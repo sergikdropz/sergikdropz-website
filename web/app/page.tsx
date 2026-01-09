@@ -24,18 +24,24 @@ export default function Home() {
           <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-2xl mx-auto">
             {artistData.bio.short}
           </p>
-          <div className="flex justify-center gap-4 mb-12 flex-wrap">
+          <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12 max-w-3xl mx-auto">
             <Link
               href="/music"
-              className="px-8 py-3 bg-white text-black font-semibold rounded hover:bg-gray-200 transition-colors"
+              className="flex-1 px-8 py-4 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-lg text-center"
             >
-              Listen Now
+              Listen
+            </Link>
+            <Link
+              href="/book"
+              className="flex-1 px-8 py-4 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-lg text-center"
+            >
+              Book
             </Link>
             <Link
               href="/epk"
-              className="px-8 py-3 border border-white text-white font-semibold rounded hover:bg-white hover:text-black transition-colors"
+              className="flex-1 px-8 py-4 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-black transition-colors text-lg text-center"
             >
-              EPK
+              Press / EPK
             </Link>
           </div>
           <SocialLinks />

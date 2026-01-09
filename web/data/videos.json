@@ -79,6 +79,30 @@
       "youtube_id": "BaECr4F4e2E",
       "category": "music-video",
       "date": "2025"
+    },
+    {
+      "id": "if-you-want-to",
+      "title": "Sergik x Nood - If You Want To",
+      "description": "Collaboration",
+      "youtube_id": "fpoisbBCL00",
+      "category": "collaboration",
+      "date": "2025"
+    },
+    {
+      "id": "big-macs-n-jumbo-jacks",
+      "title": "SERGIK X OG Coconut - Big Macs nJumbo Jacks",
+      "description": "Collaboration",
+      "youtube_id": "jAdkId8-8jM",
+      "category": "collaboration",
+      "date": "2025"
+    },
+    {
+      "id": "katana-ghost",
+      "title": "Sergik x Crosstick - Katana Ghost",
+      "description": "Collaboration",
+      "youtube_id": "Vd1YTEWZWmA",
+      "category": "collaboration",
+      "date": "2025"
     }
   ],
   "youtube_channel": "https://youtube.com/@sergikdropz"

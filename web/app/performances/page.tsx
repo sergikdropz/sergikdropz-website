@@ -19,7 +19,6 @@ export default function Performances() {
               >
                 <h3 className="text-xl font-semibold mb-2">{festival.name}</h3>
                 <p className="text-gray-400">{festival.location}</p>
-                <p className="text-gray-500 text-sm mt-2">{festival.year}</p>
               </div>
             ))}
           </div>

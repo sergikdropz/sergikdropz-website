@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import SoundCloudEmbed from './SoundCloudEmbed'
+import artistData from '@/data/artist.json'
 
 interface Release {
   id: string
@@ -91,21 +92,53 @@ export default function ReleaseCard({ release }: { release: Release }) {
         </div>
         <p className="text-gray-400 text-sm mb-4">{release.year}</p>
         <div className="flex flex-wrap gap-2 mb-4">
-          {release.platforms.map((platform) => (
-            <span
-              key={platform}
-              className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded"
-            >
-              {platform}
-            </span>
-          ))}
+          {release.platforms.map((platform) => {
+            // Determine URL based on platform, with fallbacks to artist URLs
+            let platformUrl: string | null = null
+            
+            if (platform === 'Spotify') {
+              // Use release Spotify URL if available and not empty, otherwise fall back to artist profile
+              if (release.spotify_url && release.spotify_url.trim() !== '') {
+                platformUrl = release.spotify_url
+              } else {
+                platformUrl = artistData.platforms.spotify
+              }
+            } else if (platform === 'SoundCloud') {
+              // Use release SoundCloud URL if available and not empty, otherwise fall back to artist profile
+              if (release.soundcloud_url && release.soundcloud_url.trim() !== '') {
+                platformUrl = release.soundcloud_url
+              } else {
+                platformUrl = artistData.platforms.soundcloud
+              }
+            } else if (platform === 'Apple Music') {
+              // Create Apple Music search URL with release title and artist name
+              const searchQuery = encodeURIComponent(`${release.title} SERGIK`)
+              platformUrl = `https://music.apple.com/search?term=${searchQuery}`
+            }
+
+            // All platform badges should be clickable since we always have a fallback URL
+            return (
+              <Link
+                key={platform}
+                href={platformUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-gray-300 bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded transition-colors cursor-pointer"
+              >
+                {platform}
+              </Link>
+            )
+          })}
         </div>
         
         {/* Platform Links */}
         <div className="flex flex-wrap gap-3 mb-4">
-          {release.spotify_url && (
+          {/* Spotify link - always show if platform is listed */}
+          {release.platforms.includes('Spotify') && (
             <Link
-              href={release.spotify_url}
+              href={release.spotify_url && release.spotify_url.trim() !== '' 
+                ? release.spotify_url 
+                : artistData.platforms.spotify}
               target="_blank"
               rel="noopener noreferrer"
               className="text-white hover:text-gray-300 text-sm font-medium inline-flex items-center gap-1"
@@ -114,7 +147,8 @@ export default function ReleaseCard({ release }: { release: Release }) {
               <span>→</span>
             </Link>
           )}
-          {release.soundcloud_url && (
+          {/* SoundCloud button - show if platform is listed and we have a URL (for embed) */}
+          {release.platforms.includes('SoundCloud') && release.soundcloud_url && release.soundcloud_url.trim() !== '' && (
             <button
               onClick={() => setShowSoundCloud(!showSoundCloud)}
               className="text-[#ff5500] hover:text-[#ff6600] text-sm font-medium inline-flex items-center gap-1 transition-colors"
@@ -126,7 +160,7 @@ export default function ReleaseCard({ release }: { release: Release }) {
         </div>
 
         {/* SoundCloud Embed */}
-        {showSoundCloud && release.soundcloud_url && (
+        {showSoundCloud && release.soundcloud_url && release.soundcloud_url.trim() !== '' && (
           <div className="mt-4 pt-4 border-t border-gray-800">
             <SoundCloudEmbed
               url={release.soundcloud_url}

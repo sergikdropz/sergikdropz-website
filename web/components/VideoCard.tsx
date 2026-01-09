@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 
 interface Video {
   id: string
@@ -19,24 +18,39 @@ interface VideoCardProps {
 
 export default function VideoCard({ video }: VideoCardProps) {
   const [isPlaying, setIsPlaying] = useState(false)
+  const [thumbnailIndex, setThumbnailIndex] = useState(0)
 
-  const thumbnailUrl = video.thumbnail || `https://img.youtube.com/vi/${video.youtube_id}/maxresdefault.jpg`
+  // Thumbnail quality fallback chain (from highest to lowest quality)
+  // Start with sddefault since maxresdefault often doesn't exist
+  const thumbnailOptions = video.thumbnail 
+    ? [video.thumbnail] // Use custom thumbnail if provided
+    : [
+        `https://img.youtube.com/vi/${video.youtube_id}/sddefault.jpg`,     // 640x480 - standard definition (most reliable)
+        `https://img.youtube.com/vi/${video.youtube_id}/maxresdefault.jpg`, // 1280x720 - highest quality (if available)
+        `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`,     // 480x360 - high quality default
+        `https://img.youtube.com/vi/${video.youtube_id}/mqdefault.jpg`,     // 320x180 - medium quality
+      ]
+
+  const thumbnailUrl = thumbnailOptions[thumbnailIndex]
   const embedUrl = `https://www.youtube.com/embed/${video.youtube_id}?autoplay=1&rel=0`
+
+  const handleThumbnailError = () => {
+    // Try next thumbnail in fallback chain
+    if (thumbnailIndex < thumbnailOptions.length - 1) {
+      setThumbnailIndex(thumbnailIndex + 1)
+    }
+  }
 
   return (
     <div className="bg-gray-900 rounded-lg overflow-hidden hover:bg-gray-800 transition-colors">
       <div className="aspect-video bg-gray-800 relative group cursor-pointer">
         {!isPlaying ? (
           <>
-            <Image
+            <img
               src={thumbnailUrl}
               alt={video.title}
-              fill
-              className="object-cover"
-              onError={(e) => {
-                // Fallback to default thumbnail if custom fails
-                e.currentTarget.src = `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`
-              }}
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={handleThumbnailError}
             />
             <div 
               className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors"

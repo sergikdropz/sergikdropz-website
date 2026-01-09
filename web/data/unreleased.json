@@ -1,0 +1,16 @@
+{
+  "tracks": [
+    {
+      "id": "unreleased-1",
+      "title": "Track Title",
+      "filename": "track-1.mp3",
+      "uploadDate": "2025-01-15",
+      "duration": 180,
+      "genre": "House",
+      "artwork": "/images/releases/soul-candy.jpg",
+      "likes": 0,
+      "plays": 0
+    }
+  ]
+}
+

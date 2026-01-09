@@ -8,12 +8,12 @@ export default function Header() {
 
   const navItems = [
     { href: '/', label: 'Home' },
-    { href: '/about', label: 'About' },
     { href: '/music', label: 'Music' },
     { href: '/videos', label: 'Videos' },
-    { href: '/performances', label: 'Performances' },
     { href: '/gallery', label: 'Gallery' },
+    { href: '/performances', label: 'Performances' },
     { href: '/epk', label: 'EPK' },
+    { href: '/book', label: 'Book' },
     { href: '/contact', label: 'Contact' },
   ]
 
