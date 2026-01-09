@@ -1,8 +1,21 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
+import { FaSoundcloud } from 'react-icons/fa'
 import releasesData from '@/data/releases.json'
+import playlistsData from '@/data/soundcloud-playlists.json'
 import ReleaseCard from '@/components/ReleaseCard'
+import SoundCloudEmbed from '@/components/SoundCloudEmbed'
+
+// Filter playlists that have URLs and sort by featured
+const soundcloudPlaylists = playlistsData.playlists
+  .filter(playlist => playlist.url)
+  .sort((a, b) => {
+    if (a.featured && !b.featured) return -1
+    if (!a.featured && b.featured) return 1
+    return 0
+  })
 
 export default function Music() {
   const [filter, setFilter] = useState<string>('all')
@@ -76,6 +89,89 @@ export default function Music() {
               Showing {releases.length} of {releasesData.releases.length} releases
             </div>
           </div>
+        </div>
+
+        {/* SoundCloud Profile Section */}
+        {playlistsData.profile?.url && (
+          <div className="mb-16">
+            <div className="bg-gradient-to-r from-[#ff5500] to-[#ff7700] rounded-lg p-8 md:p-12">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                <div className="flex-shrink-0">
+                  <FaSoundcloud className="text-6xl md:text-8xl text-white opacity-90" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">
+                    Follow on SoundCloud
+                  </h2>
+                  <p className="text-white/90 text-lg mb-6">
+                    Stream all my latest tracks, mixes, and exclusive releases on SoundCloud
+                  </p>
+                  <Link
+                    href={playlistsData.profile.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-white text-[#ff5500] px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors"
+                  >
+                    <FaSoundcloud className="text-xl" />
+                    <span>Visit SoundCloud Profile</span>
+                    <span>→</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SoundCloud Playlists Section */}
+        {soundcloudPlaylists.length > 0 && (
+          <div className="mb-16">
+            <div className="mb-8">
+              <h2 className="text-3xl md:text-4xl font-bold mb-2">SoundCloud</h2>
+              <p className="text-gray-400">
+                Stream playlists and discover all my tracks
+              </p>
+            </div>
+            <div className="space-y-8">
+              {soundcloudPlaylists.map((playlist) => (
+                <div key={playlist.id} className="bg-gray-900 rounded-lg p-6">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div>
+                      <h3 className="text-2xl font-semibold mb-2">{playlist.title}</h3>
+                      {playlist.description && (
+                        <p className="text-gray-400">{playlist.description}</p>
+                      )}
+                    </div>
+                    <Link
+                      href={playlist.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#ff5500] hover:text-[#ff6600] text-sm font-medium inline-flex items-center gap-1 transition-colors ml-4"
+                    >
+                      <span>View on SoundCloud</span>
+                      <span>→</span>
+                    </Link>
+                  </div>
+                  <SoundCloudEmbed
+                    url={playlist.url}
+                    height={playlist.featured ? 500 : 400}
+                    visual={true}
+                    showArtwork={true}
+                    showComments={playlist.featured}
+                    showUser={true}
+                    className="w-full"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Releases Section */}
+        <div className="mb-8">
+          <h2 className="text-3xl md:text-4xl font-bold mb-2">Releases</h2>
+          <p className="text-gray-400">
+            Browse all releases by type and year
+          </p>
         </div>
         
         {releases.length > 0 ? (

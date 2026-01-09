@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import SoundCloudEmbed from './SoundCloudEmbed'
 
 interface Release {
   id: string
@@ -11,6 +12,7 @@ interface Release {
   year: number
   platforms: string[]
   spotify_url?: string
+  soundcloud_url?: string
   image?: string | null
   fetch_from_spotify?: boolean
 }
@@ -18,6 +20,7 @@ interface Release {
 export default function ReleaseCard({ release }: { release: Release }) {
   const [imageUrl, setImageUrl] = useState<string | null>(release.image || null)
   const [isLoading, setIsLoading] = useState(!release.image)
+  const [showSoundCloud, setShowSoundCloud] = useState(false)
 
   // Try to fetch artwork from Spotify if no image and we have a track/album URL
   useEffect(() => {
@@ -97,16 +100,43 @@ export default function ReleaseCard({ release }: { release: Release }) {
             </span>
           ))}
         </div>
-        {release.spotify_url && (
-          <Link
-            href={release.spotify_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-white hover:text-gray-300 text-sm font-medium inline-flex items-center gap-1"
-          >
-            <span>Listen on Spotify</span>
-            <span>→</span>
-          </Link>
+        
+        {/* Platform Links */}
+        <div className="flex flex-wrap gap-3 mb-4">
+          {release.spotify_url && (
+            <Link
+              href={release.spotify_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:text-gray-300 text-sm font-medium inline-flex items-center gap-1"
+            >
+              <span>Listen on Spotify</span>
+              <span>→</span>
+            </Link>
+          )}
+          {release.soundcloud_url && (
+            <button
+              onClick={() => setShowSoundCloud(!showSoundCloud)}
+              className="text-[#ff5500] hover:text-[#ff6600] text-sm font-medium inline-flex items-center gap-1 transition-colors"
+            >
+              <span>{showSoundCloud ? 'Hide' : 'Play on'} SoundCloud</span>
+              <span>{showSoundCloud ? '↑' : '↓'}</span>
+            </button>
+          )}
+        </div>
+
+        {/* SoundCloud Embed */}
+        {showSoundCloud && release.soundcloud_url && (
+          <div className="mt-4 pt-4 border-t border-gray-800">
+            <SoundCloudEmbed
+              url={release.soundcloud_url}
+              height={200}
+              visual={true}
+              showArtwork={true}
+              showComments={false}
+              className="w-full"
+            />
+          </div>
         )}
       </div>
     </div>

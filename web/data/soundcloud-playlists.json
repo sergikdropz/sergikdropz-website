@@ -1,0 +1,30 @@
+{
+  "profile": {
+    "url": "https://soundcloud.com/sergikdropz",
+    "username": "sergikdropz"
+  },
+  "playlists": [
+    {
+      "id": "all-tracks",
+      "title": "All Tracks",
+      "url": "https://soundcloud.com/sergikdropz/tracks",
+      "description": "Browse and stream all my tracks on SoundCloud",
+      "featured": true
+    },
+    {
+      "id": "featured",
+      "title": "Featured Playlist",
+      "url": "",
+      "description": "My latest tracks and favorites",
+      "featured": false
+    },
+    {
+      "id": "latest-releases",
+      "title": "Latest Releases",
+      "url": "",
+      "description": "All my newest music in one place",
+      "featured": false
+    }
+  ]
+}
+

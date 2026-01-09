@@ -7,6 +7,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/2zkqOMl5kMNdTvev330BGY",
+      "soundcloud_url": "",
       "image": "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02deb7fda8d70e348aaa078b3f",
       "fetch_from_spotify": true
     },
@@ -17,6 +18,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/0wCI1XN9f2uy1rmNP2Kvdr",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02a73f9f212c566649ea8073a0",
       "fetch_from_spotify": true
     },
@@ -27,6 +29,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/1Ivf2mBL1NtMLpNZ1kywmB",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02492ca92f6379ce246b39c4dd",
       "fetch_from_spotify": true
     },
@@ -37,6 +40,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/5FTLjL6EQfAdqrMbqi3Ntm",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e029664440b471868861507ad53",
       "fetch_from_spotify": true
     },
@@ -47,6 +51,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/0i57OqVzsDMQNMf0vjwf24",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02dde99d9c2e4918d1049ffb34",
       "fetch_from_spotify": true
     },
@@ -57,6 +62,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/5zJtaXQIMOVAqLNLkpVa31",
+      "soundcloud_url": "",
       "image": "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0205c868e4c3fc0f3328a1adc0",
       "fetch_from_spotify": true
     },
@@ -67,6 +73,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/6AM8DtyUEnUxjPirlzneQF",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02de3c7ee86cf046c5534596a0",
       "fetch_from_spotify": true
     },
@@ -77,6 +84,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/5JhlBQHTWOzcE0RQvX5txR",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02fec444732b7bb667291a19a0",
       "fetch_from_spotify": true
     },
@@ -87,6 +95,7 @@
       "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/6Evd65kthdMGZcC9ixITZQ",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e0273bfb86b058bc177b8e9d9a0",
       "fetch_from_spotify": true
     },
@@ -97,6 +106,7 @@
       "year": 2024,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/album/1r2snTW7heBEWiwmgkBrqb",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02d17dbd4eae325eec9f74a0de",
       "fetch_from_spotify": true
     },
@@ -107,6 +117,7 @@
       "year": 2024,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
       "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H",
+      "soundcloud_url": "",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616100005174a81945fefa16b88ff93f51e7",
       "fetch_from_spotify": true
     }
