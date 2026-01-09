@@ -1,0 +1,47 @@
+{
+  "venues": [
+    {
+      "id": "warehouse-215",
+      "name": "Warehouse 215",
+      "city": "Phoenix, AZ",
+      "type": "Warehouse",
+      "description": "Underground warehouse venue"
+    },
+    {
+      "id": "walter-wherehouse",
+      "name": "Walter Where?House",
+      "city": "Phoenix, AZ",
+      "type": "Warehouse",
+      "description": "Iconic warehouse space"
+    },
+    {
+      "id": "walter-studios",
+      "name": "Walter Studios",
+      "city": "Phoenix, AZ",
+      "type": "Studio / Venue",
+      "description": "Multi-purpose studio and venue"
+    },
+    {
+      "id": "darkstar",
+      "name": "Darkstar",
+      "city": "Tempe, AZ",
+      "type": "Club",
+      "description": "Electronic music club"
+    },
+    {
+      "id": "sunbar",
+      "name": "Sunbar",
+      "city": "Tempe, AZ",
+      "type": "Club",
+      "description": "Nightclub and event space"
+    },
+    {
+      "id": "bar-smith-rooftop",
+      "name": "Bar Smith Rooftop",
+      "city": "Phoenix, AZ",
+      "type": "Rooftop Club",
+      "description": "Downtown rooftop venue"
+    }
+  ]
+}
+

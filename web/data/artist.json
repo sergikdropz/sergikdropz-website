@@ -1,0 +1,60 @@
+{
+  "artist_name": "SERGIK",
+  "legal_name": "Sergik",
+  "roles": ["DJ", "Producer", "Curator", "Organizer"],
+  "location": {
+    "city": "Phoenix",
+    "state": "Arizona",
+    "country": "USA",
+    "region_context": ["Southwest", "Desert"]
+  },
+  "contact": {
+    "email": "sergikdrops@gmail.com"
+  },
+  "genres": {
+    "primary": ["House", "Tech House", "Minimal House", "Deep House"],
+    "secondary": ["Underground Electronic", "Groove-driven", "Minimal-leaning", "Long-form DJ sets"]
+  },
+  "bio": {
+    "short": "SERGIK is an electronic music producer, DJ, curator, and organizer rooted in underground dance culture and community-driven music movements.",
+    "long": "SERGIK is an electronic music producer, DJ, curator, and organizer rooted in underground dance culture and community-driven music movements. His sound is groove-forward and minimal-leaning, built for warehouses, after-hours spaces, and environment-aware dance floors. Influenced by hip-hop, funk, Motown, soul, and psychedelic sound-system culture, Sergik delivers immersive sets shaped in real time by space, crowd, and energy—prioritizing tension, flow, and long-form movement over spectacle."
+  },
+  "influences": {
+    "musical": {
+      "rhythmic": ["Hip-Hop", "Rap", "Funk", "Motown", "Soul"],
+      "textural": ["Psychedelic Rock", "Sound-system culture", "Experimental electronic"]
+    },
+    "philosophy": [
+      "Groove over drops",
+      "Tension over spectacle",
+      "Repetition and flow",
+      "Crowd-adaptive sets"
+    ]
+  },
+  "environmental_contexts": [
+    "Warehouses",
+    "After-hours clubs",
+    "Desert environments",
+    "Forest environments"
+  ],
+  "environment_statement": "Performances are shaped by environment—from concrete warehouses to desert nights and forest clearings—treating space as an active instrument.",
+  "community_roles": [
+    "Warehouse event organizer",
+    "Event curator",
+    "Studio movement founder",
+    "Artist incubator"
+  ],
+  "community_focus": [
+    "Underground infrastructure",
+    "Safe and inclusive DIY spaces",
+    "Long-term scene sustainability"
+  ],
+  "platforms": {
+    "instagram": "https://instagram.com/sergikdropz",
+    "youtube": "https://youtube.com/@sergikdropz",
+    "spotify": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H",
+    "soundcloud": "https://soundcloud.com/sergikdropz",
+    "linktree": "https://linktr.ee/sergikdropz"
+  }
+}
+

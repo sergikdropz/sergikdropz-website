@@ -1,0 +1,68 @@
+{
+  "images": [
+    {
+      "id": "desert-portrait-1",
+      "src": "/images/gallery/desert-portrait-1.jpg",
+      "alt": "SERGIK in desert landscape at golden hour overlooking Phoenix",
+      "category": "landscape",
+      "description": "Desert portrait at golden hour - contemplative profile view overlooking vast desert landscape with mountains, lake, and sparse desert vegetation. Warm golden light, reflective sunglasses, gold chain visible."
+    },
+    {
+      "id": "rooftop-portrait-1",
+      "src": "/images/gallery/rooftop-portrait-1.jpg",
+      "alt": "SERGIK on rooftop at night with city lights",
+      "category": "portrait",
+      "description": "Urban rooftop portrait at night - man bun, full beard, heavily tattooed forearms, silver chain. Warm Edison string lights and city skyline bokeh in background. Relaxed, intimate evening setting."
+    },
+    {
+      "id": "performance-green-1",
+      "src": "/images/gallery/performance-green-1.jpg",
+      "alt": "SERGIK performing with intense green stage lighting and geometric elements",
+      "category": "performance",
+      "description": "Live performance with dramatic green lighting - bucket hat, Off-White jacket, orange-tinted sunglasses on chain. Geometric stage props with orange-red glow, crystalline reflective pillar. Pioneer DJ setup, warehouse/underground atmosphere."
+    },
+    {
+      "id": "studio-red-1",
+      "src": "/images/gallery/studio-red-1.jpg",
+      "alt": "SERGIK in studio with red and yellow LED lighting",
+      "category": "studio",
+      "description": "Studio session - fedora hat, SERGIK logo t-shirt, red tufted couch. Geometric LED light panels (hexagonal/diamond patterns) in yellow/orange/red/purple. Professional audio equipment, acoustic panels, DAW visible on laptop. Dog companion in foreground."
+    },
+    {
+      "id": "performance-pioneer-1",
+      "src": "/images/gallery/performance-pioneer-1.jpg",
+      "alt": "SERGIK DJing with Pioneer equipment, purple and orange lighting",
+      "category": "performance",
+      "description": "Performance from behind - Off-White jacket with four-arrow logo, bucket hat. Pioneer DJ equipment, dramatic purple and orange/yellow stage lighting with atmospheric haze. Club/warehouse setting."
+    },
+    {
+      "id": "sunset-portrait-1",
+      "src": "/images/gallery/sunset-portrait-1.jpg",
+      "alt": "SERGIK portrait at sunset with palm trees",
+      "category": "portrait",
+      "description": "Sunset portrait - dark wavy hair, full beard, dark sunglasses. Hands clasped in contemplative gesture. Heavy forearm tattoos. Vibrant orange/yellow/pink sunset sky, palm tree silhouette. Desert/tropical evening atmosphere."
+    },
+    {
+      "id": "performance-red-blue-1",
+      "src": "/images/gallery/performance-red-blue-1.jpg",
+      "alt": "SERGIK performing with intense red and blue lighting",
+      "category": "performance",
+      "description": "Intense performance - profile view, bucket hat, Off-White jacket with diagonal stripes, Supreme logo visible. Pioneer DJ mixer in foreground. Dramatic red and blue stage lighting creating high-energy underground atmosphere. Active mixing, focused expression."
+    },
+    {
+      "id": "performance-group-1",
+      "src": "/images/gallery/performance-group-1.jpg",
+      "alt": "Multiple performers on stage with red and blue lighting",
+      "category": "performance",
+      "description": "Collaborative performance scene - three performers on stage. SERGIK in foreground with Pioneer DJ setup, red/blue lighting. Other performers with fedora hats, abstract graphic banner in background. Energetic underground electronic music event."
+    },
+    {
+      "id": "performance-closeup-1",
+      "src": "/images/gallery/performance-closeup-1.jpg",
+      "alt": "Close-up of SERGIK performing with dramatic red-orange and blue lighting",
+      "category": "performance",
+      "description": "Intimate close-up performance moment - full beard illuminated by blue light, over-ear headphones, dark cap. Jacket with angular chevron pattern on sleeve glowing red-orange. Vertical light streaks, deep blue ambient background. Focused, immersed in performance."
+    }
+  ]
+}
+

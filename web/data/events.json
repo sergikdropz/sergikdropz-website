@@ -1,0 +1,42 @@
+{
+  "festivals": [
+    {
+      "id": "goldrush-2024",
+      "name": "Goldrush Music Festival",
+      "year": 2024,
+      "location": "Phoenix, AZ",
+      "type": "Festival"
+    },
+    {
+      "id": "phoenix-lights-2024",
+      "name": "Phoenix Lights Festival",
+      "year": 2024,
+      "location": "Phoenix, AZ",
+      "type": "Festival"
+    },
+    {
+      "id": "body-language-2024",
+      "name": "Body Language / Super Unnatural",
+      "year": 2024,
+      "location": "Phoenix, AZ",
+      "type": "Festival"
+    },
+    {
+      "id": "gem-jam-2024",
+      "name": "Gem & Jam",
+      "year": 2024,
+      "location": "Arizona",
+      "type": "Festival"
+    },
+    {
+      "id": "june-jam-2024",
+      "name": "June Jam",
+      "year": 2024,
+      "location": "Arizona",
+      "type": "Festival"
+    }
+  ],
+  "upcoming": [],
+  "past": []
+}
+

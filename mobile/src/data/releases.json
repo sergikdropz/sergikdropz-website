@@ -1,0 +1,53 @@
+{
+  "releases": [
+    {
+      "id": "soul-candy",
+      "title": "Soul Candy",
+      "type": "EP",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H"
+    },
+    {
+      "id": "ftp",
+      "title": "FTP",
+      "type": "EP",
+      "year": 2024,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H"
+    },
+    {
+      "id": "a-good-day",
+      "title": "A Good Day (feat. Be Janis)",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H"
+    },
+    {
+      "id": "repeat-cozy-catz",
+      "title": "Repeat / Cozy Catz (feat. DiscoFlip)",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H"
+    },
+    {
+      "id": "say-yeah-remix",
+      "title": "Say Yeah (Sergik Remix)",
+      "type": "Remix",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H"
+    },
+    {
+      "id": "funky-bounce",
+      "title": "Funky Bounce",
+      "type": "Single",
+      "year": 2024,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H"
+    }
+  ]
+}
+

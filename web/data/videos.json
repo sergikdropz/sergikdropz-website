@@ -1,0 +1,85 @@
+{
+  "videos": [
+    {
+      "id": "utopia-ep-visual",
+      "title": "SERGIK - Utopia (EP Visual)",
+      "description": "EP Visual",
+      "youtube_id": "OML1I_V4Dy4",
+      "category": "music-video",
+      "date": "2025"
+    },
+    {
+      "id": "bonafide-hustla",
+      "title": "SERGIK - Bonafide Hustla",
+      "description": "Music Video",
+      "youtube_id": "00jCu-4hgZg",
+      "category": "music-video",
+      "date": "2025"
+    },
+    {
+      "id": "cruise-control-visualizer",
+      "title": "SERGIK - Cruise Control Visualizer",
+      "description": "Visualizer",
+      "youtube_id": "0-ncbzh-7Jw",
+      "category": "visualizer",
+      "date": "2025"
+    },
+    {
+      "id": "in-the-streets",
+      "title": "SERGIK - In The Streets",
+      "description": "Music Video",
+      "youtube_id": "ME-pcfB1bHc",
+      "category": "music-video",
+      "date": "2025"
+    },
+    {
+      "id": "electrify",
+      "title": "SERGIK - Electrify",
+      "description": "Music Video",
+      "youtube_id": "dcREFTRdviU",
+      "category": "music-video",
+      "date": "2025"
+    },
+    {
+      "id": "soul-candy-ep-visualizer",
+      "title": "SERGIK Soul Candy EP Visualizer",
+      "description": "EP Visualizer",
+      "youtube_id": "X0cWv2hIByE",
+      "category": "visualizer",
+      "date": "2025"
+    },
+    {
+      "id": "what-you-on",
+      "title": "SERGIK x Zak Martin - What You On",
+      "description": "Collaboration",
+      "youtube_id": "nWuixsTKMBI",
+      "category": "collaboration",
+      "date": "2025"
+    },
+    {
+      "id": "cant-stop-music-video",
+      "title": "Sergik x Isaiah - Can't Stop (Official Music Video)",
+      "description": "Official music video filmed at Arcosanti, Arizona at Form Music Festival 2024",
+      "youtube_id": "1A0v-4u_STs",
+      "category": "music-video",
+      "date": "2024"
+    },
+    {
+      "id": "it-is-what-it-is",
+      "title": "SERGIK - It Is What It Is",
+      "description": "Music Video",
+      "youtube_id": "gbDkx2lK9UI",
+      "category": "music-video",
+      "date": "2025"
+    },
+    {
+      "id": "soul-mind-body",
+      "title": "SERGIK - Soul Mind Body",
+      "description": "Music Video",
+      "youtube_id": "BaECr4F4e2E",
+      "category": "music-video",
+      "date": "2025"
+    }
+  ],
+  "youtube_channel": "https://youtube.com/@sergikdropz"
+}

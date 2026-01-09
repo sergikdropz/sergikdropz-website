@@ -1,0 +1,65 @@
+{
+  "releases": [
+    {
+      "id": "soul-candy",
+      "title": "Soul Candy",
+      "type": "EP",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/2zkqOMl5kMNdTvev330BGY",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02deb7fda8d70e348aaa078b3f",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "ftp",
+      "title": "FTP",
+      "type": "EP",
+      "year": 2024,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616100005174a81945fefa16b88ff93f51e7",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "a-good-day",
+      "title": "A Good Day (feat. Be Janis)",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/1Ivf2mBL1NtMLpNZ1kywmB",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02492ca92f6379ce246b39c4dd",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "repeat-cozy-catz",
+      "title": "Repeat / Cozy Catz (feat. DiscoFlip)",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/5FTLjL6EQfAdqrMbqi3Ntm",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e029664440b471868861507ad53",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "say-yeah-remix",
+      "title": "Say Yeah (Sergik Remix)",
+      "type": "Remix",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/0i57OqVzsDMQNMf0vjwf24",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02dde99d9c2e4918d1049ffb34",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "funky-bounce",
+      "title": "Funky Bounce",
+      "type": "Single",
+      "year": 2024,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/1r2snTW7heBEWiwmgkBrqb",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02d17dbd4eae325eec9f74a0de",
+      "fetch_from_spotify": true
+    }
+  ]
+}
+
