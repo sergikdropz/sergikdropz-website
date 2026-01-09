@@ -11,13 +11,13 @@
       "fetch_from_spotify": true
     },
     {
-      "id": "ftp",
-      "title": "FTP",
+      "id": "roos-va",
+      "title": "ROOS VA",
       "type": "EP",
-      "year": 2024,
+      "year": 2025,
       "platforms": ["Spotify", "Apple Music", "SoundCloud"],
-      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H",
-      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616100005174a81945fefa16b88ff93f51e7",
+      "spotify_url": "https://open.spotify.com/album/0wCI1XN9f2uy1rmNP2Kvdr",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02a73f9f212c566649ea8073a0",
       "fetch_from_spotify": true
     },
     {
@@ -51,6 +51,46 @@
       "fetch_from_spotify": true
     },
     {
+      "id": "have-to-dance",
+      "title": "Have To Dance",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/5zJtaXQIMOVAqLNLkpVa31",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0205c868e4c3fc0f3328a1adc0",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "you-cant",
+      "title": "You Can't",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/6AM8DtyUEnUxjPirlzneQF",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02de3c7ee86cf046c5534596a0",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "feeling-lit",
+      "title": "Feeling Lit",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/5JhlBQHTWOzcE0RQvX5txR",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02fec444732b7bb667291a19a0",
+      "fetch_from_spotify": true
+    },
+    {
+      "id": "music-is-my-drug",
+      "title": "Music Is My Drug",
+      "type": "Single",
+      "year": 2025,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/album/6Evd65kthdMGZcC9ixITZQ",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e0273bfb86b058bc177b8e9d9a0",
+      "fetch_from_spotify": true
+    },
+    {
       "id": "funky-bounce",
       "title": "Funky Bounce",
       "type": "Single",
@@ -59,7 +99,16 @@
       "spotify_url": "https://open.spotify.com/album/1r2snTW7heBEWiwmgkBrqb",
       "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02d17dbd4eae325eec9f74a0de",
       "fetch_from_spotify": true
+    },
+    {
+      "id": "ftp",
+      "title": "FTP",
+      "type": "EP",
+      "year": 2024,
+      "platforms": ["Spotify", "Apple Music", "SoundCloud"],
+      "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616100005174a81945fefa16b88ff93f51e7",
+      "fetch_from_spotify": true
     }
   ]
 }
-
