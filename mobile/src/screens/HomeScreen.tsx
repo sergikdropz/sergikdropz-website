@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import artistData from '../data/artist.json';
 import releasesData from '../data/releases.json';
 
 export default function HomeScreen() {
-  const latestReleases = releasesData.releases.slice(0, 3);
+  // Memoize latest releases to prevent recalculation
+  const latestReleases = useMemo(() => releasesData.releases.slice(0, 3), []);
 
-  const openLink = (url: string) => {
+  // Memoize callback to prevent re-renders
+  const openLink = useCallback((url: string) => {
     Linking.openURL(url);
-  };
+  }, []);
 
   return (
     <ScrollView style={styles.container}>

@@ -1,0 +1,9 @@
+{
+    "github.copilot.chat.byok.ollamaEndpoint": "http://localhost:11535",
+    "yaml.schemas": {
+        "file:///Users/machd/.vscode/extensions/continue.continue-1.2.14-darwin-arm64/config-yaml-schema.json": [
+            ".continue/**/*.yaml"
+        ],
+        "https://raw.githubusercontent.com/pmbot-io/config/master/pmbot.yml.schema.json": "file:///Users/machd/.continue/config.yaml"
+    }
+}

@@ -1,0 +1,4 @@
+id,artist_id,name,status,start_date,end_date,budget_total_usd,budget_daily_usd,ad_account_id,landing_page_url,conversion_metric,created_at,updated_at
+
+# Example row:
+c_001,artist_123,Frontload Jan Release,running,2026-01-14,2026-02-11,300,10,adacct_456,https://lp.example.com/track,spotify_stream,2026-01-10T09:00:00Z,

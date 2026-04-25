@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MetricSnapshot",
+  "type": "object",
+  "required":["id","entity_type","entity_id","snapshot_time"],
+  "properties":{
+    "id":{"type":"string"},
+    "entity_type":{"type":"string","enum":["artist","track","playlist"]},
+    "entity_id":{"type":"string"},
+    "snapshot_time":{"type":"string","format":"date-time"},
+    "monthly_listeners":{"type":["integer","null"],"minimum":0},
+    "streams_28d":{"type":["integer","null"],"minimum":0},
+    "followers":{"type":["integer","null"],"minimum":0},
+    "popularity_score":{"type":["number","null"],"minimum":0,"maximum":100},
+    "stream_velocity_28d":{"type":["number","null"],"minimum":0},
+    "ad_spend_28d_usd":{"type":["number","null"],"minimum":0},
+    "source":{"type":["string","null"]},
+    "tags":{"type":"array","items":{"type":"string"}}
+  }
+}

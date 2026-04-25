@@ -1,0 +1,17 @@
+{
+  "presetAmounts": [3, 5, 10, 25, 50],
+  "minAmount": 1,
+  "maxAmount": 500,
+  "currency": "usd",
+  "defaultAmount": 5,
+  "heading": "Support the Music",
+  "description": "Every dollar goes directly towards creating new music, upgrading gear, and keeping the creative vision alive.",
+  "thankYouMessage": "Your support means everything. Thank you for believing in the music.",
+  "messages": {
+    "3": "Grab a coffee",
+    "5": "Show some love",
+    "10": "Big supporter",
+    "25": "Real one",
+    "50": "Legend status"
+  }
+}

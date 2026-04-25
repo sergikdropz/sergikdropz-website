@@ -2,9 +2,12 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
+import { FaSpotify, FaApple, FaAmazon, FaSoundcloud, FaYoutube, FaInstagram, FaLink, FaMusic } from 'react-icons/fa'
+import { SiTidal, SiBeatport } from 'react-icons/si'
 import SoundCloudEmbed from './SoundCloudEmbed'
 import artistData from '@/data/artist.json'
+import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface Release {
   id: string
@@ -18,10 +21,205 @@ interface Release {
   fetch_from_spotify?: boolean
 }
 
-export default function ReleaseCard({ release }: { release: Release }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(release.image || null)
-  const [isLoading, setIsLoading] = useState(!release.image)
+// Platform configuration with icons and colors
+const platformConfig = {
+  Spotify: {
+    icon: FaSpotify,
+    color: 'text-green-500 hover:text-green-400',
+    bgColor: 'hover:bg-green-500/10',
+    name: 'Spotify',
+    description: 'All releases, albums, singles, discography'
+  },
+  'Apple Music': {
+    icon: FaApple,
+    color: 'text-pink-500 hover:text-pink-400',
+    bgColor: 'hover:bg-pink-500/10',
+    name: 'Apple Music',
+    description: 'All albums, EPs, singles, discography'
+  },
+  'Amazon Music': {
+    icon: FaAmazon,
+    color: 'text-orange-500 hover:text-orange-400',
+    bgColor: 'hover:bg-orange-500/10',
+    name: 'Amazon Music',
+    description: 'All music, albums, discography'
+  },
+  TIDAL: {
+    icon: SiTidal,
+    color: 'text-blue-400 hover:text-blue-300',
+    bgColor: 'hover:bg-blue-500/10',
+    name: 'TIDAL',
+    description: 'All music, albums, discography'
+  },
+  DEEZER: {
+    icon: FaMusic,
+    color: 'text-purple-500 hover:text-purple-400',
+    bgColor: 'hover:bg-purple-500/10',
+    name: 'DEEZER',
+    description: 'All music, albums, discography'
+  },
+  Pandora: {
+    icon: FaMusic,
+    color: 'text-blue-500 hover:text-blue-400',
+    bgColor: 'hover:bg-blue-500/10',
+    name: 'Pandora',
+    description: 'Artist station and all music'
+  },
+  Beatport: {
+    icon: SiBeatport,
+    color: 'text-yellow-500 hover:text-yellow-400',
+    bgColor: 'hover:bg-yellow-500/10',
+    name: 'Beatport',
+    description: 'DJ-focused platform - tracks, releases, charts'
+  },
+  'YouTube Music': {
+    icon: FaYoutube,
+    color: 'text-red-500 hover:text-red-400',
+    bgColor: 'hover:bg-red-500/10',
+    name: 'YouTube Music',
+    description: 'All music, albums, singles, discography'
+  },
+  Shazam: {
+    icon: FaMusic,
+    color: 'text-cyan-500 hover:text-cyan-400',
+    bgColor: 'hover:bg-cyan-500/10',
+    name: 'Shazam',
+    description: 'Music discovery - top songs, latest releases'
+  },
+  SoundCloud: {
+    icon: FaSoundcloud,
+    color: 'text-[#ff5500] hover:text-[#ff6600]',
+    bgColor: 'hover:bg-orange-500/10',
+    name: 'SoundCloud',
+    description: 'Personal profile - all tracks and playlists'
+  },
+  YouTube: {
+    icon: FaYoutube,
+    color: 'text-red-500 hover:text-red-400',
+    bgColor: 'hover:bg-red-500/10',
+    name: 'YouTube',
+    description: 'Personal channel - all videos and music'
+  },
+  Instagram: {
+    icon: FaInstagram,
+    color: 'text-purple-500 hover:text-purple-400',
+    bgColor: 'hover:bg-purple-500/10',
+    name: 'Instagram',
+    description: 'Personal profile'
+  },
+  Linktree: {
+    icon: FaLink,
+    color: 'text-cyan-500 hover:text-cyan-400',
+    bgColor: 'hover:bg-cyan-500/10',
+    name: 'Linktree',
+    description: 'All platform links in one place'
+  }
+}
+
+function ReleaseCard({ release }: { release: Release }) {
+  // Filter out invalid Spotify CDN URLs from initial image
+  const getValidImageUrl = (url: string | null | undefined): string | null => {
+    if (!url) return null
+    const invalidCdnPatterns = ['image-cdn-fa.spotifycdn.com', 'image-cdn-ak.spotifycdn.com']
+    const isInvalid = invalidCdnPatterns.some(pattern => url.includes(pattern))
+    return isInvalid ? null : url
+  }
+  
+  const initialImageUrl = getValidImageUrl(release.image)
+  const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl)
+  const [isLoading, setIsLoading] = useState(!initialImageUrl && release.fetch_from_spotify)
   const [showSoundCloud, setShowSoundCloud] = useState(false)
+
+  // Get platform URL - use release-specific URL if available, otherwise fall back to artist profile
+  const getPlatformUrl = (platformName: string): string | null => {
+    if (platformName === 'Spotify') {
+      return (release.spotify_url && release.spotify_url.trim() !== '') 
+        ? release.spotify_url 
+        : artistData.platforms.spotify || null
+    }
+    
+    if (platformName === 'SoundCloud') {
+      return (release.soundcloud_url && release.soundcloud_url.trim() !== '') 
+        ? release.soundcloud_url 
+        : artistData.platforms.soundcloud || null
+    }
+    
+    if (platformName === 'Apple Music') {
+      // Create Apple Music search URL with release title and artist name
+      const searchQuery = encodeURIComponent(`${release.title} SERGIK`)
+      return `https://music.apple.com/search?term=${searchQuery}`
+    }
+    
+    if (platformName === 'Amazon Music') {
+      return 'https://music.amazon.com/artists/B09B2LNNSF/sergik'
+    }
+    
+    if (platformName === 'TIDAL') {
+      return 'https://tidal.com/artist/27288636'
+    }
+    
+    if (platformName === 'DEEZER') {
+      return 'https://www.deezer.com/us/artist/140080312'
+    }
+    
+    if (platformName === 'Pandora') {
+      return 'https://www.pandora.com/artist/sergik/ARz95KfVdbj3P5Z'
+    }
+    
+    if (platformName === 'Beatport') {
+      return 'https://www.beatport.com/artist/sergik/1002796'
+    }
+    
+    if (platformName === 'YouTube Music') {
+      return 'https://music.youtube.com/channel/UCBWcROfNv8PeY6KdrnNM_pw'
+    }
+    
+    if (platformName === 'Shazam') {
+      return 'https://www.shazam.com/artist/sergik/1577778284'
+    }
+    
+    if (platformName === 'YouTube') {
+      return artistData.platforms.youtube || null
+    }
+    
+    if (platformName === 'Instagram') {
+      return artistData.platforms.instagram || null
+    }
+    
+    if (platformName === 'Linktree') {
+      return artistData.platforms.linktree || null
+    }
+    
+    return null
+  }
+
+  // Get all available platforms - include all streaming platforms
+  const allAvailablePlatforms = [
+    ...release.platforms, // Include platforms listed in release
+    // Add all streaming platforms
+    'Spotify',
+    'Apple Music',
+    'Amazon Music',
+    'TIDAL',
+    'DEEZER',
+    'Pandora',
+    'Beatport',
+    'YouTube Music',
+    'Shazam',
+    'SoundCloud',
+    // Add platforms from artist.json
+    ...Object.keys(artistData.platforms || {})
+      .map(key => {
+        // Map platform keys to display names
+        if (key === 'spotify') return 'Spotify'
+        if (key === 'soundcloud') return 'SoundCloud'
+        if (key === 'youtube') return 'YouTube'
+        if (key === 'instagram') return 'Instagram'
+        if (key === 'linktree') return 'Linktree'
+        return null
+      })
+      .filter(Boolean) as string[]
+  ].filter((platform, index, self) => self.indexOf(platform) === index) // Remove duplicates
 
   // Try to fetch artwork from Spotify if no image and we have a track/album URL
   useEffect(() => {
@@ -35,7 +233,12 @@ export default function ReleaseCard({ release }: { release: Release }) {
           .then(res => res.json())
           .then(data => {
             if (data.imageUrl) {
-              setImageUrl(data.imageUrl)
+              // Filter out known invalid Spotify CDN URLs
+              const invalidCdnPatterns = ['image-cdn-fa.spotifycdn.com', 'image-cdn-ak.spotifycdn.com']
+              const isInvalid = invalidCdnPatterns.some(pattern => data.imageUrl.includes(pattern))
+              if (!isInvalid) {
+                setImageUrl(data.imageUrl)
+              }
               setIsLoading(false)
             } else {
               setIsLoading(false)
@@ -52,17 +255,19 @@ export default function ReleaseCard({ release }: { release: Release }) {
   }, [imageUrl, release.spotify_url, release.fetch_from_spotify])
 
   return (
-    <div className="bg-gray-900 rounded-lg overflow-hidden hover:bg-gray-800 transition-colors">
+    <div className="bg-gray-900/50 rounded-lg overflow-hidden hover:bg-gray-800/50 transition-colors touch-manipulation">
       <div className="aspect-square bg-gray-800 relative">
-        {imageUrl ? (
+        {imageUrl && !imageUrl.includes('image-cdn-fa.spotifycdn.com') && !imageUrl.includes('image-cdn-ak.spotifycdn.com') ? (
           <Image
             src={imageUrl}
             alt={release.title}
             fill
             className="object-cover"
-            unoptimized={imageUrl.startsWith('http')} // Don't optimize external URLs
-            onError={() => {
-              // Fallback if image fails to load
+            unoptimized={shouldUnoptimizeImage(imageUrl)}
+            loading="lazy"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            onError={(e) => {
+              console.warn(`Failed to load image for ${release.title}:`, imageUrl)
               setImageUrl(null)
             }}
           />
@@ -83,80 +288,57 @@ export default function ReleaseCard({ release }: { release: Release }) {
           </div>
         )}
       </div>
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="text-xl font-semibold">{release.title}</h3>
-          <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
+      <div className="p-4 sm:p-6">
+        <div className="flex items-start justify-between mb-2 gap-2">
+          <h3 className="text-lg sm:text-xl font-semibold flex-1 min-w-0">{release.title}</h3>
+          <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded flex-shrink-0">
             {release.type}
           </span>
         </div>
         <p className="text-gray-400 text-sm mb-4">{release.year}</p>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {release.platforms.map((platform) => {
-            // Determine URL based on platform, with fallbacks to artist URLs
-            let platformUrl: string | null = null
-            
-            if (platform === 'Spotify') {
-              // Use release Spotify URL if available and not empty, otherwise fall back to artist profile
-              if (release.spotify_url && release.spotify_url.trim() !== '') {
-                platformUrl = release.spotify_url
-              } else {
-                platformUrl = artistData.platforms.spotify
-              }
-            } else if (platform === 'SoundCloud') {
-              // Use release SoundCloud URL if available and not empty, otherwise fall back to artist profile
-              if (release.soundcloud_url && release.soundcloud_url.trim() !== '') {
-                platformUrl = release.soundcloud_url
-              } else {
-                platformUrl = artistData.platforms.soundcloud
-              }
-            } else if (platform === 'Apple Music') {
-              // Create Apple Music search URL with release title and artist name
-              const searchQuery = encodeURIComponent(`${release.title} SERGIK`)
-              platformUrl = `https://music.apple.com/search?term=${searchQuery}`
-            }
-
-            // All platform badges should be clickable since we always have a fallback URL
-            return (
-              <Link
-                key={platform}
-                href={platformUrl!}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-gray-300 bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded transition-colors cursor-pointer"
-              >
-                {platform}
-              </Link>
-            )
-          })}
-        </div>
         
-        {/* Platform Links */}
-        <div className="flex flex-wrap gap-3 mb-4">
-          {/* Spotify link - always show if platform is listed */}
-          {release.platforms.includes('Spotify') && (
-            <Link
-              href={release.spotify_url && release.spotify_url.trim() !== '' 
-                ? release.spotify_url 
-                : artistData.platforms.spotify}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white hover:text-gray-300 text-sm font-medium inline-flex items-center gap-1"
-            >
-              <span>Listen on Spotify</span>
-              <span>→</span>
-            </Link>
-          )}
-          {/* SoundCloud button - show if platform is listed and we have a URL (for embed) */}
-          {release.platforms.includes('SoundCloud') && release.soundcloud_url && release.soundcloud_url.trim() !== '' && (
-            <button
-              onClick={() => setShowSoundCloud(!showSoundCloud)}
-              className="text-[#ff5500] hover:text-[#ff6600] text-sm font-medium inline-flex items-center gap-1 transition-colors"
-            >
-              <span>{showSoundCloud ? 'Hide' : 'Play on'} SoundCloud</span>
-              <span>{showSoundCloud ? '↑' : '↓'}</span>
-            </button>
-          )}
+        {/* Streaming Platform Icons */}
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            {allAvailablePlatforms.map((platformName) => {
+              const config = platformConfig[platformName as keyof typeof platformConfig]
+              const platformUrl = getPlatformUrl(platformName)
+              
+              // Skip if no config or no URL available
+              if (!config || !platformUrl) return null
+              
+              const IconComponent = config.icon
+              
+              // Special handling for SoundCloud - show embed button instead of direct link
+              if (platformName === 'SoundCloud' && release.soundcloud_url && release.soundcloud_url.trim() !== '') {
+                return (
+                  <button
+                    key={platformName}
+                    onClick={() => setShowSoundCloud(!showSoundCloud)}
+                    className={`p-2.5 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor} ${showSoundCloud ? 'bg-orange-500/20 border-orange-500/50' : ''}`}
+                    title={`${showSoundCloud ? 'Hide' : 'Play on'} ${config.name} - ${config.description}`}
+                    aria-label={`${showSoundCloud ? 'Hide' : 'Play on'} ${config.name} - ${config.description}`}
+                  >
+                    <IconComponent className="text-lg sm:text-xl" />
+                  </button>
+                )
+              }
+              
+              return (
+                <Link
+                  key={platformName}
+                  href={platformUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`p-2.5 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor}`}
+                  title={`${config.name} - ${config.description}`}
+                  aria-label={`${config.name} - ${config.description}`}
+                >
+                  <IconComponent className="text-lg sm:text-xl" />
+                </Link>
+              )
+            })}
+          </div>
         </div>
 
         {/* SoundCloud Embed */}
@@ -176,3 +358,14 @@ export default function ReleaseCard({ release }: { release: Release }) {
     </div>
   )
 }
+
+// Export memoized version - safe, backward compatible
+export default memo(ReleaseCard, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.release.id === nextProps.release.id &&
+    prevProps.release.image === nextProps.release.image &&
+    prevProps.release.title === nextProps.release.title &&
+    prevProps.release.year === nextProps.release.year
+  )
+})

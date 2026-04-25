@@ -1,0 +1,99 @@
+{
+  "tiers": [
+    {
+      "id": "lease",
+      "name": "Lease",
+      "price": 29.99,
+      "description": "Perfect for independent releases and online distribution",
+      "features": [
+        "MP3 + WAV file",
+        "Up to 500,000 streams",
+        "Non-exclusive rights",
+        "Keep 100% of royalties",
+        "Use on all streaming platforms"
+      ],
+      "deliverables": ["MP3 (320kbps)", "WAV (44.1kHz/24-bit)"],
+      "terms": {
+        "streamLimit": 500000,
+        "exclusivity": "non-exclusive",
+        "duration": "lifetime",
+        "allowCommercial": true,
+        "allowPerformance": true,
+        "allowRadio": false,
+        "creditRequired": true
+      }
+    },
+    {
+      "id": "premium",
+      "name": "Premium Lease",
+      "price": 79.99,
+      "description": "For serious artists with larger audiences",
+      "popular": true,
+      "features": [
+        "MP3 + WAV + FLAC files",
+        "Up to 2,000,000 streams",
+        "Non-exclusive rights",
+        "Keep 100% of royalties",
+        "Radio and TV sync allowed",
+        "Use on all platforms including YouTube"
+      ],
+      "deliverables": ["MP3 (320kbps)", "WAV (44.1kHz/24-bit)", "FLAC (lossless)"],
+      "terms": {
+        "streamLimit": 2000000,
+        "exclusivity": "non-exclusive",
+        "duration": "lifetime",
+        "allowCommercial": true,
+        "allowPerformance": true,
+        "allowRadio": true,
+        "creditRequired": true
+      }
+    },
+    {
+      "id": "stems",
+      "name": "Stems",
+      "price": 149.99,
+      "description": "Full stems package for remixing and custom productions",
+      "features": [
+        "All individual stem tracks (drums, bass, synths, FX, etc.)",
+        "WAV format (44.1kHz/24-bit)",
+        "Up to 2,000,000 streams",
+        "Non-exclusive rights",
+        "Perfect for remixes and custom edits"
+      ],
+      "deliverables": ["Individual stem WAV files", "Full mix WAV", "MP3 master"],
+      "terms": {
+        "streamLimit": 2000000,
+        "exclusivity": "non-exclusive",
+        "duration": "lifetime",
+        "allowCommercial": true,
+        "allowPerformance": true,
+        "allowRadio": true,
+        "creditRequired": true
+      }
+    },
+    {
+      "id": "exclusive",
+      "name": "Exclusive",
+      "price": 299.99,
+      "description": "Full ownership — the beat becomes yours exclusively",
+      "features": [
+        "All files including stems",
+        "Unlimited streams",
+        "Exclusive rights — beat removed from store",
+        "Keep 100% of royalties",
+        "Full commercial use",
+        "No credit required"
+      ],
+      "deliverables": ["MP3 (320kbps)", "WAV (44.1kHz/24-bit)", "FLAC (lossless)", "Individual stems"],
+      "terms": {
+        "streamLimit": null,
+        "exclusivity": "exclusive",
+        "duration": "lifetime",
+        "allowCommercial": true,
+        "allowPerformance": true,
+        "allowRadio": true,
+        "creditRequired": false
+      }
+    }
+  ]
+}

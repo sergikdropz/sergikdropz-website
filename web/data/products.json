@@ -1,0 +1,141 @@
+{
+  "products": [
+    {
+      "id": "ep-are-we-awake",
+      "title": "Are We Awake EP (Digital Download)",
+      "slug": "are-we-awake-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Atmospheric deep house explorations.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Are We Awake/are-we-awake-album-art.jpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "are-we-awake",
+      "status": "active"
+    },
+    {
+      "id": "ep-vice-and-virtues",
+      "title": "Vice & Virtues EP (Digital Download)",
+      "slug": "vice-and-virtues-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Dark, driving tech house with minimal undertones.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Vice & Virtues/500CD048-AAA0-47EA-8F4F-4ED2A5D18A1E.jpeg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "vice-and-virtues",
+      "status": "active"
+    },
+    {
+      "id": "ep-in-the-streets",
+      "title": "In The Streets EP (Digital Download)",
+      "slug": "in-the-streets-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Raw, street-level house grooves.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - In The Streets/1FF2EF20-92A7-4FF6-8850-6FA3987CAC74.png",
+      "formats": ["WAV", "MP3"],
+      "release_id": "in-the-streets",
+      "status": "active"
+    },
+    {
+      "id": "ep-inspire",
+      "title": "Inspire EP (Digital Download)",
+      "slug": "inspire-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Uplifting soulful house journeys.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Inspire/720426BD-0BE7-4582-A072-2E014DB9E2BC.PNG",
+      "formats": ["WAV", "MP3"],
+      "release_id": "inspire",
+      "status": "active"
+    },
+    {
+      "id": "ep-the-world-dont-stop",
+      "title": "The World Dont Stop EP (Digital Download)",
+      "slug": "the-world-dont-stop-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Relentless groove-forward house tracks.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - The World Dont Stop/IMG_0289.JPG",
+      "formats": ["WAV", "MP3"],
+      "release_id": "the-world-dont-stop",
+      "status": "active"
+    },
+    {
+      "id": "ep-utopia",
+      "title": "UTOPIA EP (Digital Download)",
+      "slug": "utopia-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Lush, expansive deep house soundscapes.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Utopia/IMG_2622.jpeg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "utopia",
+      "status": "active"
+    },
+    {
+      "id": "ep-daze",
+      "title": "Daze EP (Digital Download)",
+      "slug": "daze-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Hypnotic minimal grooves for late-night floors.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+      "formats": ["WAV", "MP3"],
+      "release_id": "daze",
+      "status": "active"
+    },
+    {
+      "id": "ep-staying-a-vibe",
+      "title": "Staying A Vibe EP (Digital Download)",
+      "slug": "staying-a-vibe-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Warm, feel-good house vibes.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Staying A Vibe/CD9B1141-992E-405C-B73D-CF3D2A6BF02E.jpeg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "staying-a-vibe",
+      "status": "active"
+    },
+    {
+      "id": "ep-soul-candy",
+      "title": "Soul Candy EP (Digital Download)",
+      "slug": "soul-candy-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Sweet, soulful deep house with funky grooves and feel-good energy.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Soul Candy/57A67CAB-0A23-4AB6-AE83-C840B0E0D3E4.jpeg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "soul-candy",
+      "status": "active"
+    },
+    {
+      "id": "ep-ftp",
+      "title": "FTP EP (Digital Download)",
+      "slug": "ftp-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Hard-hitting, high-energy tracks with raw intensity.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - FTP/4A8196B2-EDF9-4BBF-A685-D754C455A2A0.jpeg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "ftp",
+      "status": "active"
+    }
+  ],
+  "categories": [
+    { "id": "sample-packs", "label": "Sample Packs" },
+    { "id": "templates", "label": "Ableton Templates" },
+    { "id": "m4l-devices", "label": "M4L Devices" },
+    { "id": "tracks", "label": "Individual Tracks" },
+    { "id": "ep-bundles", "label": "EP Downloads" }
+  ]
+}

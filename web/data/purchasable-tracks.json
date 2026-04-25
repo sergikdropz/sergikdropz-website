@@ -1,0 +1,37 @@
+{
+  "tracks": [
+    {
+      "id": "track-1",
+      "title": "Track Name",
+      "slug": "track-name",
+      "description": "High-quality lossless audio file",
+      "price": 2.99,
+      "formats": [
+        {
+          "type": "WAV",
+          "file": "/audio/downloads/track-1.wav",
+          "size": "50MB"
+        },
+        {
+          "type": "FLAC",
+          "file": "/audio/downloads/track-1.flac",
+          "size": "35MB"
+        },
+        {
+          "type": "MP3",
+          "file": "/audio/downloads/track-1.mp3",
+          "size": "8MB"
+        }
+      ],
+      "previewUrl": "/audio/previews/track-1.mp3",
+      "artwork": "/images/releases/track-1.jpg",
+      "duration": 240,
+      "stripePriceId": "price_xxxxx",
+      "licensingEnabled": false,
+      "availableTiers": [],
+      "freeDownload": false,
+      "freeDownloadFormats": []
+    }
+  ],
+  "_note": "Individual purchasable tracks will be populated from Sonic DNA analysis once download files are uploaded to Supabase Storage. Set licensingEnabled:true and availableTiers to tier IDs (lease, premium, stems, exclusive) to enable beat licensing. Set freeDownload:true with freeDownloadFormats for email-gated free downloads."
+}

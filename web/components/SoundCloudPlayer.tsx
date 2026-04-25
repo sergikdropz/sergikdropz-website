@@ -2,6 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { FaPlay, FaPause, FaHeart, FaShare, FaComment } from 'react-icons/fa'
+import Image from 'next/image'
+import { resolveAudioUrl } from '@/utils/resolveAudioUrl'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface SoundCloudPlayerProps {
   src: string
@@ -11,6 +15,7 @@ interface SoundCloudPlayerProps {
   likes?: number
   plays?: number
   duration?: number
+  priority?: boolean // For LCP optimization
 }
 
 export default function SoundCloudPlayer({
@@ -20,14 +25,26 @@ export default function SoundCloudPlayer({
   artwork,
   likes = 0,
   plays = 0,
-  duration
+  duration,
+  priority = false
 }: SoundCloudPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [audioDuration, setAudioDuration] = useState(duration || 0)
   const [isLiked, setIsLiked] = useState(false)
   const [waveformData, setWaveformData] = useState<number[]>([])
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Resolve audio URL when src changes
+  useEffect(() => {
+    resolveAudioUrl(src).then(url => {
+      setResolvedUrl(url)
+    }).catch(err => {
+      console.error('Failed to resolve audio URL:', err)
+      setResolvedUrl(src) // Fallback to original
+    })
+  }, [src])
 
   // Generate fake waveform data (in real SoundCloud, this comes from audio analysis)
   useEffect(() => {
@@ -44,46 +61,60 @@ export default function SoundCloudPlayer({
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !resolvedUrl) return
+
+    // Update src when resolved URL changes
+    audio.src = resolvedUrl
+    audio.load()
 
     const updateTime = () => setCurrentTime(audio.currentTime)
     const updateDuration = () => {
       setAudioDuration(audio.duration || duration || 0)
     }
 
+    const handleError = () => {
+      const isDevelopment = process.env.NODE_ENV === 'development'
+      
+      // In production, don't fall back to local paths (they don't exist)
+      // In development, allow fallback to local path
+      if (isDevelopment && resolvedUrl.startsWith('http') && src !== resolvedUrl) {
+        if (isDevelopment) console.log('Falling back to local path:', src)
+        audio.src = src
+        audio.load()
+      } else {
+        if (isDevelopment) console.error('Failed to load audio from Supabase:', resolvedUrl)
+      }
+    }
+
+    const handleEnded = () => setIsPlaying(false)
+
     audio.addEventListener('timeupdate', updateTime)
     audio.addEventListener('loadedmetadata', updateDuration)
-    audio.addEventListener('ended', () => setIsPlaying(false))
+    audio.addEventListener('ended', handleEnded)
+    audio.addEventListener('error', handleError)
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime)
       audio.removeEventListener('loadedmetadata', updateDuration)
-      audio.removeEventListener('ended', () => setIsPlaying(false))
+      audio.removeEventListener('ended', handleEnded)
+      audio.removeEventListener('error', handleError)
     }
-  }, [duration])
+  }, [resolvedUrl, src, duration])
 
   const togglePlay = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/a346b04a-1680-490e-a42d-0a05edd129a0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SoundCloudPlayer.tsx:65',message:'Toggle play called',data:{isPlaying,hasAudio:!!audioRef.current,src},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     const audio = audioRef.current
     if (!audio) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/a346b04a-1680-490e-a42d-0a05edd129a0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SoundCloudPlayer.tsx:68',message:'Audio ref is null',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return
     }
 
     if (isPlaying) {
       audio.pause()
     } else {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/a346b04a-1680-490e-a42d-0a05edd129a0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SoundCloudPlayer.tsx:73',message:'Attempting to play audio',data:{src},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       audio.play().catch((err) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/a346b04a-1680-490e-a42d-0a05edd129a0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SoundCloudPlayer.tsx:75',message:'Audio play failed',data:{error:err.message,src},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+        // Ignore AbortError - it's expected when play() is interrupted by pause()
+        if (err.name !== 'AbortError') {
+          // Error handled silently
+        }
       })
     }
     setIsPlaying(!isPlaying)
@@ -116,7 +147,6 @@ export default function SoundCloudPlayer({
     <div className="bg-[#1a1a1a] rounded-lg border border-gray-800 overflow-hidden">
       <audio
         ref={audioRef}
-        src={src}
         preload="metadata"
       />
 
@@ -135,11 +165,15 @@ export default function SoundCloudPlayer({
         </button>
 
         {artwork && (
-          <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0">
-            <img
-              src={artwork}
+          <div className="relative w-12 h-12 rounded overflow-hidden flex-shrink-0">
+            <Image
+              src={resolveImageUrl(artwork)}
               alt={title}
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
+              sizes="48px"
+              priority={priority}
+              unoptimized={shouldUnoptimizeImage(resolveImageUrl(artwork))}
             />
           </div>
         )}

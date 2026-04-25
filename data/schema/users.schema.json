@@ -1,0 +1,15 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"UserAccount",
+  "type":"object",
+  "required":["id","email","role","created_at"],
+  "properties":{
+    "id":{"type":"string"},
+    "email":{"type":"string","format":"email"},
+    "role":{"type":"string","enum":["artist","manager","admin","agency"]},
+    "linked_artists":{"type":"array","items":{"type":"string"}},
+    "created_at":{"type":"string","format":"date-time"},
+    "last_login":{"type":["string","null"],"format":"date-time"},
+    "subscription_plan_id":{"type":["string","null"]}
+  }
+}

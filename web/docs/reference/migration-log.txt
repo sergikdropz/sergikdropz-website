@@ -1,0 +1,4464 @@
+[dotenv@17.2.3] injecting env (23) from .env.local -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+🚀 JSONB to Storage Migration Script
+
+============================================================
+Mode: ✅ LIVE MIGRATION
+============================================================
+
+📋 Fetching audio files from database...
+
+Found 295 audio files
+
+295 records have JSONB data to migrate
+
+✅ Created backup directory: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup
+
+🚀 Starting migration...
+
+============================================================
+
+[1/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/93cef3da-5844-430b-b05b-fad9f3f70e60.json
+
+📦 Processing: SERGIK - Aha (93cef3da-5844-430b-b05b-fad9f3f70e60)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/93cef3da-5844-430b-b05b-fad9f3f70e60.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/93cef3da-5844-430b-b05b-fad9f3f70e60.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/93cef3da-5844-430b-b05b-fad9f3f70e60.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/93cef3da-5844-430b-b05b-fad9f3f70e60.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[2/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/5f36f354-3f2f-4a67-bf67-364c6e9a7963.json
+
+📦 Processing: SERGIK - Boomers (5f36f354-3f2f-4a67-bf67-364c6e9a7963)
+   📊 Waveform: 37.6 KB
+   ✅ Uploaded to: waveforms/5f36f354-3f2f-4a67-bf67-364c6e9a7963.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/5f36f354-3f2f-4a67-bf67-364c6e9a7963.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/5f36f354-3f2f-4a67-bf67-364c6e9a7963.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/5f36f354-3f2f-4a67-bf67-364c6e9a7963.json
+   ✅ Database updated
+   💾 Freed: 121.1 KB
+
+[3/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b056ce4b-129d-4cd4-9cfd-a13566a5053f.json
+
+📦 Processing: SERGIK - Can You Dance v2 (b056ce4b-129d-4cd4-9cfd-a13566a5053f)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/b056ce4b-129d-4cd4-9cfd-a13566a5053f.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/b056ce4b-129d-4cd4-9cfd-a13566a5053f.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/b056ce4b-129d-4cd4-9cfd-a13566a5053f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b056ce4b-129d-4cd4-9cfd-a13566a5053f.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[4/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f92b5210-bef1-40cc-80d2-beedabbaa085.json
+
+📦 Processing: SERGIK - Cant Fight It (f92b5210-bef1-40cc-80d2-beedabbaa085)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/f92b5210-bef1-40cc-80d2-beedabbaa085.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/f92b5210-bef1-40cc-80d2-beedabbaa085.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/f92b5210-bef1-40cc-80d2-beedabbaa085.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f92b5210-bef1-40cc-80d2-beedabbaa085.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[5/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1fda9b0e-2ce1-419f-97f3-2a1fc1c04d8d.json
+
+📦 Processing: SERGIK - Discodellic (1fda9b0e-2ce1-419f-97f3-2a1fc1c04d8d)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/1fda9b0e-2ce1-419f-97f3-2a1fc1c04d8d.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/1fda9b0e-2ce1-419f-97f3-2a1fc1c04d8d.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/1fda9b0e-2ce1-419f-97f3-2a1fc1c04d8d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1fda9b0e-2ce1-419f-97f3-2a1fc1c04d8d.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[6/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/95f4a136-2d0a-4e10-be05-1d79c8862721.json
+
+📦 Processing: JIMII x Sergik - dublin (95f4a136-2d0a-4e10-be05-1d79c8862721)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/95f4a136-2d0a-4e10-be05-1d79c8862721.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/95f4a136-2d0a-4e10-be05-1d79c8862721.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/95f4a136-2d0a-4e10-be05-1d79c8862721.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/95f4a136-2d0a-4e10-be05-1d79c8862721.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[7/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/cdb61fc6-bcfa-4ae3-9ea2-c6b63c0c9086.json
+
+📦 Processing: SERGIK - Divine Molecules (cdb61fc6-bcfa-4ae3-9ea2-c6b63c0c9086)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/cdb61fc6-bcfa-4ae3-9ea2-c6b63c0c9086.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/cdb61fc6-bcfa-4ae3-9ea2-c6b63c0c9086.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/cdb61fc6-bcfa-4ae3-9ea2-c6b63c0c9086.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/cdb61fc6-bcfa-4ae3-9ea2-c6b63c0c9086.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[8/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4d6c65bb-1f3b-4d85-a654-fc47d0073f8c.json
+
+📦 Processing: SERGIK - 24_7 VIP 1 (4d6c65bb-1f3b-4d85-a654-fc47d0073f8c)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/4d6c65bb-1f3b-4d85-a654-fc47d0073f8c.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/4d6c65bb-1f3b-4d85-a654-fc47d0073f8c.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/4d6c65bb-1f3b-4d85-a654-fc47d0073f8c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4d6c65bb-1f3b-4d85-a654-fc47d0073f8c.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[9/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/0e1693da-f583-4050-9361-20e46e4da628.json
+
+📦 Processing: SERGIK - Dmn8r's (FTP VIP) (0e1693da-f583-4050-9361-20e46e4da628)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/0e1693da-f583-4050-9361-20e46e4da628.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/0e1693da-f583-4050-9361-20e46e4da628.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/0e1693da-f583-4050-9361-20e46e4da628.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/0e1693da-f583-4050-9361-20e46e4da628.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[10/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8f8446cf-ea1d-4437-967f-41da1148b9ee.json
+
+📦 Processing: SERGIK - 24_7 VIP 2 (8f8446cf-ea1d-4437-967f-41da1148b9ee)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/8f8446cf-ea1d-4437-967f-41da1148b9ee.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/8f8446cf-ea1d-4437-967f-41da1148b9ee.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/8f8446cf-ea1d-4437-967f-41da1148b9ee.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8f8446cf-ea1d-4437-967f-41da1148b9ee.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[11/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a77ef7b8-0284-48da-8ad1-57b22ff6a842.json
+
+📦 Processing: SERGIK - Dont Mind Me (a77ef7b8-0284-48da-8ad1-57b22ff6a842)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/a77ef7b8-0284-48da-8ad1-57b22ff6a842.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/a77ef7b8-0284-48da-8ad1-57b22ff6a842.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/a77ef7b8-0284-48da-8ad1-57b22ff6a842.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a77ef7b8-0284-48da-8ad1-57b22ff6a842.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[12/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f081531e-d08c-4c3e-addf-3e7e3c3148fe.json
+
+📦 Processing: SERGIK - Air It Out (f081531e-d08c-4c3e-addf-3e7e3c3148fe)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/f081531e-d08c-4c3e-addf-3e7e3c3148fe.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/f081531e-d08c-4c3e-addf-3e7e3c3148fe.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/f081531e-d08c-4c3e-addf-3e7e3c3148fe.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f081531e-d08c-4c3e-addf-3e7e3c3148fe.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[13/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f663f7da-d4c8-4eaa-a8cf-415ee10139d2.json
+
+📦 Processing: SERGIK - Everyday Gratitude (Freedom SRGFLiP (f663f7da-d4c8-4eaa-a8cf-415ee10139d2)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/f663f7da-d4c8-4eaa-a8cf-415ee10139d2.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/f663f7da-d4c8-4eaa-a8cf-415ee10139d2.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/f663f7da-d4c8-4eaa-a8cf-415ee10139d2.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f663f7da-d4c8-4eaa-a8cf-415ee10139d2.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[14/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2fa8328c-cdb1-417b-b5ee-077ece779bfd.json
+
+📦 Processing: SERGIK - All The Vibes (2fa8328c-cdb1-417b-b5ee-077ece779bfd)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/2fa8328c-cdb1-417b-b5ee-077ece779bfd.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/2fa8328c-cdb1-417b-b5ee-077ece779bfd.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/2fa8328c-cdb1-417b-b5ee-077ece779bfd.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2fa8328c-cdb1-417b-b5ee-077ece779bfd.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[15/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e715894c-a6f1-41e4-bd33-aa1b70a6dd72.json
+
+📦 Processing: SERGIK - Everyday Gratitude 1 (e715894c-a6f1-41e4-bd33-aa1b70a6dd72)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/e715894c-a6f1-41e4-bd33-aa1b70a6dd72.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/e715894c-a6f1-41e4-bd33-aa1b70a6dd72.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/e715894c-a6f1-41e4-bd33-aa1b70a6dd72.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e715894c-a6f1-41e4-bd33-aa1b70a6dd72.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[16/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ffee5f05-df86-494d-afb6-c8b25b39ca76.json
+
+📦 Processing: SERGIK - Everyday Gratitude (ffee5f05-df86-494d-afb6-c8b25b39ca76)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/ffee5f05-df86-494d-afb6-c8b25b39ca76.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/ffee5f05-df86-494d-afb6-c8b25b39ca76.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/ffee5f05-df86-494d-afb6-c8b25b39ca76.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ffee5f05-df86-494d-afb6-c8b25b39ca76.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[17/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/edd0be0a-8e34-4140-9699-554228e5f567.json
+
+📦 Processing: SERGIK - Giddup (edd0be0a-8e34-4140-9699-554228e5f567)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/edd0be0a-8e34-4140-9699-554228e5f567.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/edd0be0a-8e34-4140-9699-554228e5f567.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/edd0be0a-8e34-4140-9699-554228e5f567.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/edd0be0a-8e34-4140-9699-554228e5f567.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[18/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1e0ff658-2b69-4685-aef9-337a82dea765.json
+
+📦 Processing: SERGIK - Going Gone 122bpm (1e0ff658-2b69-4685-aef9-337a82dea765)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/1e0ff658-2b69-4685-aef9-337a82dea765.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/1e0ff658-2b69-4685-aef9-337a82dea765.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/1e0ff658-2b69-4685-aef9-337a82dea765.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1e0ff658-2b69-4685-aef9-337a82dea765.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[19/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/030de574-a45d-4f8c-a2e3-24cffcfd2cc8.json
+
+📦 Processing: SERGIK - Gone Floating (030de574-a45d-4f8c-a2e3-24cffcfd2cc8)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/030de574-a45d-4f8c-a2e3-24cffcfd2cc8.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/030de574-a45d-4f8c-a2e3-24cffcfd2cc8.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/030de574-a45d-4f8c-a2e3-24cffcfd2cc8.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/030de574-a45d-4f8c-a2e3-24cffcfd2cc8.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[20/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3fd16b75-f087-4662-8614-c48e54e40fc5.json
+
+📦 Processing: SERGIK - Happiness 2 (3fd16b75-f087-4662-8614-c48e54e40fc5)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/3fd16b75-f087-4662-8614-c48e54e40fc5.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/3fd16b75-f087-4662-8614-c48e54e40fc5.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/3fd16b75-f087-4662-8614-c48e54e40fc5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3fd16b75-f087-4662-8614-c48e54e40fc5.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[21/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/77918b4d-f781-4ef1-896c-69253f00dacc.json
+
+📦 Processing: SERGIK - Have To Do It (77918b4d-f781-4ef1-896c-69253f00dacc)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/77918b4d-f781-4ef1-896c-69253f00dacc.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/77918b4d-f781-4ef1-896c-69253f00dacc.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/77918b4d-f781-4ef1-896c-69253f00dacc.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/77918b4d-f781-4ef1-896c-69253f00dacc.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[22/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e9a87a30-43c2-4734-bf7c-0b9e4321989f.json
+
+📦 Processing: SERGIK - I Feel Good (e9a87a30-43c2-4734-bf7c-0b9e4321989f)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/e9a87a30-43c2-4734-bf7c-0b9e4321989f.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/e9a87a30-43c2-4734-bf7c-0b9e4321989f.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/e9a87a30-43c2-4734-bf7c-0b9e4321989f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e9a87a30-43c2-4734-bf7c-0b9e4321989f.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[23/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/73cae637-09ad-47e4-820a-87b628854fc5.json
+
+📦 Processing: SERGIK - Illusions (73cae637-09ad-47e4-820a-87b628854fc5)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/73cae637-09ad-47e4-820a-87b628854fc5.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/73cae637-09ad-47e4-820a-87b628854fc5.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/73cae637-09ad-47e4-820a-87b628854fc5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/73cae637-09ad-47e4-820a-87b628854fc5.json
+   ✅ Database updated
+   💾 Freed: 119.0 KB
+
+[24/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3661ec21-69ae-45c5-b7ad-5515f899a5cb.json
+
+📦 Processing: SERGIK - In The Moment (3661ec21-69ae-45c5-b7ad-5515f899a5cb)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/3661ec21-69ae-45c5-b7ad-5515f899a5cb.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/3661ec21-69ae-45c5-b7ad-5515f899a5cb.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/3661ec21-69ae-45c5-b7ad-5515f899a5cb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3661ec21-69ae-45c5-b7ad-5515f899a5cb.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[25/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a46c2733-dfe1-461e-9164-4809a98ac975.json
+
+📦 Processing: SERGIK - Money Talk Bs Walk (a46c2733-dfe1-461e-9164-4809a98ac975)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/a46c2733-dfe1-461e-9164-4809a98ac975.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/a46c2733-dfe1-461e-9164-4809a98ac975.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/a46c2733-dfe1-461e-9164-4809a98ac975.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a46c2733-dfe1-461e-9164-4809a98ac975.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[26/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c5576a97-ffa1-4cf9-abd4-7f8c4dcb7de1.json
+
+📦 Processing: SERGIK - More Than Life (c5576a97-ffa1-4cf9-abd4-7f8c4dcb7de1)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/c5576a97-ffa1-4cf9-abd4-7f8c4dcb7de1.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/c5576a97-ffa1-4cf9-abd4-7f8c4dcb7de1.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/c5576a97-ffa1-4cf9-abd4-7f8c4dcb7de1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c5576a97-ffa1-4cf9-abd4-7f8c4dcb7de1.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[27/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1f818e3f-778c-494d-aeee-0201820eea11.json
+
+📦 Processing: SERGIK - Musik Is The Answr (1f818e3f-778c-494d-aeee-0201820eea11)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/1f818e3f-778c-494d-aeee-0201820eea11.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/1f818e3f-778c-494d-aeee-0201820eea11.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/1f818e3f-778c-494d-aeee-0201820eea11.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1f818e3f-778c-494d-aeee-0201820eea11.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[28/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f17f0c8a-49d8-4686-b722-92b3a68a005b.json
+
+📦 Processing: SERGIK - Needs (f17f0c8a-49d8-4686-b722-92b3a68a005b)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/f17f0c8a-49d8-4686-b722-92b3a68a005b.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/f17f0c8a-49d8-4686-b722-92b3a68a005b.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/f17f0c8a-49d8-4686-b722-92b3a68a005b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f17f0c8a-49d8-4686-b722-92b3a68a005b.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[29/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b3966c9f-c7aa-44b6-a9ff-e1ce8cab8a74.json
+
+📦 Processing: SERGIK - Not the Type (b3966c9f-c7aa-44b6-a9ff-e1ce8cab8a74)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/b3966c9f-c7aa-44b6-a9ff-e1ce8cab8a74.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/b3966c9f-c7aa-44b6-a9ff-e1ce8cab8a74.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/b3966c9f-c7aa-44b6-a9ff-e1ce8cab8a74.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b3966c9f-c7aa-44b6-a9ff-e1ce8cab8a74.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[30/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/63a77510-ae02-494f-968c-9e9060b0be06.json
+
+📦 Processing: SERGIK - Nothing to it (63a77510-ae02-494f-968c-9e9060b0be06)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/63a77510-ae02-494f-968c-9e9060b0be06.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/63a77510-ae02-494f-968c-9e9060b0be06.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/63a77510-ae02-494f-968c-9e9060b0be06.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/63a77510-ae02-494f-968c-9e9060b0be06.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[31/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c5faf776-bc65-4895-9196-b459b8cda13b.json
+
+📦 Processing: SERGIK - Soul Candy (c5faf776-bc65-4895-9196-b459b8cda13b)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/c5faf776-bc65-4895-9196-b459b8cda13b.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/c5faf776-bc65-4895-9196-b459b8cda13b.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/c5faf776-bc65-4895-9196-b459b8cda13b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c5faf776-bc65-4895-9196-b459b8cda13b.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[32/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6459f0ed-8b8d-4b84-9dbe-a6e83ce11542.json
+
+📦 Processing: SERGIK - Spring Swing 1 (6459f0ed-8b8d-4b84-9dbe-a6e83ce11542)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/6459f0ed-8b8d-4b84-9dbe-a6e83ce11542.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/6459f0ed-8b8d-4b84-9dbe-a6e83ce11542.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/6459f0ed-8b8d-4b84-9dbe-a6e83ce11542.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6459f0ed-8b8d-4b84-9dbe-a6e83ce11542.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[33/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/de019438-99c3-41a9-8410-8027f88462b7.json
+
+📦 Processing: SERGIK - Spring Swing (de019438-99c3-41a9-8410-8027f88462b7)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/de019438-99c3-41a9-8410-8027f88462b7.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/de019438-99c3-41a9-8410-8027f88462b7.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/de019438-99c3-41a9-8410-8027f88462b7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/de019438-99c3-41a9-8410-8027f88462b7.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[34/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/12f7aaef-feb5-4910-84e8-3ce2923100cf.json
+
+📦 Processing: SERGIK - The Beat (12f7aaef-feb5-4910-84e8-3ce2923100cf)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/12f7aaef-feb5-4910-84e8-3ce2923100cf.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/12f7aaef-feb5-4910-84e8-3ce2923100cf.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/12f7aaef-feb5-4910-84e8-3ce2923100cf.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/12f7aaef-feb5-4910-84e8-3ce2923100cf.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[35/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8207e3e9-3033-4e0d-98bf-1c74ee0616b0.json
+
+📦 Processing: SERGIK - They Know (8207e3e9-3033-4e0d-98bf-1c74ee0616b0)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/8207e3e9-3033-4e0d-98bf-1c74ee0616b0.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/8207e3e9-3033-4e0d-98bf-1c74ee0616b0.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/8207e3e9-3033-4e0d-98bf-1c74ee0616b0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8207e3e9-3033-4e0d-98bf-1c74ee0616b0.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[36/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6afda7ea-eeb3-4b5c-8c90-fedd714d3fed.json
+
+📦 Processing: SERGIK - Way Back (6afda7ea-eeb3-4b5c-8c90-fedd714d3fed)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/6afda7ea-eeb3-4b5c-8c90-fedd714d3fed.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/6afda7ea-eeb3-4b5c-8c90-fedd714d3fed.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/6afda7ea-eeb3-4b5c-8c90-fedd714d3fed.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6afda7ea-eeb3-4b5c-8c90-fedd714d3fed.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[37/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ef9c4f4e-8b73-429a-ad29-4a716d6c8cf5.json
+
+📦 Processing: SERGIK - tell her v2 (ef9c4f4e-8b73-429a-ad29-4a716d6c8cf5)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/ef9c4f4e-8b73-429a-ad29-4a716d6c8cf5.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/ef9c4f4e-8b73-429a-ad29-4a716d6c8cf5.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/ef9c4f4e-8b73-429a-ad29-4a716d6c8cf5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ef9c4f4e-8b73-429a-ad29-4a716d6c8cf5.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[38/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/41d37df7-6fc6-461a-b7d9-65d7dd2d4ae6.json
+
+📦 Processing: SERGIK Ft. Janis & The Planets - Suade (41d37df7-6fc6-461a-b7d9-65d7dd2d4ae6)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/41d37df7-6fc6-461a-b7d9-65d7dd2d4ae6.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/41d37df7-6fc6-461a-b7d9-65d7dd2d4ae6.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/41d37df7-6fc6-461a-b7d9-65d7dd2d4ae6.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/41d37df7-6fc6-461a-b7d9-65d7dd2d4ae6.json
+   ✅ Database updated
+   💾 Freed: 120.5 KB
+
+[39/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/845fd944-5574-45d6-9b0e-27d4cd8a5803.json
+
+📦 Processing: SERGIK x Deep Chetty - So Good v3 (845fd944-5574-45d6-9b0e-27d4cd8a5803)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/845fd944-5574-45d6-9b0e-27d4cd8a5803.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/845fd944-5574-45d6-9b0e-27d4cd8a5803.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/845fd944-5574-45d6-9b0e-27d4cd8a5803.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/845fd944-5574-45d6-9b0e-27d4cd8a5803.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[40/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/55606d01-6e07-4126-b801-c03c1182668a.json
+
+📦 Processing: SERGIK x Dilon Karim Ft. BeJanis- Let it Tak (55606d01-6e07-4126-b801-c03c1182668a)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/55606d01-6e07-4126-b801-c03c1182668a.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/55606d01-6e07-4126-b801-c03c1182668a.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/55606d01-6e07-4126-b801-c03c1182668a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/55606d01-6e07-4126-b801-c03c1182668a.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[41/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a398c388-f9eb-4c46-971e-7f2c5e18a00a.json
+
+📦 Processing: SERGIK x Frank Terry - Cozy Cats (a398c388-f9eb-4c46-971e-7f2c5e18a00a)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/a398c388-f9eb-4c46-971e-7f2c5e18a00a.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/a398c388-f9eb-4c46-971e-7f2c5e18a00a.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/a398c388-f9eb-4c46-971e-7f2c5e18a00a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a398c388-f9eb-4c46-971e-7f2c5e18a00a.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[42/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6a3a92cf-2323-4fe3-9632-31ec792fbcb6.json
+
+📦 Processing: SERGIK x Frank Terry - Repeat (6a3a92cf-2323-4fe3-9632-31ec792fbcb6)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/6a3a92cf-2323-4fe3-9632-31ec792fbcb6.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/6a3a92cf-2323-4fe3-9632-31ec792fbcb6.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/6a3a92cf-2323-4fe3-9632-31ec792fbcb6.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6a3a92cf-2323-4fe3-9632-31ec792fbcb6.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[43/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3c3813cd-4050-49f4-b220-8d1b0c27846d.json
+
+📦 Processing: SERGIK x Jetski - Alienated (3c3813cd-4050-49f4-b220-8d1b0c27846d)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/3c3813cd-4050-49f4-b220-8d1b0c27846d.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/3c3813cd-4050-49f4-b220-8d1b0c27846d.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/3c3813cd-4050-49f4-b220-8d1b0c27846d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3c3813cd-4050-49f4-b220-8d1b0c27846d.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[44/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7745e91e-5a2f-433e-b6bc-e62479e05429.json
+
+📦 Processing: SERGIK x Ladell Ransom - Desiderata (7745e91e-5a2f-433e-b6bc-e62479e05429)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/7745e91e-5a2f-433e-b6bc-e62479e05429.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/7745e91e-5a2f-433e-b6bc-e62479e05429.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/7745e91e-5a2f-433e-b6bc-e62479e05429.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7745e91e-5a2f-433e-b6bc-e62479e05429.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[45/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b5e4c537-66ae-459b-a9a3-cb2d031cf3e3.json
+
+📦 Processing: SERGIK x NOOD - If You Want To v2 (b5e4c537-66ae-459b-a9a3-cb2d031cf3e3)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/b5e4c537-66ae-459b-a9a3-cb2d031cf3e3.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/b5e4c537-66ae-459b-a9a3-cb2d031cf3e3.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/b5e4c537-66ae-459b-a9a3-cb2d031cf3e3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b5e4c537-66ae-459b-a9a3-cb2d031cf3e3.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[46/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3b2aaac8-ea3a-49e4-bac2-f466f6f18045.json
+
+📦 Processing: SERGIK x Silent Jay - Like That (3b2aaac8-ea3a-49e4-bac2-f466f6f18045)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/3b2aaac8-ea3a-49e4-bac2-f466f6f18045.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/3b2aaac8-ea3a-49e4-bac2-f466f6f18045.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/3b2aaac8-ea3a-49e4-bac2-f466f6f18045.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3b2aaac8-ea3a-49e4-bac2-f466f6f18045.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[47/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/651c86f8-7d7d-4244-b002-c09fbc587cfd.json
+
+📦 Processing: SERGIK x Silent Jay - Numba One (651c86f8-7d7d-4244-b002-c09fbc587cfd)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/651c86f8-7d7d-4244-b002-c09fbc587cfd.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/651c86f8-7d7d-4244-b002-c09fbc587cfd.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/651c86f8-7d7d-4244-b002-c09fbc587cfd.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/651c86f8-7d7d-4244-b002-c09fbc587cfd.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[48/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/20c7ff8d-4b84-4d69-9e01-01b1900555d3.json
+
+📦 Processing: Sergik - 90s Baby (20c7ff8d-4b84-4d69-9e01-01b1900555d3)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/20c7ff8d-4b84-4d69-9e01-01b1900555d3.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/20c7ff8d-4b84-4d69-9e01-01b1900555d3.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/20c7ff8d-4b84-4d69-9e01-01b1900555d3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/20c7ff8d-4b84-4d69-9e01-01b1900555d3.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[49/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3774f4e8-f252-412c-99c7-073ff543649a.json
+
+📦 Processing: Silent Jay x Sergik - Move Me (3774f4e8-f252-412c-99c7-073ff543649a)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/3774f4e8-f252-412c-99c7-073ff543649a.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/3774f4e8-f252-412c-99c7-073ff543649a.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/3774f4e8-f252-412c-99c7-073ff543649a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3774f4e8-f252-412c-99c7-073ff543649a.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[50/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/0ec4c76d-e211-4f93-b1be-387b34d9db05.json
+
+📦 Processing: Optikz x SERGIK(Vips) - Crowd Control - Trap (0ec4c76d-e211-4f93-b1be-387b34d9db05)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/0ec4c76d-e211-4f93-b1be-387b34d9db05.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/0ec4c76d-e211-4f93-b1be-387b34d9db05.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/0ec4c76d-e211-4f93-b1be-387b34d9db05.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/0ec4c76d-e211-4f93-b1be-387b34d9db05.json
+   ✅ Database updated
+   💾 Freed: 120.8 KB
+
+[51/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4d111784-45f5-4143-86af-945585a8c4fb.json
+
+📦 Processing: SERGIK  - It Is What It Is (4d111784-45f5-4143-86af-945585a8c4fb)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/4d111784-45f5-4143-86af-945585a8c4fb.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/4d111784-45f5-4143-86af-945585a8c4fb.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/4d111784-45f5-4143-86af-945585a8c4fb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4d111784-45f5-4143-86af-945585a8c4fb.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[52/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ef5fadfe-c472-4484-aadb-875077fca928.json
+
+📦 Processing: SERGIK - Bitty Bong Dub (ef5fadfe-c472-4484-aadb-875077fca928)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/ef5fadfe-c472-4484-aadb-875077fca928.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/ef5fadfe-c472-4484-aadb-875077fca928.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/ef5fadfe-c472-4484-aadb-875077fca928.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ef5fadfe-c472-4484-aadb-875077fca928.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[53/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/aced440d-be1f-4ca3-a8ef-575cdfd6b804.json
+
+📦 Processing: SERGIK - Elevator Musik (aced440d-be1f-4ca3-a8ef-575cdfd6b804)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/aced440d-be1f-4ca3-a8ef-575cdfd6b804.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/aced440d-be1f-4ca3-a8ef-575cdfd6b804.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/aced440d-be1f-4ca3-a8ef-575cdfd6b804.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/aced440d-be1f-4ca3-a8ef-575cdfd6b804.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[54/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/bdb71647-0e52-46ff-8e0f-41cd13f05da4.json
+
+📦 Processing: SERGIK - Like The Ol Days (Bass VIP) (bdb71647-0e52-46ff-8e0f-41cd13f05da4)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/bdb71647-0e52-46ff-8e0f-41cd13f05da4.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/bdb71647-0e52-46ff-8e0f-41cd13f05da4.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/bdb71647-0e52-46ff-8e0f-41cd13f05da4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/bdb71647-0e52-46ff-8e0f-41cd13f05da4.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[55/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c342822a-703d-429e-9a47-cd427fa85b23.json
+
+📦 Processing: SERGIK - No Stopping (c342822a-703d-429e-9a47-cd427fa85b23)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/c342822a-703d-429e-9a47-cd427fa85b23.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/c342822a-703d-429e-9a47-cd427fa85b23.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/c342822a-703d-429e-9a47-cd427fa85b23.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c342822a-703d-429e-9a47-cd427fa85b23.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[56/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c22168a0-7132-449f-aa5e-de53c6ea1b54.json
+
+📦 Processing: SERGIK - Sunrise Bass (c22168a0-7132-449f-aa5e-de53c6ea1b54)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/c22168a0-7132-449f-aa5e-de53c6ea1b54.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/c22168a0-7132-449f-aa5e-de53c6ea1b54.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/c22168a0-7132-449f-aa5e-de53c6ea1b54.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c22168a0-7132-449f-aa5e-de53c6ea1b54.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[57/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1fcf958d-ad4c-4b92-bdcd-eac208ec1e2d.json
+
+📦 Processing: SERGIK - Whats the Reason (Bass VIP 2) (1fcf958d-ad4c-4b92-bdcd-eac208ec1e2d)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/1fcf958d-ad4c-4b92-bdcd-eac208ec1e2d.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/1fcf958d-ad4c-4b92-bdcd-eac208ec1e2d.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/1fcf958d-ad4c-4b92-bdcd-eac208ec1e2d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1fcf958d-ad4c-4b92-bdcd-eac208ec1e2d.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[58/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/392f51f0-1a74-4448-adf8-5be7c689db8a.json
+
+📦 Processing: SERGIK - Whats the Reason (Bass VIP) (392f51f0-1a74-4448-adf8-5be7c689db8a)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/392f51f0-1a74-4448-adf8-5be7c689db8a.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/392f51f0-1a74-4448-adf8-5be7c689db8a.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/392f51f0-1a74-4448-adf8-5be7c689db8a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/392f51f0-1a74-4448-adf8-5be7c689db8a.json
+   ✅ Database updated
+   💾 Freed: 120.8 KB
+
+[59/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/0718627b-dfe6-41df-8a79-b027cd5aa945.json
+
+📦 Processing: SERGIK - Whats the Reason (0718627b-dfe6-41df-8a79-b027cd5aa945)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/0718627b-dfe6-41df-8a79-b027cd5aa945.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/0718627b-dfe6-41df-8a79-b027cd5aa945.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/0718627b-dfe6-41df-8a79-b027cd5aa945.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/0718627b-dfe6-41df-8a79-b027cd5aa945.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[60/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/749f59be-5ad3-4fbc-bffa-8aaf487da757.json
+
+📦 Processing: SERGIK - Wonked (135 BPM Drum Rework) (749f59be-5ad3-4fbc-bffa-8aaf487da757)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/749f59be-5ad3-4fbc-bffa-8aaf487da757.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/749f59be-5ad3-4fbc-bffa-8aaf487da757.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/749f59be-5ad3-4fbc-bffa-8aaf487da757.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/749f59be-5ad3-4fbc-bffa-8aaf487da757.json
+   ✅ Database updated
+   💾 Freed: 121.0 KB
+
+[61/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4fff5980-18b2-4a21-9846-2a5379183830.json
+
+📦 Processing: SERGIK - Wonked (4fff5980-18b2-4a21-9846-2a5379183830)
+   📊 Waveform: 37.6 KB
+   ✅ Uploaded to: waveforms/4fff5980-18b2-4a21-9846-2a5379183830.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/4fff5980-18b2-4a21-9846-2a5379183830.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/4fff5980-18b2-4a21-9846-2a5379183830.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4fff5980-18b2-4a21-9846-2a5379183830.json
+   ✅ Database updated
+   💾 Freed: 121.1 KB
+
+[62/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7bae44f1-e152-4ded-af80-072dfaf68b51.json
+
+📦 Processing: SERGIK -Crowd Control (Amerika SRGFLiP) 1 (7bae44f1-e152-4ded-af80-072dfaf68b51)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/7bae44f1-e152-4ded-af80-072dfaf68b51.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/7bae44f1-e152-4ded-af80-072dfaf68b51.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/7bae44f1-e152-4ded-af80-072dfaf68b51.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7bae44f1-e152-4ded-af80-072dfaf68b51.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[63/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7e9f6488-2895-4239-a57f-e9ed5f307666.json
+
+📦 Processing: SERGIK X OG Coconuttz - Drunk n High (7e9f6488-2895-4239-a57f-e9ed5f307666)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/7e9f6488-2895-4239-a57f-e9ed5f307666.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/7e9f6488-2895-4239-a57f-e9ed5f307666.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/7e9f6488-2895-4239-a57f-e9ed5f307666.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7e9f6488-2895-4239-a57f-e9ed5f307666.json
+   ✅ Database updated
+   💾 Freed: 120.8 KB
+
+[64/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d46c0f7f-0b61-450b-a5fc-d190b8a3513c.json
+
+📦 Processing: SERGIK x Aloe Flipz - Shafeus (d46c0f7f-0b61-450b-a5fc-d190b8a3513c)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/d46c0f7f-0b61-450b-a5fc-d190b8a3513c.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/d46c0f7f-0b61-450b-a5fc-d190b8a3513c.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/d46c0f7f-0b61-450b-a5fc-d190b8a3513c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d46c0f7f-0b61-450b-a5fc-d190b8a3513c.json
+   ✅ Database updated
+   💾 Freed: 121.0 KB
+
+[65/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/28327f8d-d234-48c0-9ca4-759952ff2090.json
+
+📦 Processing: SERGIK - Space Dust (28327f8d-d234-48c0-9ca4-759952ff2090)
+   📊 Waveform: 37.8 KB
+   ✅ Uploaded to: waveforms/28327f8d-d234-48c0-9ca4-759952ff2090.json
+   🧬 Sonic DNA: 41.9 KB
+   ✅ Uploaded to: sonic-dna/28327f8d-d234-48c0-9ca4-759952ff2090.json
+   🤖 AI Analysis: 41.9 KB
+   ✅ Uploaded to: ai-analysis/28327f8d-d234-48c0-9ca4-759952ff2090.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/28327f8d-d234-48c0-9ca4-759952ff2090.json
+   ✅ Database updated
+   💾 Freed: 121.7 KB
+
+[66/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/713878e1-3710-466b-8aea-6774d7416cbb.json
+
+📦 Processing: SERGIK - Back to The Basics (Instrumental) (713878e1-3710-466b-8aea-6774d7416cbb)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/713878e1-3710-466b-8aea-6774d7416cbb.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/713878e1-3710-466b-8aea-6774d7416cbb.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/713878e1-3710-466b-8aea-6774d7416cbb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/713878e1-3710-466b-8aea-6774d7416cbb.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[67/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/9312854a-aeb7-46d2-8059-a1b622fd2928.json
+
+📦 Processing: SERGIK - Back to The Basics (9312854a-aeb7-46d2-8059-a1b622fd2928)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/9312854a-aeb7-46d2-8059-a1b622fd2928.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/9312854a-aeb7-46d2-8059-a1b622fd2928.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/9312854a-aeb7-46d2-8059-a1b622fd2928.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/9312854a-aeb7-46d2-8059-a1b622fd2928.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[68/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f0b2f56e-6baf-40d2-9247-9f3dcde910bd.json
+
+📦 Processing: SERGIK x Isaiah - Wont Stop 2 (f0b2f56e-6baf-40d2-9247-9f3dcde910bd)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/f0b2f56e-6baf-40d2-9247-9f3dcde910bd.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/f0b2f56e-6baf-40d2-9247-9f3dcde910bd.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/f0b2f56e-6baf-40d2-9247-9f3dcde910bd.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f0b2f56e-6baf-40d2-9247-9f3dcde910bd.json
+   ✅ Database updated
+   💾 Freed: 120.5 KB
+
+[69/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/28c2d8dd-a350-42e2-9d96-e1497f64b4e7.json
+
+📦 Processing: SERGIK x OG Coconut - What you want (28c2d8dd-a350-42e2-9d96-e1497f64b4e7)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/28c2d8dd-a350-42e2-9d96-e1497f64b4e7.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/28c2d8dd-a350-42e2-9d96-e1497f64b4e7.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/28c2d8dd-a350-42e2-9d96-e1497f64b4e7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/28c2d8dd-a350-42e2-9d96-e1497f64b4e7.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[70/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/10b23a72-1880-4f87-8cf6-ec6609cbf047.json
+
+📦 Processing: SERGIK x OG Coconut - Big Macs n Jumbo Jacks (10b23a72-1880-4f87-8cf6-ec6609cbf047)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/10b23a72-1880-4f87-8cf6-ec6609cbf047.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/10b23a72-1880-4f87-8cf6-ec6609cbf047.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/10b23a72-1880-4f87-8cf6-ec6609cbf047.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/10b23a72-1880-4f87-8cf6-ec6609cbf047.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[71/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/9801989f-7de3-4d89-bc28-0b28d4359121.json
+
+📦 Processing: SERGIK x OG Coconut x Kuhl - Mavericks V2 (9801989f-7de3-4d89-bc28-0b28d4359121)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/9801989f-7de3-4d89-bc28-0b28d4359121.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/9801989f-7de3-4d89-bc28-0b28d4359121.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/9801989f-7de3-4d89-bc28-0b28d4359121.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/9801989f-7de3-4d89-bc28-0b28d4359121.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[72/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a5d0b11a-79e9-4f42-8552-67d072ea8b1c.json
+
+📦 Processing: SERGIK x Optikz - Foe Fos (a5d0b11a-79e9-4f42-8552-67d072ea8b1c)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/a5d0b11a-79e9-4f42-8552-67d072ea8b1c.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/a5d0b11a-79e9-4f42-8552-67d072ea8b1c.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/a5d0b11a-79e9-4f42-8552-67d072ea8b1c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a5d0b11a-79e9-4f42-8552-67d072ea8b1c.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[73/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3d91d79b-751c-4500-8614-7ca42dadba20.json
+
+📦 Processing: SERGIK x Slick Floyd - Pharoe (3d91d79b-751c-4500-8614-7ca42dadba20)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/3d91d79b-751c-4500-8614-7ca42dadba20.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/3d91d79b-751c-4500-8614-7ca42dadba20.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/3d91d79b-751c-4500-8614-7ca42dadba20.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3d91d79b-751c-4500-8614-7ca42dadba20.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[74/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7b988de5-49da-476e-9c57-c9487c264d48.json
+
+📦 Processing: SERGIK x Stov - Everyday (DnB ViP) (7b988de5-49da-476e-9c57-c9487c264d48)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/7b988de5-49da-476e-9c57-c9487c264d48.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/7b988de5-49da-476e-9c57-c9487c264d48.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/7b988de5-49da-476e-9c57-c9487c264d48.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7b988de5-49da-476e-9c57-c9487c264d48.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[75/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/873f95ed-e22c-4334-abc7-7091dcdd142a.json
+
+📦 Processing: ANDINO x SERGIK - Bird Talk (873f95ed-e22c-4334-abc7-7091dcdd142a)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/873f95ed-e22c-4334-abc7-7091dcdd142a.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/873f95ed-e22c-4334-abc7-7091dcdd142a.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/873f95ed-e22c-4334-abc7-7091dcdd142a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/873f95ed-e22c-4334-abc7-7091dcdd142a.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[76/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4e27fd2b-24db-40e0-b89f-2cda2b49f90f.json
+
+📦 Processing: Andino x Sergik x Janis - Tradicion (4e27fd2b-24db-40e0-b89f-2cda2b49f90f)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/4e27fd2b-24db-40e0-b89f-2cda2b49f90f.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/4e27fd2b-24db-40e0-b89f-2cda2b49f90f.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/4e27fd2b-24db-40e0-b89f-2cda2b49f90f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4e27fd2b-24db-40e0-b89f-2cda2b49f90f.json
+   ✅ Database updated
+   💾 Freed: 119.1 KB
+
+[77/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ac6e18e6-0856-4a2b-8037-5941bc7884fc.json
+
+📦 Processing: Optikz x SERGIK(Vips) - Crowd Control - House (ac6e18e6-0856-4a2b-8037-5941bc7884fc)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/ac6e18e6-0856-4a2b-8037-5941bc7884fc.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/ac6e18e6-0856-4a2b-8037-5941bc7884fc.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/ac6e18e6-0856-4a2b-8037-5941bc7884fc.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ac6e18e6-0856-4a2b-8037-5941bc7884fc.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[78/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/94be4c95-2b13-4eca-8d25-ca7faf2ed34b.json
+
+📦 Processing: SERGIK - 49ers - Move Your Feet (remix) (94be4c95-2b13-4eca-8d25-ca7faf2ed34b)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/94be4c95-2b13-4eca-8d25-ca7faf2ed34b.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/94be4c95-2b13-4eca-8d25-ca7faf2ed34b.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/94be4c95-2b13-4eca-8d25-ca7faf2ed34b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/94be4c95-2b13-4eca-8d25-ca7faf2ed34b.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[79/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/9112e7a5-a283-426c-92e6-30185d58baba.json
+
+📦 Processing: SERGIK - CorK (9112e7a5-a283-426c-92e6-30185d58baba)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/9112e7a5-a283-426c-92e6-30185d58baba.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/9112e7a5-a283-426c-92e6-30185d58baba.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/9112e7a5-a283-426c-92e6-30185d58baba.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/9112e7a5-a283-426c-92e6-30185d58baba.json
+   ✅ Database updated
+   💾 Freed: 119.1 KB
+
+[80/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/be02484f-d9da-4637-9998-9dcc69a59895.json
+
+📦 Processing: SERGIK - Good (be02484f-d9da-4637-9998-9dcc69a59895)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/be02484f-d9da-4637-9998-9dcc69a59895.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/be02484f-d9da-4637-9998-9dcc69a59895.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/be02484f-d9da-4637-9998-9dcc69a59895.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/be02484f-d9da-4637-9998-9dcc69a59895.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[81/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/09871762-b66e-403c-90e3-c7688b4a973a.json
+
+📦 Processing: SERGIK - How Ya (09871762-b66e-403c-90e3-c7688b4a973a)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/09871762-b66e-403c-90e3-c7688b4a973a.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/09871762-b66e-403c-90e3-c7688b4a973a.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/09871762-b66e-403c-90e3-c7688b4a973a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/09871762-b66e-403c-90e3-c7688b4a973a.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[82/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2a557169-75a8-4b88-8f6a-f2b93b6808c0.json
+
+📦 Processing: SERGIK - Like That 1 (2a557169-75a8-4b88-8f6a-f2b93b6808c0)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/2a557169-75a8-4b88-8f6a-f2b93b6808c0.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/2a557169-75a8-4b88-8f6a-f2b93b6808c0.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/2a557169-75a8-4b88-8f6a-f2b93b6808c0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2a557169-75a8-4b88-8f6a-f2b93b6808c0.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[83/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/debd9366-3251-4cf3-8b08-6e8b168f78e3.json
+
+📦 Processing: SERGIK - Opinions (debd9366-3251-4cf3-8b08-6e8b168f78e3)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/debd9366-3251-4cf3-8b08-6e8b168f78e3.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/debd9366-3251-4cf3-8b08-6e8b168f78e3.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/debd9366-3251-4cf3-8b08-6e8b168f78e3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/debd9366-3251-4cf3-8b08-6e8b168f78e3.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[84/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ecfc9713-cd6e-49b5-8aff-30514dd6c13f.json
+
+📦 Processing: SERGIK - Party People (ecfc9713-cd6e-49b5-8aff-30514dd6c13f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/ecfc9713-cd6e-49b5-8aff-30514dd6c13f.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/ecfc9713-cd6e-49b5-8aff-30514dd6c13f.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/ecfc9713-cd6e-49b5-8aff-30514dd6c13f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ecfc9713-cd6e-49b5-8aff-30514dd6c13f.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[85/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/262f5516-6242-4187-8fa9-8129bcc09116.json
+
+📦 Processing: SERGIK - The Bomb Tech 130 bpm (262f5516-6242-4187-8fa9-8129bcc09116)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/262f5516-6242-4187-8fa9-8129bcc09116.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/262f5516-6242-4187-8fa9-8129bcc09116.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/262f5516-6242-4187-8fa9-8129bcc09116.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/262f5516-6242-4187-8fa9-8129bcc09116.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[86/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e4649072-5244-4256-ab9c-8b757a094e99.json
+
+📦 Processing: SERGIK - The Bomb (e4649072-5244-4256-ab9c-8b757a094e99)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/e4649072-5244-4256-ab9c-8b757a094e99.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/e4649072-5244-4256-ab9c-8b757a094e99.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/e4649072-5244-4256-ab9c-8b757a094e99.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e4649072-5244-4256-ab9c-8b757a094e99.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[87/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7db8bfea-184c-4270-8ccf-c63a6c259a09.json
+
+📦 Processing: SERGIK x BatteryLo - Thiiisss (7db8bfea-184c-4270-8ccf-c63a6c259a09)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/7db8bfea-184c-4270-8ccf-c63a6c259a09.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/7db8bfea-184c-4270-8ccf-c63a6c259a09.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/7db8bfea-184c-4270-8ccf-c63a6c259a09.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7db8bfea-184c-4270-8ccf-c63a6c259a09.json
+   ✅ Database updated
+   💾 Freed: 121.0 KB
+
+[88/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3c1c3b3b-9071-4714-b2c4-7c2d44d34de0.json
+
+📦 Processing: SERGIK x Crosstick - Katana Ghost (3c1c3b3b-9071-4714-b2c4-7c2d44d34de0)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/3c1c3b3b-9071-4714-b2c4-7c2d44d34de0.json
+   🧬 Sonic DNA: 42.0 KB
+   ✅ Uploaded to: sonic-dna/3c1c3b3b-9071-4714-b2c4-7c2d44d34de0.json
+   🤖 AI Analysis: 42.0 KB
+   ✅ Uploaded to: ai-analysis/3c1c3b3b-9071-4714-b2c4-7c2d44d34de0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3c1c3b3b-9071-4714-b2c4-7c2d44d34de0.json
+   ✅ Database updated
+   💾 Freed: 121.3 KB
+
+[89/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7c40d080-1887-4406-925e-ef5b293d8a82.json
+
+📦 Processing: SERGIK - Whats the Reason (7c40d080-1887-4406-925e-ef5b293d8a82)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/7c40d080-1887-4406-925e-ef5b293d8a82.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/7c40d080-1887-4406-925e-ef5b293d8a82.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/7c40d080-1887-4406-925e-ef5b293d8a82.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7c40d080-1887-4406-925e-ef5b293d8a82.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[90/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e1b4be51-e9db-424c-b2b6-a5c16d990299.json
+
+📦 Processing: SERGIK - Bender (e1b4be51-e9db-424c-b2b6-a5c16d990299)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/e1b4be51-e9db-424c-b2b6-a5c16d990299.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/e1b4be51-e9db-424c-b2b6-a5c16d990299.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/e1b4be51-e9db-424c-b2b6-a5c16d990299.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e1b4be51-e9db-424c-b2b6-a5c16d990299.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[91/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7bb28eef-c5f4-4760-ba36-329c7fd6693c.json
+
+📦 Processing: SERGIK x Breauxx x WWW - Uninvited v2 (7bb28eef-c5f4-4760-ba36-329c7fd6693c)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/7bb28eef-c5f4-4760-ba36-329c7fd6693c.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/7bb28eef-c5f4-4760-ba36-329c7fd6693c.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/7bb28eef-c5f4-4760-ba36-329c7fd6693c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7bb28eef-c5f4-4760-ba36-329c7fd6693c.json
+   ✅ Database updated
+   💾 Freed: 120.5 KB
+
+[92/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e285c4e8-f8eb-4c19-b769-e4d6489876d7.json
+
+📦 Processing: SERGIK x Breauxxx - Pumpin (e285c4e8-f8eb-4c19-b769-e4d6489876d7)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/e285c4e8-f8eb-4c19-b769-e4d6489876d7.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/e285c4e8-f8eb-4c19-b769-e4d6489876d7.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/e285c4e8-f8eb-4c19-b769-e4d6489876d7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e285c4e8-f8eb-4c19-b769-e4d6489876d7.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[93/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d5ce8ce8-617b-4673-bc30-873fff86dab1.json
+
+📦 Processing: SERGIK x Breauxxx - The Bag 135bpm (Techyea SRGFLIP) (d5ce8ce8-617b-4673-bc30-873fff86dab1)
+   📊 Waveform: 37.7 KB
+   ✅ Uploaded to: waveforms/d5ce8ce8-617b-4673-bc30-873fff86dab1.json
+   🧬 Sonic DNA: 41.9 KB
+   ✅ Uploaded to: sonic-dna/d5ce8ce8-617b-4673-bc30-873fff86dab1.json
+   🤖 AI Analysis: 41.9 KB
+   ✅ Uploaded to: ai-analysis/d5ce8ce8-617b-4673-bc30-873fff86dab1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d5ce8ce8-617b-4673-bc30-873fff86dab1.json
+   ✅ Database updated
+   💾 Freed: 121.6 KB
+
+[94/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/0e2b684b-0e35-4bd7-b645-18b4faa570e2.json
+
+📦 Processing: SERGIK x L9V - DarkPark (0e2b684b-0e35-4bd7-b645-18b4faa570e2)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/0e2b684b-0e35-4bd7-b645-18b4faa570e2.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/0e2b684b-0e35-4bd7-b645-18b4faa570e2.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/0e2b684b-0e35-4bd7-b645-18b4faa570e2.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/0e2b684b-0e35-4bd7-b645-18b4faa570e2.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[95/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/733ddb14-460a-4e7b-888f-b04a3859b8a1.json
+
+📦 Processing: SERGIK x OG Coconut - What you want (733ddb14-460a-4e7b-888f-b04a3859b8a1)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/733ddb14-460a-4e7b-888f-b04a3859b8a1.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/733ddb14-460a-4e7b-888f-b04a3859b8a1.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/733ddb14-460a-4e7b-888f-b04a3859b8a1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/733ddb14-460a-4e7b-888f-b04a3859b8a1.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[96/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/0d052b8c-4076-424e-b0b1-5664641f3cc4.json
+
+📦 Processing: SERGIK x Silent Jay - Like That (0d052b8c-4076-424e-b0b1-5664641f3cc4)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/0d052b8c-4076-424e-b0b1-5664641f3cc4.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/0d052b8c-4076-424e-b0b1-5664641f3cc4.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/0d052b8c-4076-424e-b0b1-5664641f3cc4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/0d052b8c-4076-424e-b0b1-5664641f3cc4.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[97/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/81ad9531-ee0e-4e27-940d-f1253af44ce5.json
+
+📦 Processing: SERGIK x Slick Floyd - LDE (81ad9531-ee0e-4e27-940d-f1253af44ce5)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/81ad9531-ee0e-4e27-940d-f1253af44ce5.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/81ad9531-ee0e-4e27-940d-f1253af44ce5.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/81ad9531-ee0e-4e27-940d-f1253af44ce5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/81ad9531-ee0e-4e27-940d-f1253af44ce5.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[98/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8723c8b9-5c13-4987-8c4c-d03533c39aa9.json
+
+📦 Processing: SERGIK x Zak Martin - Wat U Want (8723c8b9-5c13-4987-8c4c-d03533c39aa9)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/8723c8b9-5c13-4987-8c4c-d03533c39aa9.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/8723c8b9-5c13-4987-8c4c-d03533c39aa9.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/8723c8b9-5c13-4987-8c4c-d03533c39aa9.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8723c8b9-5c13-4987-8c4c-d03533c39aa9.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[99/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/037a15c5-9a82-495b-8f80-3ca0795b0fbe.json
+
+📦 Processing: Sergik - Its On till Dawn (037a15c5-9a82-495b-8f80-3ca0795b0fbe)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/037a15c5-9a82-495b-8f80-3ca0795b0fbe.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/037a15c5-9a82-495b-8f80-3ca0795b0fbe.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/037a15c5-9a82-495b-8f80-3ca0795b0fbe.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/037a15c5-9a82-495b-8f80-3ca0795b0fbe.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[100/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/13c85f92-6690-4bee-a41e-6140a86bcd09.json
+
+📦 Processing: Sergik - Music is my drug (13c85f92-6690-4bee-a41e-6140a86bcd09)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/13c85f92-6690-4bee-a41e-6140a86bcd09.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/13c85f92-6690-4bee-a41e-6140a86bcd09.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/13c85f92-6690-4bee-a41e-6140a86bcd09.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/13c85f92-6690-4bee-a41e-6140a86bcd09.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[101/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b7071657-4293-4d91-9950-e857689eab91.json
+
+📦 Processing: Andino x Segik La Selva (b7071657-4293-4d91-9950-e857689eab91)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/b7071657-4293-4d91-9950-e857689eab91.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/b7071657-4293-4d91-9950-e857689eab91.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/b7071657-4293-4d91-9950-e857689eab91.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b7071657-4293-4d91-9950-e857689eab91.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[102/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/20957f2d-bdcc-4966-a625-2cc5a2f06e9f.json
+
+📦 Processing: Barrio Bros - Bloops (20957f2d-bdcc-4966-a625-2cc5a2f06e9f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/20957f2d-bdcc-4966-a625-2cc5a2f06e9f.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/20957f2d-bdcc-4966-a625-2cc5a2f06e9f.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/20957f2d-bdcc-4966-a625-2cc5a2f06e9f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/20957f2d-bdcc-4966-a625-2cc5a2f06e9f.json
+   ✅ Database updated
+   💾 Freed: 119.2 KB
+
+[103/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/edde5ead-d197-4989-8b16-efdc00cb1b5a.json
+
+📦 Processing: Ceemoar x Sergik - No Body (edde5ead-d197-4989-8b16-efdc00cb1b5a)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/edde5ead-d197-4989-8b16-efdc00cb1b5a.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/edde5ead-d197-4989-8b16-efdc00cb1b5a.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/edde5ead-d197-4989-8b16-efdc00cb1b5a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/edde5ead-d197-4989-8b16-efdc00cb1b5a.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[104/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8ceb1208-a776-4a20-8278-e992a87e6053.json
+
+📦 Processing: SERGIK  - Betta (8ceb1208-a776-4a20-8278-e992a87e6053)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/8ceb1208-a776-4a20-8278-e992a87e6053.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/8ceb1208-a776-4a20-8278-e992a87e6053.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/8ceb1208-a776-4a20-8278-e992a87e6053.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8ceb1208-a776-4a20-8278-e992a87e6053.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[105/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/93deeee5-418f-4f77-936f-b2ec93b571f4.json
+
+📦 Processing: SERGIK  - It Is What It Is (93deeee5-418f-4f77-936f-b2ec93b571f4)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/93deeee5-418f-4f77-936f-b2ec93b571f4.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/93deeee5-418f-4f77-936f-b2ec93b571f4.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/93deeee5-418f-4f77-936f-b2ec93b571f4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/93deeee5-418f-4f77-936f-b2ec93b571f4.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[106/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/9ebfe63d-6ca3-4bd0-a252-3078efe8b742.json
+
+📦 Processing: SERGIK - 6 Hours In v2 (9ebfe63d-6ca3-4bd0-a252-3078efe8b742)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/9ebfe63d-6ca3-4bd0-a252-3078efe8b742.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/9ebfe63d-6ca3-4bd0-a252-3078efe8b742.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/9ebfe63d-6ca3-4bd0-a252-3078efe8b742.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/9ebfe63d-6ca3-4bd0-a252-3078efe8b742.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[107/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2a1c7232-2026-4af9-9ec5-f8f306ad29b8.json
+
+📦 Processing: SERGIK - 6 Hours In (2a1c7232-2026-4af9-9ec5-f8f306ad29b8)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/2a1c7232-2026-4af9-9ec5-f8f306ad29b8.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/2a1c7232-2026-4af9-9ec5-f8f306ad29b8.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/2a1c7232-2026-4af9-9ec5-f8f306ad29b8.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2a1c7232-2026-4af9-9ec5-f8f306ad29b8.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[108/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/5edf3a0f-c45a-4c63-860d-bcaf930492ea.json
+
+📦 Processing: SERGIK - After After (All Around Flip) V2 (5edf3a0f-c45a-4c63-860d-bcaf930492ea)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/5edf3a0f-c45a-4c63-860d-bcaf930492ea.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/5edf3a0f-c45a-4c63-860d-bcaf930492ea.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/5edf3a0f-c45a-4c63-860d-bcaf930492ea.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/5edf3a0f-c45a-4c63-860d-bcaf930492ea.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[109/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1f71c0b9-bd70-412e-8709-f24851709367.json
+
+📦 Processing: SERGIK - All Days (1f71c0b9-bd70-412e-8709-f24851709367)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/1f71c0b9-bd70-412e-8709-f24851709367.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/1f71c0b9-bd70-412e-8709-f24851709367.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/1f71c0b9-bd70-412e-8709-f24851709367.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1f71c0b9-bd70-412e-8709-f24851709367.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[110/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2926ddaa-a896-411b-8937-edf73c958d25.json
+
+📦 Processing: SERGIK - All The Vibes (2926ddaa-a896-411b-8937-edf73c958d25)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/2926ddaa-a896-411b-8937-edf73c958d25.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/2926ddaa-a896-411b-8937-edf73c958d25.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/2926ddaa-a896-411b-8937-edf73c958d25.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2926ddaa-a896-411b-8937-edf73c958d25.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[111/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/515d5751-a677-4672-916a-e7ace62a5d61.json
+
+📦 Processing: SERGIK - Bass Bunker (515d5751-a677-4672-916a-e7ace62a5d61)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/515d5751-a677-4672-916a-e7ace62a5d61.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/515d5751-a677-4672-916a-e7ace62a5d61.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/515d5751-a677-4672-916a-e7ace62a5d61.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/515d5751-a677-4672-916a-e7ace62a5d61.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[112/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e95b159b-aaf1-4c2e-9ac5-e51d38027963.json
+
+📦 Processing: SERGIK - Be FreeNDaMind (e95b159b-aaf1-4c2e-9ac5-e51d38027963)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/e95b159b-aaf1-4c2e-9ac5-e51d38027963.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/e95b159b-aaf1-4c2e-9ac5-e51d38027963.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/e95b159b-aaf1-4c2e-9ac5-e51d38027963.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e95b159b-aaf1-4c2e-9ac5-e51d38027963.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[113/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1b43c705-2c9f-4cc5-a351-2930f6f2bfab.json
+
+📦 Processing: SERGIK - Been Done (1b43c705-2c9f-4cc5-a351-2930f6f2bfab)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/1b43c705-2c9f-4cc5-a351-2930f6f2bfab.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/1b43c705-2c9f-4cc5-a351-2930f6f2bfab.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/1b43c705-2c9f-4cc5-a351-2930f6f2bfab.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1b43c705-2c9f-4cc5-a351-2930f6f2bfab.json
+   ✅ Database updated
+   💾 Freed: 118.9 KB
+
+[114/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6dd9c6be-a802-4282-84f2-22e5ad09099b.json
+
+📦 Processing: SERGIK - Bubble Buddy (6dd9c6be-a802-4282-84f2-22e5ad09099b)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/6dd9c6be-a802-4282-84f2-22e5ad09099b.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/6dd9c6be-a802-4282-84f2-22e5ad09099b.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/6dd9c6be-a802-4282-84f2-22e5ad09099b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6dd9c6be-a802-4282-84f2-22e5ad09099b.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[115/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b2e09ed7-35a6-4248-8c6c-ab23ce1b4138.json
+
+📦 Processing: SERGIK - Do My Thang (b2e09ed7-35a6-4248-8c6c-ab23ce1b4138)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/b2e09ed7-35a6-4248-8c6c-ab23ce1b4138.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/b2e09ed7-35a6-4248-8c6c-ab23ce1b4138.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/b2e09ed7-35a6-4248-8c6c-ab23ce1b4138.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b2e09ed7-35a6-4248-8c6c-ab23ce1b4138.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[116/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/15da93bc-5939-487c-be13-3d16f7493c73.json
+
+📦 Processing: SERGIK - Dont Go (15da93bc-5939-487c-be13-3d16f7493c73)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/15da93bc-5939-487c-be13-3d16f7493c73.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/15da93bc-5939-487c-be13-3d16f7493c73.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/15da93bc-5939-487c-be13-3d16f7493c73.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/15da93bc-5939-487c-be13-3d16f7493c73.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[117/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/57d1f91e-5bd2-40ef-896a-7da07750495b.json
+
+📦 Processing: SERGIK - Dont Stop V3 (57d1f91e-5bd2-40ef-896a-7da07750495b)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/57d1f91e-5bd2-40ef-896a-7da07750495b.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/57d1f91e-5bd2-40ef-896a-7da07750495b.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/57d1f91e-5bd2-40ef-896a-7da07750495b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/57d1f91e-5bd2-40ef-896a-7da07750495b.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[118/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/09df8aee-38d2-4544-bc88-0456bed9ec24.json
+
+📦 Processing: SERGIK - Double D's (09df8aee-38d2-4544-bc88-0456bed9ec24)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/09df8aee-38d2-4544-bc88-0456bed9ec24.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/09df8aee-38d2-4544-bc88-0456bed9ec24.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/09df8aee-38d2-4544-bc88-0456bed9ec24.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/09df8aee-38d2-4544-bc88-0456bed9ec24.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[119/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/813fa3b2-37c2-4eba-a510-5a332f7fbba5.json
+
+📦 Processing: SERGIK - Electrify 2 (813fa3b2-37c2-4eba-a510-5a332f7fbba5)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/813fa3b2-37c2-4eba-a510-5a332f7fbba5.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/813fa3b2-37c2-4eba-a510-5a332f7fbba5.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/813fa3b2-37c2-4eba-a510-5a332f7fbba5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/813fa3b2-37c2-4eba-a510-5a332f7fbba5.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[120/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8113062b-86b2-49e9-912a-c08bc3cef43f.json
+
+📦 Processing: SERGIK - Electrify (8113062b-86b2-49e9-912a-c08bc3cef43f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/8113062b-86b2-49e9-912a-c08bc3cef43f.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/8113062b-86b2-49e9-912a-c08bc3cef43f.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/8113062b-86b2-49e9-912a-c08bc3cef43f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8113062b-86b2-49e9-912a-c08bc3cef43f.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[121/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d76aa54c-44b0-4975-a08d-1dda61e6f7f5.json
+
+📦 Processing: SERGIK - Elevator Musik (d76aa54c-44b0-4975-a08d-1dda61e6f7f5)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/d76aa54c-44b0-4975-a08d-1dda61e6f7f5.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/d76aa54c-44b0-4975-a08d-1dda61e6f7f5.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/d76aa54c-44b0-4975-a08d-1dda61e6f7f5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d76aa54c-44b0-4975-a08d-1dda61e6f7f5.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[122/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1147da22-be34-4dda-8925-7a5597f0190b.json
+
+📦 Processing: SERGIK - Fk Wat They Say (1147da22-be34-4dda-8925-7a5597f0190b)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/1147da22-be34-4dda-8925-7a5597f0190b.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/1147da22-be34-4dda-8925-7a5597f0190b.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/1147da22-be34-4dda-8925-7a5597f0190b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1147da22-be34-4dda-8925-7a5597f0190b.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[123/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e4e9624b-5668-4b92-bbf9-69e670d96bee.json
+
+📦 Processing: SERGIK - Freaks n Beats (e4e9624b-5668-4b92-bbf9-69e670d96bee)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/e4e9624b-5668-4b92-bbf9-69e670d96bee.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/e4e9624b-5668-4b92-bbf9-69e670d96bee.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/e4e9624b-5668-4b92-bbf9-69e670d96bee.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e4e9624b-5668-4b92-bbf9-69e670d96bee.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[124/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/23689b42-3ae1-4b6b-8a6d-3d51af14cff4.json
+
+📦 Processing: SERGIK - Funkdamentals (23689b42-3ae1-4b6b-8a6d-3d51af14cff4)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/23689b42-3ae1-4b6b-8a6d-3d51af14cff4.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/23689b42-3ae1-4b6b-8a6d-3d51af14cff4.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/23689b42-3ae1-4b6b-8a6d-3d51af14cff4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/23689b42-3ae1-4b6b-8a6d-3d51af14cff4.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[125/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/9cec87b3-67f3-45f2-8837-a462e936d288.json
+
+📦 Processing: SERGIK - Funky Technician (9cec87b3-67f3-45f2-8837-a462e936d288)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/9cec87b3-67f3-45f2-8837-a462e936d288.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/9cec87b3-67f3-45f2-8837-a462e936d288.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/9cec87b3-67f3-45f2-8837-a462e936d288.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/9cec87b3-67f3-45f2-8837-a462e936d288.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[126/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/57308200-dca0-4a5c-b619-354fe19a49ae.json
+
+📦 Processing: SERGIK - Going Fast3 (57308200-dca0-4a5c-b619-354fe19a49ae)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/57308200-dca0-4a5c-b619-354fe19a49ae.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/57308200-dca0-4a5c-b619-354fe19a49ae.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/57308200-dca0-4a5c-b619-354fe19a49ae.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/57308200-dca0-4a5c-b619-354fe19a49ae.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[127/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fba58db1-f8ac-4ef1-b8d8-8e6b5685e876.json
+
+📦 Processing: SERGIK - Got Dat (fba58db1-f8ac-4ef1-b8d8-8e6b5685e876)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/fba58db1-f8ac-4ef1-b8d8-8e6b5685e876.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/fba58db1-f8ac-4ef1-b8d8-8e6b5685e876.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/fba58db1-f8ac-4ef1-b8d8-8e6b5685e876.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fba58db1-f8ac-4ef1-b8d8-8e6b5685e876.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[128/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/88424c1d-de71-440f-8227-d2dcfc682f12.json
+
+📦 Processing: SERGIK - Have To Dance (88424c1d-de71-440f-8227-d2dcfc682f12)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/88424c1d-de71-440f-8227-d2dcfc682f12.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/88424c1d-de71-440f-8227-d2dcfc682f12.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/88424c1d-de71-440f-8227-d2dcfc682f12.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/88424c1d-de71-440f-8227-d2dcfc682f12.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[129/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e3dcec0a-628d-45a9-adb5-ce360c34cb93.json
+
+📦 Processing: SERGIK - Hold Me Down (e3dcec0a-628d-45a9-adb5-ce360c34cb93)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/e3dcec0a-628d-45a9-adb5-ce360c34cb93.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/e3dcec0a-628d-45a9-adb5-ce360c34cb93.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/e3dcec0a-628d-45a9-adb5-ce360c34cb93.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e3dcec0a-628d-45a9-adb5-ce360c34cb93.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[130/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fe623628-aa84-47c1-ac23-ac969587ce11.json
+
+📦 Processing: SERGIK - How Ya (fe623628-aa84-47c1-ac23-ac969587ce11)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/fe623628-aa84-47c1-ac23-ac969587ce11.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/fe623628-aa84-47c1-ac23-ac969587ce11.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/fe623628-aa84-47c1-ac23-ac969587ce11.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fe623628-aa84-47c1-ac23-ac969587ce11.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[131/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/221fc1b7-e7c9-4db7-9072-2eede8a2314f.json
+
+📦 Processing: SERGIK - Jumpin v2 (221fc1b7-e7c9-4db7-9072-2eede8a2314f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/221fc1b7-e7c9-4db7-9072-2eede8a2314f.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/221fc1b7-e7c9-4db7-9072-2eede8a2314f.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/221fc1b7-e7c9-4db7-9072-2eede8a2314f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/221fc1b7-e7c9-4db7-9072-2eede8a2314f.json
+   ✅ Database updated
+   💾 Freed: 119.2 KB
+
+[132/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ca131d75-7946-469b-8cc1-2271b3013c43.json
+
+📦 Processing: SERGIK - Movin (ca131d75-7946-469b-8cc1-2271b3013c43)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/ca131d75-7946-469b-8cc1-2271b3013c43.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/ca131d75-7946-469b-8cc1-2271b3013c43.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/ca131d75-7946-469b-8cc1-2271b3013c43.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ca131d75-7946-469b-8cc1-2271b3013c43.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[133/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fe8da848-c848-4177-9b2f-d8dcb3e9403d.json
+
+📦 Processing: SERGIK - Mr. DJ (fe8da848-c848-4177-9b2f-d8dcb3e9403d)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/fe8da848-c848-4177-9b2f-d8dcb3e9403d.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/fe8da848-c848-4177-9b2f-d8dcb3e9403d.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/fe8da848-c848-4177-9b2f-d8dcb3e9403d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fe8da848-c848-4177-9b2f-d8dcb3e9403d.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[134/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c94fc0ba-2803-45c6-b2ae-c087f4199080.json
+
+📦 Processing: SERGIK - My Type (c94fc0ba-2803-45c6-b2ae-c087f4199080)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/c94fc0ba-2803-45c6-b2ae-c087f4199080.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/c94fc0ba-2803-45c6-b2ae-c087f4199080.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/c94fc0ba-2803-45c6-b2ae-c087f4199080.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c94fc0ba-2803-45c6-b2ae-c087f4199080.json
+   ✅ Database updated
+   💾 Freed: 119.0 KB
+
+[135/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/10e9b2ba-48fd-470b-8d68-9b7f7dc9a8e3.json
+
+📦 Processing: SERGIK - No Stopping (10e9b2ba-48fd-470b-8d68-9b7f7dc9a8e3)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/10e9b2ba-48fd-470b-8d68-9b7f7dc9a8e3.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/10e9b2ba-48fd-470b-8d68-9b7f7dc9a8e3.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/10e9b2ba-48fd-470b-8d68-9b7f7dc9a8e3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/10e9b2ba-48fd-470b-8d68-9b7f7dc9a8e3.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[136/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7a0a25b0-4add-4c7b-b51a-b9d39bf940c0.json
+
+📦 Processing: SERGIK - Para Papa (7a0a25b0-4add-4c7b-b51a-b9d39bf940c0)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/7a0a25b0-4add-4c7b-b51a-b9d39bf940c0.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/7a0a25b0-4add-4c7b-b51a-b9d39bf940c0.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/7a0a25b0-4add-4c7b-b51a-b9d39bf940c0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7a0a25b0-4add-4c7b-b51a-b9d39bf940c0.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[137/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/17e1dde1-3949-4477-a01b-8e61e9cd584b.json
+
+📦 Processing: SERGIK - Piece Of Your Luv 2 (17e1dde1-3949-4477-a01b-8e61e9cd584b)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/17e1dde1-3949-4477-a01b-8e61e9cd584b.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/17e1dde1-3949-4477-a01b-8e61e9cd584b.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/17e1dde1-3949-4477-a01b-8e61e9cd584b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/17e1dde1-3949-4477-a01b-8e61e9cd584b.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[138/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1fc957fc-adbd-4b4b-8dc7-bf7bb52c2a92.json
+
+📦 Processing: SERGIK - Pop Musik (1fc957fc-adbd-4b4b-8dc7-bf7bb52c2a92)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/1fc957fc-adbd-4b4b-8dc7-bf7bb52c2a92.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/1fc957fc-adbd-4b4b-8dc7-bf7bb52c2a92.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/1fc957fc-adbd-4b4b-8dc7-bf7bb52c2a92.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1fc957fc-adbd-4b4b-8dc7-bf7bb52c2a92.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[139/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/24026faf-abde-41af-a98a-5f91fdd420cb.json
+
+📦 Processing: SERGIK - Rather Dance (24026faf-abde-41af-a98a-5f91fdd420cb)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/24026faf-abde-41af-a98a-5f91fdd420cb.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/24026faf-abde-41af-a98a-5f91fdd420cb.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/24026faf-abde-41af-a98a-5f91fdd420cb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/24026faf-abde-41af-a98a-5f91fdd420cb.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[140/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f85df52d-c795-4b04-9497-34f95a5ba83e.json
+
+📦 Processing: SERGIK - Rock Dem Feets (f85df52d-c795-4b04-9497-34f95a5ba83e)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/f85df52d-c795-4b04-9497-34f95a5ba83e.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/f85df52d-c795-4b04-9497-34f95a5ba83e.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/f85df52d-c795-4b04-9497-34f95a5ba83e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f85df52d-c795-4b04-9497-34f95a5ba83e.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[141/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/10f8b527-d1e0-49c9-989f-a30d9a982576.json
+
+📦 Processing: SERGIK - Rules Dont Apply (10f8b527-d1e0-49c9-989f-a30d9a982576)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/10f8b527-d1e0-49c9-989f-a30d9a982576.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/10f8b527-d1e0-49c9-989f-a30d9a982576.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/10f8b527-d1e0-49c9-989f-a30d9a982576.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/10f8b527-d1e0-49c9-989f-a30d9a982576.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[142/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/cedf5a0b-2493-4b58-aac7-5a9b17512fac.json
+
+📦 Processing: SERGIK - Salute (cedf5a0b-2493-4b58-aac7-5a9b17512fac)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/cedf5a0b-2493-4b58-aac7-5a9b17512fac.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/cedf5a0b-2493-4b58-aac7-5a9b17512fac.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/cedf5a0b-2493-4b58-aac7-5a9b17512fac.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/cedf5a0b-2493-4b58-aac7-5a9b17512fac.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[143/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ccf5dee8-e9ba-4fd8-99c1-5474070a9398.json
+
+📦 Processing: SERGIK - Something (ccf5dee8-e9ba-4fd8-99c1-5474070a9398)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/ccf5dee8-e9ba-4fd8-99c1-5474070a9398.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/ccf5dee8-e9ba-4fd8-99c1-5474070a9398.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/ccf5dee8-e9ba-4fd8-99c1-5474070a9398.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ccf5dee8-e9ba-4fd8-99c1-5474070a9398.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[144/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/84a2bf1f-1936-4776-a9b0-5598e72643aa.json
+
+📦 Processing: SERGIK - Soul Mind n Body v2 (84a2bf1f-1936-4776-a9b0-5598e72643aa)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/84a2bf1f-1936-4776-a9b0-5598e72643aa.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/84a2bf1f-1936-4776-a9b0-5598e72643aa.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/84a2bf1f-1936-4776-a9b0-5598e72643aa.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/84a2bf1f-1936-4776-a9b0-5598e72643aa.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[145/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d2ec3bcf-de3d-4312-b060-4303cbc6dd59.json
+
+📦 Processing: SERGIK - To Dat Bass 2 (d2ec3bcf-de3d-4312-b060-4303cbc6dd59)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/d2ec3bcf-de3d-4312-b060-4303cbc6dd59.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/d2ec3bcf-de3d-4312-b060-4303cbc6dd59.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/d2ec3bcf-de3d-4312-b060-4303cbc6dd59.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d2ec3bcf-de3d-4312-b060-4303cbc6dd59.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[146/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1a532109-ddba-44e7-a46a-94b0b22ba72c.json
+
+📦 Processing: SERGIK - Upside Down (1a532109-ddba-44e7-a46a-94b0b22ba72c)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/1a532109-ddba-44e7-a46a-94b0b22ba72c.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/1a532109-ddba-44e7-a46a-94b0b22ba72c.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/1a532109-ddba-44e7-a46a-94b0b22ba72c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1a532109-ddba-44e7-a46a-94b0b22ba72c.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[147/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a11c3f86-90b9-4adc-869c-2992b39075fb.json
+
+📦 Processing: SERGIK - What u gotta do (a11c3f86-90b9-4adc-869c-2992b39075fb)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/a11c3f86-90b9-4adc-869c-2992b39075fb.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/a11c3f86-90b9-4adc-869c-2992b39075fb.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/a11c3f86-90b9-4adc-869c-2992b39075fb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a11c3f86-90b9-4adc-869c-2992b39075fb.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[148/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8aa3144e-5b23-4990-b4f7-08c20f9c28d6.json
+
+📦 Processing: SERGIK - Yee Bwoyyy (8aa3144e-5b23-4990-b4f7-08c20f9c28d6)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/8aa3144e-5b23-4990-b4f7-08c20f9c28d6.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/8aa3144e-5b23-4990-b4f7-08c20f9c28d6.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/8aa3144e-5b23-4990-b4f7-08c20f9c28d6.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8aa3144e-5b23-4990-b4f7-08c20f9c28d6.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[149/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8554fe3e-53bd-4efc-88d4-93bbe5d5e965.json
+
+📦 Processing: SERGIK Rework - Say Yeah v4 (8554fe3e-53bd-4efc-88d4-93bbe5d5e965)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/8554fe3e-53bd-4efc-88d4-93bbe5d5e965.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/8554fe3e-53bd-4efc-88d4-93bbe5d5e965.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/8554fe3e-53bd-4efc-88d4-93bbe5d5e965.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8554fe3e-53bd-4efc-88d4-93bbe5d5e965.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[150/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4937466a-bb65-4e33-8454-16a3eb57c22e.json
+
+📦 Processing: SERGIK x Andino - Alboroto (4937466a-bb65-4e33-8454-16a3eb57c22e)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/4937466a-bb65-4e33-8454-16a3eb57c22e.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/4937466a-bb65-4e33-8454-16a3eb57c22e.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/4937466a-bb65-4e33-8454-16a3eb57c22e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4937466a-bb65-4e33-8454-16a3eb57c22e.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[151/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d630d33a-a430-47dd-a9ae-caeffae30cd1.json
+
+📦 Processing: SERGIK x Breauxx - Come Correct (d630d33a-a430-47dd-a9ae-caeffae30cd1)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/d630d33a-a430-47dd-a9ae-caeffae30cd1.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/d630d33a-a430-47dd-a9ae-caeffae30cd1.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/d630d33a-a430-47dd-a9ae-caeffae30cd1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d630d33a-a430-47dd-a9ae-caeffae30cd1.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[152/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8ba10a8b-6e62-4513-b954-ae63d8ed8cb5.json
+
+📦 Processing: SERGIK x Breauxx - Move Me _ Dance With Me2 (8ba10a8b-6e62-4513-b954-ae63d8ed8cb5)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/8ba10a8b-6e62-4513-b954-ae63d8ed8cb5.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/8ba10a8b-6e62-4513-b954-ae63d8ed8cb5.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/8ba10a8b-6e62-4513-b954-ae63d8ed8cb5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8ba10a8b-6e62-4513-b954-ae63d8ed8cb5.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[153/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/25a91081-7592-4a90-a954-154f19076343.json
+
+📦 Processing: SERGIK x Breauxx - Walk Dat Walk (25a91081-7592-4a90-a954-154f19076343)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/25a91081-7592-4a90-a954-154f19076343.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/25a91081-7592-4a90-a954-154f19076343.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/25a91081-7592-4a90-a954-154f19076343.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/25a91081-7592-4a90-a954-154f19076343.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[154/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/cb109dde-1e0b-4a7e-a5b6-608ebd666fd5.json
+
+📦 Processing: SERGIK x Breauxx - Walk Dat Walk2 (cb109dde-1e0b-4a7e-a5b6-608ebd666fd5)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/cb109dde-1e0b-4a7e-a5b6-608ebd666fd5.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/cb109dde-1e0b-4a7e-a5b6-608ebd666fd5.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/cb109dde-1e0b-4a7e-a5b6-608ebd666fd5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/cb109dde-1e0b-4a7e-a5b6-608ebd666fd5.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[155/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/dd650db3-ca13-408c-8670-0c798c27afac.json
+
+📦 Processing: SERGIK x Breauxx - You Can't (dd650db3-ca13-408c-8670-0c798c27afac)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/dd650db3-ca13-408c-8670-0c798c27afac.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/dd650db3-ca13-408c-8670-0c798c27afac.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/dd650db3-ca13-408c-8670-0c798c27afac.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/dd650db3-ca13-408c-8670-0c798c27afac.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[156/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/9d9e8d98-32d3-48c3-8808-1a92235e61b4.json
+
+📦 Processing: SERGIK x Breauxxx - All Around (9d9e8d98-32d3-48c3-8808-1a92235e61b4)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/9d9e8d98-32d3-48c3-8808-1a92235e61b4.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/9d9e8d98-32d3-48c3-8808-1a92235e61b4.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/9d9e8d98-32d3-48c3-8808-1a92235e61b4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/9d9e8d98-32d3-48c3-8808-1a92235e61b4.json
+   ✅ Database updated
+   💾 Freed: 119.2 KB
+
+[157/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6b14b885-0263-44fe-8592-2ff285807135.json
+
+📦 Processing: SERGIK x Breauxxx - The Bag  (DiscoTech SRGFLIP) (6b14b885-0263-44fe-8592-2ff285807135)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/6b14b885-0263-44fe-8592-2ff285807135.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/6b14b885-0263-44fe-8592-2ff285807135.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/6b14b885-0263-44fe-8592-2ff285807135.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6b14b885-0263-44fe-8592-2ff285807135.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[158/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ddb2495c-ba83-420a-a6e3-0707e51877ce.json
+
+📦 Processing: SERGIK x Breauxxxx x Janis - The Bag (OG MiX) (ddb2495c-ba83-420a-a6e3-0707e51877ce)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/ddb2495c-ba83-420a-a6e3-0707e51877ce.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/ddb2495c-ba83-420a-a6e3-0707e51877ce.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/ddb2495c-ba83-420a-a6e3-0707e51877ce.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ddb2495c-ba83-420a-a6e3-0707e51877ce.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[159/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/674b5553-ddb9-48c2-9817-8b571842db0e.json
+
+📦 Processing: SERGIK x Deep Chetty - So Good v3 (674b5553-ddb9-48c2-9817-8b571842db0e)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/674b5553-ddb9-48c2-9817-8b571842db0e.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/674b5553-ddb9-48c2-9817-8b571842db0e.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/674b5553-ddb9-48c2-9817-8b571842db0e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/674b5553-ddb9-48c2-9817-8b571842db0e.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[160/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/177badae-53b6-4c91-ad3b-7f145d92610d.json
+
+📦 Processing: SERGIK x Dillon Nathaniel - Moon Glazin (177badae-53b6-4c91-ad3b-7f145d92610d)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/177badae-53b6-4c91-ad3b-7f145d92610d.json
+   🧬 Sonic DNA: 40.9 KB
+   ✅ Uploaded to: sonic-dna/177badae-53b6-4c91-ad3b-7f145d92610d.json
+   🤖 AI Analysis: 40.9 KB
+   ✅ Uploaded to: ai-analysis/177badae-53b6-4c91-ad3b-7f145d92610d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/177badae-53b6-4c91-ad3b-7f145d92610d.json
+   ✅ Database updated
+   💾 Freed: 118.8 KB
+
+[161/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8318f5bd-bc05-4b5e-82c8-5e93f078c540.json
+
+📦 Processing: SERGIK x Dilon Karim Ft. BeJanis- Let it Take Ya (Instrumental) 1 (8318f5bd-bc05-4b5e-82c8-5e93f078c540)
+   📊 Waveform: 37.8 KB
+   ✅ Uploaded to: waveforms/8318f5bd-bc05-4b5e-82c8-5e93f078c540.json
+   🧬 Sonic DNA: 42.0 KB
+   ✅ Uploaded to: sonic-dna/8318f5bd-bc05-4b5e-82c8-5e93f078c540.json
+   🤖 AI Analysis: 42.0 KB
+   ✅ Uploaded to: ai-analysis/8318f5bd-bc05-4b5e-82c8-5e93f078c540.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8318f5bd-bc05-4b5e-82c8-5e93f078c540.json
+   ✅ Database updated
+   💾 Freed: 122.0 KB
+
+[162/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/36af2631-bbda-4762-b577-d33529e366ad.json
+
+📦 Processing: SERGIK x Dilon Karim Ft. BeJanis- Let it Take Ya 1 (36af2631-bbda-4762-b577-d33529e366ad)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/36af2631-bbda-4762-b577-d33529e366ad.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/36af2631-bbda-4762-b577-d33529e366ad.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/36af2631-bbda-4762-b577-d33529e366ad.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/36af2631-bbda-4762-b577-d33529e366ad.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[163/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/aaf39cb0-48a9-451c-b7b1-daac74637cd0.json
+
+📦 Processing: SERGIK x FM - Dog n Me (aaf39cb0-48a9-451c-b7b1-daac74637cd0)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/aaf39cb0-48a9-451c-b7b1-daac74637cd0.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/aaf39cb0-48a9-451c-b7b1-daac74637cd0.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/aaf39cb0-48a9-451c-b7b1-daac74637cd0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/aaf39cb0-48a9-451c-b7b1-daac74637cd0.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[164/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/255396f4-a797-49d8-8769-1ab1eee14c55.json
+
+📦 Processing: SERGIK x JIMII - Do it Yourself v2 (255396f4-a797-49d8-8769-1ab1eee14c55)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/255396f4-a797-49d8-8769-1ab1eee14c55.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/255396f4-a797-49d8-8769-1ab1eee14c55.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/255396f4-a797-49d8-8769-1ab1eee14c55.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/255396f4-a797-49d8-8769-1ab1eee14c55.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[165/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/12fb6c93-2e0e-417d-bbc2-bb66bc2d090c.json
+
+📦 Processing: SERGIK x Jetski - Alienated (12fb6c93-2e0e-417d-bbc2-bb66bc2d090c)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/12fb6c93-2e0e-417d-bbc2-bb66bc2d090c.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/12fb6c93-2e0e-417d-bbc2-bb66bc2d090c.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/12fb6c93-2e0e-417d-bbc2-bb66bc2d090c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/12fb6c93-2e0e-417d-bbc2-bb66bc2d090c.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[166/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/5c733286-6975-427d-a309-bc52158be323.json
+
+📦 Processing: SERGIK x Jetski - Code Name SERGSKI (5c733286-6975-427d-a309-bc52158be323)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/5c733286-6975-427d-a309-bc52158be323.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/5c733286-6975-427d-a309-bc52158be323.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/5c733286-6975-427d-a309-bc52158be323.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/5c733286-6975-427d-a309-bc52158be323.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[167/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/05d84113-2e90-4781-a35a-d4ae397266cb.json
+
+📦 Processing: SERGIK x Melfice - Buggn (05d84113-2e90-4781-a35a-d4ae397266cb)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/05d84113-2e90-4781-a35a-d4ae397266cb.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/05d84113-2e90-4781-a35a-d4ae397266cb.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/05d84113-2e90-4781-a35a-d4ae397266cb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/05d84113-2e90-4781-a35a-d4ae397266cb.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[168/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8b6f6d23-40a6-44e6-b07b-eccf7d85b84a.json
+
+📦 Processing: SERGIK x OG Coconut - What you want (8b6f6d23-40a6-44e6-b07b-eccf7d85b84a)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/8b6f6d23-40a6-44e6-b07b-eccf7d85b84a.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/8b6f6d23-40a6-44e6-b07b-eccf7d85b84a.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/8b6f6d23-40a6-44e6-b07b-eccf7d85b84a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8b6f6d23-40a6-44e6-b07b-eccf7d85b84a.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[169/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/39315414-8282-4612-ae38-fad04a60e9b7.json
+
+📦 Processing: SERGIK x SRIJA - Disco Power (39315414-8282-4612-ae38-fad04a60e9b7)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/39315414-8282-4612-ae38-fad04a60e9b7.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/39315414-8282-4612-ae38-fad04a60e9b7.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/39315414-8282-4612-ae38-fad04a60e9b7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/39315414-8282-4612-ae38-fad04a60e9b7.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[170/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d31725fc-d787-40f9-87e6-4785cbeeb199.json
+
+📦 Processing: SERGIK x Sean H x Sean W - Back at it (d31725fc-d787-40f9-87e6-4785cbeeb199)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/d31725fc-d787-40f9-87e6-4785cbeeb199.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/d31725fc-d787-40f9-87e6-4785cbeeb199.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/d31725fc-d787-40f9-87e6-4785cbeeb199.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d31725fc-d787-40f9-87e6-4785cbeeb199.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[171/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b8c3d286-735b-41e4-bbdd-05faa50becac.json
+
+📦 Processing: SERGIK x Silent Jay - Make Me Free (b8c3d286-735b-41e4-bbdd-05faa50becac)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/b8c3d286-735b-41e4-bbdd-05faa50becac.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/b8c3d286-735b-41e4-bbdd-05faa50becac.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/b8c3d286-735b-41e4-bbdd-05faa50becac.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b8c3d286-735b-41e4-bbdd-05faa50becac.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[172/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3a006ebe-0b59-4c80-827d-0447884133e3.json
+
+📦 Processing: SERGIK x Silent Jay - Move n Groove (3a006ebe-0b59-4c80-827d-0447884133e3)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/3a006ebe-0b59-4c80-827d-0447884133e3.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/3a006ebe-0b59-4c80-827d-0447884133e3.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/3a006ebe-0b59-4c80-827d-0447884133e3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3a006ebe-0b59-4c80-827d-0447884133e3.json
+   ✅ Database updated
+   💾 Freed: 120.9 KB
+
+[173/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fec3ad73-25a6-41d2-8f7f-33d4f0a0b066.json
+
+📦 Processing: SERGIK x Slick Floyd - Just Groove (fec3ad73-25a6-41d2-8f7f-33d4f0a0b066)
+   📊 Waveform: 36.8 KB
+   ✅ Uploaded to: waveforms/fec3ad73-25a6-41d2-8f7f-33d4f0a0b066.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/fec3ad73-25a6-41d2-8f7f-33d4f0a0b066.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/fec3ad73-25a6-41d2-8f7f-33d4f0a0b066.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fec3ad73-25a6-41d2-8f7f-33d4f0a0b066.json
+   ✅ Database updated
+   💾 Freed: 118.9 KB
+
+[174/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/33e1bb2d-8f70-4c42-8274-105116bdbbca.json
+
+📦 Processing: SERGIK x Slick Floyd - Listen Up (33e1bb2d-8f70-4c42-8274-105116bdbbca)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/33e1bb2d-8f70-4c42-8274-105116bdbbca.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/33e1bb2d-8f70-4c42-8274-105116bdbbca.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/33e1bb2d-8f70-4c42-8274-105116bdbbca.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/33e1bb2d-8f70-4c42-8274-105116bdbbca.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[175/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b541d46b-b636-40fd-a52d-9560713ccbb2.json
+
+📦 Processing: SERGIK x Zak Martin - Bang 2 Da Beat (b541d46b-b636-40fd-a52d-9560713ccbb2)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/b541d46b-b636-40fd-a52d-9560713ccbb2.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/b541d46b-b636-40fd-a52d-9560713ccbb2.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/b541d46b-b636-40fd-a52d-9560713ccbb2.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b541d46b-b636-40fd-a52d-9560713ccbb2.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[176/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/eef37d35-be10-4ffe-ae6f-8888ab7bac12.json
+
+📦 Processing: SERGIK x Zak Martin - Throw it Back (eef37d35-be10-4ffe-ae6f-8888ab7bac12)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/eef37d35-be10-4ffe-ae6f-8888ab7bac12.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/eef37d35-be10-4ffe-ae6f-8888ab7bac12.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/eef37d35-be10-4ffe-ae6f-8888ab7bac12.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/eef37d35-be10-4ffe-ae6f-8888ab7bac12.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[177/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/79025e63-a9c7-4244-9a34-b85897e217a9.json
+
+📦 Processing: SERGIK x Zak Martin - Wat U Want (79025e63-a9c7-4244-9a34-b85897e217a9)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/79025e63-a9c7-4244-9a34-b85897e217a9.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/79025e63-a9c7-4244-9a34-b85897e217a9.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/79025e63-a9c7-4244-9a34-b85897e217a9.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/79025e63-a9c7-4244-9a34-b85897e217a9.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[178/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/946f4e43-5f7b-40b2-8e20-f647d931369e.json
+
+📦 Processing: Sergik x Silent Jay - tear the roof off (946f4e43-5f7b-40b2-8e20-f647d931369e)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/946f4e43-5f7b-40b2-8e20-f647d931369e.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/946f4e43-5f7b-40b2-8e20-f647d931369e.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/946f4e43-5f7b-40b2-8e20-f647d931369e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/946f4e43-5f7b-40b2-8e20-f647d931369e.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[179/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fad41df6-c97d-40eb-bb44-f50fae8488f1.json
+
+📦 Processing: Zack Thrasher X Sergik - Sauced (fad41df6-c97d-40eb-bb44-f50fae8488f1)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/fad41df6-c97d-40eb-bb44-f50fae8488f1.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/fad41df6-c97d-40eb-bb44-f50fae8488f1.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/fad41df6-c97d-40eb-bb44-f50fae8488f1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fad41df6-c97d-40eb-bb44-f50fae8488f1.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[180/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/232f79f1-c2f4-4d18-a04a-3db9128b93e4.json
+
+📦 Processing: SERGIK  - Dreamer (232f79f1-c2f4-4d18-a04a-3db9128b93e4)
+   📊 Waveform: 37.6 KB
+   ✅ Uploaded to: waveforms/232f79f1-c2f4-4d18-a04a-3db9128b93e4.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/232f79f1-c2f4-4d18-a04a-3db9128b93e4.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/232f79f1-c2f4-4d18-a04a-3db9128b93e4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/232f79f1-c2f4-4d18-a04a-3db9128b93e4.json
+   ✅ Database updated
+   💾 Freed: 121.2 KB
+
+[181/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c78cfded-d482-453a-bd25-cc09f0cd58ab.json
+
+📦 Processing: SERGIK - Book of Memories (c78cfded-d482-453a-bd25-cc09f0cd58ab)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/c78cfded-d482-453a-bd25-cc09f0cd58ab.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/c78cfded-d482-453a-bd25-cc09f0cd58ab.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/c78cfded-d482-453a-bd25-cc09f0cd58ab.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c78cfded-d482-453a-bd25-cc09f0cd58ab.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[182/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a13cf962-cba4-441c-a1dc-96bf1d343df7.json
+
+📦 Processing: SERGIK - Bye Spring (hip Hop) (a13cf962-cba4-441c-a1dc-96bf1d343df7)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/a13cf962-cba4-441c-a1dc-96bf1d343df7.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/a13cf962-cba4-441c-a1dc-96bf1d343df7.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/a13cf962-cba4-441c-a1dc-96bf1d343df7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a13cf962-cba4-441c-a1dc-96bf1d343df7.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[183/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3d26f0f2-a583-47ae-9c8e-e30c74028691.json
+
+📦 Processing: SERGIK - Cosmic Cadillac (3d26f0f2-a583-47ae-9c8e-e30c74028691)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/3d26f0f2-a583-47ae-9c8e-e30c74028691.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/3d26f0f2-a583-47ae-9c8e-e30c74028691.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/3d26f0f2-a583-47ae-9c8e-e30c74028691.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3d26f0f2-a583-47ae-9c8e-e30c74028691.json
+   ✅ Database updated
+   💾 Freed: 120.9 KB
+
+[184/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/53b0eb2f-1189-4e50-aabe-523abb940d11.json
+
+📦 Processing: SERGIK - Golden Hour - Trap (53b0eb2f-1189-4e50-aabe-523abb940d11)
+   📊 Waveform: 37.7 KB
+   ✅ Uploaded to: waveforms/53b0eb2f-1189-4e50-aabe-523abb940d11.json
+   🧬 Sonic DNA: 41.8 KB
+   ✅ Uploaded to: sonic-dna/53b0eb2f-1189-4e50-aabe-523abb940d11.json
+   🤖 AI Analysis: 41.8 KB
+   ✅ Uploaded to: ai-analysis/53b0eb2f-1189-4e50-aabe-523abb940d11.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/53b0eb2f-1189-4e50-aabe-523abb940d11.json
+   ✅ Database updated
+   💾 Freed: 121.5 KB
+
+[185/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/81eaf0d0-0c26-41f2-8079-41f5165357ca.json
+
+📦 Processing: SERGIK - Inspire (81eaf0d0-0c26-41f2-8079-41f5165357ca)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/81eaf0d0-0c26-41f2-8079-41f5165357ca.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/81eaf0d0-0c26-41f2-8079-41f5165357ca.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/81eaf0d0-0c26-41f2-8079-41f5165357ca.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/81eaf0d0-0c26-41f2-8079-41f5165357ca.json
+   ✅ Database updated
+   💾 Freed: 120.9 KB
+
+[186/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e18006d2-11fc-4d1f-9d41-4b28b6b0ce0a.json
+
+📦 Processing: SERGIK - Life 1 (e18006d2-11fc-4d1f-9d41-4b28b6b0ce0a)
+   📊 Waveform: 37.7 KB
+   ✅ Uploaded to: waveforms/e18006d2-11fc-4d1f-9d41-4b28b6b0ce0a.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/e18006d2-11fc-4d1f-9d41-4b28b6b0ce0a.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/e18006d2-11fc-4d1f-9d41-4b28b6b0ce0a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e18006d2-11fc-4d1f-9d41-4b28b6b0ce0a.json
+   ✅ Database updated
+   💾 Freed: 121.3 KB
+
+[187/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d1dab602-eaa2-47fd-9bd7-b6ee4cb0e1fd.json
+
+📦 Processing: SERGIK - On and On(Badu Remix) (d1dab602-eaa2-47fd-9bd7-b6ee4cb0e1fd)
+   📊 Waveform: 38.2 KB
+   ✅ Uploaded to: waveforms/d1dab602-eaa2-47fd-9bd7-b6ee4cb0e1fd.json
+   🧬 Sonic DNA: 42.3 KB
+   ✅ Uploaded to: sonic-dna/d1dab602-eaa2-47fd-9bd7-b6ee4cb0e1fd.json
+   🤖 AI Analysis: 42.3 KB
+   ✅ Uploaded to: ai-analysis/d1dab602-eaa2-47fd-9bd7-b6ee4cb0e1fd.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d1dab602-eaa2-47fd-9bd7-b6ee4cb0e1fd.json
+   ✅ Database updated
+   💾 Freed: 122.9 KB
+
+[188/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1e31d15e-d2f2-4034-8fe7-994722fe0dab.json
+
+📦 Processing: SERGIK - Rise n Shine (1e31d15e-d2f2-4034-8fe7-994722fe0dab)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/1e31d15e-d2f2-4034-8fe7-994722fe0dab.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/1e31d15e-d2f2-4034-8fe7-994722fe0dab.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/1e31d15e-d2f2-4034-8fe7-994722fe0dab.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1e31d15e-d2f2-4034-8fe7-994722fe0dab.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[189/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a9a0f9b4-33d1-4288-a89f-da0927feab30.json
+
+📦 Processing: SERGIK - Subliminal acid (a9a0f9b4-33d1-4288-a89f-da0927feab30)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/a9a0f9b4-33d1-4288-a89f-da0927feab30.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/a9a0f9b4-33d1-4288-a89f-da0927feab30.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/a9a0f9b4-33d1-4288-a89f-da0927feab30.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a9a0f9b4-33d1-4288-a89f-da0927feab30.json
+   ✅ Database updated
+   💾 Freed: 119.2 KB
+
+[190/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c24cdeca-01b5-459f-be5b-582bea01ae13.json
+
+📦 Processing: SERGIK - The McCoy (c24cdeca-01b5-459f-be5b-582bea01ae13)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/c24cdeca-01b5-459f-be5b-582bea01ae13.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/c24cdeca-01b5-459f-be5b-582bea01ae13.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/c24cdeca-01b5-459f-be5b-582bea01ae13.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c24cdeca-01b5-459f-be5b-582bea01ae13.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[191/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c03dad18-6405-454e-9555-549610d06290.json
+
+📦 Processing: SERGIK - Utopia (c03dad18-6405-454e-9555-549610d06290)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/c03dad18-6405-454e-9555-549610d06290.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/c03dad18-6405-454e-9555-549610d06290.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/c03dad18-6405-454e-9555-549610d06290.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c03dad18-6405-454e-9555-549610d06290.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[192/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7a549a00-c98e-44de-bf1f-24eb355fc134.json
+
+📦 Processing: SERGIK x Javi - Smoke Break at Da Crib VIP.2 (7a549a00-c98e-44de-bf1f-24eb355fc134)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/7a549a00-c98e-44de-bf1f-24eb355fc134.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/7a549a00-c98e-44de-bf1f-24eb355fc134.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/7a549a00-c98e-44de-bf1f-24eb355fc134.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7a549a00-c98e-44de-bf1f-24eb355fc134.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[193/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8fe39f93-e8be-4dbb-a7d0-47d42b9fae48.json
+
+📦 Processing: SERGIK x WWW - Daft Punk - Harder Better Faster Stronger Flip (8fe39f93-e8be-4dbb-a7d0-47d42b9fae48)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/8fe39f93-e8be-4dbb-a7d0-47d42b9fae48.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/8fe39f93-e8be-4dbb-a7d0-47d42b9fae48.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/8fe39f93-e8be-4dbb-a7d0-47d42b9fae48.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8fe39f93-e8be-4dbb-a7d0-47d42b9fae48.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[194/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7a71a273-996a-4102-b1da-28e2ef7bb3dc.json
+
+📦 Processing: SERGIK  - Make it Bounce Pre-Master (7a71a273-996a-4102-b1da-28e2ef7bb3dc)
+   📊 Waveform: 37.9 KB
+   ✅ Uploaded to: waveforms/7a71a273-996a-4102-b1da-28e2ef7bb3dc.json
+   🧬 Sonic DNA: 42.0 KB
+   ✅ Uploaded to: sonic-dna/7a71a273-996a-4102-b1da-28e2ef7bb3dc.json
+   🤖 AI Analysis: 42.0 KB
+   ✅ Uploaded to: ai-analysis/7a71a273-996a-4102-b1da-28e2ef7bb3dc.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7a71a273-996a-4102-b1da-28e2ef7bb3dc.json
+   ✅ Database updated
+   💾 Freed: 121.9 KB
+
+[195/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c100dd35-0b97-4304-9262-44343823e76d.json
+
+📦 Processing: SERGIK  - Make it Bounce (c100dd35-0b97-4304-9262-44343823e76d)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/c100dd35-0b97-4304-9262-44343823e76d.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/c100dd35-0b97-4304-9262-44343823e76d.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/c100dd35-0b97-4304-9262-44343823e76d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c100dd35-0b97-4304-9262-44343823e76d.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[196/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/47d07121-e1a0-4928-907b-94137a9dab1c.json
+
+📦 Processing: SERGIK - 49ers - Move Your Feet (remix) (47d07121-e1a0-4928-907b-94137a9dab1c)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/47d07121-e1a0-4928-907b-94137a9dab1c.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/47d07121-e1a0-4928-907b-94137a9dab1c.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/47d07121-e1a0-4928-907b-94137a9dab1c.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/47d07121-e1a0-4928-907b-94137a9dab1c.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[197/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3202603f-410d-4c85-b287-709f4e5c5797.json
+
+📦 Processing: SERGIK - Bender (3202603f-410d-4c85-b287-709f4e5c5797)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/3202603f-410d-4c85-b287-709f4e5c5797.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/3202603f-410d-4c85-b287-709f4e5c5797.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/3202603f-410d-4c85-b287-709f4e5c5797.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3202603f-410d-4c85-b287-709f4e5c5797.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[198/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/304be75f-e0e7-44dc-a8dc-b0de24614aea.json
+
+📦 Processing: SERGIK - Can You Dance v2 (304be75f-e0e7-44dc-a8dc-b0de24614aea)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/304be75f-e0e7-44dc-a8dc-b0de24614aea.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/304be75f-e0e7-44dc-a8dc-b0de24614aea.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/304be75f-e0e7-44dc-a8dc-b0de24614aea.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/304be75f-e0e7-44dc-a8dc-b0de24614aea.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[199/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/bf7e6a1a-878d-496d-adc7-e0962f207c16.json
+
+📦 Processing: SERGIK - Cant Kill My Vibe (bf7e6a1a-878d-496d-adc7-e0962f207c16)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/bf7e6a1a-878d-496d-adc7-e0962f207c16.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/bf7e6a1a-878d-496d-adc7-e0962f207c16.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/bf7e6a1a-878d-496d-adc7-e0962f207c16.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/bf7e6a1a-878d-496d-adc7-e0962f207c16.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[200/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ee6c8035-e6c1-403f-893a-7b538bae5029.json
+
+📦 Processing: SERGIK - Dont You (ee6c8035-e6c1-403f-893a-7b538bae5029)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/ee6c8035-e6c1-403f-893a-7b538bae5029.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/ee6c8035-e6c1-403f-893a-7b538bae5029.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/ee6c8035-e6c1-403f-893a-7b538bae5029.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ee6c8035-e6c1-403f-893a-7b538bae5029.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[201/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/117ea3cb-8770-47c3-b5c3-208a1f542853.json
+
+📦 Processing: SERGIK - Funky Technician 1 (117ea3cb-8770-47c3-b5c3-208a1f542853)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/117ea3cb-8770-47c3-b5c3-208a1f542853.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/117ea3cb-8770-47c3-b5c3-208a1f542853.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/117ea3cb-8770-47c3-b5c3-208a1f542853.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/117ea3cb-8770-47c3-b5c3-208a1f542853.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[202/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4fcf234b-b822-45d7-994a-5c384628c0fe.json
+
+📦 Processing: SERGIK - Good (4fcf234b-b822-45d7-994a-5c384628c0fe)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/4fcf234b-b822-45d7-994a-5c384628c0fe.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/4fcf234b-b822-45d7-994a-5c384628c0fe.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/4fcf234b-b822-45d7-994a-5c384628c0fe.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4fcf234b-b822-45d7-994a-5c384628c0fe.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[203/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7dc9d617-c550-438d-8ecf-2fe707ad3a12.json
+
+📦 Processing: SERGIK - Gypsy - House 1 (7dc9d617-c550-438d-8ecf-2fe707ad3a12)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/7dc9d617-c550-438d-8ecf-2fe707ad3a12.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/7dc9d617-c550-438d-8ecf-2fe707ad3a12.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/7dc9d617-c550-438d-8ecf-2fe707ad3a12.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7dc9d617-c550-438d-8ecf-2fe707ad3a12.json
+   ✅ Database updated
+   💾 Freed: 120.5 KB
+
+[204/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/65375a36-41ba-4c83-b23a-1e9c7f7acff3.json
+
+📦 Processing: SERGIK - Happiness 2 (65375a36-41ba-4c83-b23a-1e9c7f7acff3)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/65375a36-41ba-4c83-b23a-1e9c7f7acff3.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/65375a36-41ba-4c83-b23a-1e9c7f7acff3.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/65375a36-41ba-4c83-b23a-1e9c7f7acff3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/65375a36-41ba-4c83-b23a-1e9c7f7acff3.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[205/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6f57316e-87ab-47dc-95ab-1cefcb71ae44.json
+
+📦 Processing: SERGIK - High Class (6f57316e-87ab-47dc-95ab-1cefcb71ae44)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/6f57316e-87ab-47dc-95ab-1cefcb71ae44.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/6f57316e-87ab-47dc-95ab-1cefcb71ae44.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/6f57316e-87ab-47dc-95ab-1cefcb71ae44.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6f57316e-87ab-47dc-95ab-1cefcb71ae44.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[206/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/81a82ea5-abd1-4822-9aa3-690fab59af77.json
+
+📦 Processing: SERGIK - How Ya (81a82ea5-abd1-4822-9aa3-690fab59af77)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/81a82ea5-abd1-4822-9aa3-690fab59af77.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/81a82ea5-abd1-4822-9aa3-690fab59af77.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/81a82ea5-abd1-4822-9aa3-690fab59af77.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/81a82ea5-abd1-4822-9aa3-690fab59af77.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[207/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/992bfede-6911-4765-98b0-5dcfc6ccf57d.json
+
+📦 Processing: SERGIK - Like That (992bfede-6911-4765-98b0-5dcfc6ccf57d)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/992bfede-6911-4765-98b0-5dcfc6ccf57d.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/992bfede-6911-4765-98b0-5dcfc6ccf57d.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/992bfede-6911-4765-98b0-5dcfc6ccf57d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/992bfede-6911-4765-98b0-5dcfc6ccf57d.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[208/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/5b8d1436-4516-4669-92d5-c134a031dbb8.json
+
+📦 Processing: SERGIK - Money Talk Bs Walk (5b8d1436-4516-4669-92d5-c134a031dbb8)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/5b8d1436-4516-4669-92d5-c134a031dbb8.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/5b8d1436-4516-4669-92d5-c134a031dbb8.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/5b8d1436-4516-4669-92d5-c134a031dbb8.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/5b8d1436-4516-4669-92d5-c134a031dbb8.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[209/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ca0aae77-1548-4d8a-a104-356582713b96.json
+
+📦 Processing: SERGIK - Somthn L's (ca0aae77-1548-4d8a-a104-356582713b96)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/ca0aae77-1548-4d8a-a104-356582713b96.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/ca0aae77-1548-4d8a-a104-356582713b96.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/ca0aae77-1548-4d8a-a104-356582713b96.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ca0aae77-1548-4d8a-a104-356582713b96.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[210/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fdaf87b7-d249-4049-af74-2ce60212b15e.json
+
+📦 Processing: SERGIK - They Know (fdaf87b7-d249-4049-af74-2ce60212b15e)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/fdaf87b7-d249-4049-af74-2ce60212b15e.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/fdaf87b7-d249-4049-af74-2ce60212b15e.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/fdaf87b7-d249-4049-af74-2ce60212b15e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fdaf87b7-d249-4049-af74-2ce60212b15e.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[211/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f73e7151-0ffc-4908-980a-184d0eab0870.json
+
+📦 Processing: SERGIK - Tuck n Roll (f73e7151-0ffc-4908-980a-184d0eab0870)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/f73e7151-0ffc-4908-980a-184d0eab0870.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/f73e7151-0ffc-4908-980a-184d0eab0870.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/f73e7151-0ffc-4908-980a-184d0eab0870.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f73e7151-0ffc-4908-980a-184d0eab0870.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[212/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d5d11986-772f-4c01-ae16-afe231314053.json
+
+📦 Processing: SERGIK - Uninvited v2 (d5d11986-772f-4c01-ae16-afe231314053)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/d5d11986-772f-4c01-ae16-afe231314053.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/d5d11986-772f-4c01-ae16-afe231314053.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/d5d11986-772f-4c01-ae16-afe231314053.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d5d11986-772f-4c01-ae16-afe231314053.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[213/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/991bdbd0-0806-4a13-b1b1-a557bd3388a9.json
+
+📦 Processing: SERGIK - Wut We Bring (991bdbd0-0806-4a13-b1b1-a557bd3388a9)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/991bdbd0-0806-4a13-b1b1-a557bd3388a9.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/991bdbd0-0806-4a13-b1b1-a557bd3388a9.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/991bdbd0-0806-4a13-b1b1-a557bd3388a9.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/991bdbd0-0806-4a13-b1b1-a557bd3388a9.json
+   ✅ Database updated
+   💾 Freed: 120.8 KB
+
+[214/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f354b1a7-d880-4f68-8485-fdd4ae0df812.json
+
+📦 Processing: SERGIK - tell her v2 (f354b1a7-d880-4f68-8485-fdd4ae0df812)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/f354b1a7-d880-4f68-8485-fdd4ae0df812.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/f354b1a7-d880-4f68-8485-fdd4ae0df812.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/f354b1a7-d880-4f68-8485-fdd4ae0df812.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f354b1a7-d880-4f68-8485-fdd4ae0df812.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[215/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/02511e6e-a2bc-4c61-868d-f5c57db19ad8.json
+
+📦 Processing: SERGIK x Breauxx - You Can't 1 (02511e6e-a2bc-4c61-868d-f5c57db19ad8)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/02511e6e-a2bc-4c61-868d-f5c57db19ad8.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/02511e6e-a2bc-4c61-868d-f5c57db19ad8.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/02511e6e-a2bc-4c61-868d-f5c57db19ad8.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/02511e6e-a2bc-4c61-868d-f5c57db19ad8.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[216/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7771f9b5-ded1-40aa-bdc8-7016bc49b29a.json
+
+📦 Processing: SERGIK x Breauxx x WWW - Uninvited v2 (7771f9b5-ded1-40aa-bdc8-7016bc49b29a)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/7771f9b5-ded1-40aa-bdc8-7016bc49b29a.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/7771f9b5-ded1-40aa-bdc8-7016bc49b29a.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/7771f9b5-ded1-40aa-bdc8-7016bc49b29a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7771f9b5-ded1-40aa-bdc8-7016bc49b29a.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[217/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/246af0e9-f0ba-491a-89c3-ca22bab6de46.json
+
+📦 Processing: SERGIK x OffMedz_ - Around the World 1 (246af0e9-f0ba-491a-89c3-ca22bab6de46)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/246af0e9-f0ba-491a-89c3-ca22bab6de46.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/246af0e9-f0ba-491a-89c3-ca22bab6de46.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/246af0e9-f0ba-491a-89c3-ca22bab6de46.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/246af0e9-f0ba-491a-89c3-ca22bab6de46.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[218/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c186682b-fad8-4305-a145-2362cf827943.json
+
+📦 Processing: SERGIK x Silent Jay - Like That (c186682b-fad8-4305-a145-2362cf827943)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/c186682b-fad8-4305-a145-2362cf827943.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/c186682b-fad8-4305-a145-2362cf827943.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/c186682b-fad8-4305-a145-2362cf827943.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c186682b-fad8-4305-a145-2362cf827943.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[219/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/307b2e72-a8cd-4d1f-a4be-edf3d2e71d73.json
+
+📦 Processing: SERGIK x Silent Jay - Numba One (307b2e72-a8cd-4d1f-a4be-edf3d2e71d73)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/307b2e72-a8cd-4d1f-a4be-edf3d2e71d73.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/307b2e72-a8cd-4d1f-a4be-edf3d2e71d73.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/307b2e72-a8cd-4d1f-a4be-edf3d2e71d73.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/307b2e72-a8cd-4d1f-a4be-edf3d2e71d73.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[220/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/055c9013-ff19-4431-9ca7-30d589f0dbf4.json
+
+📦 Processing: SERGIK x Slick Floyd - LDE (055c9013-ff19-4431-9ca7-30d589f0dbf4)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/055c9013-ff19-4431-9ca7-30d589f0dbf4.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/055c9013-ff19-4431-9ca7-30d589f0dbf4.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/055c9013-ff19-4431-9ca7-30d589f0dbf4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/055c9013-ff19-4431-9ca7-30d589f0dbf4.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[221/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b9484c5a-a149-48bd-9443-bef06eb39436.json
+
+📦 Processing: SERGIK x Stan The Guitarman - Interstate 1 (b9484c5a-a149-48bd-9443-bef06eb39436)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/b9484c5a-a149-48bd-9443-bef06eb39436.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/b9484c5a-a149-48bd-9443-bef06eb39436.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/b9484c5a-a149-48bd-9443-bef06eb39436.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b9484c5a-a149-48bd-9443-bef06eb39436.json
+   ✅ Database updated
+   💾 Freed: 120.7 KB
+
+[222/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a9190ce5-07c4-4c03-8a4d-d7843a345060.json
+
+📦 Processing: Sergik - Music is my drug (a9190ce5-07c4-4c03-8a4d-d7843a345060)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/a9190ce5-07c4-4c03-8a4d-d7843a345060.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/a9190ce5-07c4-4c03-8a4d-d7843a345060.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/a9190ce5-07c4-4c03-8a4d-d7843a345060.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a9190ce5-07c4-4c03-8a4d-d7843a345060.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[223/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4d675306-dbc1-408b-ad67-efbe1326cfaa.json
+
+📦 Processing: SERGIK - Dubonaut (4d675306-dbc1-408b-ad67-efbe1326cfaa)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/4d675306-dbc1-408b-ad67-efbe1326cfaa.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/4d675306-dbc1-408b-ad67-efbe1326cfaa.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/4d675306-dbc1-408b-ad67-efbe1326cfaa.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4d675306-dbc1-408b-ad67-efbe1326cfaa.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[224/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/eebaf8f7-7d36-4655-9ad1-3ad45d54e310.json
+
+📦 Processing: SERGIK - Everyday (Dub Reggae SRGFLiP) (eebaf8f7-7d36-4655-9ad1-3ad45d54e310)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/eebaf8f7-7d36-4655-9ad1-3ad45d54e310.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/eebaf8f7-7d36-4655-9ad1-3ad45d54e310.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/eebaf8f7-7d36-4655-9ad1-3ad45d54e310.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/eebaf8f7-7d36-4655-9ad1-3ad45d54e310.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[225/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f53efde0-ae85-4b44-8cb3-65f29a6c078f.json
+
+📦 Processing: SERGIK - Jahdelicah 1 (f53efde0-ae85-4b44-8cb3-65f29a6c078f)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/f53efde0-ae85-4b44-8cb3-65f29a6c078f.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/f53efde0-ae85-4b44-8cb3-65f29a6c078f.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/f53efde0-ae85-4b44-8cb3-65f29a6c078f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f53efde0-ae85-4b44-8cb3-65f29a6c078f.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[226/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f6deb0fa-bc06-461e-b117-54e82247d6eb.json
+
+📦 Processing: SERGIK - Man On A Journey (f6deb0fa-bc06-461e-b117-54e82247d6eb)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/f6deb0fa-bc06-461e-b117-54e82247d6eb.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/f6deb0fa-bc06-461e-b117-54e82247d6eb.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/f6deb0fa-bc06-461e-b117-54e82247d6eb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f6deb0fa-bc06-461e-b117-54e82247d6eb.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[227/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e5742fb1-91a0-4660-83a0-e6c844f079d6.json
+
+📦 Processing: SERGIK - Wandering (e5742fb1-91a0-4660-83a0-e6c844f079d6)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/e5742fb1-91a0-4660-83a0-e6c844f079d6.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/e5742fb1-91a0-4660-83a0-e6c844f079d6.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/e5742fb1-91a0-4660-83a0-e6c844f079d6.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e5742fb1-91a0-4660-83a0-e6c844f079d6.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[228/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d9ab011e-ea7e-4d09-954b-be6d6dc807f1.json
+
+📦 Processing: SERGIK x Auxlee - Quirk (d9ab011e-ea7e-4d09-954b-be6d6dc807f1)
+   📊 Waveform: 37.7 KB
+   ✅ Uploaded to: waveforms/d9ab011e-ea7e-4d09-954b-be6d6dc807f1.json
+   🧬 Sonic DNA: 41.8 KB
+   ✅ Uploaded to: sonic-dna/d9ab011e-ea7e-4d09-954b-be6d6dc807f1.json
+   🤖 AI Analysis: 41.8 KB
+   ✅ Uploaded to: ai-analysis/d9ab011e-ea7e-4d09-954b-be6d6dc807f1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d9ab011e-ea7e-4d09-954b-be6d6dc807f1.json
+   ✅ Database updated
+   💾 Freed: 121.4 KB
+
+[229/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/153b1697-8f24-4ce1-8705-774e23075e8b.json
+
+📦 Processing: SERGIK  - It Is What It Is (153b1697-8f24-4ce1-8705-774e23075e8b)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/153b1697-8f24-4ce1-8705-774e23075e8b.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/153b1697-8f24-4ce1-8705-774e23075e8b.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/153b1697-8f24-4ce1-8705-774e23075e8b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/153b1697-8f24-4ce1-8705-774e23075e8b.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[230/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a0041d52-8cc0-4f3e-bed8-603c432a5db3.json
+
+📦 Processing: SERGIK - Elevator Musik (a0041d52-8cc0-4f3e-bed8-603c432a5db3)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/a0041d52-8cc0-4f3e-bed8-603c432a5db3.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/a0041d52-8cc0-4f3e-bed8-603c432a5db3.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/a0041d52-8cc0-4f3e-bed8-603c432a5db3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a0041d52-8cc0-4f3e-bed8-603c432a5db3.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[231/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/fdcf1bb7-e426-420f-9f86-83d391cfee4d.json
+
+📦 Processing: SERGIK - No Stopping (fdcf1bb7-e426-420f-9f86-83d391cfee4d)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/fdcf1bb7-e426-420f-9f86-83d391cfee4d.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/fdcf1bb7-e426-420f-9f86-83d391cfee4d.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/fdcf1bb7-e426-420f-9f86-83d391cfee4d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/fdcf1bb7-e426-420f-9f86-83d391cfee4d.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[232/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f72d7d55-1361-422c-bdfd-effc9a948298.json
+
+📦 Processing: SERGIK - Whats the Reason (f72d7d55-1361-422c-bdfd-effc9a948298)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/f72d7d55-1361-422c-bdfd-effc9a948298.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/f72d7d55-1361-422c-bdfd-effc9a948298.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/f72d7d55-1361-422c-bdfd-effc9a948298.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f72d7d55-1361-422c-bdfd-effc9a948298.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[233/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/442a3ecc-73ba-4ec5-a210-3fb5c9183116.json
+
+📦 Processing: SERGIK x OG Coconut - What you want (442a3ecc-73ba-4ec5-a210-3fb5c9183116)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/442a3ecc-73ba-4ec5-a210-3fb5c9183116.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/442a3ecc-73ba-4ec5-a210-3fb5c9183116.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/442a3ecc-73ba-4ec5-a210-3fb5c9183116.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/442a3ecc-73ba-4ec5-a210-3fb5c9183116.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[234/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/337a09f5-e478-4fec-a7e9-f8ee35db52c0.json
+
+📦 Processing: SERGIK - Crawling Vines (337a09f5-e478-4fec-a7e9-f8ee35db52c0)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/337a09f5-e478-4fec-a7e9-f8ee35db52c0.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/337a09f5-e478-4fec-a7e9-f8ee35db52c0.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/337a09f5-e478-4fec-a7e9-f8ee35db52c0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/337a09f5-e478-4fec-a7e9-f8ee35db52c0.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[235/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/57ba8534-6fc0-4dac-9e6f-0e8b85eedede.json
+
+📦 Processing: SERGIK - Daze V2 (57ba8534-6fc0-4dac-9e6f-0e8b85eedede)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/57ba8534-6fc0-4dac-9e6f-0e8b85eedede.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/57ba8534-6fc0-4dac-9e6f-0e8b85eedede.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/57ba8534-6fc0-4dac-9e6f-0e8b85eedede.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/57ba8534-6fc0-4dac-9e6f-0e8b85eedede.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[236/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/94abf7a9-688f-4a31-a53d-bd346bf50c2f.json
+
+📦 Processing: SERGIK x AUXLEE - The Conex (94abf7a9-688f-4a31-a53d-bd346bf50c2f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/94abf7a9-688f-4a31-a53d-bd346bf50c2f.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/94abf7a9-688f-4a31-a53d-bd346bf50c2f.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/94abf7a9-688f-4a31-a53d-bd346bf50c2f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/94abf7a9-688f-4a31-a53d-bd346bf50c2f.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[237/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7ac83aba-c9b8-466c-be7f-0bf4b56c7c9d.json
+
+📦 Processing: SERGIK x Bones - Momentum (7ac83aba-c9b8-466c-be7f-0bf4b56c7c9d)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/7ac83aba-c9b8-466c-be7f-0bf4b56c7c9d.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/7ac83aba-c9b8-466c-be7f-0bf4b56c7c9d.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/7ac83aba-c9b8-466c-be7f-0bf4b56c7c9d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7ac83aba-c9b8-466c-be7f-0bf4b56c7c9d.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[238/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/27b5d6bf-d218-4633-92f5-50b6f3301e4a.json
+
+📦 Processing: SERGIK - Electrify 2 (27b5d6bf-d218-4633-92f5-50b6f3301e4a)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/27b5d6bf-d218-4633-92f5-50b6f3301e4a.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/27b5d6bf-d218-4633-92f5-50b6f3301e4a.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/27b5d6bf-d218-4633-92f5-50b6f3301e4a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/27b5d6bf-d218-4633-92f5-50b6f3301e4a.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[239/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2088c4da-9b85-4560-ae17-e4bc72109e15.json
+
+📦 Processing: SERGIK - In The Streets 2 (2088c4da-9b85-4560-ae17-e4bc72109e15)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/2088c4da-9b85-4560-ae17-e4bc72109e15.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/2088c4da-9b85-4560-ae17-e4bc72109e15.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/2088c4da-9b85-4560-ae17-e4bc72109e15.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2088c4da-9b85-4560-ae17-e4bc72109e15.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[240/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/c0232962-0cb9-4e43-a0b2-a653c5db2cf7.json
+
+📦 Processing: SERGIK - Melt 2 (c0232962-0cb9-4e43-a0b2-a653c5db2cf7)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/c0232962-0cb9-4e43-a0b2-a653c5db2cf7.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/c0232962-0cb9-4e43-a0b2-a653c5db2cf7.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/c0232962-0cb9-4e43-a0b2-a653c5db2cf7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/c0232962-0cb9-4e43-a0b2-a653c5db2cf7.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[241/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/cb6dfd08-ce17-4c73-849b-1203d490ab2f.json
+
+📦 Processing: SERGIK - The Assignment 2 (cb6dfd08-ce17-4c73-849b-1203d490ab2f)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/cb6dfd08-ce17-4c73-849b-1203d490ab2f.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/cb6dfd08-ce17-4c73-849b-1203d490ab2f.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/cb6dfd08-ce17-4c73-849b-1203d490ab2f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/cb6dfd08-ce17-4c73-849b-1203d490ab2f.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[242/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/dbff1458-2fdf-410e-a13e-994aec93507d.json
+
+📦 Processing: SERGIK - They Know (dbff1458-2fdf-410e-a13e-994aec93507d)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/dbff1458-2fdf-410e-a13e-994aec93507d.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/dbff1458-2fdf-410e-a13e-994aec93507d.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/dbff1458-2fdf-410e-a13e-994aec93507d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/dbff1458-2fdf-410e-a13e-994aec93507d.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[243/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d898aa1a-f5cf-4c4f-97c8-117f835a67e9.json
+
+📦 Processing: SERGIK - Deeper (d898aa1a-f5cf-4c4f-97c8-117f835a67e9)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/d898aa1a-f5cf-4c4f-97c8-117f835a67e9.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/d898aa1a-f5cf-4c4f-97c8-117f835a67e9.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/d898aa1a-f5cf-4c4f-97c8-117f835a67e9.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d898aa1a-f5cf-4c4f-97c8-117f835a67e9.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[244/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/3d32b7e9-9d26-49dc-b291-1dc966aea804.json
+
+📦 Processing: SERGIK - Inspire (3d32b7e9-9d26-49dc-b291-1dc966aea804)
+   📊 Waveform: 37.5 KB
+   ✅ Uploaded to: waveforms/3d32b7e9-9d26-49dc-b291-1dc966aea804.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/3d32b7e9-9d26-49dc-b291-1dc966aea804.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/3d32b7e9-9d26-49dc-b291-1dc966aea804.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/3d32b7e9-9d26-49dc-b291-1dc966aea804.json
+   ✅ Database updated
+   💾 Freed: 121.0 KB
+
+[245/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/41ec1c1e-f508-4773-945b-5f45e380386b.json
+
+📦 Processing: SEERGIK - All The Vibes (41ec1c1e-f508-4773-945b-5f45e380386b)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/41ec1c1e-f508-4773-945b-5f45e380386b.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/41ec1c1e-f508-4773-945b-5f45e380386b.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/41ec1c1e-f508-4773-945b-5f45e380386b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/41ec1c1e-f508-4773-945b-5f45e380386b.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[246/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/87684703-909b-4221-949f-1618c7d36ba5.json
+
+📦 Processing: SERGIK - Back to The Basics (87684703-909b-4221-949f-1618c7d36ba5)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/87684703-909b-4221-949f-1618c7d36ba5.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/87684703-909b-4221-949f-1618c7d36ba5.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/87684703-909b-4221-949f-1618c7d36ba5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/87684703-909b-4221-949f-1618c7d36ba5.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[247/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e968778d-8b47-4e5e-8107-333d3b43e8d5.json
+
+📦 Processing: SERGIK - Everyday Gratitude 1 (e968778d-8b47-4e5e-8107-333d3b43e8d5)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/e968778d-8b47-4e5e-8107-333d3b43e8d5.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/e968778d-8b47-4e5e-8107-333d3b43e8d5.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/e968778d-8b47-4e5e-8107-333d3b43e8d5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e968778d-8b47-4e5e-8107-333d3b43e8d5.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[248/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/99b2c5a7-096e-456f-8a5d-78893dc9cc80.json
+
+📦 Processing: SERGIK - Soul Candy (99b2c5a7-096e-456f-8a5d-78893dc9cc80)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/99b2c5a7-096e-456f-8a5d-78893dc9cc80.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/99b2c5a7-096e-456f-8a5d-78893dc9cc80.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/99b2c5a7-096e-456f-8a5d-78893dc9cc80.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/99b2c5a7-096e-456f-8a5d-78893dc9cc80.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[249/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/246ceab6-7890-4ae3-83af-67ffd3737f70.json
+
+📦 Processing: SERGIK - Spring Swing 1 (246ceab6-7890-4ae3-83af-67ffd3737f70)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/246ceab6-7890-4ae3-83af-67ffd3737f70.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/246ceab6-7890-4ae3-83af-67ffd3737f70.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/246ceab6-7890-4ae3-83af-67ffd3737f70.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/246ceab6-7890-4ae3-83af-67ffd3737f70.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[250/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/21faee5c-beae-4684-93c6-a4f840434994.json
+
+📦 Processing: SERGIK - Last Night (21faee5c-beae-4684-93c6-a4f840434994)
+   📊 Waveform: 36.9 KB
+   ✅ Uploaded to: waveforms/21faee5c-beae-4684-93c6-a4f840434994.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/21faee5c-beae-4684-93c6-a4f840434994.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/21faee5c-beae-4684-93c6-a4f840434994.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/21faee5c-beae-4684-93c6-a4f840434994.json
+   ✅ Database updated
+   💾 Freed: 119.1 KB
+
+[251/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/a840aed1-54e5-46a6-8722-6f91ff2e089e.json
+
+📦 Processing: SERGIK - Mind n Body (a840aed1-54e5-46a6-8722-6f91ff2e089e)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/a840aed1-54e5-46a6-8722-6f91ff2e089e.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/a840aed1-54e5-46a6-8722-6f91ff2e089e.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/a840aed1-54e5-46a6-8722-6f91ff2e089e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/a840aed1-54e5-46a6-8722-6f91ff2e089e.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[252/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/96941d9c-db24-4aa2-9813-546901fe93cc.json
+
+📦 Processing: SERGIK - Pre Party (96941d9c-db24-4aa2-9813-546901fe93cc)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/96941d9c-db24-4aa2-9813-546901fe93cc.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/96941d9c-db24-4aa2-9813-546901fe93cc.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/96941d9c-db24-4aa2-9813-546901fe93cc.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/96941d9c-db24-4aa2-9813-546901fe93cc.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[253/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/09df06ad-4e7a-4adc-b6b8-142c2be53fef.json
+
+📦 Processing: SERGIK - Tequila Power (09df06ad-4e7a-4adc-b6b8-142c2be53fef)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/09df06ad-4e7a-4adc-b6b8-142c2be53fef.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/09df06ad-4e7a-4adc-b6b8-142c2be53fef.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/09df06ad-4e7a-4adc-b6b8-142c2be53fef.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/09df06ad-4e7a-4adc-b6b8-142c2be53fef.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[254/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2b5e2abe-6624-4e77-bcac-0e2bfb931abb.json
+
+📦 Processing: SERGIK x BeJanis - Hydrate v2 (2b5e2abe-6624-4e77-bcac-0e2bfb931abb)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/2b5e2abe-6624-4e77-bcac-0e2bfb931abb.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/2b5e2abe-6624-4e77-bcac-0e2bfb931abb.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/2b5e2abe-6624-4e77-bcac-0e2bfb931abb.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2b5e2abe-6624-4e77-bcac-0e2bfb931abb.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[255/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ba4fa579-37d1-44f6-92c0-af2d4e873966.json
+
+📦 Processing: SERGIK - Caramba V1 (ba4fa579-37d1-44f6-92c0-af2d4e873966)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/ba4fa579-37d1-44f6-92c0-af2d4e873966.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/ba4fa579-37d1-44f6-92c0-af2d4e873966.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/ba4fa579-37d1-44f6-92c0-af2d4e873966.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ba4fa579-37d1-44f6-92c0-af2d4e873966.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[256/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1d7d4717-5440-4682-ae40-2b3d5206d3ab.json
+
+📦 Processing: SERGIK - The World Dont Stop The Day (Sax) (1d7d4717-5440-4682-ae40-2b3d5206d3ab)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/1d7d4717-5440-4682-ae40-2b3d5206d3ab.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/1d7d4717-5440-4682-ae40-2b3d5206d3ab.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/1d7d4717-5440-4682-ae40-2b3d5206d3ab.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1d7d4717-5440-4682-ae40-2b3d5206d3ab.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[257/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/42cb565e-9b39-4931-85b2-d14d9fa89f15.json
+
+📦 Processing: SERGIK - The World Dont Stop The Night Gmaj 127bpm (42cb565e-9b39-4931-85b2-d14d9fa89f15)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/42cb565e-9b39-4931-85b2-d14d9fa89f15.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/42cb565e-9b39-4931-85b2-d14d9fa89f15.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/42cb565e-9b39-4931-85b2-d14d9fa89f15.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/42cb565e-9b39-4931-85b2-d14d9fa89f15.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[258/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1c259f5f-4316-49df-b999-4e0f222fe414.json
+
+📦 Processing: SERGIK X BATTLO - Land Of The Free Gmaj 123bpm (1c259f5f-4316-49df-b999-4e0f222fe414)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/1c259f5f-4316-49df-b999-4e0f222fe414.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/1c259f5f-4316-49df-b999-4e0f222fe414.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/1c259f5f-4316-49df-b999-4e0f222fe414.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1c259f5f-4316-49df-b999-4e0f222fe414.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[259/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/afe91781-e2bb-4c03-aacf-aebb877b695d.json
+
+📦 Processing: SERGIK. - All My Real Ones (afe91781-e2bb-4c03-aacf-aebb877b695d)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/afe91781-e2bb-4c03-aacf-aebb877b695d.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/afe91781-e2bb-4c03-aacf-aebb877b695d.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/afe91781-e2bb-4c03-aacf-aebb877b695d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/afe91781-e2bb-4c03-aacf-aebb877b695d.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[260/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/07282a58-cbc2-4fce-b63e-66840baef357.json
+
+📦 Processing: SERGIK - Jahdelicah 1 (07282a58-cbc2-4fce-b63e-66840baef357)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/07282a58-cbc2-4fce-b63e-66840baef357.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/07282a58-cbc2-4fce-b63e-66840baef357.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/07282a58-cbc2-4fce-b63e-66840baef357.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/07282a58-cbc2-4fce-b63e-66840baef357.json
+   ✅ Database updated
+   💾 Freed: 119.8 KB
+
+[261/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4e8ac424-6261-42b6-a9fc-63f3c9c8e9a3.json
+
+📦 Processing: SERGIK - Like The Ol Days (Bass VIP) (4e8ac424-6261-42b6-a9fc-63f3c9c8e9a3)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/4e8ac424-6261-42b6-a9fc-63f3c9c8e9a3.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/4e8ac424-6261-42b6-a9fc-63f3c9c8e9a3.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/4e8ac424-6261-42b6-a9fc-63f3c9c8e9a3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4e8ac424-6261-42b6-a9fc-63f3c9c8e9a3.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[262/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/22020e83-d81f-43fa-92f7-6f0ebf16f58b.json
+
+📦 Processing: SERGIK - Man On A Journey (22020e83-d81f-43fa-92f7-6f0ebf16f58b)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/22020e83-d81f-43fa-92f7-6f0ebf16f58b.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/22020e83-d81f-43fa-92f7-6f0ebf16f58b.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/22020e83-d81f-43fa-92f7-6f0ebf16f58b.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/22020e83-d81f-43fa-92f7-6f0ebf16f58b.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[263/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/cd9d83d0-dcb5-41fd-bf0c-14434034439f.json
+
+📦 Processing: SERGIK - Subliminal acid (cd9d83d0-dcb5-41fd-bf0c-14434034439f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/cd9d83d0-dcb5-41fd-bf0c-14434034439f.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/cd9d83d0-dcb5-41fd-bf0c-14434034439f.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/cd9d83d0-dcb5-41fd-bf0c-14434034439f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/cd9d83d0-dcb5-41fd-bf0c-14434034439f.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[264/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/79fe60ad-95ec-426a-a5d3-b229aab260f5.json
+
+📦 Processing: SERGIK - Utopia (79fe60ad-95ec-426a-a5d3-b229aab260f5)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/79fe60ad-95ec-426a-a5d3-b229aab260f5.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/79fe60ad-95ec-426a-a5d3-b229aab260f5.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/79fe60ad-95ec-426a-a5d3-b229aab260f5.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/79fe60ad-95ec-426a-a5d3-b229aab260f5.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[265/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b6997fd2-9252-47fd-9add-9ffec9a58c7a.json
+
+📦 Processing: SERGIK - Doin Ma Thang (b6997fd2-9252-47fd-9add-9ffec9a58c7a)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/b6997fd2-9252-47fd-9add-9ffec9a58c7a.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/b6997fd2-9252-47fd-9add-9ffec9a58c7a.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/b6997fd2-9252-47fd-9add-9ffec9a58c7a.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b6997fd2-9252-47fd-9add-9ffec9a58c7a.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[266/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/441cdf20-0185-4696-a9ad-85300fe19000.json
+
+📦 Processing: SERGIK - Game (441cdf20-0185-4696-a9ad-85300fe19000)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/441cdf20-0185-4696-a9ad-85300fe19000.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/441cdf20-0185-4696-a9ad-85300fe19000.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/441cdf20-0185-4696-a9ad-85300fe19000.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/441cdf20-0185-4696-a9ad-85300fe19000.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[267/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/bf9fb3ed-42b3-4f33-9db8-cc121a078299.json
+
+📦 Processing: SERGIK - We Do This (bf9fb3ed-42b3-4f33-9db8-cc121a078299)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/bf9fb3ed-42b3-4f33-9db8-cc121a078299.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/bf9fb3ed-42b3-4f33-9db8-cc121a078299.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/bf9fb3ed-42b3-4f33-9db8-cc121a078299.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/bf9fb3ed-42b3-4f33-9db8-cc121a078299.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[268/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/41721a5e-d7d1-46ca-a467-520d5a29fb20.json
+
+📦 Processing: SERGIK - What They Say (41721a5e-d7d1-46ca-a467-520d5a29fb20)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/41721a5e-d7d1-46ca-a467-520d5a29fb20.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/41721a5e-d7d1-46ca-a467-520d5a29fb20.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/41721a5e-d7d1-46ca-a467-520d5a29fb20.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/41721a5e-d7d1-46ca-a467-520d5a29fb20.json
+   ✅ Database updated
+   💾 Freed: 119.3 KB
+
+[269/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/b93bc246-979c-4ee9-98f8-fa7f571edcee.json
+
+📦 Processing: SERGIK x Slick - Gangsta (b93bc246-979c-4ee9-98f8-fa7f571edcee)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/b93bc246-979c-4ee9-98f8-fa7f571edcee.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/b93bc246-979c-4ee9-98f8-fa7f571edcee.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/b93bc246-979c-4ee9-98f8-fa7f571edcee.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/b93bc246-979c-4ee9-98f8-fa7f571edcee.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[270/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/2f712d6d-a3cf-4b98-9399-6b9fb5b0b679.json
+
+📦 Processing: SERGIK - Melt 2 (2f712d6d-a3cf-4b98-9399-6b9fb5b0b679)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/2f712d6d-a3cf-4b98-9399-6b9fb5b0b679.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/2f712d6d-a3cf-4b98-9399-6b9fb5b0b679.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/2f712d6d-a3cf-4b98-9399-6b9fb5b0b679.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/2f712d6d-a3cf-4b98-9399-6b9fb5b0b679.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[271/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f78e6ecc-c059-4e10-b081-7234a473144d.json
+
+📦 Processing: SERGIK x Silent Jay - Soul On Fire (f78e6ecc-c059-4e10-b081-7234a473144d)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/f78e6ecc-c059-4e10-b081-7234a473144d.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/f78e6ecc-c059-4e10-b081-7234a473144d.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/f78e6ecc-c059-4e10-b081-7234a473144d.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f78e6ecc-c059-4e10-b081-7234a473144d.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[272/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/69bf3a42-7f54-454b-8594-454927c813d1.json
+
+📦 Processing: SERGIK - On and On (69bf3a42-7f54-454b-8594-454927c813d1)
+   📊 Waveform: 38.3 KB
+   ✅ Uploaded to: waveforms/69bf3a42-7f54-454b-8594-454927c813d1.json
+   🧬 Sonic DNA: 42.5 KB
+   ✅ Uploaded to: sonic-dna/69bf3a42-7f54-454b-8594-454927c813d1.json
+   🤖 AI Analysis: 42.5 KB
+   ✅ Uploaded to: ai-analysis/69bf3a42-7f54-454b-8594-454927c813d1.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/69bf3a42-7f54-454b-8594-454927c813d1.json
+   ✅ Database updated
+   💾 Freed: 123.3 KB
+
+[273/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/944e78f3-3238-4240-aa8a-e37a46f172f4.json
+
+📦 Processing: SERGIK - Bad Decisions (944e78f3-3238-4240-aa8a-e37a46f172f4)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/944e78f3-3238-4240-aa8a-e37a46f172f4.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/944e78f3-3238-4240-aa8a-e37a46f172f4.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/944e78f3-3238-4240-aa8a-e37a46f172f4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/944e78f3-3238-4240-aa8a-e37a46f172f4.json
+   ✅ Database updated
+   💾 Freed: 120.4 KB
+
+[274/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/7c6e5f69-e4fd-4f6a-8f5e-0070ff635284.json
+
+📦 Processing: SERGIK - Can't You See (7c6e5f69-e4fd-4f6a-8f5e-0070ff635284)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/7c6e5f69-e4fd-4f6a-8f5e-0070ff635284.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/7c6e5f69-e4fd-4f6a-8f5e-0070ff635284.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/7c6e5f69-e4fd-4f6a-8f5e-0070ff635284.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/7c6e5f69-e4fd-4f6a-8f5e-0070ff635284.json
+   ✅ Database updated
+   💾 Freed: 119.4 KB
+
+[275/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e9a4fae5-b7cf-4295-8ea5-33964d8e6878.json
+
+📦 Processing: SERGIK - Dat Feelin (e9a4fae5-b7cf-4295-8ea5-33964d8e6878)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/e9a4fae5-b7cf-4295-8ea5-33964d8e6878.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/e9a4fae5-b7cf-4295-8ea5-33964d8e6878.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/e9a4fae5-b7cf-4295-8ea5-33964d8e6878.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e9a4fae5-b7cf-4295-8ea5-33964d8e6878.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[276/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/bb481cc3-2441-4597-8397-e0f922e1e245.json
+
+📦 Processing: SERGIK - Feeling Lit (bb481cc3-2441-4597-8397-e0f922e1e245)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/bb481cc3-2441-4597-8397-e0f922e1e245.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/bb481cc3-2441-4597-8397-e0f922e1e245.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/bb481cc3-2441-4597-8397-e0f922e1e245.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/bb481cc3-2441-4597-8397-e0f922e1e245.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+[277/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/1915e688-4b8e-446d-b372-2a3f877c938f.json
+
+📦 Processing: SERGIK - Opinions (1915e688-4b8e-446d-b372-2a3f877c938f)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/1915e688-4b8e-446d-b372-2a3f877c938f.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/1915e688-4b8e-446d-b372-2a3f877c938f.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/1915e688-4b8e-446d-b372-2a3f877c938f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/1915e688-4b8e-446d-b372-2a3f877c938f.json
+   ✅ Database updated
+   💾 Freed: 119.7 KB
+
+[278/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e565f21a-f783-476a-8381-a8dc399e6f8f.json
+
+📦 Processing: SERGIK - Party People (e565f21a-f783-476a-8381-a8dc399e6f8f)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/e565f21a-f783-476a-8381-a8dc399e6f8f.json
+   🧬 Sonic DNA: 41.2 KB
+   ✅ Uploaded to: sonic-dna/e565f21a-f783-476a-8381-a8dc399e6f8f.json
+   🤖 AI Analysis: 41.2 KB
+   ✅ Uploaded to: ai-analysis/e565f21a-f783-476a-8381-a8dc399e6f8f.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e565f21a-f783-476a-8381-a8dc399e6f8f.json
+   ✅ Database updated
+   💾 Freed: 119.6 KB
+
+[279/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/447ab101-8e39-4e35-85e1-334d75a55a24.json
+
+📦 Processing: SERGIK - Musik Is The Answr (447ab101-8e39-4e35-85e1-334d75a55a24)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/447ab101-8e39-4e35-85e1-334d75a55a24.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/447ab101-8e39-4e35-85e1-334d75a55a24.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/447ab101-8e39-4e35-85e1-334d75a55a24.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/447ab101-8e39-4e35-85e1-334d75a55a24.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[280/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/6a480242-3b08-495e-9b7c-d2fee9f17df8.json
+
+📦 Processing: SERGIK - Whats the Reason (6a480242-3b08-495e-9b7c-d2fee9f17df8)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/6a480242-3b08-495e-9b7c-d2fee9f17df8.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/6a480242-3b08-495e-9b7c-d2fee9f17df8.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/6a480242-3b08-495e-9b7c-d2fee9f17df8.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/6a480242-3b08-495e-9b7c-d2fee9f17df8.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[281/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/40211b6d-0574-4acb-b8bd-704a12d03fbd.json
+
+📦 Processing: Sergik - Its On till Dawn (40211b6d-0574-4acb-b8bd-704a12d03fbd)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/40211b6d-0574-4acb-b8bd-704a12d03fbd.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/40211b6d-0574-4acb-b8bd-704a12d03fbd.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/40211b6d-0574-4acb-b8bd-704a12d03fbd.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/40211b6d-0574-4acb-b8bd-704a12d03fbd.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[282/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d656510a-4cb1-4353-b4b4-506b881165c0.json
+
+📦 Processing: SERGIK - Deep Side The Mood (d656510a-4cb1-4353-b4b4-506b881165c0)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/d656510a-4cb1-4353-b4b4-506b881165c0.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/d656510a-4cb1-4353-b4b4-506b881165c0.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/d656510a-4cb1-4353-b4b4-506b881165c0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d656510a-4cb1-4353-b4b4-506b881165c0.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[283/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8efd7e9f-cc1d-4cf6-8c87-136206aef4e3.json
+
+📦 Processing: SERGIK x Auxlee - Weepin Willows (8efd7e9f-cc1d-4cf6-8c87-136206aef4e3)
+   📊 Waveform: 37.6 KB
+   ✅ Uploaded to: waveforms/8efd7e9f-cc1d-4cf6-8c87-136206aef4e3.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/8efd7e9f-cc1d-4cf6-8c87-136206aef4e3.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/8efd7e9f-cc1d-4cf6-8c87-136206aef4e3.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8efd7e9f-cc1d-4cf6-8c87-136206aef4e3.json
+   ✅ Database updated
+   💾 Freed: 121.1 KB
+
+[284/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/faa4cdcb-9ef0-4bad-9a71-8066872670e0.json
+
+📦 Processing: SERGIK x Nood - Im Grown (Dub Edit) (faa4cdcb-9ef0-4bad-9a71-8066872670e0)
+   📊 Waveform: 37.6 KB
+   ✅ Uploaded to: waveforms/faa4cdcb-9ef0-4bad-9a71-8066872670e0.json
+   🧬 Sonic DNA: 41.8 KB
+   ✅ Uploaded to: sonic-dna/faa4cdcb-9ef0-4bad-9a71-8066872670e0.json
+   🤖 AI Analysis: 41.8 KB
+   ✅ Uploaded to: ai-analysis/faa4cdcb-9ef0-4bad-9a71-8066872670e0.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/faa4cdcb-9ef0-4bad-9a71-8066872670e0.json
+   ✅ Database updated
+   💾 Freed: 121.4 KB
+
+[285/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/d4ecbc3f-a08c-47f2-b85a-657d5b625923.json
+
+📦 Processing: SERGIK x Nood - Im Grown (Instrumental) (d4ecbc3f-a08c-47f2-b85a-657d5b625923)
+   📊 Waveform: 37.6 KB
+   ✅ Uploaded to: waveforms/d4ecbc3f-a08c-47f2-b85a-657d5b625923.json
+   🧬 Sonic DNA: 41.9 KB
+   ✅ Uploaded to: sonic-dna/d4ecbc3f-a08c-47f2-b85a-657d5b625923.json
+   🤖 AI Analysis: 41.9 KB
+   ✅ Uploaded to: ai-analysis/d4ecbc3f-a08c-47f2-b85a-657d5b625923.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/d4ecbc3f-a08c-47f2-b85a-657d5b625923.json
+   ✅ Database updated
+   💾 Freed: 121.5 KB
+
+[286/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/f655d2c9-cbeb-4849-8e35-7346abacd4f4.json
+
+📦 Processing: SERGIK - What Is What Xtendo (f655d2c9-cbeb-4849-8e35-7346abacd4f4)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/f655d2c9-cbeb-4849-8e35-7346abacd4f4.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/f655d2c9-cbeb-4849-8e35-7346abacd4f4.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/f655d2c9-cbeb-4849-8e35-7346abacd4f4.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/f655d2c9-cbeb-4849-8e35-7346abacd4f4.json
+   ✅ Database updated
+   💾 Freed: 120.2 KB
+
+[287/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/4b27fc97-2537-4abb-9ca2-0f128fabfe76.json
+
+📦 Processing: SERGIK - Forza (4b27fc97-2537-4abb-9ca2-0f128fabfe76)
+   📊 Waveform: 37.0 KB
+   ✅ Uploaded to: waveforms/4b27fc97-2537-4abb-9ca2-0f128fabfe76.json
+   🧬 Sonic DNA: 41.0 KB
+   ✅ Uploaded to: sonic-dna/4b27fc97-2537-4abb-9ca2-0f128fabfe76.json
+   🤖 AI Analysis: 41.0 KB
+   ✅ Uploaded to: ai-analysis/4b27fc97-2537-4abb-9ca2-0f128fabfe76.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/4b27fc97-2537-4abb-9ca2-0f128fabfe76.json
+   ✅ Database updated
+   💾 Freed: 119.2 KB
+
+[288/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/ff975760-95b6-422d-add2-bba0d29e61e7.json
+
+📦 Processing: SERGIK - FTP (ff975760-95b6-422d-add2-bba0d29e61e7)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/ff975760-95b6-422d-add2-bba0d29e61e7.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/ff975760-95b6-422d-add2-bba0d29e61e7.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/ff975760-95b6-422d-add2-bba0d29e61e7.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/ff975760-95b6-422d-add2-bba0d29e61e7.json
+   ✅ Database updated
+   💾 Freed: 120.0 KB
+
+[289/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/0f05d269-e934-42b5-84ec-7140fa1e7b73.json
+
+📦 Processing: SERGIK - One Of Those Nights (0f05d269-e934-42b5-84ec-7140fa1e7b73)
+   📊 Waveform: 37.2 KB
+   ✅ Uploaded to: waveforms/0f05d269-e934-42b5-84ec-7140fa1e7b73.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/0f05d269-e934-42b5-84ec-7140fa1e7b73.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/0f05d269-e934-42b5-84ec-7140fa1e7b73.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/0f05d269-e934-42b5-84ec-7140fa1e7b73.json
+   ✅ Database updated
+   💾 Freed: 120.1 KB
+
+[290/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/8a40210f-cc87-4ed9-a1e1-ddbadd73664e.json
+
+📦 Processing: SERGIK - Dmn8r's (FTP VIP) (8a40210f-cc87-4ed9-a1e1-ddbadd73664e)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/8a40210f-cc87-4ed9-a1e1-ddbadd73664e.json
+   🧬 Sonic DNA: 41.3 KB
+   ✅ Uploaded to: sonic-dna/8a40210f-cc87-4ed9-a1e1-ddbadd73664e.json
+   🤖 AI Analysis: 41.3 KB
+   ✅ Uploaded to: ai-analysis/8a40210f-cc87-4ed9-a1e1-ddbadd73664e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/8a40210f-cc87-4ed9-a1e1-ddbadd73664e.json
+   ✅ Database updated
+   💾 Freed: 119.9 KB
+
+[291/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/27559c46-043b-4882-8d48-83db677ef9be.json
+
+📦 Processing: SERGIK - The Worst (27559c46-043b-4882-8d48-83db677ef9be)
+   📊 Waveform: 37.3 KB
+   ✅ Uploaded to: waveforms/27559c46-043b-4882-8d48-83db677ef9be.json
+   🧬 Sonic DNA: 41.4 KB
+   ✅ Uploaded to: sonic-dna/27559c46-043b-4882-8d48-83db677ef9be.json
+   🤖 AI Analysis: 41.4 KB
+   ✅ Uploaded to: ai-analysis/27559c46-043b-4882-8d48-83db677ef9be.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/27559c46-043b-4882-8d48-83db677ef9be.json
+   ✅ Database updated
+   💾 Freed: 120.3 KB
+
+[292/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/65b7879c-08a8-463e-b96c-4fcfe6b80066.json
+
+📦 Processing: SERGIK x Lugh Haurie - Zoned 120BPM DMaj (65b7879c-08a8-463e-b96c-4fcfe6b80066)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/65b7879c-08a8-463e-b96c-4fcfe6b80066.json
+   🧬 Sonic DNA: 41.6 KB
+   ✅ Uploaded to: sonic-dna/65b7879c-08a8-463e-b96c-4fcfe6b80066.json
+   🤖 AI Analysis: 41.6 KB
+   ✅ Uploaded to: ai-analysis/65b7879c-08a8-463e-b96c-4fcfe6b80066.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/65b7879c-08a8-463e-b96c-4fcfe6b80066.json
+   ✅ Database updated
+   💾 Freed: 120.6 KB
+
+[293/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/e90a1ea1-6df2-444c-acdc-4f83b08775a2.json
+
+📦 Processing: SERGIK - Life 1 (e90a1ea1-6df2-444c-acdc-4f83b08775a2)
+   📊 Waveform: 37.7 KB
+   ✅ Uploaded to: waveforms/e90a1ea1-6df2-444c-acdc-4f83b08775a2.json
+   🧬 Sonic DNA: 41.7 KB
+   ✅ Uploaded to: sonic-dna/e90a1ea1-6df2-444c-acdc-4f83b08775a2.json
+   🤖 AI Analysis: 41.7 KB
+   ✅ Uploaded to: ai-analysis/e90a1ea1-6df2-444c-acdc-4f83b08775a2.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/e90a1ea1-6df2-444c-acdc-4f83b08775a2.json
+   ✅ Database updated
+   💾 Freed: 121.3 KB
+
+[294/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/33f3b46a-4176-4e8b-89f0-8d54c4a6b80e.json
+
+📦 Processing: SERGIK - Like The Ol Days (33f3b46a-4176-4e8b-89f0-8d54c4a6b80e)
+   📊 Waveform: 37.4 KB
+   ✅ Uploaded to: waveforms/33f3b46a-4176-4e8b-89f0-8d54c4a6b80e.json
+   🧬 Sonic DNA: 41.5 KB
+   ✅ Uploaded to: sonic-dna/33f3b46a-4176-4e8b-89f0-8d54c4a6b80e.json
+   🤖 AI Analysis: 41.5 KB
+   ✅ Uploaded to: ai-analysis/33f3b46a-4176-4e8b-89f0-8d54c4a6b80e.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/33f3b46a-4176-4e8b-89f0-8d54c4a6b80e.json
+   ✅ Database updated
+   💾 Freed: 120.5 KB
+
+[295/295]
+💾 Backed up to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup/bb65b67b-cd56-4199-bea9-2b8c4a4ff2fe.json
+
+📦 Processing: SERGIK - The McCoy (bb65b67b-cd56-4199-bea9-2b8c4a4ff2fe)
+   📊 Waveform: 37.1 KB
+   ✅ Uploaded to: waveforms/bb65b67b-cd56-4199-bea9-2b8c4a4ff2fe.json
+   🧬 Sonic DNA: 41.1 KB
+   ✅ Uploaded to: sonic-dna/bb65b67b-cd56-4199-bea9-2b8c4a4ff2fe.json
+   🤖 AI Analysis: 41.1 KB
+   ✅ Uploaded to: ai-analysis/bb65b67b-cd56-4199-bea9-2b8c4a4ff2fe.json
+   🎵 Frequency Bands: 0.1 KB
+   ✅ Uploaded to: frequency-bands/bb65b67b-cd56-4199-bea9-2b8c4a4ff2fe.json
+   ✅ Database updated
+   💾 Freed: 119.5 KB
+
+
+============================================================
+📊 MIGRATION SUMMARY
+============================================================
+Total records: 295
+Migrated: 295
+Skipped (no data): 0
+Failed: 0
+Files created: 1180
+Database space freed: 34.57 MB
+============================================================
+
+✅ Migration complete!
+📦 Backups saved to: /Users/machd/Documents/SERGIK Web and app/web/data/migration-backup
+
+💡 Next steps:
+   1. Test your application
+   2. Verify files in Supabase Storage
+   3. Run VACUUM FULL to reclaim disk space
+   4. If needed, rollback with: node scripts/migrate-jsonb-to-storage.mjs --rollback

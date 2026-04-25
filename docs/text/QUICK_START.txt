@@ -1,0 +1,29 @@
+🚀 QUICK START - Supabase Setup
+
+Everything is ready! Here's what to do:
+
+1. GET YOUR SUPABASE KEYS (5 minutes):
+   - Go to: https://supabase.com/dashboard
+   - Create project (if needed)
+   - Settings → API
+   - Copy: URL, anon key, service_role key
+
+2. RUN SETUP SCRIPT:
+   cd web
+   node scripts/setup-supabase.mjs
+   (Enter your keys when prompted)
+
+3. SET UP DATABASE (2 minutes):
+   - Supabase Dashboard → SQL Editor
+   - Copy/paste: web/supabase/schema.sql
+   - Click "Run"
+
+4. CREATE STORAGE BUCKET (1 minute):
+   - Supabase Dashboard → Storage
+   - Create: audio-files (Public)
+
+5. TEST & UPLOAD:
+   node scripts/test-supabase-connection.mjs
+   node scripts/upload-audio-to-supabase.mjs
+
+That's it! 🎉

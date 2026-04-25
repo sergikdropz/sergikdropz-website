@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface SpotifyArtworkProps {
   releaseTitle: string
@@ -50,7 +51,8 @@ export default function SpotifyArtwork({
         alt={`${releaseTitle} artwork`}
         fill
         className={`object-cover ${className}`}
-        unoptimized={imageUrl.startsWith('http')}
+        unoptimized={shouldUnoptimizeImage(imageUrl)}
+        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
       />
     )
   }

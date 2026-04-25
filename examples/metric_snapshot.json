@@ -1,0 +1,15 @@
+{
+  "id":"ms_0001",
+  "entity_type":"artist",
+  "entity_id":"artist_123",
+  "snapshot_time":"2026-01-28T12:00:00Z",
+  "monthly_listeners":27100,
+  "streams_28d":89200,
+  "followers":1250,
+  "popularity_score":38,
+  "stream_velocity_28d":3200,
+  "ad_spend_28d_usd":210,
+  "source":"spotify",
+  "ingested_at":"2026-01-28T12:05:00Z",
+  "tags":["release-cycle","need-action"]
+}

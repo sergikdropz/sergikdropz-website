@@ -1,0 +1,39 @@
+{
+  "bundles": [
+    {
+      "id": "bundle-all-eps",
+      "name": "Complete EP Collection",
+      "slug": "complete-ep-collection",
+      "description": "Get every SERGIK EP in one bundle. 10 EPs, all formats included.",
+      "productIds": [
+        "ep-are-we-awake",
+        "ep-vice-and-virtues",
+        "ep-in-the-streets",
+        "ep-inspire",
+        "ep-the-world-dont-stop",
+        "ep-utopia",
+        "ep-daze",
+        "ep-staying-a-vibe",
+        "ep-soul-candy",
+        "ep-ftp"
+      ],
+      "originalPrice": 99.90,
+      "bundlePrice": 59.99,
+      "savingsPercent": 40,
+      "artwork": "/images/gallery/logo.png",
+      "status": "active"
+    },
+    {
+      "id": "bundle-starter-3",
+      "name": "Starter Pack (Any 3 EPs)",
+      "slug": "starter-pack",
+      "description": "Pick any 3 EPs from the catalog. Perfect for getting started.",
+      "productIds": [],
+      "originalPrice": 29.97,
+      "bundlePrice": 19.99,
+      "savingsPercent": 33,
+      "artwork": "/images/gallery/logo.png",
+      "status": "active"
+    }
+  ]
+}

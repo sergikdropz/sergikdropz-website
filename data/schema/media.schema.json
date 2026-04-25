@@ -1,0 +1,18 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"MediaAsset",
+  "type":"object",
+  "required":["id","type","url"],
+  "properties":{
+    "id":{"type":"string"},
+    "type":{"type":"string","enum":["image","video","thumbnail","audio"]},
+    "url":{"type":"string","format":"uri"},
+    "width":{"type":["integer","null"]},
+    "height":{"type":["integer","null"]},
+    "duration_sec":{"type":["number","null"],"minimum":0},
+    "caption":{"type":["string","null"]},
+    "alt_text":{"type":["string","null"]},
+    "created_at":{"type":"string","format":"date-time"},
+    "usage":{"type":"array","items":{"type":"string"}}
+  }
+}

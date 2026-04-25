@@ -62,6 +62,174 @@
       "alt": "Close-up of SERGIK performing with dramatic red-orange and blue lighting",
       "category": "performance",
       "description": "Intimate close-up performance moment - full beard illuminated by blue light, over-ear headphones, dark cap. Jacket with angular chevron pattern on sleeve glowing red-orange. Vertical light streaks, deep blue ambient background. Focused, immersed in performance."
+    },
+    {
+      "id": "portrait-vault-green-1",
+      "src": "/images/gallery/portrait-vault-green-1.jpg",
+      "alt": "Close-up portrait with green-lit vault door background",
+      "category": "portrait",
+      "description": "Close-up portrait - person with dark sunglasses and gold chain, dark t-shirt. Intense neon green lighting illuminating large vault door with circular handles and spokes in background. Industrial, secure facility aesthetic. Dramatic contrast between dark foreground and bright green background."
+    },
+    {
+      "id": "unorganized-1",
+      "src": "/images/gallery/1.JPG",
+      "alt": "SERGIK gallery image 1",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "portrait-vault-neon-2",
+      "src": "/images/gallery/Vault neon 2.png",
+      "alt": "Neon-stylized vault portrait variant 2",
+      "category": "portrait",
+      "description": "Neon-stylized portrait with vault door - variant 2. Highly stylized neon-lit portrait with vibrant electric colors, metallic vault door background, and futuristic aesthetic."
+    },
+    {
+      "id": "unorganized-img-0203",
+      "src": "/images/gallery/IMG_0203.PNG",
+      "alt": "SERGIK gallery image IMG_0203",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-1519",
+      "src": "/images/gallery/IMG_1519.jpeg",
+      "alt": "SERGIK gallery image IMG_1519",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2011",
+      "src": "/images/gallery/IMG_2011.jpg",
+      "alt": "SERGIK gallery image IMG_2011",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2014",
+      "src": "/images/gallery/IMG_2014.jpg",
+      "alt": "SERGIK gallery image IMG_2014",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2018",
+      "src": "/images/gallery/IMG_2018.jpg",
+      "alt": "SERGIK gallery image IMG_2018",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2022",
+      "src": "/images/gallery/IMG_2022.jpg",
+      "alt": "SERGIK gallery image IMG_2022",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2023",
+      "src": "/images/gallery/IMG_2023.jpg",
+      "alt": "SERGIK gallery image IMG_2023",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2025",
+      "src": "/images/gallery/IMG_2025.jpg",
+      "alt": "SERGIK gallery image IMG_2025",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2026",
+      "src": "/images/gallery/IMG_2026.jpg",
+      "alt": "SERGIK gallery image IMG_2026",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-2192",
+      "src": "/images/gallery/IMG_2192.jpeg",
+      "alt": "SERGIK gallery image IMG_2192",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-3353",
+      "src": "/images/gallery/IMG_3353.jpg",
+      "alt": "SERGIK gallery image IMG_3353",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5043",
+      "src": "/images/gallery/IMG_5043.jpeg",
+      "alt": "SERGIK gallery image IMG_5043",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5046",
+      "src": "/images/gallery/IMG_5046.jpeg",
+      "alt": "SERGIK gallery image IMG_5046",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5063",
+      "src": "/images/gallery/IMG_5063.jpeg",
+      "alt": "SERGIK gallery image IMG_5063",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5612",
+      "src": "/images/gallery/IMG_5612.jpg",
+      "alt": "SERGIK gallery image IMG_5612",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5629",
+      "src": "/images/gallery/IMG_5629.jpg",
+      "alt": "SERGIK gallery image IMG_5629",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5798",
+      "src": "/images/gallery/IMG_5798.jpg",
+      "alt": "SERGIK gallery image IMG_5798",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5800",
+      "src": "/images/gallery/IMG_5800.jpg",
+      "alt": "SERGIK gallery image IMG_5800",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5801",
+      "src": "/images/gallery/IMG_5801.jpg",
+      "alt": "SERGIK gallery image IMG_5801",
+      "category": "portrait",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5809",
+      "src": "/images/gallery/IMG_5809.jpg",
+      "alt": "SERGIK gallery image IMG_5809",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
+    },
+    {
+      "id": "unorganized-img-5826",
+      "src": "/images/gallery/IMG_5826.jpeg",
+      "alt": "SERGIK gallery image IMG_5826",
+      "category": "performance",
+      "description": "Gallery image - review and update description"
     }
   ]
 }
