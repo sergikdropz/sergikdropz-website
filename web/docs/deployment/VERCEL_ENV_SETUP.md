@@ -12,19 +12,19 @@ Click this link: https://vercel.com/jordan-cabogas-projects/sergikdropz-website/
 
 **Variable 1:**
 - **Key:** `NEXT_PUBLIC_SUPABASE_URL`
-- **Value:** `https://utgwlgcejflqxyalnlze.supabase.co`
+- **Value:** `https://<your-project-ref>.supabase.co`
 - **Environment:** ✅ Production (check this box)
 - Click **"Save"**
 
 **Variable 2:**
 - **Key:** `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- **Value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0Z3dsZ2NlamZscXh5YWxubHplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNDM1MjEsImV4cCI6MjA4MzYxOTUyMX0.ytF2QL0b8KJ7iMSRji2LHNJlEZ1lzrO6p2LlBcyLEVs`
+- **Value:** `[REDACTED - get from Supabase Dashboard -> Settings -> API]`
 - **Environment:** ✅ Production (check this box)
 - Click **"Save"**
 
 **Variable 3:**
 - **Key:** `SUPABASE_SERVICE_ROLE_KEY`
-- **Value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0Z3dsZ2NlamZscXh5YWxubHplIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODA0MzUyMSwiZXhwIjoyMDgzNjE5NTIxfQ.V3MAuqD38qesRRKTrzd4khdFnQ-hGe3GV_Ks1XLdDpA`
+- **Value:** `[REDACTED - store in Vercel Secret Manager]`
 - **Environment:** ✅ Production (check this box)
 - Click **"Save"**
 
