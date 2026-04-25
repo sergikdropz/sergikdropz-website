@@ -1,0 +1,9 @@
+# Exclude large audio files from Vercel deployment
+# These files should be hosted on a CDN (Supabase Storage, Cloudflare R2, etc.)
+public/audio/
+public/audio/**
+
+# Exclude large image files - these should be optimized or hosted on CDN
+# Exclude entire unreleased EP images directory (contains very large PNG files)
+public/images/audio/unreleased/eps/
+

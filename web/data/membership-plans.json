@@ -1,0 +1,41 @@
+{
+  "plans": [
+    {
+      "id": "supporter",
+      "name": "Supporter",
+      "price": 4.99,
+      "interval": "month",
+      "stripePriceId": "",
+      "description": "Show your support and get exclusive perks",
+      "features": [
+        "Early access to new releases (48 hours)",
+        "Supporter badge on profile",
+        "Monthly exclusive behind-the-scenes content",
+        "10% discount on all shop purchases",
+        "Access to supporters-only Discord channel"
+      ],
+      "color": "purple"
+    },
+    {
+      "id": "inner-circle",
+      "name": "Inner Circle",
+      "price": 14.99,
+      "interval": "month",
+      "stripePriceId": "",
+      "popular": true,
+      "description": "The ultimate fan experience",
+      "features": [
+        "Everything in Supporter tier",
+        "1 free beat lease per month",
+        "Stems access for select tracks",
+        "Monthly 1-on-1 production feedback session",
+        "Free merch item on sign-up",
+        "Name in album credits",
+        "Exclusive unreleased tracks and demos",
+        "25% discount on all shop purchases"
+      ],
+      "color": "gold"
+    }
+  ],
+  "_note": "You must create Stripe Price IDs for each plan in your Stripe Dashboard (Products > Create Product > Recurring) and add the IDs to stripePriceId fields above."
+}

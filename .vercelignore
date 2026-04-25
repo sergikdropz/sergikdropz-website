@@ -1,0 +1,37 @@
+# Exclude large audio files from Vercel deployment (18GB+)
+# These files are hosted on Supabase Storage, not Vercel
+web/public/audio/
+web/public/audio/**
+
+# Exclude large image files
+web/public/images/audio/unreleased/eps/
+web/public/images/audio/unreleased/eps/**
+
+# Exclude temp files
+web/temp/
+web/temp/**
+
+# Exclude mobile app (not needed for web deployment)
+mobile/
+
+# Exclude node_modules (will be installed during build)
+**/node_modules
+web/node_modules/
+
+# Exclude Docker files
+docker-compose.yml
+**/Dockerfile
+**/.dockerignore
+
+# Exclude large documentation (keeps essential docs)
+*.md
+!README.md
+!web/README.md
+
+# Exclude scripts (not needed in production)
+web/scripts/
+
+# Exclude Supabase exports
+web/data/supabase-export/*.json
+!web/data/supabase-export/export-summary.json
+

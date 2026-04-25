@@ -1,0 +1,18 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"ContentPage",
+  "type":"object",
+  "required":["id","slug","title"],
+  "properties":{
+    "id":{"type":"string"},
+    "slug":{"type":"string"},
+    "title":{"type":"string"},
+    "body_markdown":{"type":"string"},
+    "hero_media_id":{"type":["string","null"]},
+    "ctas":{"type":"array","items":{"type":"object"}},
+    "meta_description":{"type":["string","null"]},
+    "structured_sections":{"type":"array","items":{"type":"object"}},
+    "published":{"type":"boolean"},
+    "published_at":{"type":["string","null"],"format":"date-time"}
+  }
+}

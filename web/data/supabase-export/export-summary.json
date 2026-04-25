@@ -1,0 +1,29 @@
+{
+  "exportedAt": "2026-01-11T20:18:02.825Z",
+  "supabaseUrl": "https://utgwlgcejflqxyalnlze.supabase.co",
+  "tables": [
+    "audio_files",
+    "purchases"
+  ],
+  "stats": {
+    "totalRecords": 379,
+    "tables": {
+      "audio_files": 379,
+      "purchases": 0
+    }
+  },
+  "schema": {
+    "audio_files": {
+      "exists": true,
+      "note": "Schema details available in supabase/schema.sql"
+    },
+    "purchases": {
+      "exists": true,
+      "note": "Schema details available in supabase/schema.sql"
+    }
+  },
+  "files": [
+    "audio_files.json",
+    "purchases.json"
+  ]
+}

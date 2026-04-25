@@ -7,6 +7,10 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/blob-report/
+/e2e/.auth/
 
 # next.js
 /.next/
@@ -33,4 +37,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Supabase exports (large JSON files)
+/data/supabase-export/*.json
+!/data/supabase-export/export-summary.json
 

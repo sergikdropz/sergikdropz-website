@@ -1,0 +1,14 @@
+{
+  "name": "intellijend-etl-validator",
+  "version": "1.0.0",
+  "description": "ETL validator for intellijend dataset schema",
+  "main": "scripts/etl_validate.js",
+  "scripts": {
+    "validate:metrics": "node scripts/etl_validate.js --csv data/templates/metrics.csv --schema data/schema/metrics.schema.json",
+    "validate:campaigns": "node scripts/etl_validate.js --csv data/templates/campaigns.csv --schema data/schema/campaigns.schema.json"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "csv-parser": "^3.0.0"
+  }
+}

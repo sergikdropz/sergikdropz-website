@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Artist",
+  "type": "object",
+  "required": ["id","name","created_at"],
+  "properties": {
+    "id": {"type":"string","description":"uuid"},
+    "name": {"type":"string"},
+    "spotify_artist_id": {"type":["string","null"]},
+    "monthly_listeners": {"type":["integer","null"],"minimum":0},
+    "popularity_score": {"type":["number","null"],"minimum":0,"maximum":100},
+    "genres": {"type":"array","items":{"type":"string"}},
+    "profile_url": {"type":"string","format":"uri"},
+    "team_members": {"type":"array","items":{"type":"object","properties":{
+      "name":{"type":"string"},"role":{"type":"string"},"email":{"type":"string","format":"email"}
+    }}},
+    "notes": {"type":["string","null"]},
+    "created_at": {"type":"string","format":"date-time"},
+    "updated_at": {"type":["string","null"],"format":"date-time"}
+  }
+}

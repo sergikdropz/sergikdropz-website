@@ -1,53 +1,89 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import React, { useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking } from 'react-native';
 import releasesData from '../data/releases.json';
 
-export default function MusicScreen() {
-  const releases = releasesData.releases;
+// Memoize release card component for better performance
+const ReleaseCard = React.memo(({ release, onSpotifyPress }: { release: any; onSpotifyPress: (url: string) => void }) => (
+  <View style={styles.releaseCard}>
+    <View style={styles.releaseHeader}>
+      <View style={styles.releaseInfo}>
+        <Text style={styles.releaseTitle}>{release.title}</Text>
+        <Text style={styles.releaseMeta}>
+          {release.type} • {release.year}
+        </Text>
+      </View>
+      <View style={styles.typeBadge}>
+        <Text style={styles.typeText}>{release.type}</Text>
+      </View>
+    </View>
+    
+    <View style={styles.platformContainer}>
+      {release.platforms.map((platform: string) => (
+        <View key={platform} style={styles.platformTag}>
+          <Text style={styles.platformText}>{platform}</Text>
+        </View>
+      ))}
+    </View>
+    
+    {release.spotify_url && (
+      <TouchableOpacity
+        style={styles.spotifyButton}
+        onPress={() => onSpotifyPress(release.spotify_url!)}
+      >
+        <Text style={styles.spotifyButtonText}>Listen on Spotify →</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+));
 
-  const openSpotify = (url: string) => {
+ReleaseCard.displayName = 'ReleaseCard';
+
+export default function MusicScreen() {
+  // Memoize releases data
+  const releases = useMemo(() => releasesData.releases, []);
+
+  // Memoize callback to prevent re-renders
+  const openSpotify = useCallback((url: string) => {
     Linking.openURL(url);
-  };
+  }, []);
+
+  // Optimize render item with useCallback
+  const renderItem = useCallback(({ item }: { item: any }) => (
+    <ReleaseCard release={item} onSpotifyPress={openSpotify} />
+  ), [openSpotify]);
+
+  // Key extractor for FlatList
+  const keyExtractor = useCallback((item: any) => item.id, []);
+
+  // Get item layout for better FlatList performance
+  const getItemLayout = useCallback((_: any, index: number) => {
+    const itemSize = 150; // Approximate item height
+    return {
+      length: itemSize,
+      offset: itemSize * index,
+      index,
+    };
+  }, []);
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Music</Text>
         
-        {releases.map((release) => (
-          <View key={release.id} style={styles.releaseCard}>
-            <View style={styles.releaseHeader}>
-              <View style={styles.releaseInfo}>
-                <Text style={styles.releaseTitle}>{release.title}</Text>
-                <Text style={styles.releaseMeta}>
-                  {release.type} • {release.year}
-                </Text>
-              </View>
-              <View style={styles.typeBadge}>
-                <Text style={styles.typeText}>{release.type}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.platformContainer}>
-              {release.platforms.map((platform) => (
-                <View key={platform} style={styles.platformTag}>
-                  <Text style={styles.platformText}>{platform}</Text>
-                </View>
-              ))}
-            </View>
-            
-            {release.spotify_url && (
-              <TouchableOpacity
-                style={styles.spotifyButton}
-                onPress={() => openSpotify(release.spotify_url!)}
-              >
-                <Text style={styles.spotifyButtonText}>Listen on Spotify →</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
+        <FlatList
+          data={releases}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          getItemLayout={getItemLayout}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          initialNumToRender={5}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -124,6 +160,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
+  },
+  listContent: {
+    paddingBottom: 20,
   },
 });
 

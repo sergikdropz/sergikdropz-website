@@ -3,8 +3,8 @@ import socialProofData from '@/data/social-proof.json'
 
 export default function About() {
   return (
-    <div className="pt-20 min-h-screen bg-black">
-      <div className="container mx-auto px-4 py-16">
+    <div className="pt-20 min-h-screen relative">
+      <div className="container mx-auto px-4 py-16 relative z-10">
         <h1 className="text-5xl font-bold mb-12">About</h1>
         
         <div className="max-w-4xl mx-auto space-y-12">

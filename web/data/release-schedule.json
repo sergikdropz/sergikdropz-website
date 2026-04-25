@@ -1,0 +1,108 @@
+{
+  "schedule": [
+    {
+      "id": "are-we-awake",
+      "title": "Are We Awake",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-03-27",
+      "presave_date": "2026-03-20",
+      "genre": "Deep House / Minimal",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Are We Awake/are-we-awake-album-art.jpg",
+      "smart_link": null,
+      "description": "Atmospheric deep house explorations"
+    },
+    {
+      "id": "vice-and-virtues",
+      "title": "Vice & Virtues",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-07-15",
+      "presave_date": "2026-07-06",
+      "genre": "Tech House / Minimal House",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Vice & Virtues/500CD048-AAA0-47EA-8F4F-4ED2A5D18A1E.jpeg",
+      "smart_link": null,
+      "description": "Dark, driving tech house with minimal undertones"
+    },
+    {
+      "id": "in-the-streets",
+      "title": "In The Streets",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-05-08",
+      "presave_date": "2026-05-01",
+      "genre": "House / Underground",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - In The Streets/1FF2EF20-92A7-4FF6-8850-6FA3987CAC74.png",
+      "smart_link": null,
+      "description": "Raw, street-level house grooves"
+    },
+    {
+      "id": "inspire",
+      "title": "Inspire",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-05-29",
+      "presave_date": "2026-05-22",
+      "genre": "Deep House / Soulful",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Inspire/720426BD-0BE7-4582-A072-2E014DB9E2BC.PNG",
+      "smart_link": null,
+      "description": "Uplifting soulful house journeys"
+    },
+    {
+      "id": "the-world-dont-stop",
+      "title": "The World Dont Stop",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-06-19",
+      "presave_date": "2026-06-12",
+      "genre": "House / Groove",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - The World Dont Stop/IMG_0289.JPG",
+      "smart_link": null,
+      "description": "Relentless groove-forward house tracks"
+    },
+    {
+      "id": "utopia",
+      "title": "UTOPIA",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-04-16",
+      "presave_date": "2026-04-12",
+      "genre": "Experimental, Reggae Dub, Hip-Hop, Downtempo",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Utopia/IMG_2622.jpeg",
+      "smart_link": null,
+      "description": "Lush, expansive deep downtempo hip hop and experimental reggae soundscapes "
+    },
+    {
+      "id": "daze",
+      "title": "Daze",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-07-31",
+      "presave_date": "2026-07-24",
+      "genre": "Minimal House / Hypnotic",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+      "smart_link": null,
+      "description": "Hypnotic minimal grooves for late-night floors"
+    },
+    {
+      "id": "staying-a-vibe",
+      "title": "Staying A Vibe",
+      "type": "EP",
+      "track_count": null,
+      "release_date": "2026-08-21",
+      "presave_date": "2026-08-14",
+      "genre": "House / Feel-good",
+      "status": "scheduled",
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Staying A Vibe/CD9B1141-992E-405C-B73D-CF3D2A6BF02E.jpeg",
+      "smart_link": null,
+      "description": "Warm, feel-good house vibes"
+    }
+  ]
+}

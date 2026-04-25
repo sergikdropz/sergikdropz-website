@@ -6,16 +6,17 @@ import eventsData from '@/data/events.json'
 import venuesData from '@/data/venues.json'
 import socialProofData from '@/data/social-proof.json'
 import SocialLinks from '@/components/SocialLinks'
+import VenueCard from '@/components/VenueCard'
 
 export default function EPK() {
   return (
-    <div className="pt-20 min-h-screen bg-black">
-      <div className="container mx-auto px-4 py-16">
+    <div className="pt-20 min-h-screen relative">
+      <div className="container mx-auto px-4 py-16 relative z-10">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl font-bold mb-12">Electronic Press Kit</h1>
+          <h1 className="font-six-caps text-center mb-12" style={{ fontSize: '70px', letterSpacing: '6.2px' }}>Electronic Press Kit</h1>
           
           {/* Contact */}
-          <section className="mb-12 bg-gray-900 p-8 rounded-lg">
+          <section className="mb-12 bg-gray-900/40 p-8 rounded-lg">
             <h2 className="text-3xl font-semibold mb-6">Contact</h2>
             <p className="text-lg">
               <strong>Email:</strong>{' '}
@@ -34,9 +35,6 @@ export default function EPK() {
           {/* Bio */}
           <section className="mb-12">
             <h2 className="text-3xl font-semibold mb-6">Biography</h2>
-            <p className="text-lg text-gray-300 leading-relaxed mb-4">
-              {artistData.bio.short}
-            </p>
             <p className="text-lg text-gray-300 leading-relaxed">
               {artistData.bio.long}
             </p>
@@ -49,7 +47,7 @@ export default function EPK() {
               {releasesData.releases.map((release) => (
                 <div
                   key={release.id}
-                  className="bg-gray-900 p-4 rounded-lg"
+                  className="bg-gray-900/40 p-4 rounded-lg"
                 >
                   <div className="flex justify-between items-start">
                     <div>
@@ -70,25 +68,34 @@ export default function EPK() {
           {/* Performance History */}
           <section className="mb-12">
             <h2 className="text-3xl font-semibold mb-6">Performance History</h2>
-            <div className="mb-8">
-              <h3 className="text-xl font-medium mb-4">Festivals</h3>
-              <ul className="space-y-2">
+            
+            {/* Festivals */}
+            <div className="mb-12">
+              <h3 className="text-2xl font-semibold mb-6">Festivals</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {eventsData.festivals.map((festival) => (
-                  <li key={festival.id} className="text-gray-300">
-                    {festival.name} • {festival.location}
-                  </li>
+                  <div
+                    key={festival.id}
+                    className="bg-gray-900/40 p-6 rounded-lg hover:bg-gray-800/40 transition-colors"
+                  >
+                    <h4 className="text-xl font-semibold mb-2">{festival.name}</h4>
+                    <p className="text-gray-400">{festival.location}</p>
+                    {festival.year && (
+                      <p className="text-gray-500 text-sm mt-2">{festival.year}</p>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
+
+            {/* Venues */}
             <div>
-              <h3 className="text-xl font-medium mb-4">Notable Venues</h3>
-              <ul className="space-y-2">
+              <h3 className="text-2xl font-semibold mb-6">Notable Venues</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {venuesData.venues.map((venue) => (
-                  <li key={venue.id} className="text-gray-300">
-                    {venue.name} • {venue.city} ({venue.type})
-                  </li>
+                  <VenueCard key={venue.id} venue={venue} />
                 ))}
-              </ul>
+              </div>
             </div>
           </section>
 
@@ -108,7 +115,7 @@ export default function EPK() {
           </section>
 
           {/* Download Section */}
-          <section className="bg-gray-900 p-8 rounded-lg text-center">
+          <section className="bg-gray-900/40 p-8 rounded-lg text-center">
             <h2 className="text-2xl font-semibold mb-4">Press Assets</h2>
             <p className="text-gray-400 mb-6">
               Download the complete press kit or request high-resolution images and additional materials.

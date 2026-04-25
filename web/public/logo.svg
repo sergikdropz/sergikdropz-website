@@ -1,0 +1,160 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="metallicShine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#e0e0e0;stop-opacity:0.9" />
+      <stop offset="60%" style="stop-color:#a0a0a0;stop-opacity:0.7" />
+      <stop offset="100%" style="stop-color:#666666;stop-opacity:0.5" />
+    </linearGradient>
+    <linearGradient id="crackedStone" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#999999;stop-opacity:0.9" />
+      <stop offset="50%" style="stop-color:#666666;stop-opacity:0.7" />
+      <stop offset="100%" style="stop-color:#333333;stop-opacity:0.5" />
+    </linearGradient>
+    <linearGradient id="irisGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#888888;stop-opacity:0.8" />
+      <stop offset="50%" style="stop-color:#555555;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#333333;stop-opacity:0.4" />
+    </linearGradient>
+    <pattern id="crackLines" x="0" y="0" width="15" height="15" patternUnits="userSpaceOnUse">
+      <path d="M0,7.5 L15,7.5 M7.5,0 L7.5,15" stroke="#444444" stroke-width="0.8" opacity="0.4"/>
+      <path d="M3,3 L12,12 M12,3 L3,12" stroke="#333333" stroke-width="0.5" opacity="0.3"/>
+      <path d="M1,10 L10,1" stroke="#222222" stroke-width="0.3" opacity="0.2"/>
+    </pattern>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Black Background -->
+  <rect width="200" height="200" fill="#000000"/>
+  
+  <!-- Bottom Base Element - Smooth trapezoidal block -->
+  <path d="M 55 165 L 145 165 L 140 185 L 60 185 Z" fill="url(#metallicShine)" opacity="0.95"/>
+  <path d="M 90 165 L 110 165 L 110 185 L 90 185 Z" fill="#000000" opacity="0.4"/>
+  <path d="M 55 165 L 145 165" stroke="#ffffff" stroke-width="1" opacity="0.3"/>
+  
+  <!-- Diagonal Blocks - Lower Left (two stacked segments) -->
+  <g>
+    <!-- Outer segment -->
+    <path d="M 25 125 L 45 105 L 50 110 L 30 130 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 25 125 L 45 105 L 50 110 L 30 130 Z" fill="url(#crackLines)"/>
+    <!-- Inner segment -->
+    <path d="M 45 105 L 55 95 L 60 100 L 50 110 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 45 105 L 55 95 L 60 100 L 50 110 Z" fill="url(#crackLines)"/>
+    <!-- Faceted highlights -->
+    <path d="M 35 115 L 40 110 L 45 115 L 40 120 Z" fill="#ffffff" opacity="0.25"/>
+    <path d="M 50 100 L 52 98 L 55 100 L 52 102 Z" fill="#ffffff" opacity="0.2"/>
+  </g>
+  
+  <!-- Diagonal Blocks - Lower Right (two stacked segments) -->
+  <g>
+    <!-- Outer segment -->
+    <path d="M 175 125 L 155 105 L 150 110 L 170 130 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 175 125 L 155 105 L 150 110 L 170 130 Z" fill="url(#crackLines)"/>
+    <!-- Inner segment -->
+    <path d="M 155 105 L 145 95 L 140 100 L 150 110 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 155 105 L 145 95 L 140 100 L 150 110 Z" fill="url(#crackLines)"/>
+    <!-- Faceted highlights -->
+    <path d="M 165 115 L 160 110 L 155 115 L 160 120 Z" fill="#ffffff" opacity="0.25"/>
+    <path d="M 150 100 L 148 98 L 145 100 L 148 102 Z" fill="#ffffff" opacity="0.2"/>
+  </g>
+  
+  <!-- Diagonal Blocks - Upper Left (two stacked segments) -->
+  <g>
+    <!-- Outer segment -->
+    <path d="M 25 75 L 45 95 L 50 90 L 30 70 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 25 75 L 45 95 L 50 90 L 30 70 Z" fill="url(#crackLines)"/>
+    <!-- Inner segment -->
+    <path d="M 45 95 L 55 105 L 60 100 L 50 90 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 45 95 L 55 105 L 60 100 L 50 90 Z" fill="url(#crackLines)"/>
+    <!-- Faceted highlights -->
+    <path d="M 35 85 L 40 90 L 45 85 L 40 80 Z" fill="#ffffff" opacity="0.25"/>
+    <path d="M 50 100 L 52 102 L 55 100 L 52 98 Z" fill="#ffffff" opacity="0.2"/>
+  </g>
+  
+  <!-- Diagonal Blocks - Upper Right (two stacked segments) -->
+  <g>
+    <!-- Outer segment -->
+    <path d="M 175 75 L 155 95 L 150 90 L 170 70 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 175 75 L 155 95 L 150 90 L 170 70 Z" fill="url(#crackLines)"/>
+    <!-- Inner segment -->
+    <path d="M 155 95 L 145 105 L 140 100 L 150 90 Z" fill="url(#crackedStone)" opacity="0.85"/>
+    <path d="M 155 95 L 145 105 L 140 100 L 150 90 Z" fill="url(#crackLines)"/>
+    <!-- Faceted highlights -->
+    <path d="M 165 85 L 160 90 L 155 85 L 160 80 Z" fill="#ffffff" opacity="0.25"/>
+    <path d="M 150 100 L 148 102 L 145 100 L 148 98 Z" fill="#ffffff" opacity="0.2"/>
+  </g>
+  
+  <!-- Central Eye -->
+  <g>
+    <!-- Upper Eyelid - Thick, polished -->
+    <path d="M 55 100 Q 100 82 145 100" stroke="url(#metallicShine)" stroke-width="10" fill="none" opacity="0.95" stroke-linecap="round"/>
+    <path d="M 55 100 Q 100 82 145 100" stroke="#ffffff" stroke-width="8" fill="none" opacity="0.9" stroke-linecap="round"/>
+    <path d="M 55 100 Q 100 82 145 100" stroke="#cccccc" stroke-width="6" fill="none" opacity="0.8" stroke-linecap="round"/>
+    
+    <!-- Lower Eyelid - Thick, polished -->
+    <path d="M 55 120 Q 100 138 145 120" stroke="url(#metallicShine)" stroke-width="10" fill="none" opacity="0.95" stroke-linecap="round"/>
+    <path d="M 55 120 Q 100 138 145 120" stroke="#ffffff" stroke-width="8" fill="none" opacity="0.9" stroke-linecap="round"/>
+    <path d="M 55 120 Q 100 138 145 120" stroke="#cccccc" stroke-width="6" fill="none" opacity="0.8" stroke-linecap="round"/>
+    
+    <!-- Iris - Textured, crystalline pattern -->
+    <ellipse cx="100" cy="110" rx="38" ry="28" fill="url(#irisGradient)" opacity="0.85"/>
+    <ellipse cx="100" cy="110" rx="32" ry="22" fill="#444444" opacity="0.7"/>
+    <!-- Crystalline/organic texture patterns -->
+    <path d="M 80 105 L 90 98 L 95 108 L 85 115 Z" fill="#666666" opacity="0.5"/>
+    <path d="M 95 108 L 105 102 L 110 112 L 100 118 Z" fill="#777777" opacity="0.4"/>
+    <path d="M 105 102 L 115 98 L 120 108 L 110 112 Z" fill="#666666" opacity="0.5"/>
+    <path d="M 90 115 L 100 110 L 110 115 L 100 120 Z" fill="#888888" opacity="0.35"/>
+    <path d="M 85 100 L 95 105 L 100 95 L 90 90 Z" fill="#555555" opacity="0.4"/>
+    <!-- Additional texture lines -->
+    <path d="M 85 110 Q 90 105 95 110" stroke="#777777" stroke-width="1" fill="none" opacity="0.3"/>
+    <path d="M 105 110 Q 110 105 115 110" stroke="#777777" stroke-width="1" fill="none" opacity="0.3"/>
+    
+    <!-- Pupil - Solid black, irregular, wider at bottom -->
+    <ellipse cx="100" cy="112" rx="14" ry="12" fill="#000000"/>
+    <ellipse cx="100" cy="112" rx="12" ry="10" fill="#000000"/>
+    
+    <!-- Tear drop line from inner corner -->
+    <path d="M 65 110 Q 70 125 75 132" stroke="#ffffff" stroke-width="2.5" fill="none" opacity="0.8" stroke-linecap="round"/>
+    
+    <!-- Outer corner spiral flourish -->
+    <path d="M 135 105 Q 152 98 162 105 Q 168 112 162 120" stroke="#ffffff" stroke-width="3.5" fill="none" opacity="0.9" stroke-linecap="round"/>
+    <circle cx="162" cy="120" r="4" fill="#ffffff" opacity="0.9"/>
+    <circle cx="162" cy="120" r="2" fill="#000000" opacity="0.6"/>
+    <circle cx="162" cy="120" r="1" fill="#ffffff" opacity="0.3"/>
+    
+    <!-- Inner corner spiral flourish -->
+    <path d="M 65 110 Q 48 103 38 110 Q 32 117 38 125" stroke="#ffffff" stroke-width="3.5" fill="none" opacity="0.9" stroke-linecap="round"/>
+    <circle cx="38" cy="125" r="4" fill="#ffffff" opacity="0.9"/>
+    <circle cx="38" cy="125" r="2" fill="#000000" opacity="0.6"/>
+    <circle cx="38" cy="125" r="1" fill="#ffffff" opacity="0.3"/>
+  </g>
+  
+  <!-- Top Pyramid/Crown Element - Multi-tiered, stacked blocks -->
+  <g>
+    <!-- Base tier -->
+    <path d="M 75 65 L 125 65 L 120 75 L 80 75 Z" fill="url(#metallicShine)" opacity="0.95"/>
+    <path d="M 90 65 L 110 65 L 110 75 L 90 75 Z" fill="#000000" opacity="0.3"/>
+    <!-- Middle tier -->
+    <path d="M 85 60 L 115 60 L 110 65 L 90 65 Z" fill="url(#metallicShine)" opacity="0.9"/>
+    <path d="M 95 60 L 105 60 L 105 65 L 95 65 Z" fill="#000000" opacity="0.25"/>
+    <!-- Upper tier -->
+    <path d="M 90 50 L 110 50 L 105 60 L 95 60 Z" fill="url(#metallicShine)" opacity="0.85"/>
+    <!-- Sharp apex/spike -->
+    <path d="M 98 35 L 102 35 L 100 50 Z" fill="url(#metallicShine)" opacity="0.95"/>
+    <path d="M 99 35 L 101 35 L 100 50 Z" fill="#ffffff" opacity="0.4"/>
+    <!-- Highlights -->
+    <path d="M 85 60 L 90 55 L 95 60" stroke="#ffffff" stroke-width="1" opacity="0.4" fill="none"/>
+    <path d="M 105 60 L 110 55 L 115 60" stroke="#ffffff" stroke-width="1" opacity="0.4" fill="none"/>
+  </g>
+  
+  <!-- Overall highlights and metallic sheen -->
+  <ellipse cx="100" cy="50" rx="50" ry="8" fill="#ffffff" opacity="0.08"/>
+  <ellipse cx="100" cy="150" rx="40" ry="6" fill="#ffffff" opacity="0.06"/>
+  <ellipse cx="100" cy="110" rx="60" ry="4" fill="#ffffff" opacity="0.05"/>
+</svg>

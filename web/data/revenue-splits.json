@@ -1,0 +1,134 @@
+{
+  "collaborators": [
+    {
+      "id": "auxlee",
+      "name": "Auxlee",
+      "email": null,
+      "paymentMethod": null
+    },
+    {
+      "id": "battlo",
+      "name": "Batt Lo",
+      "email": null,
+      "paymentMethod": null
+    },
+    {
+      "id": "bejanis",
+      "name": "BeJanis",
+      "email": null,
+      "paymentMethod": null
+    },
+    {
+      "id": "bones",
+      "name": "Bones",
+      "email": null,
+      "paymentMethod": null
+    },
+    {
+      "id": "og-coconut",
+      "name": "OG Coconut",
+      "email": null,
+      "paymentMethod": null
+    },
+    {
+      "id": "slick",
+      "name": "Slick Floyd",
+      "email": null,
+      "paymentMethod": null
+    },
+    {
+      "id": "lugh-haurie",
+      "name": "Lugh Haurie",
+      "email": null,
+      "paymentMethod": null
+    }
+  ],
+  "splits": {
+    "ep-daze": {
+      "epTitle": "Daze EP",
+      "totalTracks": 5,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - Daze-sergik-x-auxlee---the-conex",
+          "title": "The Conex",
+          "collaboratorId": "auxlee",
+          "collaboratorName": "Auxlee",
+          "splitPercent": 50
+        },
+        {
+          "trackId": "track-unreleased-eps-SERGIK - Daze-sergik-x-bones---momentum",
+          "title": "Momentum",
+          "collaboratorId": "bones",
+          "collaboratorName": "Bones",
+          "splitPercent": 50
+        }
+      ]
+    },
+    "ep-the-world-dont-stop": {
+      "epTitle": "The World Dont Stop EP",
+      "totalTracks": 5,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - The World Dont Stop-sergik-x-battlo---land-of-the-free-gmaj-123bpm",
+          "title": "Land Of The Free",
+          "collaboratorId": "battlo",
+          "collaboratorName": "Batt Lo",
+          "splitPercent": 50
+        }
+      ]
+    },
+    "ep-staying-a-vibe": {
+      "epTitle": "Staying A Vibe EP",
+      "totalTracks": 5,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - Staying A Vibe-sergik-x-bejanis---hydrate-v2",
+          "title": "Hydrate v2",
+          "collaboratorId": "bejanis",
+          "collaboratorName": "BeJanis",
+          "splitPercent": 50
+        }
+      ]
+    },
+    "ep-are-we-awake": {
+      "epTitle": "Are We Awake EP",
+      "totalTracks": 5,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - Are We Awake-sergik-x-og-coconut---what-you-want",
+          "title": "What You Want",
+          "collaboratorId": "og-coconut",
+          "collaboratorName": "OG Coconut",
+          "splitPercent": 50
+        }
+      ]
+    },
+    "ep-vice-and-virtues": {
+      "epTitle": "Vice & Virtues EP",
+      "totalTracks": 5,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - Vice & Virtues-sergik-x-slick---gangsta",
+          "title": "Gangsta",
+          "collaboratorId": "slick",
+          "collaboratorName": "Slick Floyd",
+          "splitPercent": 50
+        }
+      ]
+    },
+    "ep-ftp": {
+      "epTitle": "FTP EP",
+      "totalTracks": 5,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - FTP-sergik-x-lugh-haurie---zoned-120bpm-dmaj",
+          "title": "Zoned",
+          "collaboratorId": "lugh-haurie",
+          "collaboratorName": "Lugh Haurie",
+          "splitPercent": 50
+        }
+      ]
+    }
+  },
+  "_note": "splitPercent is the collaborator's share of revenue for that track. For EP sales, each track's share = EP price / totalTracks, then the collaborator gets splitPercent of their track's share. Default 50/50 split — adjust per agreement."
+}

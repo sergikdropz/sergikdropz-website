@@ -21,9 +21,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Local/editor extension bundles (too large for git)
+*.vsix
+
+# Local data dumps/backups (should not be versioned)
+web/data/backups/
+
 # Environment variables
 .env*.local
 .env
+.env.vercel
 
 # Vercel
 .vercel
@@ -78,4 +85,15 @@ local.properties
 
 # Metro
 .metro-health-check*
+
+# Audio files (too large for Git - kept locally for lossless audio sales)
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aac
+*.ogg
+*.wma
+*.mp4
+*.m4v
 
