@@ -3,9 +3,10 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
+import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 
-// Cache tracks for 5 minutes to reduce database load
-export const revalidate = 300
+// Cookie + vault gating: incompatible with static/ISR. HTTP caching via headers only if needed.
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/music-library/tracks-optimized
@@ -221,7 +222,7 @@ export async function GET(request: NextRequest) {
         title: track.title,
         artist: track.artist,
         duration: track.duration,
-        file: track.file_url,
+        file: normalizeVaultAudioUrl(track.file_url || ''),
         artwork: track.artwork_url,
         bpm: track.bpm,
         key_signature: keySignature,

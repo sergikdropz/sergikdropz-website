@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { fetchWaveformData } from '@/lib/fetchFromStorage'
 import { extractPathFromSupabaseUrl } from '@/utils/extractPathFromSupabaseUrl'
+import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,18 +44,20 @@ export async function GET(request: Request) {
     }
     
     // Extract local path from Supabase URL if needed
-    let localPath = extractPathFromSupabaseUrl(filePath)
+    const normalizedParam = normalizeVaultAudioUrl(filePath)
+    let localPath = extractPathFromSupabaseUrl(normalizedParam)
     if (!localPath) {
       // If extraction failed, use the original path
-      localPath = filePath
+      localPath = normalizedParam
     }
+    localPath = normalizeVaultAudioUrl(localPath)
     
     // Normalize the path - try multiple formats
     const storagePath = localPath.replace(/^\/audio\//, '').replace(/^\//, '')
     const pathVariations = [
       storagePath,
-      filePath,
-      filePath.replace(/^\/audio\//, ''),
+      normalizedParam,
+      normalizedParam.replace(/^\/audio\//, ''),
       `audio/${storagePath}`,
       `/audio/${storagePath}`
     ]

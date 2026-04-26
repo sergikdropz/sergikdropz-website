@@ -13,7 +13,7 @@ const PRELOAD_COUNT = 5 // Number of next tracks to preload
 
 // Public API JSON cache (music library structure, waveform/bpm, sonic-dna reads)
 // v2: Cleared stale sonic-dna responses after data enhancement (2026-01-30)
-const API_CACHE_NAME = 'sergik-api-cache-v2'
+const API_CACHE_NAME = 'sergik-api-cache-v3'
 const API_MAX_ITEMS = 500 // High cap; browser may still evict
 
 // Track cache metadata
@@ -224,6 +224,70 @@ async function fetchWithRetry(request, retries = 1, delay = 1000) {
   }
 }
 
+/**
+ * HTMLMediaElement almost always requests media with Range. Returning a cached
+ * full-file 200 for those requests breaks progressive playback and causes stalls.
+ * Satisfy common "bytes=start-end" / "bytes=start-" / "bytes=-suffix" from cache.
+ */
+async function rangeResponseFromCachedFullFile(request, cachedResponse) {
+  const rangeHeader = request.headers.get('Range')
+  if (!rangeHeader || !cachedResponse || !cachedResponse.ok) return null
+
+  const blob = await cachedResponse.blob()
+  const size = blob.size
+  if (!size) return null
+
+  const trimmed = rangeHeader.trim()
+  const suffix = /^bytes=-(\d+)$/i.exec(trimmed)
+  if (suffix) {
+    const lastN = parseInt(suffix[1], 10)
+    if (Number.isNaN(lastN) || lastN <= 0) return null
+    const start = Math.max(0, size - lastN)
+    const end = size - 1
+    const sliced = blob.slice(start, size)
+    const ctype = cachedResponse.headers.get('Content-Type') || 'application/octet-stream'
+    return new Response(sliced, {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: {
+        'Content-Type': ctype,
+        'Content-Length': String(sliced.size),
+        'Content-Range': `bytes ${start}-${end}/${size}`,
+        'Accept-Ranges': 'bytes',
+      },
+    })
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(trimmed)
+  if (!match) return null
+
+  let start = match[1] === '' ? 0 : parseInt(match[1], 10)
+  let end = match[2] === '' ? size - 1 : parseInt(match[2], 10)
+  if (Number.isNaN(start) || Number.isNaN(end)) return null
+  if (start >= size) {
+    return new Response(null, {
+      status: 416,
+      statusText: 'Range Not Satisfiable',
+      headers: { 'Content-Range': `bytes */${size}` },
+    })
+  }
+  end = Math.min(end, size - 1)
+  if (start > end) return null
+
+  const sliced = blob.slice(start, end + 1)
+  const ctype = cachedResponse.headers.get('Content-Type') || 'application/octet-stream'
+  return new Response(sliced, {
+    status: 206,
+    statusText: 'Partial Content',
+    headers: {
+      'Content-Type': ctype,
+      'Content-Length': String(sliced.size),
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+      'Accept-Ranges': 'bytes',
+    },
+  })
+}
+
 // Handle audio request with smart caching
 async function handleAudioRequest(request) {
   const url = request.url
@@ -234,6 +298,19 @@ async function handleAudioRequest(request) {
   const cachedResponse = await cache.match(url)
   
   if (cachedResponse) {
+    const rangeHeader = request.headers.get('Range')
+    if (rangeHeader) {
+      const ranged = await rangeResponseFromCachedFullFile(request, cachedResponse)
+      if (ranged) {
+        const item = metadata.items.find(i => i.url === url)
+        if (item) {
+          item.lastAccessed = Date.now()
+          await saveCacheMetadata(metadata)
+        }
+        return ranged
+      }
+      return fetchWithRetry(request)
+    }
     const item = metadata.items.find(i => i.url === url)
     if (item) {
       item.lastAccessed = Date.now()
@@ -295,6 +372,11 @@ async function handleAudioRequest(request) {
     
     const staleCached = await cache.match(url)
     if (staleCached) {
+      const rangeHeader = request.headers.get('Range')
+      if (rangeHeader) {
+        const ranged = await rangeResponseFromCachedFullFile(request, staleCached)
+        if (ranged) return ranged
+      }
       return staleCached
     }
     

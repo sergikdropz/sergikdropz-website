@@ -4,6 +4,7 @@
  */
 
 import musicLibraryData from '@/data/music-library.json'
+import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 
 export interface Track {
   id: string
@@ -88,8 +89,9 @@ let musicLibraryCache: { data: MusicLibraryData | null; expiresAt: number } = {
 const MUSIC_LIBRARY_CACHE_TTL_MS = 10 * 60_000
 
 // Persistent cache (best-effort). Browser storage can be evicted; we just try to keep it.
-const CACHE_VERSION = 'v10' // Increment when schema changes - added iTunes-style columns
+const CACHE_VERSION = 'v11' // v11: MP3-only vault URLs (invalidate stale .wav in localStorage)
 const PERSIST_KEY = `sergik:musicLibraryCache:${CACHE_VERSION}`
+const CACHE_VERSION_NUM = parseInt(CACHE_VERSION.replace(/^v/i, ''), 10) || 0
 const PERSIST_TTL_MS = 24 * 60 * 60_000
 
 /**
@@ -107,6 +109,26 @@ export function invalidateMusicLibraryCache(): void {
   }
 }
 
+/** In-place: Supabase vault objects are MP3; rewrite stale .wav URLs from old caches. */
+function normalizeMusicLibraryUrlsInPlace(data: MusicLibraryData): void {
+  const fix = (t: { file?: string }) => {
+    if (t?.file && typeof t.file === 'string') t.file = normalizeVaultAudioUrl(t.file)
+  }
+  const walk = (nodes: FolderItem[] | undefined) => {
+    if (!nodes) return
+    for (const n of nodes) {
+      n.tracks?.forEach(fix)
+      if (n.children) walk(n.children)
+    }
+  }
+  walk(data.folders)
+  if (Array.isArray(data.playlists)) {
+    for (const p of data.playlists as { tracks?: { file?: string }[] }[]) {
+      p?.tracks?.forEach(fix)
+    }
+  }
+}
+
 /**
  * Fetch music library data from API or fallback to JSON
  */
@@ -118,14 +140,12 @@ export interface FetchMusicLibraryOptions {
 export async function fetchMusicLibrary(options: FetchMusicLibraryOptions = {}): Promise<MusicLibraryData> {
   const { includeHidden = false, skipCache = false } = options
   
-  // Clear ALL cache versions to ensure fresh data
-  if (typeof window !== 'undefined') {
+  // Drop older persisted schema keys (e.g. v10 held pre-MP3 .wav URLs) without deleting this version's key
+  if (typeof window !== 'undefined' && CACHE_VERSION_NUM > 1) {
     try {
-      const allCacheKeys = ['sergik:musicLibraryCache:v1', 'sergik:musicLibraryCache:v2', 'sergik:musicLibraryCache:v3', 'sergik:musicLibraryCache:v4', 'sergik:musicLibraryCache:v5', 'sergik:musicLibraryCache:v6', 'sergik:musicLibraryCache:v7', 'sergik:musicLibraryCache:v8']
-      allCacheKeys.forEach(key => {
-        window.localStorage.removeItem(key)
-      })
-      // Also clear in-memory cache
+      for (let v = 1; v < CACHE_VERSION_NUM; v++) {
+        window.localStorage.removeItem(`sergik:musicLibraryCache:v${v}`)
+      }
       musicLibraryCache = { data: null, expiresAt: 0 }
     } catch {
       // Ignore errors
@@ -134,6 +154,7 @@ export async function fetchMusicLibrary(options: FetchMusicLibraryOptions = {}):
 
   // Return cached data if fresh (skip cache for admin requests with includeHidden)
   if (!skipCache && !includeHidden && musicLibraryCache.data && Date.now() < musicLibraryCache.expiresAt) {
+    normalizeMusicLibraryUrlsInPlace(musicLibraryCache.data)
     return musicLibraryCache.data
   }
 
@@ -145,6 +166,7 @@ export async function fetchMusicLibrary(options: FetchMusicLibraryOptions = {}):
       if (raw) {
         const parsed = JSON.parse(raw) as { data: MusicLibraryData; expiresAt: number }
         if (parsed?.data && typeof parsed.expiresAt === 'number' && Date.now() < parsed.expiresAt) {
+          normalizeMusicLibraryUrlsInPlace(parsed.data)
           musicLibraryCache = { data: parsed.data, expiresAt: Date.now() + MUSIC_LIBRARY_CACHE_TTL_MS }
           return parsed.data
         }
@@ -192,7 +214,8 @@ export async function fetchMusicLibrary(options: FetchMusicLibraryOptions = {}):
         hypothesisId: 'D',
       })
       if (response.ok) {
-        const data = await response.json()
+        const data = (await response.json()) as MusicLibraryData
+        normalizeMusicLibraryUrlsInPlace(data)
         debugIngest({
           location: 'musicLibraryApi.ts:59',
           message: 'fetchMusicLibrary success',
@@ -255,6 +278,7 @@ export async function fetchMusicLibrary(options: FetchMusicLibraryOptions = {}):
     hypothesisId: 'D',
   })
   const data = musicLibraryData as unknown as MusicLibraryData
+  normalizeMusicLibraryUrlsInPlace(data)
   musicLibraryCache = {
     data,
     expiresAt: Date.now() + MUSIC_LIBRARY_CACHE_TTL_MS,
@@ -310,7 +334,11 @@ export async function fetchTracks(
       const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
-        return data.tracks || []
+        const tracks = (data.tracks || []) as Track[]
+        tracks.forEach((t) => {
+          if (t.file) t.file = normalizeVaultAudioUrl(t.file)
+        })
+        return tracks
       }
     } catch (error) {
       console.error('Error fetching tracks from API:', error)
@@ -335,6 +363,9 @@ export async function fetchTracks(
   }
 
   extractTracks(data.folders || [])
+  allTracks.forEach((t) => {
+    if (t.file) t.file = normalizeVaultAudioUrl(t.file)
+  })
   return allTracks
 }
 
@@ -359,7 +390,11 @@ export async function fetchTracksSummary(
       const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
-        return { tracks: data.tracks || [], total: data.total, hasMore: data.hasMore }
+        const tracks = (data.tracks || []) as Track[]
+        tracks.forEach((t) => {
+          if (t.file) t.file = normalizeVaultAudioUrl(t.file)
+        })
+        return { tracks, total: data.total, hasMore: data.hasMore }
       }
     } catch (error) {
       console.error('Error fetching tracks summary from API:', error)
@@ -384,6 +419,9 @@ export async function fetchTracksSummary(
   }
 
   extractTracks(data.folders || [])
+  allTracks.forEach((t) => {
+    if (t.file) t.file = normalizeVaultAudioUrl(t.file)
+  })
   return { tracks: allTracks }
 }
 

@@ -6,6 +6,7 @@
  */
 
 import { getCachedUrl, setCachedUrl } from './audioCache'
+import { normalizeVaultAudioUrl } from './normalizeVaultAudioUrl'
 
 const DEBUG_INGEST =
   process.env.NODE_ENV !== 'production' && !!process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGGING
@@ -29,16 +30,17 @@ const debugIngest = (payload: Record<string, unknown>) => {
  * @returns Promise<string> - The resolved URL (Supabase URL in production, or local path in dev)
  */
 export async function resolveAudioUrl(filePath: string): Promise<string> {
+  const normalizedInput = normalizeVaultAudioUrl(filePath)
 
-  // If it's already a full URL (starts with http), return as-is
-  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-    return filePath
+  // If it's already a full URL (starts with http), normalize .wav→.mp3 for migrated bucket
+  if (normalizedInput.startsWith('http://') || normalizedInput.startsWith('https://')) {
+    return normalizedInput
   }
 
   // Check cache first (NEW - safe addition)
-  const cached = getCachedUrl(filePath)
+  const cached = getCachedUrl(normalizedInput)
   if (cached) {
-    return cached
+    return normalizeVaultAudioUrl(cached)
   }
 
   // Always try Supabase resolution (works in both dev and production)
@@ -46,7 +48,7 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
     const isDevelopment = process.env.NODE_ENV === 'development'
     
     try {
-      const response = await fetch(`/api/audio/resolve?path=${encodeURIComponent(filePath)}`)
+      const response = await fetch(`/api/audio/resolve?path=${encodeURIComponent(normalizedInput)}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -54,7 +56,7 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
           location: 'resolveAudioUrl.ts:36',
           message: 'Audio resolve response',
           data: {
-            filePath,
+            filePath: normalizedInput,
             hasUrl: !!data.url,
             url: data.url?.substring(0, 100),
             hasError: !!data.error,
@@ -68,8 +70,9 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
         // In development, use Supabase URL if found, otherwise fall back to local
         if (data.url) {
           // Cache the result (NEW - safe addition)
-          setCachedUrl(filePath, data.url)
-          return data.url
+          const out = normalizeVaultAudioUrl(data.url)
+          setCachedUrl(normalizedInput, out)
+          return out
         } else if (!isDevelopment) {
           // In production, if API returns null, check if it's a configuration error
           if (data.error) {
@@ -77,8 +80,8 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
             throw new Error(`Supabase not configured: ${data.error}`)
           }
           // In production, if API returns null, that's an error - don't fall back to local
-          console.error('Audio file not found in Supabase:', filePath)
-          throw new Error(`Audio file not found: ${filePath}`)
+          console.error('Audio file not found in Supabase:', normalizedInput)
+          throw new Error(`Audio file not found: ${normalizedInput}`)
         }
       }
     } catch (error: any) {
@@ -93,10 +96,10 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
   }
 
   // Fallback: return the local path (only used in development)
-  const result = filePath
+  const result = normalizedInput
   // Cache even local paths in dev (NEW - safe addition)
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    setCachedUrl(filePath, result)
+    setCachedUrl(normalizedInput, result)
   }
   return result
 }

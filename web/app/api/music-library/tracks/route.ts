@@ -6,9 +6,9 @@ import { buildTrackMetadata } from '@/utils/trackIndexUtils'
 import { getServerSession } from '@/lib/auth'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
+import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 
-// Cache tracks for 5 minutes to reduce database load
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/music-library/tracks
@@ -338,7 +338,7 @@ export async function GET(request: NextRequest) {
         title: track.title,
         artist: track.artist,
         duration: duration || track.duration, // Use audio_files duration if available
-        file: track.file_url,
+        file: normalizeVaultAudioUrl(track.file_url || ''),
         artwork: artwork || track.artwork_url, // Use audio_files artwork if available
         bpm: bpm,
         key_signature: keySignature, // snake_case to match front-end Track interface
