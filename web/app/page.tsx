@@ -88,21 +88,23 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Instagram Feed */}
-      <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10 bg-gradient-to-b from-transparent via-black/30 to-transparent">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="overflow-hidden rounded-lg">
-              <div className="max-h-[600px] overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #111827' }}>
-                <InstagramEmbed 
-                  username={artistData.platforms.instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '').replace('@', '')}
-                  className="w-full"
-                />
+      {/* Instagram Feed — set NEXT_PUBLIC_SHOW_INSTAGRAM_FEED=false in Vercel to hide the entire block */}
+      {(process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED ?? 'true') !== 'false' && (
+        <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10 bg-gradient-to-b from-transparent via-black/30 to-transparent">
+          <div className="container mx-auto px-4 sm:px-6">
+            <div className="max-w-6xl mx-auto">
+              <div className="overflow-hidden rounded-lg">
+                <div className="max-h-[600px] overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #111827' }}>
+                  <InstagramEmbed 
+                    username={artistData.platforms.instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '').replace('@', '')}
+                    className="w-full"
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Latest Releases */}
       <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10">
