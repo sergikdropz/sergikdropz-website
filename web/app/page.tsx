@@ -13,6 +13,12 @@ import { useState } from 'react'
 export default function Home() {
   const [followModalOpen, setFollowModalOpen] = useState(false)
 
+  /** Production: off unless `NEXT_PUBLIC_SHOW_INSTAGRAM_FEED=true` in Vercel. Dev: on unless set to false. */
+  const showInstagramFeed =
+    process.env.NODE_ENV !== 'production'
+      ? (process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED ?? 'true') !== 'false'
+      : process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED === 'true'
+
   const latestReleases = releasesData.releases.slice(0, 3)
   const galleryImages = galleryData.images
 
@@ -88,8 +94,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Instagram Feed — set NEXT_PUBLIC_SHOW_INSTAGRAM_FEED=false in Vercel to hide the entire block */}
-      {(process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED ?? 'true') !== 'false' && (
+      {/* Instagram Feed — hidden in production until NEXT_PUBLIC_SHOW_INSTAGRAM_FEED=true */}
+      {showInstagramFeed && (
         <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10 bg-gradient-to-b from-transparent via-black/30 to-transparent">
           <div className="container mx-auto px-4 sm:px-6">
             <div className="max-w-6xl mx-auto">
