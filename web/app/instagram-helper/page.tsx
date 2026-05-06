@@ -24,7 +24,9 @@ export default function InstagramHelper() {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshStatus, setRefreshStatus] = useState<{lastUpdated?: string, total?: number} | null>(null)
   const [origin, setOrigin] = useState<string>('http://localhost:3000') // Default for SSR
-  const [previewMedia, setPreviewMedia] = useState<Record<string, { mediaUrl?: string; type?: string }>>({})
+  const [previewMedia, setPreviewMedia] = useState<
+    Record<string, { mediaUrl?: string; type?: string; resolved?: boolean }>
+  >({})
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -250,66 +252,47 @@ export default function InstagramHelper() {
     }
   }
 
-  // Fetch preview media for saved posts
+  // Fetch preview thumbnails (server normalizes permutations + Graph vs oEmbed)
   useEffect(() => {
-    const validPosts = posts.filter(p => isValidInstagramUrl(p))
+    const validPosts = posts.filter((p) => isValidInstagramUrl(p))
     if (validPosts.length === 0) {
       setPreviewMedia({})
       return
     }
 
-    // Fetch media for each post
+    let cancelled = false
+
     const fetchPreviewMedia = async () => {
       const mediaMap: Record<string, { mediaUrl?: string; type?: string }> = {}
-      
+
       await Promise.all(
         validPosts.map(async (post) => {
           try {
-            const cleanUrl = post.split('?')[0]
-            // Try to get media from our API first
-            const response = await fetch(`/api/instagram/media?limit=100`)
-            if (response.ok) {
-              const data = await response.json()
-              // Find matching post by permalink
-              const matchingMedia = data.media?.find((m: any) => 
-                m.permalink === cleanUrl || m.url === cleanUrl
-              )
-              if (matchingMedia?.mediaUrl) {
-                mediaMap[post] = {
-                  mediaUrl: matchingMedia.mediaUrl,
-                  type: matchingMedia.type,
-                }
-                return
+            const r = await fetch(
+              `/api/instagram/preview?url=${encodeURIComponent(post)}`,
+              { cache: 'no-store' }
+            )
+            const data = await r.json()
+            if (!cancelled) {
+              mediaMap[post] = {
+                mediaUrl: data.mediaUrl || undefined,
+                type: data.type || undefined,
+                resolved: true,
               }
             }
-            
-            // Fallback: Try to get thumbnail from Instagram oEmbed
-            try {
-              const oembedUrl = `https://api.instagram.com/oembed?url=${encodeURIComponent(cleanUrl)}`
-              const oembedResponse = await fetch(oembedUrl)
-              if (oembedResponse.ok) {
-                const oembedData = await oembedResponse.json()
-                if (oembedData.thumbnail_url) {
-                  // Use our proxy to avoid CORS
-                  mediaMap[post] = {
-                    mediaUrl: `/api/instagram/proxy-image?url=${encodeURIComponent(oembedData.thumbnail_url)}`,
-                    type: cleanUrl.includes('/reel/') ? 'video' : 'image',
-                  }
-                }
-              }
-            } catch (oembedError) {
-              // oEmbed failed, will show loading state
-            }
-          } catch (error) {
-            console.error(`Error fetching preview for ${post}:`, error)
+          } catch (e) {
+            console.error('Preview fetch:', post, e)
           }
         })
       )
-      
-      setPreviewMedia(mediaMap)
+
+      if (!cancelled) setPreviewMedia(mediaMap)
     }
 
     fetchPreviewMedia()
+    return () => {
+      cancelled = true
+    }
   }, [posts])
 
   // Load existing posts on mount
@@ -550,7 +533,8 @@ export default function InstagramHelper() {
                 const cleanUrl = post.split('?')[0]
                 const isReel = cleanUrl.includes('/reel/')
                 const preview = previewMedia[post]
-                const hasPreview = preview?.mediaUrl
+                const hasPreview = Boolean(preview?.mediaUrl)
+                const previewResolved = preview?.resolved === true && !preview?.mediaUrl
                 const isDragging = draggedIndex === postIndex
                 const isDragOver = dragOverIndex === postIndex
                 
@@ -593,18 +577,15 @@ export default function InstagramHelper() {
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           unoptimized
                         />
+                      ) : previewResolved ? (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-900/80 p-3">
+                          <p className="text-gray-400 text-xs text-center leading-relaxed">
+                            No thumbnail yet — confirm Graph API env vars and permissions, or open the post on Instagram.
+                          </p>
+                        </div>
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="text-center p-4">
-                            <svg
-                              className="w-12 h-12 text-gray-600 mx-auto mb-2"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                            </svg>
-                            <p className="text-gray-500 text-xs">Loading preview...</p>
-                          </div>
+                        <div className="w-full h-full flex items-center justify-center animate-pulse bg-gray-800/50">
+                          <p className="text-gray-500 text-xs">Loading preview…</p>
                         </div>
                       )}
                       {isReel && hasPreview && (
@@ -1006,56 +987,85 @@ export default function InstagramHelper() {
                 <div className="text-center py-8 text-gray-400">No posts found in database.</div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {adminPosts.map((post) => (
+                  {adminPosts.map((post: Record<string, unknown>, idx: number) => {
+                    const thumb =
+                      (post.mediaUrl as string) ||
+                      (post.thumbnail_url as string) ||
+                      (post.thumbnailUrl as string)
+                    const permalink =
+                      (post.permalink as string) ||
+                      (post.post_url as string) ||
+                      (post.url as string) ||
+                      ''
+                    const caption = (post.caption as string) || ''
+                    const isVideo =
+                      post.type === 'video' ||
+                      post.media_type === 'VIDEO' ||
+                      post.media_type === 'video'
+                    const videoSrc =
+                      (post.videoUrl as string) ||
+                      (post.video_url as string)
+                    const rowId = (post.id as string) || permalink || String(idx)
+
+                    return (
                     <div
-                      key={post.id}
+                      key={rowId}
                       className="bg-gray-800/50 border border-gray-700 rounded-lg overflow-hidden hover:border-pink-500 transition"
                     >
-                      <div className="aspect-square bg-gray-700 relative">
-                        {post.thumbnail_url ? (
-                          <img
-                            src={post.thumbnail_url}
-                            alt={post.caption || 'Instagram post'}
-                            className="w-full h-full object-cover"
+                      <div className="aspect-square bg-gray-900 relative">
+                        {thumb ? (
+                          <Image
+                            src={thumb}
+                            alt={caption || 'Instagram'}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 50vw, 25vw"
+                            unoptimized
                           />
-                        ) : post.media_type === 'VIDEO' && post.video_url ? (
+                        ) : isVideo && videoSrc ? (
                           <video
-                            src={post.video_url}
+                            src={videoSrc}
                             className="w-full h-full object-cover"
                             controls
+                            playsInline
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-gray-500 text-xs">No preview</span>
+                          <div className="w-full h-full flex flex-col items-center justify-center p-2">
+                            <span className="text-gray-500 text-xs text-center">No preview</span>
                           </div>
                         )}
-                        {post.media_type === 'VIDEO' && (
-                          <div className="absolute top-2 right-2 bg-black/50 px-2 py-1 rounded text-xs text-white">
+                        {isVideo && (
+                          <div className="absolute top-2 right-2 bg-black/70 px-2 py-1 rounded text-xs text-white">
                             VIDEO
                           </div>
                         )}
                       </div>
                       <div className="p-3">
                         <p className="text-xs text-gray-400 mb-2 line-clamp-2">
-                          {post.caption || 'No caption'}
+                          {caption || '—'}
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           <button
-                            onClick={() => window.open(post.post_url, '_blank')}
-                            className="text-pink-400 hover:text-pink-300 text-xs transition flex-1"
+                            type="button"
+                            onClick={() => permalink && window.open(permalink, '_blank')}
+                            className="text-pink-400 hover:text-pink-300 text-xs transition flex-1 text-left"
                           >
-                            View
+                            View on IG
                           </button>
-                          <button
-                            onClick={() => handleDeletePost(post.id)}
-                            className="text-red-400 hover:text-red-300 text-xs transition"
-                          >
-                            Delete
-                          </button>
+                          {post.id ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePost(post.id as string)}
+                              className="text-red-400 hover:text-red-300 text-xs transition"
+                            >
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
