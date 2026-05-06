@@ -39,6 +39,18 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.supabase.co', // For Supabase audio artwork
       },
+      {
+        protocol: 'https',
+        hostname: '**.cdninstagram.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.fbcdn.net',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.instagram.com',
+      },
     ],
   },
   // Headers for better caching and permissions

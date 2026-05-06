@@ -20,11 +20,13 @@ interface InstagramMediaGridProps {
   className?: string
 }
 
+const PLACEHOLDER_PATHS = new Set(['/logo.svg', '/images/gallery/logo.png'])
+
 function isPlaceholderAsset(url?: string | null): boolean {
-  return !url || url === '/logo.svg'
+  return !url || PLACEHOLDER_PATHS.has(url)
 }
 
-/** Grid cells use /logo.svg when oEmbed/og:image fail (common for reels + datacenter fetches). Omit those rows. */
+/** Omit API fallback placeholders so only real CDN thumbnails render in the grid. */
 function itemHasRenderableThumbnail(item: InstagramMedia): boolean {
   const primary =
     item.type === 'video'
@@ -429,7 +431,7 @@ export default function InstagramMediaGrid({
                     </div>
                   ) : (
                     // Image view - handle placeholders
-                    item.mediaUrl === '/logo.svg' ? (
+                    isPlaceholderAsset(item.mediaUrl) ? (
                       <div className="relative w-full aspect-square md:aspect-auto md:max-h-[80vh] flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500">
                         <div className="text-center p-8">
                           <svg
@@ -470,7 +472,7 @@ export default function InstagramMediaGrid({
                 </div>
               ) : (
                 // Thumbnail view
-                hasFailed || item.mediaUrl === '/logo.svg' ? (
+                hasFailed || isPlaceholderAsset(item.mediaUrl) ? (
                   // Fallback: Show clickable placeholder with Instagram icon that links to post
                   <a
                     href={item.permalink}
