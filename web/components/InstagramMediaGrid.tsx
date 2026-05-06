@@ -57,8 +57,14 @@ export default function InstagramMediaGrid({
     }
     setError(null)
     try {
-      const response = await fetch(`/api/instagram/media?username=${cleanUsername}&limit=${maxPosts}`)
+      const response = await fetch(`/api/instagram/media?username=${cleanUsername}&limit=${maxPosts}`, {
+        cache: 'no-store',
+      })
       const data = await response.json()
+
+      if (process.env.NODE_ENV === 'development' && data.instagramGraph) {
+        console.info('[Instagram Graph]', data.instagramGraph)
+      }
       
       if (response.ok) {
         if (data.media && data.media.length > 0) {

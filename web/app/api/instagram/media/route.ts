@@ -203,19 +203,116 @@ const cacheHeaders = {
   'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=600',
 }
 
+/** Graph API version — keep in sync with Meta dashboard app settings */
+const GRAPH_API_VERSION = 'v21.0'
+
+/**
+ * Instagram Graph CDN URLs often 403 in the browser when loaded directly (referrer / signed URL).
+ * Proxy all Graph-sourced image/video bytes through our API so `<img>` / `<video>` load reliably.
+ */
+function graphProxiedUrl(url: string | undefined): string | undefined {
+  if (!url || !url.startsWith('http')) return undefined
+  return createProxyUrl(url)
+}
+
+/**
+ * Map Graph `media` objects — handles CAROUSEL_ALBUM (parent often has no `media_url`).
+ * INSTAGRAM_USER_ID must be the Instagram *business/creator* id from Graph (not Facebook Page id).
+ */
+function mapGraphMediaItem(item: Record<string, unknown>): InstagramMedia {
+  let mediaType = item.media_type as string
+  let media_url = item.media_url as string | undefined
+  let thumbnail_url = item.thumbnail_url as string | undefined
+
+  if (mediaType === 'CAROUSEL_ALBUM') {
+    const children = (item.children as { data?: Record<string, unknown>[] } | undefined)?.data
+    const first = children?.[0]
+    if (first) {
+      const childType = first.media_type as string | undefined
+      const cMedia = first.media_url as string | undefined
+      const cThumb = first.thumbnail_url as string | undefined
+      if (childType === 'VIDEO') {
+        thumbnail_url = cThumb || thumbnail_url
+        media_url = cMedia || media_url
+      } else {
+        media_url = cMedia || media_url
+        thumbnail_url = cThumb || thumbnail_url
+      }
+    }
+  }
+
+  let isVideo = mediaType === 'VIDEO'
+  if (mediaType === 'CAROUSEL_ALBUM') {
+    const children = (item.children as { data?: Record<string, unknown>[] } | undefined)?.data
+    const firstType = children?.[0]?.media_type as string | undefined
+    if (firstType === 'VIDEO') isVideo = true
+  }
+
+  const posterOrImage =
+    isVideo
+      ? thumbnail_url || media_url
+      : media_url || thumbnail_url
+
+  const mediaUrl = posterOrImage
+    ? graphProxiedUrl(posterOrImage) || PLACEHOLDER_MEDIA_PATH
+    : PLACEHOLDER_MEDIA_PATH
+
+  const rawVideo =
+    isVideo
+      ? media_url ||
+        (mediaType === 'VIDEO' ? (item.media_url as string | undefined) : undefined)
+      : undefined
+  const videoUrl = rawVideo ? graphProxiedUrl(rawVideo) : undefined
+
+  const thumbnailUrl =
+    isVideo && thumbnail_url ? graphProxiedUrl(thumbnail_url) : undefined
+
+  return {
+    url: item.permalink as string,
+    mediaUrl,
+    videoUrl,
+    type: isVideo ? 'video' : 'image',
+    permalink: item.permalink as string,
+    thumbnailUrl,
+    caption: item.caption as string | undefined,
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const limit = parseInt(searchParams.get('limit') || '100', 10)
+
+  let graphDiagnostics: {
+    attempted: boolean
+    ok: boolean
+    httpStatus?: number
+    error?: { message: string; code?: number; type?: string; error_subcode?: number }
+    hint?: string
+  } = { attempted: false, ok: false }
 
   try {
     const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
     const userId = process.env.INSTAGRAM_USER_ID
 
     if (accessToken && userId) {
+      graphDiagnostics.attempted = true
       try {
+        const fields = [
+          'id',
+          'media_type',
+          'media_url',
+          'permalink',
+          'thumbnail_url',
+          'caption',
+          'timestamp',
+          'username',
+          'children{media_type,media_url,permalink,thumbnail_url}',
+        ].join(',')
         const allMedia: InstagramMedia[] = []
         let nextUrl: string | null =
-          `https://graph.facebook.com/v18.0/${userId}/media?fields=id,media_type,media_url,permalink,thumbnail_url,caption,timestamp,username,children{id,media_type,media_url,permalink,thumbnail_url}&access_token=${accessToken}&limit=100`
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/${userId}/media?fields=${encodeURIComponent(
+            fields
+          )}&access_token=${encodeURIComponent(accessToken)}&limit=100`
         let pageCount = 0
         const maxPages = 50
 
@@ -223,50 +320,42 @@ export async function GET(request: Request) {
           const response = await fetch(nextUrl)
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
+            const errorData = (await response.json().catch(() => ({}))) as {
+              error?: { message?: string; code?: number; type?: string; error_subcode?: number }
+            }
             console.error('Instagram API error:', response.status, errorData)
+            graphDiagnostics.httpStatus = response.status
+            graphDiagnostics.error = errorData.error
+              ? {
+                  message: String(errorData.error.message || 'Unknown error'),
+                  code: errorData.error.code,
+                  type: errorData.error.type,
+                  error_subcode: errorData.error.error_subcode,
+                }
+              : { message: response.statusText || 'Request failed' }
+            graphDiagnostics.hint =
+              response.status === 401 || response.status === 190
+                ? 'Long-lived token may be expired — renew in Meta Developer dashboard.'
+                : response.status === 400
+                  ? 'Confirm INSTAGRAM_USER_ID is the Instagram Business Account id (from GET /me/accounts + instagram_business_account), not the Facebook Page id.'
+                  : undefined
             break
           }
 
           const data = await response.json()
 
           if (!data.data || data.data.length === 0) {
+            graphDiagnostics.ok = true
+            graphDiagnostics.hint =
+              'Graph returned zero media. Check token scopes (instagram_basic, instagram_manage_insights if needed) and that the IG account has published posts.'
             break
           }
 
-          const pageMedia: InstagramMedia[] = data.data.map((item: Record<string, unknown>) => {
-            const mediaType = item.media_type as string
-            const isVideo = mediaType === 'VIDEO'
-            const media_url = item.media_url as string | undefined
-            const thumbnail_url = item.thumbnail_url as string | undefined
+          graphDiagnostics.ok = true
 
-            const mediaUrl = isVideo
-              ? thumbnail_url
-                ? clientImageDisplayUrl(thumbnail_url)
-                : media_url
-                  ? createProxyUrl(media_url)
-                  : PLACEHOLDER_MEDIA_PATH
-              : media_url
-                ? clientImageDisplayUrl(media_url)
-                : thumbnail_url
-                  ? clientImageDisplayUrl(thumbnail_url)
-                  : PLACEHOLDER_MEDIA_PATH
-
-            const videoUrl =
-              isVideo && media_url ? createProxyUrl(media_url) : undefined
-
-            const thumbnailUrl = thumbnail_url ? clientImageDisplayUrl(thumbnail_url) : undefined
-
-            return {
-              url: item.permalink as string,
-              mediaUrl,
-              videoUrl,
-              type: isVideo ? ('video' as const) : ('image' as const),
-              permalink: item.permalink as string,
-              thumbnailUrl,
-              caption: item.caption as string | undefined,
-            }
-          })
+          const pageMedia: InstagramMedia[] = data.data.map((row: Record<string, unknown>) =>
+            mapGraphMediaItem(row)
+          )
 
           allMedia.push(...pageMedia)
 
@@ -286,12 +375,16 @@ export async function GET(request: Request) {
               total: allMedia.length,
               returned: media.length,
               source: 'api',
+              instagramGraph: graphDiagnostics,
             },
             { headers: cacheHeaders }
           )
         }
       } catch (apiError) {
         console.error('Instagram API request error:', apiError)
+        graphDiagnostics.error = {
+          message: apiError instanceof Error ? apiError.message : 'Instagram API request error',
+        }
       }
     }
 
@@ -306,6 +399,7 @@ export async function GET(request: Request) {
           media: [],
           message: 'No posts configured.',
           source: 'file',
+          ...(graphDiagnostics.attempted ? { instagramGraph: graphDiagnostics } : {}),
         },
         { headers: cacheHeaders }
       )
@@ -321,6 +415,7 @@ export async function GET(request: Request) {
         total: realPosts.length,
         returned: media.length,
         source: 'file',
+        ...(graphDiagnostics.attempted ? { instagramGraph: graphDiagnostics } : {}),
       },
       { headers: cacheHeaders }
     )
