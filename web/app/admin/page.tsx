@@ -470,9 +470,9 @@ export default function AdminDashboard() {
       color: 'from-red-600 to-orange-600',
     },
     {
-      title: 'Instagram Helper',
-      description: 'Add posts, connect account, and manage Instagram content (unified interface)',
-      href: '/instagram-helper',
+      title: 'Instagram',
+      description: 'Homepage feed toggle, Instagram Helper tools, and post URLs',
+      href: '/admin/instagram',
       icon: '📸',
       color: 'from-pink-600 to-rose-600',
     },

@@ -6,18 +6,12 @@ import releasesData from '@/data/releases.json'
 import galleryData from '@/data/gallery.json'
 import SocialLinks from '@/components/SocialLinks'
 import ReleaseCard from '@/components/ReleaseCard'
-import InstagramEmbed from '@/components/InstagramEmbed'
+import HomeInstagramFeedSection from '@/components/HomeInstagramFeedSection'
 import FollowEmailModal from '@/components/FollowEmailModal'
 import { useState } from 'react'
 
 export default function Home() {
   const [followModalOpen, setFollowModalOpen] = useState(false)
-
-  /** Production: off unless `NEXT_PUBLIC_SHOW_INSTAGRAM_FEED=true` in Vercel. Dev: on unless set to false. */
-  const showInstagramFeed =
-    process.env.NODE_ENV !== 'production'
-      ? (process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED ?? 'true') !== 'false'
-      : process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED === 'true'
 
   const latestReleases = releasesData.releases.slice(0, 3)
   const galleryImages = galleryData.images
@@ -94,23 +88,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Instagram Feed — hidden in production until NEXT_PUBLIC_SHOW_INSTAGRAM_FEED=true */}
-      {showInstagramFeed && (
-        <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10 bg-gradient-to-b from-transparent via-black/30 to-transparent">
-          <div className="container mx-auto px-4 sm:px-6">
-            <div className="max-w-6xl mx-auto">
-              <div className="overflow-hidden rounded-lg">
-                <div className="max-h-[600px] overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #111827' }}>
-                  <InstagramEmbed 
-                    username={artistData.platforms.instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '').replace('@', '')}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+      <HomeInstagramFeedSection
+        username={artistData.platforms.instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '').replace('@', '')}
+      />
 
       {/* Latest Releases */}
       <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10">
