@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 import { createSupabaseServerClient } from '@/lib/supabase'
 
 /**
@@ -7,6 +8,9 @@ import { createSupabaseServerClient } from '@/lib/supabase'
  * Body: { folderId, newParentId? }
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
     const body = await request.json()

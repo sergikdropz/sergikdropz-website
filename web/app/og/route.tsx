@@ -6,6 +6,10 @@ import releaseSchedule from '@/data/release-schedule.json'
 
 export const runtime = 'edge'
 
+const OG_IMAGE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+}
+
 function findRelease(slug: string) {
   const fromReleases = releasesData.releases.find((r: any) => r.id === slug)
   const fromSchedule = releaseSchedule.schedule.find((r) => r.id === slug)
@@ -112,7 +116,7 @@ export async function GET(request: NextRequest) {
               </div>
             </div>
           ),
-          { width: 1200, height: 630 }
+          { width: 1200, height: 630, headers: OG_IMAGE_HEADERS }
         )
       }
     }
@@ -223,6 +227,7 @@ export async function GET(request: NextRequest) {
       {
         width: 1200,
         height: 630,
+        headers: OG_IMAGE_HEADERS,
       }
     )
   } catch (e: any) {

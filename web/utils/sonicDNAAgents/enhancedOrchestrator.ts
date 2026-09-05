@@ -19,9 +19,19 @@ import { DrumPatternExpertAgent } from './drumPatternExpert'
 import { MusicologistAgent } from './musicologist'
 import { CulturalAnalystAgent } from './culturalAnalyst'
 import { EmotionalPsychologistAgent } from './emotionalPsychologist'
+import { PsychologyAnalystAgent } from './psychologyAnalyst'
+import { PsychoacousticsAnalystAgent } from './psychoacousticsAnalyst'
+import { BassPocketAnalystAgent } from './bassPocketAnalyst'
+import { InstrumentUsageAnalystAgent } from './instrumentUsageAnalyst'
 import { GenreSpecialistAgent } from './genreSpecialist'
 import { HarmonyAnalystAgent } from './harmonyAnalyst'
 import { mergeEnhancedIntoSonicDNA } from '../enhancedSonicDNAAnalysis'
+import {
+  AGENT_COLLAB_WAVES,
+  markWaveComplete,
+  type AgentBlackboard,
+} from '@/lib/audio/sonic-dna-v2/agent-blackboard'
+import { mergeAgentWaveOntoBlackboard } from '@/lib/audio/sonic-dna-v2/merge-agent-wave'
 
 interface QualityCheck {
   passed: boolean
@@ -33,6 +43,8 @@ export class EnhancedPipelineOrchestrator {
   private agents: Map<AgentType, BaseAgent>
   private cache: Map<string, AgentResult[]> = new Map()
   private performanceMetrics: Map<AgentType, number[]> = new Map()
+  /** Last blackboard after processTrack — stamped onto synthesized DNA. */
+  lastBlackboard: AgentBlackboard | null = null
 
   constructor() {
     // Initialize all agents - WaveformGenerator first (The "Father")
@@ -47,17 +59,31 @@ export class EnhancedPipelineOrchestrator {
       [AgentType.MUSICOLOGIST, new MusicologistAgent()],
       [AgentType.CULTURAL_ANALYST, new CulturalAnalystAgent()],
       [AgentType.EMOTIONAL_PSYCHOLOGIST, new EmotionalPsychologistAgent()],
+      [AgentType.PSYCHOLOGY_ANALYST, new PsychologyAnalystAgent()],
+      [AgentType.PSYCHOACOUSTICS_ANALYST, new PsychoacousticsAnalystAgent()],
+      [AgentType.BASS_POCKET_ANALYST, new BassPocketAnalystAgent()],
+      [AgentType.INSTRUMENT_USAGE_ANALYST, new InstrumentUsageAnalystAgent()],
     ])
   }
 
+  /** Skip LLM narrative waves when groove core is missing (save budget, avoid inventing). */
+  private hasGrooveCoreForLlm(board: AgentBlackboard | null): boolean {
+    const m = board?.measured
+    if (!m?.bpm || Number(m.bpm) < 50) return false
+    const drums = String(m.drumFamily || '')
+    return Boolean(drums && drums !== 'unknown')
+  }
+
   /**
-   * Process a track through the enhanced agent pipeline with retry logic
+   * Process a track through the intel v3 DAG:
+   * waveform → technical → DSP measure (∥) → pocket → classify lock → polymath (∥) → intention → description
+   * Polymath: culture ∥ musicology ∥ emotion ∥ psychology ∥ psychoacoustics
    */
   async processTrack(context: AgentContext, useRetry: boolean = true): Promise<Map<AgentType, AgentResult>> {
     const cacheKey = `${context.trackTitle}-${context.artistName}`
     
     // Check cache (but allow force refresh)
-    if (!context.previousAgentResults) {
+    if (!context.previousAgentResults && !context.blackboard) {
       const cached = this.cache.get(cacheKey)
       if (cached) {
         const results = new Map<AgentType, AgentResult>()
@@ -68,91 +94,126 @@ export class EnhancedPipelineOrchestrator {
       }
     }
 
-    // Get agents sorted by priority (highest first)
-    const agentsByPriority = Array.from(this.agents.entries())
-      .sort((a, b) => b[1].capabilities.priority - a[1].capabilities.priority)
-
     const results = new Map<AgentType, AgentResult>()
-    const previousResults: Record<string, any> = {}
+    const previousResults: Record<string, any> = { ...(context.previousAgentResults || {}) }
+    let blackboard = context.blackboard || null
+    let liveContext: AgentContext = { ...context, previousAgentResults: previousResults, blackboard: blackboard || undefined }
 
-    // Process agents in priority order, with parallel processing where possible
-    const parallelGroups: BaseAgent[][] = []
-    let currentGroup: BaseAgent[] = []
-
-    for (const [type, agent] of agentsByPriority) {
-      if (agent.capabilities.canProcessInParallel && currentGroup.length < 3) {
-        currentGroup.push(agent)
-      } else {
-        if (currentGroup.length > 0) {
-          parallelGroups.push([...currentGroup])
-          currentGroup = []
+    for (const wave of AGENT_COLLAB_WAVES) {
+      const llmWave =
+        wave.id === 'polymath-specialists' || wave.id === 'intention' || wave.id === 'description'
+      if (llmWave && !this.hasGrooveCoreForLlm(blackboard)) {
+        if (blackboard) {
+          blackboard = markWaveComplete(
+            {
+              ...blackboard,
+              conflicts: [
+                ...blackboard.conflicts,
+                {
+                  field: 'grooveCore',
+                  a: blackboard.measured?.bpm,
+                  b: blackboard.measured?.drumFamily,
+                  note: `Skipped ${wave.id}: no BPM/drums groove core for LLM spend`,
+                },
+              ],
+            },
+            `${wave.id}:skipped`,
+          )
         }
-        currentGroup.push(agent)
-      }
-    }
-    if (currentGroup.length > 0) {
-      parallelGroups.push(currentGroup)
-    }
-
-    // Process each group with retry logic
-    for (const group of parallelGroups) {
-      // Update context with previous results
-      const updatedContext: AgentContext = {
-        ...context,
-        previousAgentResults: previousResults
+        continue
       }
 
-      // Process group in parallel with retry
-      const groupPromises = group.map(async (agent) => {
-        const validation = agent.validateContext(updatedContext)
+      const group = wave.agents
+        .map((type) => this.agents.get(type as AgentType))
+        .filter((agent): agent is BaseAgent => Boolean(agent))
+      if (!group.length) continue
+
+      liveContext = {
+        ...liveContext,
+        previousAgentResults: previousResults,
+        blackboard: blackboard || undefined,
+      }
+
+      const runOne = async (agent: BaseAgent): Promise<AgentResult> => {
+        const validation = agent.validateContext(liveContext)
         if (!validation.valid) {
           return agent.createFailure(`Missing: ${validation.missing.join(', ')}`, 0)
         }
-
         const startTime = Date.now()
-        let result: AgentResult
-
-        if (useRetry && agent instanceof BaseAgent) {
-          result = await agent.processWithRetry(updatedContext, 2)
-        } else {
-          result = await agent.process(updatedContext)
-        }
-
-        // Track performance
+        const result =
+          useRetry && agent instanceof BaseAgent
+            ? await agent.processWithRetry(liveContext, 2)
+            : await agent.process(liveContext)
         const processingTime = Date.now() - startTime
         const metrics = this.performanceMetrics.get(agent.type) || []
         metrics.push(processingTime)
-        if (metrics.length > 100) metrics.shift() // Keep last 100
+        if (metrics.length > 100) metrics.shift()
         this.performanceMetrics.set(agent.type, metrics)
-
         return result
-      })
+      }
 
-      const groupResults = await Promise.all(groupPromises)
+      const groupResults = wave.parallel
+        ? await Promise.all(group.map((agent) => runOne(agent)))
+        : await (async () => {
+            const out: AgentResult[] = []
+            for (const agent of group) {
+              // Serial within wave — refresh peers between agents
+              liveContext = {
+                ...liveContext,
+                previousAgentResults: previousResults,
+                blackboard: blackboard || undefined,
+              }
+              out.push(await runOne(agent))
+              const last = out[out.length - 1]
+              if (last.success && last.data) {
+                previousResults[agent.type] = last.data
+                results.set(agent.type, last)
+                if (agent.type === AgentType.WAVEFORM_GENERATOR && last.data.waveformData) {
+                  liveContext.waveformData = {
+                    data: last.data.waveformData,
+                    samples: last.data.waveformSamples || last.data.waveformData.length,
+                    sampleRate: last.data.sampleRate || 44100,
+                  }
+                }
+              } else {
+                results.set(agent.type, last)
+              }
+            }
+            return out
+          })()
 
-      // Store results and update previous results
-      groupResults.forEach((result, index) => {
-        const agent = group[index]
-        results.set(agent.type, result)
-        
-        if (result.success && result.data) {
-          previousResults[agent.type] = result.data
-          
-          // Special handling: If this is the WaveformGenerator, add waveform to context
-          if (agent.type === AgentType.WAVEFORM_GENERATOR && result.data.waveformData) {
-            updatedContext.waveformData = {
-              data: result.data.waveformData,
-              samples: result.data.waveformSamples || result.data.waveformData.length,
-              sampleRate: result.data.sampleRate || 44100
+      if (wave.parallel) {
+        groupResults.forEach((result, index) => {
+          const agent = group[index]
+          results.set(agent.type, result)
+          if (result.success && result.data) {
+            previousResults[agent.type] = result.data
+            if (agent.type === AgentType.WAVEFORM_GENERATOR && result.data.waveformData) {
+              liveContext.waveformData = {
+                data: result.data.waveformData,
+                samples: result.data.waveformSamples || result.data.waveformData.length,
+                sampleRate: result.data.sampleRate || 44100,
+              }
             }
           }
-        }
-      })
+        })
+      }
+
+      if (blackboard) {
+        blackboard = mergeAgentWaveOntoBlackboard(
+          blackboard,
+          wave.id,
+          group.map((agent, index) => ({
+            type: agent.type,
+            result: results.get(agent.type) || groupResults[index],
+          })),
+        )
+        liveContext.blackboard = blackboard
+      }
     }
 
-    // Cache results
+    this.lastBlackboard = blackboard
     this.cache.set(cacheKey, Array.from(results.values()))
-
     return results
   }
 
@@ -238,6 +299,9 @@ export class EnhancedPipelineOrchestrator {
     const musicology = results.get(AgentType.MUSICOLOGIST)?.data
     const cultural = results.get(AgentType.CULTURAL_ANALYST)?.data
     const emotionalData = results.get(AgentType.EMOTIONAL_PSYCHOLOGIST)?.data
+    const psychologyData = results.get(AgentType.PSYCHOLOGY_ANALYST)?.data
+    const psychoacousticsData = results.get(AgentType.PSYCHOACOUSTICS_ANALYST)?.data
+    const bassPocket = results.get(AgentType.BASS_POCKET_ANALYST)?.data
 
     // Extract advanced analysis from drum pattern expert (if available)
     const advancedDrumAnalysis = drums?.advancedAnalysis
@@ -250,8 +314,19 @@ export class EnhancedPipelineOrchestrator {
     // Build comprehensive genres section with extended subgenre classification
     const genresSection = this.buildGenresSection(genre, comprehensiveAnalysis?.genres, subgenreAnalysis)
     
-    // Build comprehensive emotional section (with fallbacks)
-    const emotionalSection = this.buildEmotionalSection(emotionalData, comprehensiveAnalysis?.emotional, comprehensiveAnalysis)
+    // Build comprehensive emotional section (with fallbacks); prefer dedicated psychology agent profile
+    const emotionalSection = this.buildEmotionalSection(
+      {
+        ...(emotionalData || {}),
+        psychologicalProfile:
+          psychologyData?.psychologicalProfile || emotionalData?.psychologicalProfile,
+      },
+      comprehensiveAnalysis?.emotional,
+      comprehensiveAnalysis,
+    )
+
+    const psychologySection = this.buildPsychologySection(psychologyData, emotionalSection)
+    const psychoacousticsSection = this.buildPsychoacousticsSection(psychoacousticsData)
     
     // Build comprehensive musical section (with fallbacks)
     const musicalSection = this.buildMusicalSection(harmony, technical, comprehensiveAnalysis, musicology)
@@ -277,6 +352,10 @@ export class EnhancedPipelineOrchestrator {
       
       // Emotional intelligence section
       emotional: emotionalSection,
+
+      // Dedicated psychology + psychoacoustics (polymath wave)
+      psychology: psychologySection,
+      psychoacoustics: psychoacousticsSection,
       
       // Musical intelligence section
       musical: musicalSection,
@@ -316,6 +395,17 @@ export class EnhancedPipelineOrchestrator {
       
       // Drums section with enhanced analysis
       drums: drumsSection,
+
+      // Bass / pocket from measure-pocket wave
+      bass: bassPocket
+        ? {
+            lock: bassPocket.lock,
+            rootNote: bassPocket.rootNote,
+            slidesLikely: bassPocket.slidesLikely,
+            character: bassPocket.character,
+            reason: bassPocket.reason,
+          }
+        : comprehensiveAnalysis?.bass || null,
       
       // Genres section with enhanced classification
       genres: genresSection,
@@ -356,21 +446,137 @@ export class EnhancedPipelineOrchestrator {
       // Add quality metadata
       _metadata: {
         processedAt: new Date().toISOString(),
-        agentVersion: '2.2', // Updated version with full section synthesis
+        agentVersion: '3.0-polymath-blackboard',
         qualityScore: this.calculateQualityScore(results),
+        collaboration: {
+          waves: this.lastBlackboard?.wavesCompleted || [],
+          kbPrimary: this.lastBlackboard?.kb?.primary || null,
+          evidenceCount: this.lastBlackboard?.evidence?.length || 0,
+          conflicts: this.lastBlackboard?.conflicts?.length || 0,
+        },
         enhancedAnalysis: {
           hasDrumPatternAnalysis: !!advancedDrumAnalysis,
           hasSubgenreClassification: !!subgenreAnalysis,
           hasTimingAnalysis: !!timingAnalysis,
           hasEmotionalAnalysis: !!emotionalSection?.primaryEmotions?.length,
+          hasPsychologyAnalysis: !!psychologySection?.psychologicalProfile,
+          hasPsychoacousticsAnalysis: !!psychoacousticsSection?.report,
           hasMusicalAnalysis: !!musicalSection?.keySignature,
           hasHistoricalAnalysis: !!historicalSection?.eraInfluences?.length,
           hasRegionalAnalysis: !!regionalSection?.primaryRegions?.length
         }
-      }
+      },
+      // Shared intelligence bus snapshot for enrich / UI
+      pipelineIntelligence: this.lastBlackboard
+        ? {
+            version: this.lastBlackboard.version,
+            kb: this.lastBlackboard.kb,
+            measuredSeed: this.lastBlackboard.measured,
+            evidence: this.lastBlackboard.evidence,
+            conflicts: this.lastBlackboard.conflicts,
+            wavesCompleted: this.lastBlackboard.wavesCompleted,
+            updatedAt: this.lastBlackboard.updatedAt,
+          }
+        : null,
     }
 
-    return sonicDNA
+    // Stamp polymath layers onto measured so encyclopedia compose prefers agent depth
+    let stamped = this.stampMeasuredPolymathLayers(sonicDNA, psychologySection, psychoacousticsSection)
+    if (bassPocket?.lock) {
+      const measured = { ...(stamped.measured || {}) }
+      measured.bass = {
+        ...(measured.bass || {}),
+        lock: bassPocket.lock,
+        rootNote: bassPocket.rootNote || measured.bass?.rootNote || null,
+        slidesLikely: Boolean(bassPocket.slidesLikely),
+      }
+      if (bassPocket.timingFeel && !measured.timingFeel) measured.timingFeel = bassPocket.timingFeel
+      if (bassPocket.swingPercent != null && measured.swingPercent == null) {
+        measured.swingPercent = bassPocket.swingPercent
+      }
+      stamped = { ...stamped, measured, bass: stamped.bass || measured.bass }
+    }
+    return stamped
+  }
+
+  private buildPsychologySection(psychologyData: any, emotional: any): any {
+    const profile =
+      String(psychologyData?.psychologicalProfile || emotional?.psychologicalProfile || '').trim()
+    return {
+      psychologicalProfile: profile,
+      cognitiveEffects: Array.isArray(psychologyData?.cognitiveEffects)
+        ? psychologyData.cognitiveEffects
+        : [],
+      regulationNotes: String(psychologyData?.regulationNotes || '').trim(),
+    }
+  }
+
+  private buildPsychoacousticsSection(psycho: any): any {
+    if (!psycho || typeof psycho !== 'object') {
+      return {
+        report: '',
+        activationFormula: '',
+        socialUsage: '',
+        sonicIntent: '',
+        listenerEffects: [],
+      }
+    }
+    const effects = Array.isArray(psycho.listenerEffects) ? psycho.listenerEffects : []
+    const report =
+      String(psycho.report || '').trim() ||
+      [psycho.socialUsage, psycho.sonicIntent, psycho.activationFormula, effects.join(', ')]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+    return {
+      report,
+      activationFormula: String(psycho.activationFormula || '').trim(),
+      socialUsage: String(psycho.socialUsage || '').trim(),
+      sonicIntent: String(psycho.sonicIntent || '').trim(),
+      listenerEffects: effects,
+    }
+  }
+
+  private stampMeasuredPolymathLayers(
+    sonicDNA: any,
+    psychology: any,
+    psychoacoustics: any,
+  ): any {
+    const profile = String(psychology?.psychologicalProfile || '').trim()
+    const psychoReport = String(psychoacoustics?.report || '').trim()
+    if (!profile && !psychoReport) return sonicDNA
+
+    const measured = sonicDNA.measured && typeof sonicDNA.measured === 'object' ? { ...sonicDNA.measured } : {}
+    const intel = { ...(measured.intelligence || {}) }
+    const emotional = { ...(intel.emotional || {}), ...(sonicDNA.emotional || {}) }
+    if (profile) emotional.psychologicalProfile = profile
+    intel.emotional = emotional
+    if (psychoReport) {
+      intel.psychoacoustics = {
+        ...(intel.psychoacoustics || {}),
+        ...psychoacoustics,
+        report: psychoReport,
+      }
+    }
+    const report = { ...(measured.report || {}) }
+    const layers = { ...(report.layers || {}) }
+    if (profile) layers.psychological = profile
+    if (psychoReport) layers.psychoacoustics = psychoReport
+    report.layers = layers
+    measured.intelligence = intel
+    measured.report = report
+
+    return {
+      ...sonicDNA,
+      measured,
+      emotional: {
+        ...(sonicDNA.emotional || {}),
+        psychologicalProfile: profile || sonicDNA.emotional?.psychologicalProfile,
+      },
+      psychoacoustics: psychoReport
+        ? { ...(sonicDNA.psychoacoustics || {}), ...psychoacoustics, report: psychoReport }
+        : sonicDNA.psychoacoustics,
+    }
   }
   
   /**

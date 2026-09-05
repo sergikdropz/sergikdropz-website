@@ -1,0 +1,51 @@
+name: Post-Deploy Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Production base URL (e.g. https://sergikdropz.com)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+
+      - name: Dependency health probe
+        env:
+          HEALTH_PROBE_MAX_ATTEMPTS: 8
+          HEALTH_PROBE_DELAY_MS: 5000
+        run: npm run health:probe -- "${{ inputs.base_url }}"
+
+      - name: Smoke check key pages
+        run: |
+          set -e
+          for path in / /shop /music-library /api/health ; do
+            url="${{ inputs.base_url }}${path}"
+            echo "Checking ${url}"
+            code=$(curl -sS -L -o /dev/null -w "%{http_code}" "$url")
+            case "$code" in
+              200|301|302|307|308)
+                echo "OK ${path} -> ${code}"
+                ;;
+              *)
+                echo "FAILED ${path} -> ${code}"
+                exit 1
+                ;;
+            esac
+          done

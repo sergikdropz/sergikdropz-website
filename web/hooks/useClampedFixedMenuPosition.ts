@@ -106,11 +106,13 @@ export function useClampedFixedMenuPosition(
     const ro = el ? new ResizeObserver(() => apply()) : null
     if (el && ro) ro.observe(el)
     window.addEventListener('resize', apply)
+    window.addEventListener('scroll', apply, true)
     // Second pass after paint so scrollHeight is accurate
     const raf = window.requestAnimationFrame(apply)
     return () => {
       ro?.disconnect()
       window.removeEventListener('resize', apply)
+      window.removeEventListener('scroll', apply, true)
       window.cancelAnimationFrame(raf)
     }
   }, [open, anchor?.x, anchor?.y, estimate.width, estimate.height, pad, commitStyle, measureSize, reclampAt])

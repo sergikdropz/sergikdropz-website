@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import AudioPlayer from './AudioPlayer'
 import { loadStripe } from '@stripe/stripe-js'
-import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import { shouldUnoptimizeImage, isSafeNextImageSrc } from '@/utils/imageOptimization'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { ensureShopCheckoutAuth } from '@/lib/checkoutActor'
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -31,6 +32,7 @@ export default function PurchasableTrack({ track }: { track: PurchasableTrack })
   const [isLoading, setIsLoading] = useState(false)
   const [purchaseStatus, setPurchaseStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const cover = track.artwork ? resolveImageUrl(track.artwork) : ''
 
   // Check if returning from successful purchase
   useEffect(() => {
@@ -132,14 +134,14 @@ export default function PurchasableTrack({ track }: { track: PurchasableTrack })
   return (
     <div className="bg-gray-900 rounded-lg overflow-hidden p-6">
       <div className="flex flex-col md:flex-row gap-6">
-        {track.artwork && (
+        {isSafeNextImageSrc(cover) && (
           <div className="relative w-full md:w-32 h-32 flex-shrink-0">
             <Image
-              src={track.artwork}
+              src={cover}
               alt={track.title}
               fill
               className="object-cover rounded"
-              unoptimized={shouldUnoptimizeImage(track.artwork)}
+              unoptimized={shouldUnoptimizeImage(cover)}
               sizes="(max-width: 640px) 100vw, 128px"
             />
           </div>

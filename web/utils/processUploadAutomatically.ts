@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { generateSonicDNAWithAgents } from './generateSonicDNAWithAgents'
 import { analyzeComprehensive } from './comprehensiveMusicAnalysis'
 import { getMusicBrainzArtistDetails } from './musicbrainz'
+import { extractMeasured, sonicDnaStatusFromMeasured } from '@/lib/audio/sonic-dna-quality'
 
 /**
  * Process a newly uploaded track automatically
@@ -93,12 +94,13 @@ export async function processUploadAutomatically(trackId: string) {
       console.log(`[Auto-Process] Step 4: Storing results for ${track.title}`)
       const updateData: any = {
         sonic_dna: sonicDNA,
-        sonic_dna_status: 'completed',
+        sonic_dna_status: sonicDnaStatusFromMeasured(extractMeasured(sonicDNA)),
         sonic_dna_analyzed_at: new Date().toISOString(),
         ai_analysis: sonicDNA,
         sonic_dna_error: null,
         bpm: sonicDNA.technical?.bpm || track.bpm || null,
         key_signature: sonicDNA.harmony?.keySignature || sonicDNA.technical?.key?.key || track.key_signature || null,
+        analysis_status: sonicDnaStatusFromMeasured(extractMeasured(sonicDNA)),
         energy_level: sonicDNA.technical?.energyLevel || track.energy_level || null,
         danceability: sonicDNA.technical?.danceability || null,
         // Store waveform data from WaveformGenerator agent (The "Father")

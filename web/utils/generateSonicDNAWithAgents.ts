@@ -15,6 +15,9 @@ import { AgentContext } from './sonicDNAAgents'
 import { analyzeComprehensive } from './comprehensiveMusicAnalysis'
 import { getMusicBrainzArtistDetails, searchMusicBrainzArtist, extractGenres } from './musicbrainz'
 import { analyzeEnhancedSonicDNA, mergeEnhancedIntoSonicDNA } from './enhancedSonicDNAAnalysis'
+import { seedMeasuredFromPreanalysis } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
+import { ensureMeasuredOnDna } from '@/lib/audio/normalize-agent-to-measured'
+import { applyGenreEncyclopedia } from '@/lib/audio/compose-genre-intelligence'
 
 // Use enhanced orchestrator with retry logic and quality checks
 const orchestrator = new EnhancedPipelineOrchestrator()
@@ -110,7 +113,28 @@ export async function generateSonicDNAWithAgents(
     console.warn(`[${trackTitle}] ⚠️ Enhanced analysis failed:`, error)
   }
 
-  // Step 4: Build agent context (include enhanced analysis data)
+  // Step 4: Seed shared blackboard (measured + encyclopedia) before parallel agents
+  const blackboard = seedMeasuredFromPreanalysis({
+    trackId,
+    trackTitle,
+    artistName,
+    audioFeatures: {
+      bpm: comprehensiveAnalysis.technical.bpm || existingMetadata?.bpm,
+      key: comprehensiveAnalysis.harmony.keySignature || existingMetadata?.key,
+      energyLevel: comprehensiveAnalysis.technical.energy?.level || existingMetadata?.energyLevel,
+    },
+    comprehensive: {
+      ...comprehensiveAnalysis,
+      enhancedDrumAnalysis: enhancedAnalysis?.drumAnalysis,
+      enhancedSubgenreClassification: enhancedAnalysis?.subgenreClassification,
+      enhancedTiming: enhancedAnalysis?.timing,
+    },
+    enhanced: enhancedAnalysis,
+  })
+  console.log(
+    `[${trackTitle}] ✅ Blackboard seeded — KB ${blackboard.kb?.primary || 'Unclassified'} · drums ${blackboard.measured.drumFamily || 'pending'} · BPM ${blackboard.measured.bpm ?? 'pending'}`,
+  )
+
   const context: AgentContext = {
     trackTitle,
     artistName,
@@ -121,38 +145,40 @@ export async function generateSonicDNAWithAgents(
       duration: existingMetadata?.duration || 0,
       key: comprehensiveAnalysis.harmony.keySignature,
       timeSignature: comprehensiveAnalysis.technical.timeSignature,
-      audioFileUrl: comprehensiveAnalysis.audioFileUrl || existingMetadata?.audioFileUrl || undefined
+      audioFileUrl: comprehensiveAnalysis.audioFileUrl || existingMetadata?.audioFileUrl || undefined,
     },
     comprehensiveAnalysis: {
       ...comprehensiveAnalysis,
       filePath: existingMetadata?.filePath || undefined,
       audioFileUrl: comprehensiveAnalysis.audioFileUrl || existingMetadata?.audioFileUrl || undefined,
-      // Include enhanced analysis data for agents to use
       enhancedDrumAnalysis: enhancedAnalysis?.drumAnalysis,
       enhancedSubgenreClassification: enhancedAnalysis?.subgenreClassification,
-      enhancedTiming: enhancedAnalysis?.timing
+      enhancedTiming: enhancedAnalysis?.timing,
     },
-    musicbrainzData: musicbrainzData ? {
-      ...musicbrainzData,
-      artistInfo: {
-        ...musicbrainzData,
-        genres: musicbrainzGenres,
-        tags: musicbrainzTags
-      }
-    } : null,
-    // Include existing waveform data if available (from database)
-    waveformData: existingMetadata?.waveformData ? {
-      data: existingMetadata.waveformData,
-      samples: existingMetadata.waveformSamples || existingMetadata.waveformData.length,
-      sampleRate: 44100
-    } : undefined
+    musicbrainzData: musicbrainzData
+      ? {
+          ...musicbrainzData,
+          artistInfo: {
+            ...musicbrainzData,
+            genres: musicbrainzGenres,
+            tags: musicbrainzTags,
+          },
+        }
+      : null,
+    waveformData: existingMetadata?.waveformData
+      ? {
+          data: existingMetadata.waveformData,
+          samples: existingMetadata.waveformSamples || existingMetadata.waveformData.length,
+          sampleRate: 44100,
+        }
+      : undefined,
+    blackboard,
   }
 
-  // Step 5: Process through agent pipeline (parallel where possible)
-  console.log(`[${trackTitle}] Step 4: Agent pipeline processing...`)
-  const agentResults = await orchestrator.processTrack(context, true) // Use retry logic
+  // Step 5: DAG waves — waveform → technical → measure (∥) → polymath (∥) → intention → description
+  console.log(`[${trackTitle}] Step 4: Agent pipeline processing (polymath blackboard)...`)
+  const agentResults = await orchestrator.processTrack(context, true)
 
-  // Step 6: Quality check
   const qualityCheck = orchestrator.qualityCheck(agentResults, context)
   if (!qualityCheck.passed) {
     console.warn(`[${trackTitle}] ⚠️ Quality check issues:`, qualityCheck.issues)
@@ -161,35 +187,45 @@ export async function generateSonicDNAWithAgents(
     console.log(`[${trackTitle}] ✅ Quality check passed (score: ${qualityCheck.score}/100)`)
   }
 
-  // Step 7: Synthesize results
   console.log(`[${trackTitle}] Step 5: Synthesizing results...`)
-  let sonicDNA = orchestrator.synthesizeResults(
-    agentResults,
-    comprehensiveAnalysis,
-    musicbrainzData
-  )
+  let sonicDNA = orchestrator.synthesizeResults(agentResults, comprehensiveAnalysis, musicbrainzData)
 
-  // Step 8: Merge enhanced analysis into final Sonic DNA
   if (enhancedAnalysis) {
     console.log(`[${trackTitle}] Step 6: Merging enhanced analysis...`)
     sonicDNA = mergeEnhancedIntoSonicDNA(sonicDNA, enhancedAnalysis)
   }
 
-  // Log agent performance
+  // Normalize measured + attach same encyclopedia as UI/job enrich path
+  sonicDNA = ensureMeasuredOnDna(sonicDNA)
+  sonicDNA = applyGenreEncyclopedia(sonicDNA)
+  if (orchestrator.lastBlackboard) {
+    sonicDNA.pipelineIntelligence = {
+      ...(sonicDNA.pipelineIntelligence || {}),
+      version: orchestrator.lastBlackboard.version,
+      kb: orchestrator.lastBlackboard.kb,
+      measuredSeed: orchestrator.lastBlackboard.measured,
+      evidence: orchestrator.lastBlackboard.evidence,
+      conflicts: orchestrator.lastBlackboard.conflicts,
+      wavesCompleted: orchestrator.lastBlackboard.wavesCompleted,
+      updatedAt: orchestrator.lastBlackboard.updatedAt,
+    }
+  }
+
   console.log(`[${trackTitle}] Agent Results:`)
   agentResults.forEach((result, type) => {
     const status = result.success ? '✅' : '❌'
     console.log(`  ${status} ${type}: ${result.processingTime}ms (confidence: ${result.confidence})`)
   })
 
-  // Log enhanced analysis summary
   if (enhancedAnalysis) {
     console.log(`[${trackTitle}] Enhanced Analysis Summary:`)
     console.log(`  🥁 Drum Pattern: ${enhancedAnalysis.drums.patternType}`)
     console.log(`  ⏱️ Timing: ${enhancedAnalysis.timing.feel} (effective BPM: ${enhancedAnalysis.timing.effectiveBpm})`)
     console.log(`  🎵 Subgenre: ${enhancedAnalysis.subgenreClassification.primarySubgenre.name}`)
     if (enhancedAnalysis.subgenreClassification.secondarySubgenres.length > 0) {
-      console.log(`  🎶 Secondary: ${enhancedAnalysis.subgenreClassification.secondarySubgenres.map(s => s.name).join(', ')}`)
+      console.log(
+        `  🎶 Secondary: ${enhancedAnalysis.subgenreClassification.secondarySubgenres.map((s) => s.name).join(', ')}`,
+      )
     }
   }
 

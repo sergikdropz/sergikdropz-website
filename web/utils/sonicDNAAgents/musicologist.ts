@@ -5,6 +5,7 @@
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { formatBlackboardPrompt } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
 
 export class MusicologistAgent extends BaseAgent {
   type = AgentType.MUSICOLOGIST
@@ -23,15 +24,16 @@ export class MusicologistAgent extends BaseAgent {
       const { comprehensiveAnalysis, musicbrainzData } = context
 
       const musicology = comprehensiveAnalysis?.musicology
-      if (!musicology) {
+      const kb = context.blackboard?.kb
+      if (!musicology && !kb) {
         return this.createFailure('No musicology data available', Date.now() - startTime)
       }
 
-      // Extract musicology data
+      // Extract musicology data (fallback to encyclopedia eras/theory)
       const musicologyData = {
-        era: musicology.era || null,
-        style: musicology.style || null,
-        production: musicology.production || null
+        era: musicology?.era || (kb?.eras?.length ? { decade: kb.eras[0], description: kb.profileExcerpt } : null),
+        style: musicology?.style || (kb ? { primaryStyle: kb.primary, description: kb.profileExcerpt } : null),
+        production: musicology?.production || null,
       }
 
       // Generate description if we have meaningful data
@@ -53,29 +55,24 @@ export class MusicologistAgent extends BaseAgent {
   }
 
   private async generateDescription(musicologyData: any, context: AgentContext): Promise<string | null> {
-    const prompt = `You are an expert musicologist. Provide a CONCISE, CONTEXT-AWARE musicological analysis:
+    const prompt = `You are an expert musicologist writing on a shared Sonic DNA blackboard.
+
+${formatBlackboardPrompt(context.blackboard)}
 
 Track: "${context.trackTitle}" by ${context.artistName}
-Era/Decade: ${musicologyData.era?.decade || 'Unknown'}
-${musicologyData.era?.description ? `Era Description: ${musicologyData.era.description}` : ''}
-Primary Style: ${musicologyData.style?.primaryStyle || 'Unknown'}
-${musicologyData.style?.description ? `Style Description: ${musicologyData.style.description}` : ''}
+Era/Decade: ${musicologyData.era?.decade || context.blackboard?.kb?.eras?.[0] || 'Unknown'}
+${musicologyData.era?.description ? `Era Description: ${String(musicologyData.era.description).slice(0, 280)}` : ''}
+Primary Style: ${musicologyData.style?.primaryStyle || context.blackboard?.kb?.primary || 'Unknown'}
 Production Techniques: ${musicologyData.production?.techniques?.join(', ') || 'Unknown'}
-${musicologyData.production?.description ? `Production Description: ${musicologyData.production.description}` : ''}
-BPM: ${context.audioFeatures?.bpm || 'Unknown'}
-Energy Level: ${context.audioFeatures?.energyLevel || 'Unknown'}
-${context.comprehensiveAnalysis?.genres?.primary ? `Genres: ${context.comprehensiveAnalysis.genres.primary.join(', ')}` : ''}
+BPM: ${(context.blackboard?.measured?.bpm ?? context.audioFeatures?.bpm) || 'Unknown'}
 
-Write a CONCISE musicological analysis (80-100 words). Be CONTEXT-AWARE and cover:
-- Historical context and era characteristics
-- Stylistic significance and genre evolution
-- Production era and technology (if relevant)
-- How this track fits into musical history
-- Musicological significance
+CRITICAL: History/theory must follow measured groove class + encyclopedia — not crate names.
+
+Write a CONCISE musicological analysis (80-120 words).
 
 Return JSON:
 {
-  "description": "Your concise, context-aware musicological analysis here (80-100 words maximum) or null if musicological data is insufficient"
+  "description": "Your concise, context-aware musicological analysis here (80-120 words maximum) or null if musicological data is insufficient"
 }`
 
     const result = await this.callAI(this.withUserDirective(prompt, context), 2000)

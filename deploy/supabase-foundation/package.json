@@ -1,0 +1,13 @@
+{
+  "name": "sergik-supabase-foundation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node verify-cloud.mjs",
+    "schema:bundle": "node build-schema-bundle.mjs",
+    "init-profile": "node init-cloud-profile.mjs",
+    "bootstrap": "node bootstrap-cloud.mjs",
+    "sync": "node sync-pair.mjs",
+    "backup": "node backup-snapshot.mjs"
+  }
+}

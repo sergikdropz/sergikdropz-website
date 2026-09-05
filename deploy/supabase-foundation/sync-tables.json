@@ -1,0 +1,15 @@
+{
+  "tables": [
+    "audio_files",
+    "purchases",
+    "gallery_images",
+    "music_library_folders",
+    "music_library_tracks",
+    "music_library_playlists",
+    "settings",
+    "instagram_media",
+    "sonic_dna_cache"
+  ],
+  "pageSize": 500,
+  "batchSize": 100
+}

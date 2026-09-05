@@ -2,14 +2,41 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { FaBrain, FaSpinner, FaHeart, FaMusic, FaHistory, FaGlobe, FaTags, FaInfoCircle, FaChevronDown, FaChevronUp } from 'react-icons/fa'
+import { getSonicDnaReportView } from '@/lib/audio/sonic-dna-report-sections'
+import { measuredGrooveFacts } from '@/lib/audio/sonic-dna-prose'
+import DnaReadableCopy from '@/components/music/DnaReadableCopy'
+import { appendSonicDnaLookupParams, sonicDnaLookupPath } from '@/lib/audio/sonic-dna-query'
+import { parseSonicDna } from '@/lib/audio/sonic-dna-quality'
+import { isSonicDnaReadyForDisplay } from '@/lib/audio/sonic-dna-pipeline'
+import { prepareSonicDnaFromIntelligence } from '@/lib/audio/sonic-dna-intelligence-load'
 
 interface SonicDNAProps {
   trackId: string
+  audioFileId?: string
   trackFile: string
   trackTitle: string
   artistName: string
+  /** Preloaded DNA from the track record — prefer over regenerate/POST. */
+  initialSonicDna?: SonicDNAData | Record<string, unknown> | null
+  /** When false, defer DB fetch until the panel is opened. Default: true. */
+  enabled?: boolean
+  /** Called when unified/measured DNA loads from the API (for deck badges). */
+  onSonicDnaLoaded?: (dna: SonicDNAData) => void
   compact?: boolean // For inline display in player
   hideHeader?: boolean // Hide the header when already inside a collapsible container
+}
+
+function prepareSonicDnaForDisplay(value: unknown): SonicDNAData | null {
+  const prepared = prepareSonicDnaFromIntelligence(value)
+  return prepared ? (prepared as SonicDNAData) : null
+}
+
+function trackLookupKey(
+  trackId: string,
+  audioFileId: string | undefined,
+  trackFile: string,
+): string {
+  return `${trackId || ''}::${audioFileId || ''}::${sonicDnaLookupPath(trackFile)}`
 }
 
 interface SonicDNAData {
@@ -85,7 +112,7 @@ interface SonicDNAData {
 
 // Module-level caches to dedupe requests across component instances
 // Data version - increment to clear all caches after data updates
-const SONIC_DNA_DATA_VERSION = '20260131-v2'
+const SONIC_DNA_DATA_VERSION = '20260903-intelligence-encyclopedia'
 const SONIC_DNA_TTL_MS = 30 * 1000 // 30 second cache (reduced for fresh data)
 const sonicDNAResponseCache = new Map<
   string,
@@ -104,88 +131,303 @@ if (typeof window !== 'undefined') {
 }
 
 function normalizeTrackPath(trackFile: string): string {
-  let normalizedPath = trackFile || ''
-
-  // Extract local path from Supabase URL if it's a full URL
-  if (normalizedPath.startsWith('http://') || normalizedPath.startsWith('https://')) {
-    const match = normalizedPath.match(/\/storage\/v1\/object\/public\/audio-files\/(.+)$/)
-    if (match) {
-      normalizedPath = decodeURIComponent(match[1])
-    }
-  }
-
-  // Remove leading slashes and audio/ prefix
-  if (normalizedPath.startsWith('/audio/')) {
-    normalizedPath = normalizedPath.replace('/audio/', '')
-  }
-  if (normalizedPath.startsWith('/')) {
-    normalizedPath = normalizedPath.substring(1)
-  }
-
-  return normalizedPath
+  return sonicDnaLookupPath(trackFile)
 }
 
-export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, compact = false, hideHeader = false }: SonicDNAProps) {
-  const [sonicDNA, setSonicDNA] = useState<SonicDNAData | null>(null)
+export default function SonicDNA({
+  trackId,
+  audioFileId,
+  trackFile,
+  trackTitle,
+  artistName,
+  initialSonicDna = null,
+  enabled = true,
+  onSonicDnaLoaded,
+  compact = false,
+  hideHeader = false,
+}: SonicDNAProps) {
+  const lookupKey = trackLookupKey(trackId, audioFileId, trackFile)
+  const seededDna = prepareSonicDnaForDisplay(initialSonicDna)
+  const [sonicDNA, setSonicDNA] = useState<SonicDNAData | null>(seededDna)
   const [isLoading, setIsLoading] = useState(false)
-  const [isRegenerating, setIsRegenerating] = useState(false)
-  const [status, setStatus] = useState<'pending' | 'processing' | 'completed' | 'failed'>('pending')
+  const [status, setStatus] = useState<'pending' | 'processing' | 'completed' | 'failed'>(
+    seededDna ? 'completed' : 'pending',
+  )
+  const [awaitingGroove, setAwaitingGroove] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(true)
-  const [expandedDescription, setExpandedDescription] = useState<string | null>(null)
+  const [expandedCopy, setExpandedCopy] = useState<{ title: string; text: string } | null>(null)
   const [isExpandedView, setIsExpandedView] = useState(false)
   const [viewMode, setViewMode] = useState<'simple' | 'deep'>('deep')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const hasFetchedRef = useRef(false)
-  const currentTrackRef = useRef<string>(trackFile)
-  const statusRef = useRef<'pending' | 'processing' | 'completed' | 'failed'>('pending')
+  const fetchGenerationRef = useRef(0)
+  const hasLoadedForKeyRef = useRef(Boolean(seededDna))
+  const lookupKeyRef = useRef(lookupKey)
+  const statusRef = useRef<'pending' | 'processing' | 'completed' | 'failed'>(
+    seededDna ? 'completed' : 'pending',
+  )
 
-  // Reset when track changes
-  useEffect(() => {
-    if (currentTrackRef.current !== trackFile) {
-      currentTrackRef.current = trackFile
-      hasFetchedRef.current = false
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+  }
+
+  const applyLoadedDna = (dna: SonicDNAData, generation: number) => {
+    if (generation !== fetchGenerationRef.current) return
+    hasLoadedForKeyRef.current = true
+    setSonicDNA(dna)
+    setAwaitingGroove(false)
+    setStatus('completed')
+    setError(null)
+    setIsLoading(false)
+    stopPolling()
+    onSonicDnaLoaded?.(dna)
+  }
+
+  const applyApiPayload = (data: Record<string, unknown>, generation: number) => {
+    if (generation !== fetchGenerationRef.current) return
+
+    const prepared = prepareSonicDnaForDisplay(data.sonicDNA)
+    if (prepared) {
+      applyLoadedDna(prepared, generation)
+      return
+    }
+
+    const apiStatus = typeof data.status === 'string' ? data.status : 'pending'
+    const hasThinDna = Boolean(data.sonicDNA && typeof data.sonicDNA === 'object')
+    const percent = Number(data.percent)
+    // Completed API payload without groove core → not "missing", gated on DSP.
+    if (hasThinDna && (apiStatus === 'completed' || (Number.isFinite(percent) && percent === 0))) {
+      hasLoadedForKeyRef.current = true
       setSonicDNA(null)
+      setAwaitingGroove(true)
       setStatus('pending')
       setError(null)
-      // Clear any existing polling
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
-      }
+      setIsLoading(false)
+      stopPolling()
+      return
     }
-  }, [trackFile])
+
+    if (apiStatus === 'processing') {
+      setStatus('processing')
+      setIsLoading(true)
+      setError('Analysis is in progress. Please wait...')
+      if (!pollIntervalRef.current) {
+        let pollCount = 0
+        const maxPolls = 60
+        pollIntervalRef.current = setInterval(() => {
+          pollCount++
+          if (statusRef.current === 'completed' || statusRef.current === 'failed') {
+            stopPolling()
+            return
+          }
+          if (pollCount >= maxPolls) {
+            setError('Analysis is taking longer than expected. Try loading again.')
+            setStatus('failed')
+            setIsLoading(false)
+            stopPolling()
+            return
+          }
+          if (statusRef.current === 'processing') {
+            void fetchSonicDNA(true, generation)
+          }
+        }, 3000)
+      }
+      return
+    }
+
+    if (apiStatus === 'failed') {
+      setError(
+        (typeof data.error === 'string' && data.error) ||
+          (typeof data.message === 'string' && data.message) ||
+          'Analysis failed',
+      )
+      setStatus('failed')
+      setIsLoading(false)
+      stopPolling()
+      return
+    }
+
+    if (apiStatus === 'not_found') {
+      setError(
+        (typeof data.details === 'string' && data.details) ||
+          'Track not found in database',
+      )
+      setStatus('failed')
+      setIsLoading(false)
+      stopPolling()
+      return
+    }
+
+    if (data.error) {
+      setError(
+        (typeof data.details === 'string' && data.details) ||
+          (typeof data.error === 'string' && data.error) ||
+          'Failed to load Sonic DNA',
+      )
+      setStatus('failed')
+      setIsLoading(false)
+      stopPolling()
+      return
+    }
+
+    setStatus('pending')
+    setIsLoading(false)
+    setSonicDNA(null)
+    setError(null)
+    stopPolling()
+  }
+
+  const fetchSonicDNA = async (force = false, generation = fetchGenerationRef.current) => {
+    if (force) {
+      fetchGenerationRef.current += 1
+      generation = fetchGenerationRef.current
+      hasLoadedForKeyRef.current = false
+    }
+
+    if (!force && hasLoadedForKeyRef.current) {
+      setIsLoading(false)
+      stopPolling()
+      return
+    }
+
+    if (!force && sonicDNA && status === 'completed' && isSonicDnaReadyForDisplay(sonicDNA)) {
+      setIsLoading(false)
+      stopPolling()
+      return
+    }
+
+    if (!force && isLoading && status === 'processing' && pollIntervalRef.current) {
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const normalizedPath = normalizeTrackPath(trackFile)
+      const cacheKey = `${SONIC_DNA_DATA_VERSION}::${trackId || ''}::${audioFileId || ''}::${normalizedPath}`
+
+      if (force) {
+        sonicDNAResponseCache.delete(cacheKey)
+        sonicDNAInFlight.delete(cacheKey)
+      }
+
+      const cached = sonicDNAResponseCache.get(cacheKey)
+      if (!force && cached && Date.now() < cached.expiresAt && cached.version === SONIC_DNA_DATA_VERSION) {
+        applyApiPayload(cached.data, generation)
+        return
+      }
+
+      let promise = sonicDNAInFlight.get(cacheKey)
+      if (!promise) {
+        const params = new URLSearchParams({ v: SONIC_DNA_DATA_VERSION })
+        appendSonicDnaLookupParams(params, {
+          libraryTrackId: trackId,
+          audioFileId,
+          file: normalizedPath,
+          title: trackTitle,
+        })
+        promise = fetch(`/api/audio/sonic-dna?${params.toString()}`, {
+          signal: AbortSignal.timeout(15000),
+          cache: 'no-store',
+        }).then(async (response) => {
+          const data = await response.json().catch(() => ({}))
+          if (!response.ok && response.status !== 404) {
+            throw new Error(data.error || data.details || `HTTP ${response.status}`)
+          }
+          return data
+        }).finally(() => {
+          sonicDNAInFlight.delete(cacheKey)
+        })
+        sonicDNAInFlight.set(cacheKey, promise)
+      }
+
+      const data = await promise
+      if (generation !== fetchGenerationRef.current) return
+
+      if (prepareSonicDnaForDisplay(data.sonicDNA)) {
+        sonicDNAResponseCache.set(cacheKey, {
+          data,
+          expiresAt: Date.now() + SONIC_DNA_TTL_MS,
+          version: SONIC_DNA_DATA_VERSION,
+        })
+      }
+
+      applyApiPayload(data, generation)
+    } catch (err: any) {
+      if (generation !== fetchGenerationRef.current) return
+      console.error('Sonic DNA fetch error:', err)
+      if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+        setError('Request timed out. Please check your connection and try again.')
+      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+        setError('Network error. Please check your connection and Supabase configuration.')
+      } else {
+        setError(err.message || 'Failed to fetch Sonic DNA analysis')
+      }
+      setStatus('failed')
+      setIsLoading(false)
+      stopPolling()
+    }
+  }
+
+  // Reset only when track identity changes — do not wipe fetched DNA on unrelated re-renders.
+  useEffect(() => {
+    if (lookupKeyRef.current === lookupKey) return
+    lookupKeyRef.current = lookupKey
+    fetchGenerationRef.current += 1
+    stopPolling()
+    hasLoadedForKeyRef.current = false
+
+    const nextSeed = prepareSonicDnaForDisplay(initialSonicDna)
+    if (nextSeed) hasLoadedForKeyRef.current = true
+    setSonicDNA(nextSeed)
+    setStatus(nextSeed ? 'completed' : 'pending')
+    setError(null)
+    setIsLoading(false)
+  }, [lookupKey])
+
+  // Adopt preloaded DNA when parent supplies it for the current track.
+  useEffect(() => {
+    const nextSeed = prepareSonicDnaForDisplay(initialSonicDna)
+    if (!nextSeed || hasLoadedForKeyRef.current) return
+    applyLoadedDna(nextSeed, fetchGenerationRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSonicDna])
+
+  // Load from knowledge/DB when the panel opens (or on track change while open).
+  useEffect(() => {
+    const shouldLoad =
+      enabled && (!compact || hideHeader || !isCollapsed)
+    if (!shouldLoad || hasLoadedForKeyRef.current) return
+
+    void fetchSonicDNA(false, fetchGenerationRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookupKey, enabled, compact, hideHeader, isCollapsed])
 
   // Stop polling when component unmounts
-  useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
-      }
-    }
-  }, [])
+  useEffect(() => () => stopPolling(), [])
 
   // Update status ref when status changes
   useEffect(() => {
     statusRef.current = status
-    // Stop polling when status becomes completed or failed
     if ((status === 'completed' || status === 'failed') && pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current)
-      pollIntervalRef.current = null
+      stopPolling()
     }
   }, [status])
 
   useEffect(() => {
-    if (!expandedDescription) return
+    if (!expandedCopy) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setExpandedDescription(null)
+        setExpandedCopy(null)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [expandedDescription])
+  }, [expandedCopy])
 
   useEffect(() => {
     if (!isExpandedView) return
@@ -198,284 +440,48 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isExpandedView])
 
-  // Load cached data on mount if available (but don't auto-trigger analysis)
-  useEffect(() => {
-    // For compact (collapsible) UI, avoid auto-fetching on mount; fetch on expand instead.
-    const shouldAutoFetch = !compact || hideHeader
-    if (shouldAutoFetch && !hasFetchedRef.current && !sonicDNA && currentTrackRef.current === trackFile) {
-      hasFetchedRef.current = true
-      // Only fetch if data might exist (don't trigger new analysis)
-      fetchSonicDNA()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackFile]) // Re-fetch if trackFile changes
+  const loadFromDatabaseButton = (
+    <button
+      type="button"
+      onClick={() => {
+        hasLoadedForKeyRef.current = false
+        void fetchSonicDNA(true)
+      }}
+      disabled={isLoading}
+      className={`w-full ${
+        compact
+          ? 'px-3 py-2 text-xs'
+          : 'px-4 py-3'
+      } bg-gray-700/80 hover:bg-gray-600/80 border border-gray-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+    >
+      {isLoading ? (
+        <>
+          <FaSpinner className="animate-spin" />
+          <span>Loading Sonic DNA...</span>
+        </>
+      ) : (
+        <span>Load Sonic DNA intelligence</span>
+      )}
+    </button>
+  )
 
-  // For collapsible compact UI: fetch when expanded (prevents mass background fetches)
-  useEffect(() => {
-    if (!compact) return
-    if (hideHeader) return // hideHeader implies always-visible container; handled above
-    if (isCollapsed) return
-    if (!hasFetchedRef.current && currentTrackRef.current === trackFile) {
-      hasFetchedRef.current = true
-      fetchSonicDNA()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compact, hideHeader, isCollapsed, trackFile])
-
-  const fetchSonicDNA = async () => {
-    // Don't fetch if we already have completed data
-    if (sonicDNA && status === 'completed') {
-      setIsLoading(false)
-      // Make sure polling is stopped
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
-      }
-      return
-    }
-
-    // Don't fetch if already loading (prevents duplicate requests)
-    if (isLoading && status === 'processing' && pollIntervalRef.current) {
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-    
-    try {
-      const normalizedPath = normalizeTrackPath(trackFile)
-      const cacheKey = normalizedPath
-
-      // Serve from cache if fresh AND same version
-      const cached = sonicDNAResponseCache.get(cacheKey)
-      if (cached && Date.now() < cached.expiresAt && cached.version === SONIC_DNA_DATA_VERSION) {
-        const data = cached.data
-        if (data.status === 'completed' && data.sonicDNA) {
-          setSonicDNA(data.sonicDNA)
-          setStatus('completed')
-          setIsLoading(false)
-          setError(null)
-          return
-        }
-      }
-
-      // Deduplicate in-flight requests across instances
-      let promise = sonicDNAInFlight.get(cacheKey)
-      if (!promise) {
-        // Add cache buster to force fresh data after enhancement
-        const cacheBuster = 'v=20260130'
-        promise = fetch(`/api/audio/sonic-dna?path=${encodeURIComponent(normalizedPath)}&${cacheBuster}`, {
-          signal: AbortSignal.timeout(10000), // 10 second timeout
-          cache: 'no-cache', // Force fresh data from server
-        })
-          .then(async (response) => {
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
-              throw new Error(errorData.error || errorData.details || `HTTP ${response.status}`)
-            }
-            return await response.json()
-          })
-          .finally(() => {
-            sonicDNAInFlight.delete(cacheKey)
-          })
-        sonicDNAInFlight.set(cacheKey, promise)
-      }
-
-      const data = await promise
-
-      // Cache successful payloads briefly (even pending/processing) to avoid tight re-fetch loops
-      sonicDNAResponseCache.set(cacheKey, {
-        data,
-        expiresAt: Date.now() + SONIC_DNA_TTL_MS,
-        version: SONIC_DNA_DATA_VERSION,
-      })
-      
-      if (data.error) {
-        setError(data.details || data.error)
-        setStatus('failed')
-        setIsLoading(false)
-        // Stop polling
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
-        return
-      }
-      
-      if (data.status === 'completed' && data.sonicDNA) {
-        setSonicDNA(data.sonicDNA)
-        setStatus('completed')
-        setIsLoading(false)
-        setError(null)
-        hasFetchedRef.current = true
-        // Stop polling immediately
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
-        return // Exit early - data is loaded, no need to continue
-      } else if (data.status === 'processing') {
-        setStatus('processing')
-        setIsLoading(true)
-        setError('Analysis is in progress. Please wait...')
-        // Start polling if not already polling
-        if (!pollIntervalRef.current) {
-          let pollCount = 0
-          const maxPolls = 60 // 60 polls * 3 seconds = 3 minutes max
-          pollIntervalRef.current = setInterval(() => {
-            pollCount++
-            // Check status ref (always current) before fetching
-            if (statusRef.current === 'completed' || statusRef.current === 'failed') {
-              if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current)
-                pollIntervalRef.current = null
-              }
-              return
-            }
-            // Stop polling after max attempts
-            if (pollCount >= maxPolls) {
-              setError('Analysis is taking longer than expected. Please try refreshing or check if the analysis is still running.')
-              setStatus('failed')
-              setIsLoading(false)
-              if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current)
-                pollIntervalRef.current = null
-              }
-              return
-            }
-            // Only fetch if still processing
-            if (statusRef.current === 'processing') {
-              fetchSonicDNA()
-            }
-          }, 3000)
-        }
-      } else if (data.status === 'failed') {
-        setError(data.error || data.message || 'Analysis failed')
-        setStatus('failed')
-        setIsLoading(false)
-        // Stop polling
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
-      } else if (data.status === 'not_found') {
-        setError(data.details || 'Track not found in database')
-        setStatus('failed')
-        setIsLoading(false)
-        // Stop polling
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
-      } else if (data.status === 'pending') {
-        // If pending, just show that no analysis exists yet (don't auto-trigger)
-        // User can manually trigger analysis if they want deeper analysis
-        setStatus('pending')
-        setIsLoading(false)
-        setError(null)
-        setSonicDNA(null)
-        hasFetchedRef.current = true
-        // Stop polling
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
-      } else {
-        // No data available
-        setStatus('pending')
-        setError(null) // Don't show error, just no data available
-        setIsLoading(false)
-        setSonicDNA(null)
-        hasFetchedRef.current = true
-        // Stop polling
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
-      }
-    } catch (err: any) {
-      console.error('Sonic DNA fetch error:', err)
-      // Handle network errors, timeouts, and other fetch errors
-      if (err.name === 'AbortError' || err.name === 'TimeoutError') {
-        setError('Request timed out. Please check your connection and try again.')
-      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-        setError('Network error. Please check your connection and Supabase configuration.')
-      } else {
-        setError(err.message || 'Failed to fetch Sonic DNA analysis')
-      }
-      setStatus('failed')
-      setIsLoading(false)
-      // Stop polling
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
-      }
-    }
-  }
-
-  const triggerAnalysis = async () => {
-    setIsLoading(true)
-    setError(null)
-    setStatus('processing')
-    
-    try {
-      // Normalize the file path - extract from Supabase URL if needed
-      const normalizedPath = normalizeTrackPath(trackFile)
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Triggering comprehensive analysis for:', normalizedPath)
-      }
-      const response = await fetch(`/api/audio/sonic-dna?path=${encodeURIComponent(normalizedPath)}`, {
-        method: 'POST'
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
-        throw new Error(errorData.error || errorData.details || `HTTP ${response.status}`)
-      }
-      
-      const data = await response.json()
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Analysis triggered:', data)
-      }
-      
-      if (data.status === 'processing') {
-        setStatus('processing')
-        setIsLoading(true)
-        setError('Comprehensive analysis started. This may take a few moments. Please wait...')
-        // Start polling after a short delay
-        setTimeout(() => {
-          if (!pollIntervalRef.current && statusRef.current === 'processing') {
-            fetchSonicDNA()
-          }
-        }, 2000)
-      } else if (data.status === 'completed' && data.hasComprehensive) {
-        // Already has comprehensive analysis
-        setStatus('completed')
-        setIsLoading(false)
-        // Fetch the existing data
-        fetchSonicDNA()
-      } else {
-        setError(data.message || 'Failed to start analysis')
-        setStatus('failed')
-        setIsLoading(false)
-      }
-    } catch (err: any) {
-      console.error('Analysis trigger error:', err)
-      setError(err.message || 'Failed to trigger analysis')
-      setStatus('failed')
-      setIsLoading(false)
-    }
-  }
-
-  // Check if current Sonic DNA has comprehensive analysis
-  const hasComprehensiveAnalysis = sonicDNA && typeof sonicDNA === 'object' && 'comprehensive' in sonicDNA
+  const emptyState = (
+    <div className={`${compact ? 'text-xs' : 'text-sm'} text-gray-400 space-y-2`}>
+      <p>
+        {awaitingGroove
+          ? 'Sonic DNA is stored, but groove analysis is incomplete (needs measured BPM + drum grid). Encyclopedia stays gated until audio is analyzed.'
+          : 'No Sonic DNA intelligence card found for this track yet.'}
+      </p>
+      {loadFromDatabaseButton}
+    </div>
+  )
 
   // Render Sonic DNA sections with beautiful styling
   const renderSonicDNASections = (dna: SonicDNAData, isCompact: boolean = false, mode: 'simple' | 'deep' = 'deep') => {
     const textSize = isCompact ? 'text-xs' : 'text-sm'
-    const padding = isCompact ? 'p-2.5' : 'p-4'
-    const sectionGap = isCompact ? 'mb-2.5' : 'mb-4'
+    const padding = isCompact ? 'p-2' : 'p-4'
+    const sectionGap = isCompact ? 'mb-2' : 'mb-4'
+    const bodyPad = isCompact ? 'pl-0' : 'pl-5'
     const isDeep = mode === 'deep'
     const maxTextLength = isCompact ? 140 : 220
     const truncateText = (value?: string) => {
@@ -516,6 +522,10 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         ? dna.genres.subgenres 
         : comprehensive?.genres?.subgenres || [],
       genreFusion: dna.genres?.genreFusion || comprehensive?.genres?.fusion || '',
+      relatedGenres: (dna.genres as { relatedGenres?: string[] })?.relatedGenres
+        || comprehensive?.genres?.relatedGenres
+        || comprehensive?.genres?.genreInfluences
+        || [],
     }
     
     // Merge historical data
@@ -539,100 +549,293 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
       regionalCharacteristics: dna.regional?.regionalCharacteristics || cultural?.regionalCharacteristics || '',
     }
     
-    // Extract description, intention, summary from multiple sources
-    const description = dna.description || comprehensive?.description || musicology?.description || ''
-    const intention = dna.intention || comprehensive?.intention || ''
-    const summary = dna.summary || comprehensive?.summary || ''
-    const descriptionText = truncateText(description)
-    const intentionText = truncateText(intention)
-    const summaryText = truncateText(summary)
+    const report = getSonicDnaReportView(dna)
+    const measured = report.measured || {}
+    const usageLines = report.usageLines
+    const instrumentationLines = report.instrumentationLines || []
+    const instrumentationChips = report.instrumentationChips || []
+    const groovePrimary = report.groovePrimary
+    const grooveSub = report.grooveSub
+    const keyLabel = report.key
+    const bpmLabel = report.bpm
+    const related = report.related
+    const dspFacts = report.byId.dsp?.text || ''
+    const historyText = report.byId.history?.text || ''
+    const cultureText = report.byId.culture?.text || ''
+    const psychText = report.byId.psychology?.text || ''
+    const psychoText = report.byId.psychoacoustics?.text || ''
+    const musicoText = report.byId.musicology?.text || ''
+    const description = report.byId.description?.text || ''
+    const benefitsText = report.byId.benefits?.text || ''
+    const intention = report.byId.intention?.text || ''
+    const grooveFacts = measuredGrooveFacts(measured)
+    const showLegacyExtras = !report.encyclopedia
+    
+    const scoreLabel = (value: unknown, asTen = true) => {
+      const n = Number(value)
+      if (!Number.isFinite(n)) return null
+      if (n <= 1) return `${Math.round(n * 100)}%`
+      if (n <= 10 || asTen) return `${Math.round(n)}/10`
+      return `${Math.round(n)}%`
+    }
+
+    const Chip = ({ text, className }: { text: string; className: string }) => (
+      <span className={`px-2 py-1 rounded-md ${isCompact ? 'text-[10px]' : 'text-xs'} border ${className}`}>
+        {text}
+      </span>
+    )
     
     // Create merged dna object for rendering
-    const mergedDna = {
-      ...dna,
-      description,
-      intention,
-      summary,
-      emotional,
-      genres,
-      historical,
-      regional,
-    }
-    
     return (
       <div className="space-y-3">
-        {/* Track Description */}
-        {description && (
+        {(groovePrimary || bpmLabel || keyLabel) && (
+          <div className={`bg-gradient-to-br from-purple-900/30 to-indigo-900/20 rounded-lg ${padding} border border-purple-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaTags className="text-purple-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-purple-300 ${textSize}`}>Groove class</h3>
+            </div>
+            <p className={`text-purple-100 ${isCompact ? 'text-sm' : 'text-base'} font-semibold ${bodyPad} break-words`}>
+              {groovePrimary || 'Unclassified'}
+              {grooveSub ? ` / ${grooveSub}` : ''}
+            </p>
+            <div className={`flex flex-wrap gap-1.5 sm:gap-2 ${bodyPad} mt-2`}>
+              {bpmLabel ? <Chip text={`${Math.round(Number(bpmLabel))} BPM`} className="bg-purple-900/40 text-purple-200 border-purple-700/30" /> : null}
+              {measured.timingFeel ? <Chip text={String(measured.timingFeel)} className="bg-purple-900/40 text-purple-200 border-purple-700/30" /> : null}
+              {measured.effectiveBpm && measured.bpm && Math.abs(measured.effectiveBpm - measured.bpm) >= 8 ? (
+                <Chip text={`felt ~${Math.round(measured.effectiveBpm)} BPM`} className="bg-amber-900/40 text-amber-200 border-amber-700/30" />
+              ) : null}
+              {keyLabel && keyLabel !== 'Unknown' ? <Chip text={String(keyLabel)} className="bg-indigo-900/40 text-indigo-200 border-indigo-700/30" /> : null}
+              {measured.camelot ? <Chip text={`Camelot ${measured.camelot}`} className="bg-indigo-900/40 text-indigo-200 border-indigo-700/30" /> : null}
+            </div>
+          </div>
+        )}
+
+        {usageLines.length > 0 && (
+          <div className={`bg-gradient-to-br from-orange-900/20 to-amber-900/20 rounded-lg ${padding} border border-orange-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaMusic className="text-orange-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-orange-300 ${textSize}`}>How percussion and instruments are used</h3>
+            </div>
+            <ul className={`space-y-1.5 ${bodyPad} text-orange-100 ${textSize} leading-relaxed`}>
+              {(isDeep ? usageLines : usageLines.slice(0, 4)).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {(instrumentationLines.length > 0 || instrumentationChips.length > 0) && (
+          <div className={`bg-gradient-to-br from-teal-900/20 to-cyan-900/20 rounded-lg ${padding} border border-teal-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaTags className="text-teal-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-teal-300 ${textSize}`}>Technical instrumentation</h3>
+            </div>
+            {instrumentationChips.length > 0 && (
+              <div className={`flex flex-wrap gap-1.5 ${bodyPad} mb-2`}>
+                {(isDeep ? instrumentationChips : instrumentationChips.slice(0, 8)).map((chip) => (
+                  <Chip
+                    key={`${chip.category}-${chip.label}`}
+                    text={chip.label}
+                    className="bg-teal-900/40 text-teal-200 border-teal-700/30"
+                  />
+                ))}
+              </div>
+            )}
+            {instrumentationLines.length > 0 && (
+              <ul className={`space-y-1.5 ${bodyPad} text-teal-100 ${textSize} leading-relaxed`}>
+                {(isDeep ? instrumentationLines : instrumentationLines.slice(0, 3)).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {(grooveFacts.length > 0 || dspFacts) && (
           <div
-            className={`bg-gradient-to-br from-blue-900/20 to-indigo-900/20 rounded-lg ${padding} border border-blue-500/20 ${sectionGap} cursor-zoom-in`}
-            onDoubleClick={() => setExpandedDescription(description)}
+            className={`bg-gradient-to-br from-slate-900/40 to-gray-900/20 rounded-lg ${padding} border border-gray-600/30 ${sectionGap} cursor-zoom-in`}
+            onDoubleClick={() => setExpandedCopy({ title: 'Measured groove', text: dspFacts })}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
-                setExpandedDescription(description)
+                setExpandedCopy({ title: 'Measured groove', text: dspFacts })
               }
             }}
             role="button"
             tabIndex={0}
             title="Double-click to expand"
-            aria-label="Expand track description"
+            aria-label="Expand measured groove facts"
           >
-            <div className="flex items-center gap-2 mb-3">
-              <FaInfoCircle className="text-blue-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
-              <h3 className={`font-bold text-blue-300 ${textSize}`}>Track Description</h3>
+            <div className="flex items-center gap-2 mb-2">
+              <FaInfoCircle className="text-gray-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-gray-300 ${textSize}`}>Measured groove</h3>
             </div>
-            <p className={`text-blue-200 ${textSize} leading-relaxed pl-5`}>{descriptionText}</p>
+            {grooveFacts.length > 0 ? (
+              <dl className={`grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 ${bodyPad} ${textSize} text-gray-200`}>
+                {grooveFacts.map((row) => (
+                  <div key={row.label}>
+                    <dt className="text-[10px] uppercase tracking-wide text-gray-500">{row.label}</dt>
+                    <dd className="leading-relaxed">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <DnaReadableCopy text={dspFacts} className={`text-gray-200 ${bodyPad} ${textSize}`} simple={!isDeep} />
+            )}
           </div>
         )}
 
-        {/* Intention */}
+        {related.length > 0 && (
+          <div className={`bg-gradient-to-br from-fuchsia-900/20 to-purple-900/20 rounded-lg ${padding} border border-fuchsia-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaGlobe className="text-fuchsia-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-fuchsia-300 ${textSize}`}>Related traditions</h3>
+            </div>
+            <p className={`text-fuchsia-200/80 ${isCompact ? 'text-[10px]' : 'text-xs'} ${bodyPad} mb-2`}>
+              World-genre map for this class — not extra crate labels for this file.
+            </p>
+            <div className={`flex flex-wrap gap-1.5 ${bodyPad}`}>
+              {(isDeep ? related : related.slice(0, 8)).map((name) => (
+                <Chip key={name} text={name} className="bg-fuchsia-900/40 text-fuchsia-100 border-fuchsia-700/30" />
+              ))}
+            </div>
+          </div>
+        )}
+
         {intention && (
           <div className={`bg-gradient-to-br from-pink-900/20 to-rose-900/20 rounded-lg ${padding} border border-pink-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaHeart className="text-pink-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-pink-300 ${textSize}`}>Intention</h3>
             </div>
-            <p className={`text-pink-200 ${textSize} leading-relaxed pl-5`}>{intentionText}</p>
+            <DnaReadableCopy text={intention} className={`text-pink-200 ${bodyPad} ${textSize}`} simple={!isDeep} />
           </div>
         )}
 
-        {/* Summary */}
-        {summary && summary !== 'Analysis pending' && (
-          <div className={`bg-gradient-to-br from-purple-900/30 via-blue-900/20 to-purple-800/20 rounded-lg ${padding} border border-purple-500/20 ${sectionGap}`}>
-            <div className="flex items-start gap-2 mb-2">
-              <FaInfoCircle className="text-purple-400 flex-shrink-0 mt-0.5" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
-              <h3 className={`font-bold text-purple-300 ${textSize}`}>Summary</h3>
+        {psychoText && (
+          <div
+            className={`bg-gradient-to-br from-indigo-900/30 to-fuchsia-900/20 rounded-lg ${padding} border border-indigo-500/25 ${sectionGap} cursor-zoom-in`}
+            onDoubleClick={() => setExpandedCopy({ title: 'Psychoacoustics study', text: psychoText })}
+            role="button"
+            tabIndex={0}
+            aria-label="Expand psychoacoustics study"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <FaBrain className="text-indigo-300" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-indigo-200 ${textSize}`}>Psychoacoustics study</h3>
             </div>
-            <p className={`text-gray-200 leading-relaxed ${textSize} pl-5`}>{summaryText}</p>
+            <p className={`text-indigo-200/70 ${isCompact ? 'text-[10px]' : 'text-xs'} ${bodyPad} mb-2`}>
+              Social usage, sonic intent, and the DNA formula this groove activates in a listener.
+            </p>
+            <DnaReadableCopy text={psychoText} className={`text-indigo-100 ${bodyPad} ${textSize}`} simple={!isDeep} />
+          </div>
+        )}
+
+        {description && (
+          <div
+            className={`bg-gradient-to-br from-blue-900/20 to-indigo-900/20 rounded-lg ${padding} border border-blue-500/20 ${sectionGap} cursor-zoom-in`}
+            onDoubleClick={() => setExpandedCopy({ title: 'Description', text: description })}
+            role="button"
+            tabIndex={0}
+            aria-label="Expand description"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <FaInfoCircle className="text-blue-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-blue-300 ${textSize}`}>Description</h3>
+            </div>
+            <DnaReadableCopy text={description} className={`text-blue-200 ${bodyPad} ${textSize}`} simple={!isDeep} />
+          </div>
+        )}
+
+        {benefitsText && (
+          <div
+            className={`bg-gradient-to-br from-emerald-900/20 to-teal-900/20 rounded-lg ${padding} border border-emerald-500/20 ${sectionGap} cursor-zoom-in`}
+            onDoubleClick={() => setExpandedCopy({ title: 'Benefits of listening', text: benefitsText })}
+            role="button"
+            tabIndex={0}
+            aria-label="Expand listening benefits"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <FaHeart className="text-emerald-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-emerald-300 ${textSize}`}>Benefits of listening</h3>
+            </div>
+            <p className={`text-emerald-200/70 ${isCompact ? 'text-[10px]' : 'text-xs'} ${bodyPad} mb-2`}>
+              What this groove offers a listener or DJ — derived from the full Sonic DNA card.
+            </p>
+            <DnaReadableCopy text={benefitsText} className={`text-emerald-100 ${bodyPad} ${textSize}`} simple={!isDeep} />
+          </div>
+        )}
+
+        {historyText && (
+          <div
+            className={`bg-gradient-to-br from-amber-900/20 to-orange-900/20 rounded-lg ${padding} border border-amber-500/20 ${sectionGap} cursor-zoom-in`}
+            onDoubleClick={() => setExpandedCopy({ title: 'History and science', text: historyText })}
+            role="button"
+            tabIndex={0}
+            aria-label="Expand historical context"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <FaHistory className="text-amber-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-amber-300 ${textSize}`}>History and science</h3>
+            </div>
+            <DnaReadableCopy text={historyText} className={`text-amber-100 ${bodyPad} ${textSize}`} simple={!isDeep} />
+          </div>
+        )}
+
+        {cultureText && (
+          <div className={`bg-gradient-to-br from-teal-900/20 to-emerald-900/20 rounded-lg ${padding} border border-teal-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaGlobe className="text-teal-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-teal-300 ${textSize}`}>Culture</h3>
+            </div>
+            <DnaReadableCopy text={cultureText} className={`text-teal-100 ${bodyPad} ${textSize}`} simple={!isDeep} />
+          </div>
+        )}
+
+        {psychText && (
+          <div className={`bg-gradient-to-br from-rose-900/20 to-pink-900/20 rounded-lg ${padding} border border-rose-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaHeart className="text-rose-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-rose-300 ${textSize}`}>Psychology</h3>
+            </div>
+            <DnaReadableCopy text={psychText} className={`text-rose-100 ${bodyPad} ${textSize}`} simple={!isDeep} />
+          </div>
+        )}
+
+        {musicoText && (
+          <div className={`bg-gradient-to-br from-violet-900/20 to-purple-900/20 rounded-lg ${padding} border border-violet-500/20 ${sectionGap}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <FaHistory className="text-violet-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
+              <h3 className={`font-bold text-violet-300 ${textSize}`}>Musicology</h3>
+            </div>
+            <DnaReadableCopy text={musicoText} className={`text-violet-100 ${bodyPad} ${textSize}`} simple={!isDeep} />
           </div>
         )}
 
         {/* Technical Analysis */}
-        {technical && (technical.bpm || technical.key) && (
+        {showLegacyExtras && technical && (technical.bpm || technical.key) && (
           <div className={`bg-gradient-to-br from-cyan-900/20 to-teal-900/20 rounded-lg ${padding} border border-cyan-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaMusic className="text-cyan-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-cyan-300 ${textSize}`}>Technical Analysis</h3>
             </div>
-            <div className="grid grid-cols-2 gap-3 pl-5">
+            <div className={`grid grid-cols-2 gap-3 ${bodyPad}`}>
               {technical.bpm && (
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>BPM</p>
-                  <p className={`text-cyan-200 font-bold ${textSize}`}>{technical.bpm}</p>
+                  <p className={`text-cyan-200 font-bold ${textSize}`}>{Math.round(Number(technical.bpm))}</p>
                 </div>
               )}
-              {technical.key && technical.key.key !== 'Unknown' && (
+              {keyLabel && keyLabel !== 'Unknown' && (
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Key</p>
-                  <p className={`text-cyan-200 font-bold ${textSize}`}>
-                    {technical.key.key} {technical.key.mode || ''}
-                  </p>
+                  <p className={`text-cyan-200 font-bold ${textSize}`}>{keyLabel}</p>
                 </div>
               )}
-              {technical.key?.scale && (
+              {(measured.scale || technical.key?.scale || dna.musical?.scale) && (
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Scale</p>
-                  <p className={`text-cyan-200 font-medium ${textSize}`}>{technical.key.scale}</p>
+                  <p className={`text-cyan-200 font-medium ${textSize}`}>{measured.scale || technical.key?.scale || dna.musical?.scale}</p>
                 </div>
               )}
               {technical.timeSignature && (
@@ -641,17 +844,21 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
                   <p className={`text-cyan-200 font-medium ${textSize}`}>{technical.timeSignature}</p>
                 </div>
               )}
-              {technical.danceability !== undefined && (
+              {technical.energyLevel !== undefined && scoreLabel(technical.energyLevel) && (
+                <div>
+                  <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Energy</p>
+                  <p className={`text-cyan-200 font-medium ${textSize}`}>{scoreLabel(technical.energyLevel)}</p>
+                </div>
+              )}
+              {technical.danceability !== undefined && scoreLabel(technical.danceability) && (
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Danceability</p>
-                  <p className={`text-cyan-200 font-medium ${textSize}`}>
-                    {Math.round(technical.danceability * 100)}%
-                  </p>
+                  <p className={`text-cyan-200 font-medium ${textSize}`}>{scoreLabel(technical.danceability)}</p>
                 </div>
               )}
             </div>
             {technical.technicalDescription && (
-              <div className="mt-3 pl-5">
+              <div className={`mt-3 ${bodyPad}`}>
                 <p className={`text-cyan-200 ${textSize} leading-relaxed`}>{truncateText(technical.technicalDescription)}</p>
               </div>
             )}
@@ -659,13 +866,13 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         )}
 
         {/* Drum Pattern Analysis */}
-        {isDeep && ((drums && drums.pattern) || (dna.drums && (dna.drums.patternType || dna.drums.genreStyles))) ? (
+        {showLegacyExtras && isDeep && ((drums && drums.pattern) || (dna.drums && (dna.drums.patternType || dna.drums.genreStyles))) ? (
           <div className={`bg-gradient-to-br from-orange-900/20 to-red-900/20 rounded-lg ${padding} border border-orange-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaMusic className="text-orange-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-orange-300 ${textSize}`}>Drum Pattern</h3>
             </div>
-            <div className="space-y-2 pl-5">
+            <div className={`space-y-2 ${bodyPad}`}>
               {(drums?.pattern?.patternType || dna.drums?.patternType) && (
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Pattern Type</p>
@@ -846,7 +1053,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
               <FaMusic className="text-indigo-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-indigo-300 ${textSize}`}>Harmony</h3>
             </div>
-            <div className="space-y-2 pl-5">
+            <div className={`space-y-2 ${bodyPad}`}>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Key</p>
@@ -868,13 +1075,13 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         )}
 
         {/* MusicBrainz Metadata */}
-        {isDeep && musicbrainz && (musicbrainz.artistInfo || musicbrainz.artistId) && (
+        {showLegacyExtras && isDeep && musicbrainz && (musicbrainz.artistInfo || musicbrainz.artistId) && (
           <div className={`bg-gradient-to-br from-emerald-900/20 to-green-900/20 rounded-lg ${padding} border border-emerald-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaGlobe className="text-emerald-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-emerald-300 ${textSize}`}>MusicBrainz Data</h3>
             </div>
-            <div className="space-y-2 pl-5">
+            <div className={`space-y-2 ${bodyPad}`}>
               {musicbrainz.artistInfo?.name && (
                 <div>
                   <p className={`text-gray-400 mb-1 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Artist</p>
@@ -928,13 +1135,13 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         )}
 
         {/* Musicology Analysis */}
-        {isDeep && musicology && (
+        {showLegacyExtras && isDeep && musicology && (
           <div className={`bg-gradient-to-br from-violet-900/20 to-purple-900/20 rounded-lg ${padding} border border-violet-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaHistory className="text-violet-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-violet-300 ${textSize}`}>Musicology</h3>
             </div>
-            <div className="space-y-2.5 pl-5">
+            <div className={`space-y-2.5 ${bodyPad}`}>
               {musicology.era && musicology.era.decade && (
                 <div>
                   <p className={`text-gray-400 mb-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Era</p>
@@ -1007,13 +1214,13 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         )}
 
         {/* Cultural Analysis (from comprehensive) */}
-        {isDeep && comprehensive?.cultural && (
+        {showLegacyExtras && isDeep && comprehensive?.cultural && (
           <div className={`bg-gradient-to-br from-teal-900/20 to-cyan-900/20 rounded-lg ${padding} border border-teal-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaGlobe className="text-teal-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-teal-300 ${textSize}`}>Cultural Analysis</h3>
             </div>
-            <div className="space-y-2.5 pl-5">
+            <div className={`space-y-2.5 ${bodyPad}`}>
               {Array.isArray(comprehensive.cultural.regions) && comprehensive.cultural.regions.length > 0 && (
                 <div>
                   <p className={`text-gray-400 mb-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Regions</p>
@@ -1074,7 +1281,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
               <FaHeart className="text-pink-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-pink-300 ${textSize}`}>Emotional Intelligence</h3>
             </div>
-            <div className="space-y-2.5 pl-5">
+            <div className={`space-y-2.5 ${bodyPad}`}>
               <div>
                 <p className={`text-gray-400 mb-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Primary Emotions</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1108,7 +1315,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
               <FaMusic className="text-blue-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-blue-300 ${textSize}`}>Musical Intelligence</h3>
             </div>
-            <div className="space-y-2 pl-5">
+            <div className={`space-y-2 ${bodyPad}`}>
               <div className="grid grid-cols-2 gap-3">
                 {/* Key - check multiple sources */}
                 {(() => {
@@ -1216,7 +1423,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
                 </span>
               )}
             </div>
-            <div className="space-y-2.5 pl-5">
+            <div className={`space-y-2.5 ${bodyPad}`}>
               <div>
                 <p className={`text-gray-400 mb-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Primary Genres</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1327,13 +1534,13 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         )}
 
         {/* Historical Context */}
-        {isDeep && historical && Array.isArray(historical.eraInfluences) && historical.eraInfluences.length > 0 && (
+        {isDeep && historical && Array.isArray(historical.eraInfluences) && historical.eraInfluences.length > 0 && !historyText && (
           <div className={`bg-gradient-to-br from-amber-900/20 to-orange-900/20 rounded-lg ${padding} border border-amber-500/20 ${sectionGap}`}>
             <div className="flex items-center gap-2 mb-3">
               <FaHistory className="text-amber-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-amber-300 ${textSize}`}>Historical Context</h3>
             </div>
-            <div className="space-y-2.5 pl-5">
+            <div className={`space-y-2.5 ${bodyPad}`}>
               <div>
                 <p className={`text-gray-400 mb-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Era Influences</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1361,7 +1568,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
               <FaGlobe className="text-green-400" style={{ fontSize: isCompact ? '0.75rem' : '0.875rem' }} />
               <h3 className={`font-bold text-green-300 ${textSize}`}>Regional & Cultural</h3>
             </div>
-            <div className="space-y-2.5 pl-5">
+            <div className={`space-y-2.5 ${bodyPad}`}>
               <div>
                 <p className={`text-gray-400 mb-1.5 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>Primary Regions</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1385,34 +1592,34 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
     )
   }
 
-  const descriptionModal = expandedDescription ? (
+  const descriptionModal = expandedCopy ? (
     <div
       className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
-      onClick={() => setExpandedDescription(null)}
+      onClick={() => setExpandedCopy(null)}
       role="dialog"
       aria-modal="true"
-      aria-label="Expanded track description"
+      aria-label={`Expanded ${expandedCopy.title}`}
     >
       <div
-        className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-950/90 to-indigo-950/90 shadow-2xl"
+        className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-950/90 to-indigo-950/90 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-blue-500/20 px-4 py-3">
           <div className="flex items-center gap-2">
             <FaInfoCircle className="text-blue-300" />
-            <h3 className="text-sm font-semibold text-blue-200">Track Description</h3>
+            <h3 className="text-sm font-semibold text-blue-200">{expandedCopy.title}</h3>
           </div>
           <button
             type="button"
-            onClick={() => setExpandedDescription(null)}
+            onClick={() => setExpandedCopy(null)}
             className="rounded-md px-2 py-1 text-xs text-blue-200 hover:bg-blue-900/40"
-            aria-label="Close description"
+            aria-label={`Close ${expandedCopy.title}`}
           >
             Close
           </button>
         </div>
         <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
-          <p className="text-sm leading-relaxed text-blue-100">{expandedDescription}</p>
+          <DnaReadableCopy text={expandedCopy.text} className="text-sm text-blue-100" />
         </div>
       </div>
     </div>
@@ -1499,13 +1706,13 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         
         {shouldShowContent && (
           <>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <span className="text-[10px] text-gray-400">Mode</span>
               <div className="inline-flex items-center rounded-full border border-gray-700/60 bg-gray-900/50 p-0.5 text-[10px]">
                 <button
                   type="button"
                   onClick={() => setViewMode('simple')}
-                  className={`rounded-full px-2 py-0.5 transition ${
+                  className={`rounded-full px-2.5 py-1 transition touch-manipulation ${
                     viewMode === 'simple' ? 'bg-gray-200 text-gray-900' : 'text-gray-300 hover:text-white'
                   }`}
                   aria-pressed={viewMode === 'simple'}
@@ -1515,7 +1722,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
                 <button
                   type="button"
                   onClick={() => setViewMode('deep')}
-                  className={`rounded-full px-2 py-0.5 transition ${
+                  className={`rounded-full px-2.5 py-1 transition touch-manipulation ${
                     viewMode === 'deep' ? 'bg-gray-200 text-gray-900' : 'text-gray-300 hover:text-white'
                   }`}
                   aria-pressed={viewMode === 'deep'}
@@ -1524,22 +1731,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
                 </button>
               </div>
             </div>
-            {!sonicDNA && !isLoading && status !== 'processing' && (
-              <button
-                onClick={() => triggerAnalysis()}
-                disabled={isLoading}
-                className="w-full px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <FaSpinner className="animate-spin" />
-                    <span>Starting Analysis...</span>
-                  </>
-                ) : (
-                  <span>Generate Sonic DNA Analysis</span>
-                )}
-              </button>
-            )}
+            {!sonicDNA && !isLoading && status === 'pending' && !error && emptyState}
 
             {isLoading && (
               <div className="flex items-center gap-2 text-gray-400 text-xs py-4">
@@ -1549,8 +1741,9 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
             )}
 
             {error && (
-              <div className="text-red-400 text-xs p-2 bg-red-900/20 rounded mb-2">
+              <div className="text-red-400 text-xs p-2 bg-red-900/20 rounded mb-2 space-y-2">
                 <p>{error}</p>
+                {loadFromDatabaseButton}
               </div>
             )}
 
@@ -1567,7 +1760,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
                     Expand
                   </button>
                 </div>
-                <div className="p-3 max-h-96 overflow-y-auto">
+                <div className="p-2.5 sm:p-3 max-h-[min(40dvh,22rem)] sm:max-h-96 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
                   {renderSonicDNASections(sonicDNA, true, viewMode)}
                 </div>
               </div>
@@ -1613,22 +1806,7 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
         </div>
       </div>
       
-      {!sonicDNA && !isLoading && status !== 'processing' && (
-        <button
-          onClick={() => triggerAnalysis()}
-          disabled={isLoading}
-          className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <FaSpinner className="animate-spin" />
-              <span>Starting Analysis...</span>
-            </>
-          ) : (
-            <span>Generate Sonic DNA Analysis</span>
-          )}
-        </button>
-      )}
+      {!sonicDNA && !isLoading && status === 'pending' && !error && emptyState}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-gray-400 py-4">
@@ -1638,8 +1816,9 @@ export default function SonicDNA({ trackId, trackFile, trackTitle, artistName, c
       )}
 
       {error && (
-        <div className="text-red-400 text-sm p-3 bg-red-900/20 rounded mb-4">
+        <div className="text-red-400 text-sm p-3 bg-red-900/20 rounded mb-4 space-y-2">
           <p>{error}</p>
+          {loadFromDatabaseButton}
         </div>
       )}
 

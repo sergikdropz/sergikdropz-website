@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runTrackUploadPipeline } from '@/utils/trackUploadPipeline'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes max for full pipeline
@@ -25,6 +26,8 @@ export const maxDuration = 300 // 5 minutes max for full pipeline
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const formData = await request.formData()
     const file = formData.get('file') as File
     const title = formData.get('title') as string | null

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-// @ts-ignore - react-window types may be outdated
+import { useState, useMemo } from 'react'
+// @ts-expect-error - react-window types may be outdated
 import { FixedSizeList as List } from 'react-window'
-import { useTracks, useSonicDna, useWaveform, usePrefetchTracks } from '@/hooks/useMusicData'
+import { useTracks, useSonicDna, useWaveform } from '@/hooks/useMusicData'
 import Image from 'next/image'
 import { FaPlay, FaPause, FaMusic, FaWaveSquare } from 'react-icons/fa'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import { displayTrackBpm, displayTrackGenre, displayTrackKey } from '@/lib/audio/track-display'
 
 interface VirtualizedTrackListProps {
   folderId?: string
@@ -31,21 +32,15 @@ function TrackRow({ index, style, data }: TrackRowProps) {
   const { tracks, currentTrackId, onTrackSelect, isPlaying } = data
   const track = tracks[index]
 
+  // Hooks must be called unconditionally — Rule of Hooks.
+  // Use safe optional access so they still work when track is undefined.
+  const trackId = track?.id ?? ''
+  const isCurrentTrack = !!trackId && trackId === currentTrackId
+  // Only fetch heavy DNA/waveform for the selected (playing) track — never for the whole list.
+  const { data: sonicDna } = useSonicDna(trackId, isCurrentTrack)
+  const { data: waveform } = useWaveform(trackId, isCurrentTrack)
+
   if (!track) return null
-
-  const isCurrentTrack = track.id === currentTrackId
-
-  // Lazy load sonic DNA and waveform only when needed
-  const { data: sonicDna } = useSonicDna(track.id, false) // Disabled by default
-  const { data: waveform } = useWaveform(track.id, false) // Disabled by default
-
-  const { prefetchSonicDna, prefetchWaveform } = usePrefetchTracks()
-
-  // Prefetch heavy data on hover for better UX
-  const handleMouseEnter = useCallback(() => {
-    prefetchSonicDna(track.id)
-    prefetchWaveform(track.id)
-  }, [track.id, prefetchSonicDna, prefetchWaveform])
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -53,21 +48,10 @@ function TrackRow({ index, style, data }: TrackRowProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const getGenreFromSonicDna = (dna: any) => {
-    if (!dna) return ''
-    return dna.genres?.primaryGenres?.[0] ||
-           dna.comprehensive?.genres?.primary ||
-           dna.genres?.primary ||
-           ''
-  }
-
-  const getKeyFromSonicDna = (dna: any) => {
-    if (!dna) return track.key_signature || ''
-    return dna.harmony?.keySignature ||
-           dna.technical?.key?.key ||
-           track.key_signature ||
-           ''
-  }
+  const dnaTrack = { ...track, sonic_dna: sonicDna || track.sonic_dna }
+  const genre = displayTrackGenre(dnaTrack)
+  const key = displayTrackKey(dnaTrack)
+  const bpm = displayTrackBpm(dnaTrack)
 
   return (
     <div
@@ -76,7 +60,6 @@ function TrackRow({ index, style, data }: TrackRowProps) {
         isCurrentTrack ? 'bg-blue-900/20 border-l-4 border-blue-500' : ''
       }`}
       onClick={() => onTrackSelect(track)}
-      onMouseEnter={handleMouseEnter}
     >
       {/* Track Number / Play Button */}
       <div className="flex items-center justify-center w-8 h-8 flex-shrink-0">
@@ -116,9 +99,9 @@ function TrackRow({ index, style, data }: TrackRowProps) {
           <h4 className={`font-medium truncate ${isCurrentTrack ? 'text-blue-400' : 'text-white'}`}>
             {track.title}
           </h4>
-          {sonicDna && (
+          {genre && (
             <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
-              {getGenreFromSonicDna(sonicDna)}
+              {genre}
             </span>
           )}
         </div>
@@ -127,18 +110,18 @@ function TrackRow({ index, style, data }: TrackRowProps) {
 
       {/* Metadata */}
       <div className="hidden md:flex items-center gap-4 text-sm text-gray-400 flex-shrink-0">
-        {track.bpm && (
-          <span className="text-center min-w-[3rem]">{track.bpm} BPM</span>
+        {bpm && (
+          <span className="text-center min-w-[3rem]">{bpm} BPM</span>
         )}
-        {getKeyFromSonicDna(sonicDna) && (
-          <span className="text-center min-w-[2rem]">{getKeyFromSonicDna(sonicDna)}</span>
+        {key && (
+          <span className="text-center min-w-[2rem]">{key}</span>
         )}
         <span className="text-center min-w-[3rem]">{formatDuration(track.duration)}</span>
       </div>
 
       {/* Mobile metadata - simplified */}
       <div className="flex md:hidden items-center gap-2 text-xs text-gray-400 flex-shrink-0">
-        {track.bpm && <span>{track.bpm}</span>}
+        {bpm && <span>{bpm}</span>}
         <span>{formatDuration(track.duration)}</span>
       </div>
     </div>

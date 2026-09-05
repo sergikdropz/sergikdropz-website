@@ -6,7 +6,7 @@
  */
 
 import { getCachedUrl, setCachedUrl } from './audioCache'
-import { normalizeVaultAudioUrl } from './normalizeVaultAudioUrl'
+import { alternateAudioExtensionUrl, normalizeVaultAudioUrl } from './normalizeVaultAudioUrl'
 
 const DEBUG_INGEST =
   process.env.NODE_ENV !== 'production' && !!process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGGING
@@ -24,6 +24,45 @@ const debugIngest = (payload: Record<string, unknown>) => {
   }
 }
 
+async function urlExists(url: string): Promise<boolean> {
+  if (typeof window === 'undefined') return true
+  if (!url.startsWith('/') || url.startsWith('//')) return true
+  try {
+    const res = await fetch(url, { method: 'HEAD', credentials: 'same-origin' })
+    if (res.ok) return true
+    // Some static hosts reject HEAD — try a ranged GET.
+    if (res.status === 405 || res.status === 501) {
+      const getRes = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        credentials: 'same-origin',
+      })
+      return getRes.ok || getRes.status === 206
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Local vault may have WAV-only drops or MP3-only migrated files.
+ * Prefer the URL that actually exists on disk.
+ *
+ * Never probe `/api/audio/media/...` — each HEAD hits R2 through the Next proxy and
+ * races the actual playback GET (logs showed multi-second HEADs starving play).
+ * Extension fallback belongs in the player's onError path.
+ */
+async function preferExistingLocalAudio(url: string): Promise<string> {
+  if (typeof window === 'undefined') return url
+  if (!url.startsWith('/audio/')) return url
+
+  if (await urlExists(url)) return url
+  const alt = alternateAudioExtensionUrl(url)
+  if (alt && (await urlExists(alt))) return alt
+  return url
+}
+
 /**
  * Resolves an audio file path to a URL
  * @param filePath - The local file path (e.g., "/audio/unreleased/eps/...")
@@ -32,8 +71,14 @@ const debugIngest = (payload: Record<string, unknown>) => {
 export async function resolveAudioUrl(filePath: string): Promise<string> {
   const normalizedInput = normalizeVaultAudioUrl(filePath)
 
-  // If it's already a full URL (starts with http), normalize .wav→.mp3 for migrated bucket
-  if (normalizedInput.startsWith('http://') || normalizedInput.startsWith('https://')) {
+  // Already same-origin media proxy or absolute http(s) — skip resolve + existence HEAD
+  if (
+    normalizedInput.startsWith('/api/audio/media/') ||
+    normalizedInput.startsWith('http://') ||
+    normalizedInput.startsWith('https://')
+  ) {
+    setCachedUrl(filePath, normalizedInput)
+    setCachedUrl(normalizedInput, normalizedInput)
     return normalizedInput
   }
 
@@ -69,9 +114,12 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
         // In production, always use Supabase URL (even if null, API will construct it)
         // In development, use Supabase URL if found, otherwise fall back to local
         if (data.url) {
-          // Cache the result (NEW - safe addition)
           const out = normalizeVaultAudioUrl(data.url)
-          setCachedUrl(normalizedInput, out)
+          const ttlMs =
+            typeof data.expiresIn === 'number' && data.expiresIn > 60
+              ? Math.max(60_000, (data.expiresIn - 60) * 1000)
+              : undefined
+          setCachedUrl(normalizedInput, out, ttlMs)
           return out
         } else if (!isDevelopment) {
           // In production, if API returns null, check if it's a configuration error
@@ -95,9 +143,8 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
     }
   }
 
-  // Fallback: return the local path (only used in development)
-  const result = normalizedInput
-  // Cache even local paths in dev (NEW - safe addition)
+  // Fallback: local path — pick the extension that actually exists (wav-only playlist drops).
+  const result = await preferExistingLocalAudio(normalizedInput)
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     setCachedUrl(normalizedInput, result)
   }

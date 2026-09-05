@@ -197,7 +197,7 @@ async function getComprehensiveStats(supabase: any) {
     // Same track can appear in multiple folders/playlists
     const { data: allLibraryTracks } = await supabase
       .from('music_library_tracks')
-      .select('id, audio_file_id, bpm, key_signature, sonic_dna, waveform, energy_level, artist, metadata')
+      .select('id, audio_file_id, bpm, key_signature, energy_level, artist, metadata')
       .or('is_archived.is.null,is_archived.eq.false')
     
     // Deduplicate by audio_file_id to get TRUE unique track count
@@ -226,11 +226,12 @@ async function getComprehensiveStats(supabase: any) {
     for (const track of uniqueTracks) {
       const meta = track.metadata || {}
       
-      if (meta.has_sonic_dna !== undefined ? meta.has_sonic_dna : track.sonic_dna) tracksWithDnaCount++
-      if (meta.has_bpm !== undefined ? meta.has_bpm : track.bpm) tracksWithBpmCount++
+      if (meta.has_sonic_dna) tracksWithDnaCount++
+      else if (meta.has_sonic_dna === undefined && track.bpm) tracksWithDnaCount++
+      if (meta.has_bpm !== undefined ? meta.has_bpm : Boolean(track.bpm)) tracksWithBpmCount++
       if (meta.has_key !== undefined ? meta.has_key : (track.key_signature && track.key_signature !== 'Unknown')) tracksWithKeyCount++
-      if (meta.has_energy !== undefined ? meta.has_energy : (track.energy_level != null)) tracksWithEnergyCount++
-      if (meta.has_waveform !== undefined ? meta.has_waveform : track.waveform) tracksWithWaveformCount++
+      if (meta.has_energy !== undefined ? meta.has_energy : track.energy_level != null) tracksWithEnergyCount++
+      if (meta.has_waveform) tracksWithWaveformCount++
       
       if (track.artist) artistSet.add(track.artist.toLowerCase())
     }

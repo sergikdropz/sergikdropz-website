@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import EmailGate from './EmailGate'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface FreeDownloadTrackProps {
   track: {
@@ -16,16 +18,18 @@ interface FreeDownloadTrackProps {
 
 export default function FreeDownloadTrack({ track }: FreeDownloadTrackProps) {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const cover = track.artwork ? resolveImageUrl(track.artwork) : ''
 
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden">
       <div className="flex flex-col sm:flex-row">
-        {track.artwork && (
+        {isSafeNextImageSrc(cover) && (
           <div className="relative w-full sm:w-40 h-40 flex-shrink-0">
             <Image
-              src={track.artwork}
+              src={cover}
               alt={track.title}
               fill
+              unoptimized={shouldUnoptimizeImage(cover)}
               className="object-cover"
               sizes="160px"
             />

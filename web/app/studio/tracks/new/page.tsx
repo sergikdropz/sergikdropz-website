@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/AdminAuthContext'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { FaUpload, FaCheckCircle, FaPaperPlane } from 'react-icons/fa'
 

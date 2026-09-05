@@ -5,6 +5,7 @@
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { peerAgentData } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
 
 export class HarmonyAnalystAgent extends BaseAgent {
   type = AgentType.HARMONY_ANALYST
@@ -23,15 +24,16 @@ export class HarmonyAnalystAgent extends BaseAgent {
       const { comprehensiveAnalysis, previousAgentResults } = context
 
       const harmony = comprehensiveAnalysis?.harmony
-      const technical = previousAgentResults?.[AgentType.TECHNICAL_ANALYZER]?.data
+      const technical = peerAgentData(previousAgentResults, AgentType.TECHNICAL_ANALYZER)
+      const seededKey = context.blackboard?.measured?.key
 
-      if (!harmony && !technical) {
+      if (!harmony && !technical && !seededKey) {
         return this.createFailure('No harmony data available', Date.now() - startTime)
       }
 
       // Extract harmony data
       const harmonyData = {
-        keySignature: harmony?.keySignature || technical?.key?.key || 'Unknown',
+        keySignature: harmony?.keySignature || technical?.key?.key || seededKey || 'Unknown',
         scale: harmony?.scale || technical?.key?.scale || 'major',
         tonality: harmony?.tonality || (technical?.key?.mode === 'minor' ? 'minor' : 'major'),
         timeSignature: comprehensiveAnalysis?.technical?.timeSignature || technical?.timeSignature || '4/4'

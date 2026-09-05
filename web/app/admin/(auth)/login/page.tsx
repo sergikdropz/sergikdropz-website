@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseClient } from '@/lib/supabase'
 
@@ -70,83 +69,114 @@ export default function AdminLogin() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [autoLoggingIn, setAutoLoggingIn] = useState(false)
-  const router = useRouter()
-  const pathname = usePathname()
-  const hasCheckedSessionRef = useRef(false)
-  const isRedirectingRef = useRef(false)
+  const hasAutoLoginAttemptedRef = useRef(false)
 
   useEffect(() => {
-    // Only run on the login page
-    if (pathname !== '/admin/login') {
+    if (hasAutoLoginAttemptedRef.current) return
+    hasAutoLoginAttemptedRef.current = true
+
+    // Server layout redirects authenticated admins to /admin.
+    // Only run remembered-credentials / dev URL auto-login when still on this page.
+    const remembered = getRememberedCredentials()
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlEmail = urlParams.get('email')
+    const urlPassword = urlParams.get('password')
+    const urlError = urlParams.get('error')
+    const wantEnvAutoLogin = urlParams.get('autologin') === '1'
+
+    if (urlError) {
+      setError(
+        urlError === 'auto-login-not-configured'
+          ? 'Dev auto-login is not configured. Set ADMIN_AUTO_LOGIN_EMAIL and ADMIN_AUTO_LOGIN_PASSWORD in web/.env.local.'
+          : urlError
+      )
+    }
+
+    if (urlEmail && urlPassword) {
+      setEmail(urlEmail)
+      setPassword(urlPassword)
+      setRememberMe(true)
+      setTimeout(() => {
+        setAutoLoggingIn(true)
+        void handleAutoLogin(urlEmail, urlPassword)
+      }, 300)
       return
     }
-    
-    // Prevent multiple session checks using ref (persists across remounts)
-    if (hasCheckedSessionRef.current || isRedirectingRef.current) {
+
+    if (wantEnvAutoLogin) {
+      setTimeout(() => {
+        setAutoLoggingIn(true)
+        void handleEnvAutoLogin()
+      }, 200)
       return
     }
-    
-    hasCheckedSessionRef.current = true
-    
-    // Check if already logged in first
-    checkSession().then((isAuthenticated) => {
-      // Only auto-login if not already authenticated
-      if (!isAuthenticated) {
-        // Try development auto-login first (if env vars are set)
-        // Note: In Next.js, client-side env vars must be prefixed with NEXT_PUBLIC_
-        // For server-side auto-login, we'll check on the server
-        const remembered = getRememberedCredentials()
-        
-        // Try to get dev credentials from URL params (for easy testing)
-        const urlParams = new URLSearchParams(window.location.search)
-        const urlEmail = urlParams.get('email')
-        const urlPassword = urlParams.get('password')
-        
-        if (urlEmail && urlPassword) {
-          // Auto-login from URL params (development only)
-          setEmail(urlEmail)
-          setPassword(urlPassword)
-          setRememberMe(true)
-          setTimeout(() => {
-            setAutoLoggingIn(true)
-            handleAutoLogin(urlEmail, urlPassword)
-          }, 300)
-          return
-        }
-        
-        if (remembered) {
-          setEmail(remembered.email)
-          setPassword(remembered.password)
-          setRememberMe(true)
-          
-          // Small delay before auto-login for better UX
-          setTimeout(() => {
-            setAutoLoggingIn(true)
-            handleAutoLogin(remembered.email, remembered.password)
-          }, 500)
-        }
-      }
-    }).catch(() => {
-      // Ignore errors
-    })
+
+    if (remembered) {
+      setEmail(remembered.email)
+      setPassword(remembered.password)
+      setRememberMe(true)
+      setTimeout(() => {
+        setAutoLoggingIn(true)
+        void handleAutoLogin(remembered.email, remembered.password)
+      }, 500)
+    }
   }, [])
 
-  async function checkSession(): Promise<boolean> {
-    try {
-      const response = await fetch('/api/auth/session', { credentials: 'include' })
-      const data = await response.json()
-      if (data.authenticated && data.isAdmin) {
-        // Set redirecting flag to prevent multiple redirects
-        isRedirectingRef.current = true
-        // Use window.location.replace for a full page reload that doesn't add to history
-        // This prevents the infinite loop where router.push doesn't complete
-        window.location.replace('/admin')
-        return true
+  async function finishAutoLogin(
+    email: string,
+    password: string,
+    data: { session?: { access_token: string; refresh_token: string }; error?: string },
+    responseOk: boolean
+  ) {
+    if (responseOk) {
+      if (data.session) {
+        try {
+          const supabase = getSupabaseClient()
+          await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          })
+        } catch {
+          // Ignore errors setting session
+        }
       }
-      return false
-    } catch (err: any) {
-      // Not logged in, stay on login page
-      return false
+
+      if (email && password) {
+        saveRememberedCredentials(email, password)
+      }
+
+      const sessionCheck = await fetch('/api/auth/session', { credentials: 'include' })
+      const sessionData = await sessionCheck.json()
+      if (sessionCheck.ok && sessionData.authenticated && sessionData.isAdmin) {
+        window.location.replace('/admin')
+        return
+      }
+
+      clearRememberedCredentials()
+      setAutoLoggingIn(false)
+      setError('Login succeeded, but session was not established. Please try again.')
+      return
+    }
+
+    clearRememberedCredentials()
+    setAutoLoggingIn(false)
+    setError(data.error || 'Auto-login failed. Please sign in manually.')
+  }
+
+  async function handleEnvAutoLogin() {
+    try {
+      const response = await fetch('/api/auth/auto-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ fromEnv: true }),
+      })
+      const data = await response.json()
+      await finishAutoLogin(data.user?.email || '', '', data, response.ok)
+    } catch {
+      clearRememberedCredentials()
+      setAutoLoggingIn(false)
+      setError('Auto-login failed. Please sign in manually.')
     }
   }
 
@@ -162,44 +192,8 @@ export default function AdminLogin() {
       })
 
       const data = await response.json()
-
-      if (response.ok) {
-        // Set the Supabase client session so AuthContext can detect it
-        if (data.session) {
-          try {
-            const supabase = getSupabaseClient()
-            await supabase.auth.setSession({
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-            })
-          } catch (err: any) {
-            // Ignore errors setting session
-          }
-        }
-        
-        // Save credentials for future auto-login
-        saveRememberedCredentials(email, password)
-        
-        const sessionCheck = await fetch('/api/auth/session', { credentials: 'include' })
-        const sessionData = await sessionCheck.json()
-        if (sessionCheck.ok && sessionData.authenticated && sessionData.isAdmin) {
-          // Success - redirect to admin dashboard
-          // Use window.location.replace for a full page reload that doesn't add to history
-          window.location.replace('/admin')
-          return
-        }
-
-        clearRememberedCredentials()
-        setAutoLoggingIn(false)
-        setError('Login succeeded, but session was not established. Please try again.')
-      } else {
-        // Auto-login failed, clear remembered credentials
-        clearRememberedCredentials()
-        setAutoLoggingIn(false)
-        setError(data.error || 'Auto-login failed. Please sign in manually.')
-      }
-    } catch (err: any) {
-      // Auto-login failed, clear remembered credentials
+      await finishAutoLogin(email, password, data, response.ok)
+    } catch {
       clearRememberedCredentials()
       setAutoLoggingIn(false)
       setError('Auto-login failed. Please sign in manually.')
@@ -359,7 +353,7 @@ export default function AdminLogin() {
             </Link>
             {process.env.NODE_ENV === 'development' && (
               <p className="text-xs text-gray-400">
-                Dev: Add ?email=your@email.com&password=yourpass to URL for auto-login
+                Dev: open /admin/login?autologin=1 (uses ADMIN_AUTO_LOGIN_* in .env.local)
               </p>
             )}
           </div>

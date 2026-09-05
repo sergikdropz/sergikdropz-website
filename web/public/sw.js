@@ -45,6 +45,41 @@ async function saveCacheMetadata(metadata) {
   }
 }
 
+/**
+ * LRU bookkeeping used to be a metadata read + write on every audio request,
+ * which put two Cache Storage round-trips in front of each Range response.
+ * Batch the touches instead: eviction order only needs coarse recency.
+ */
+const pendingTouches = new Set()
+let touchFlushTimer = null
+
+function touchCacheItem(url) {
+  pendingTouches.add(url)
+  if (touchFlushTimer !== null) return
+  touchFlushTimer = setTimeout(async () => {
+    touchFlushTimer = null
+    const urls = [...pendingTouches]
+    pendingTouches.clear()
+    if (!urls.length) return
+    try {
+      const metadata = await getCacheMetadata()
+      const now = Date.now()
+      let changed = false
+      for (const item of metadata.items) {
+        if (urls.includes(item.url)) {
+          item.lastAccessed = now
+          changed = true
+        }
+      }
+      if (changed) await saveCacheMetadata(metadata)
+    } catch (error) {
+      console.debug('Cache touch flush failed:', error)
+    }
+  }, TOUCH_FLUSH_DELAY_MS)
+}
+
+const TOUCH_FLUSH_DELAY_MS = 30000
+
 // Get file size from response
 async function getResponseSize(response) {
   const cloned = response.clone()
@@ -68,6 +103,7 @@ async function evictLRU(targetSize) {
     
     try {
       await cache.delete(item.url)
+      blobCache.delete(item.url)
       currentSize -= item.size
       itemsToRemove.push(item.url)
     } catch (error) {
@@ -119,10 +155,10 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.startsWith('/api/analytics')) return
 
     const isCacheableApi =
-      url.pathname.startsWith('/api/music-library/') ||
       url.pathname.startsWith('/api/audio/waveform') ||
       url.pathname.startsWith('/api/audio/bpm') ||
       url.pathname.startsWith('/api/audio/sonic-dna')
+    // Do not cache /api/music-library/* — vault responses are cookie/session sensitive.
 
     if (!isCacheableApi) return
 
@@ -229,11 +265,36 @@ async function fetchWithRetry(request, retries = 1, delay = 1000) {
  * full-file 200 for those requests breaks progressive playback and causes stalls.
  * Satisfy common "bytes=start-end" / "bytes=start-" / "bytes=-suffix" from cache.
  */
+/**
+ * A media element issues many Range requests per track, and reading the cached
+ * body is what costs — `blob()` drains the whole response every time. Hold the
+ * last couple of tracks' bodies so slicing stays cheap. Blob.slice() is lazy, so
+ * only the requested window is materialized.
+ */
+const BLOB_CACHE_LIMIT = 3
+const blobCache = new Map()
+
+async function cachedBodyBlob(url, cachedResponse) {
+  const hit = blobCache.get(url)
+  if (hit) {
+    // Refresh recency.
+    blobCache.delete(url)
+    blobCache.set(url, hit)
+    return hit
+  }
+  const blob = await cachedResponse.clone().blob()
+  blobCache.set(url, blob)
+  while (blobCache.size > BLOB_CACHE_LIMIT) {
+    blobCache.delete(blobCache.keys().next().value)
+  }
+  return blob
+}
+
 async function rangeResponseFromCachedFullFile(request, cachedResponse) {
   const rangeHeader = request.headers.get('Range')
   if (!rangeHeader || !cachedResponse || !cachedResponse.ok) return null
 
-  const blob = await cachedResponse.blob()
+  const blob = await cachedBodyBlob(request.url, cachedResponse)
   const size = blob.size
   if (!size) return null
 
@@ -292,7 +353,6 @@ async function rangeResponseFromCachedFullFile(request, cachedResponse) {
 async function handleAudioRequest(request) {
   const url = request.url
   const cache = await caches.open(CACHE_NAME)
-  const metadata = await getCacheMetadata()
   
   // Check if in cache
   const cachedResponse = await cache.match(url)
@@ -302,20 +362,12 @@ async function handleAudioRequest(request) {
     if (rangeHeader) {
       const ranged = await rangeResponseFromCachedFullFile(request, cachedResponse)
       if (ranged) {
-        const item = metadata.items.find(i => i.url === url)
-        if (item) {
-          item.lastAccessed = Date.now()
-          await saveCacheMetadata(metadata)
-        }
+        touchCacheItem(url)
         return ranged
       }
       return fetchWithRetry(request)
     }
-    const item = metadata.items.find(i => i.url === url)
-    if (item) {
-      item.lastAccessed = Date.now()
-      await saveCacheMetadata(metadata)
-    }
+    touchCacheItem(url)
     return cachedResponse
   }
   
@@ -341,6 +393,7 @@ async function handleAudioRequest(request) {
     if (response.status === 200) {
       const responseToCache = response.clone()
       const size = await getResponseSize(responseToCache)
+      const metadata = await getCacheMetadata()
       
       const shouldCache = metadata.items.length < MAX_CACHE_ITEMS || 
                          metadata.totalSize + size < MAX_CACHE_SIZE
@@ -354,6 +407,7 @@ async function handleAudioRequest(request) {
         }
         
         await cache.put(url, responseToCache)
+        blobCache.delete(url)
         
         metadata.items.push({
           url,
@@ -400,7 +454,9 @@ self.addEventListener('message', async (event) => {
     const tracks = event.data.tracks || []
     const cache = await caches.open(CACHE_NAME)
     
-    // Preload next tracks in background
+    // Preload next tracks one at a time. Firing all of these at once put several
+    // whole-file downloads in flight alongside the track currently streaming,
+    // and they competed for the same connection budget — audible as stalls.
     for (let i = 0; i < Math.min(tracks.length, PRELOAD_COUNT); i++) {
       const trackUrl = tracks[i]
       
@@ -408,46 +464,42 @@ self.addEventListener('message', async (event) => {
       const cached = await cache.match(trackUrl)
       if (cached) continue
       
-      // Preload in background (don't wait)
-      // Don't include Range header for preload - we want full file
-      fetch(trackUrl, {
-        headers: {
-          // Explicitly don't send Range header to get full response
-        }
-      })
-        .then(async (response) => {
-          // Only cache full responses (200), not partial (206)
-          if (response.ok && response.status === 200) {
-            const metadata = await getCacheMetadata()
-            const size = await getResponseSize(response.clone())
-            
-            // Only cache if we have space
-            if (metadata.items.length < MAX_CACHE_ITEMS && 
-                metadata.totalSize + size < MAX_CACHE_SIZE) {
-              await cache.put(trackUrl, response.clone())
-              
-              metadata.items.push({
-                url: trackUrl,
-                size,
-                lastAccessed: Date.now(),
-                cachedAt: Date.now(),
-                preloaded: true
-              })
-              metadata.totalSize += size
-              await saveCacheMetadata(metadata)
-            }
+      try {
+        // Deliberately no Range header — we want the full file to cache.
+        const response = await fetch(trackUrl)
+        // Only cache full responses (200), not partial (206)
+        if (response.ok && response.status === 200) {
+          const metadata = await getCacheMetadata()
+          const size = await getResponseSize(response.clone())
+
+          // Only cache if we have space
+          if (metadata.items.length < MAX_CACHE_ITEMS &&
+              metadata.totalSize + size < MAX_CACHE_SIZE) {
+            await cache.put(trackUrl, response.clone())
+            blobCache.delete(trackUrl)
+
+            metadata.items.push({
+              url: trackUrl,
+              size,
+              lastAccessed: Date.now(),
+              cachedAt: Date.now(),
+              preloaded: true
+            })
+            metadata.totalSize += size
+            await saveCacheMetadata(metadata)
           }
-        })
-        .catch((error) => {
-          // Silently fail preload
-          console.debug('Preload failed:', error)
-        })
+        }
+      } catch (error) {
+        // Silently fail preload
+        console.debug('Preload failed:', error)
+      }
     }
   } else if (event.data.type === 'CLEAR_CACHE') {
     // Clear all cached audio
     const cache = await caches.open(CACHE_NAME)
     const keys = await cache.keys()
     await Promise.all(keys.map(key => cache.delete(key)))
+    blobCache.clear()
     await saveCacheMetadata({ items: [], totalSize: 0 })
     
     event.ports[0].postMessage({ success: true })

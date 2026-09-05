@@ -1,20 +1,18 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Six_Caps } from 'next/font/google'
 import './globals.css'
-import ConditionalHeader from '@/components/ConditionalHeader'
-import ConditionalFooter from '@/components/ConditionalFooter'
-import ConditionalNavigationButtons from '@/components/ConditionalNavigationButtons'
-import BackgroundImages from '@/components/BackgroundImages'
-import { MusicPlayerProvider } from '@/contexts/MusicPlayerContext'
-import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
-import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import { Providers } from '@/components/Providers'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import AnalyticsConsentBanner from '@/components/AnalyticsConsentBanner'
 import AnalyticsScripts from '@/components/AnalyticsScripts'
 
-const inter = Inter({ subsets: ['latin'] })
-const sixCaps = Six_Caps({ 
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: true,
+})
+const sixCaps = Six_Caps({
   weight: '400',
   subsets: ['latin'],
   variable: '--font-six-caps',
@@ -105,12 +103,12 @@ export default function RootLayout({
         {process.env.NEXT_PUBLIC_SUPABASE_URL && (
           <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
         )}
-        <link rel="preconnect" href="https://i.scdn.co" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://image-cdn-fa.spotifycdn.com" />
-        <link rel="dns-prefetch" href="https://www.instagram.com" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://www.instagram.com" />
+        {(process.env.NEXT_PUBLIC_AUDIO_BASE_URL || process.env.NEXT_PUBLIC_MEDIA_CDN_URL) && (
+          <link
+            rel="preconnect"
+            href={process.env.NEXT_PUBLIC_MEDIA_CDN_URL || process.env.NEXT_PUBLIC_AUDIO_BASE_URL}
+          />
+        )}
         
         {/* Permissions Policy - allow unload for development hot reloading */}
         <meta httpEquiv="Permissions-Policy" content="unload=*" />
@@ -133,9 +131,8 @@ export default function RootLayout({
             }}
           />
         )}
-        
-        {/* Six Caps font — preconnect already declared above */}
-        <link href="https://fonts.googleapis.com/css2?family=Six+Caps&display=swap" rel="stylesheet" />
+
+        {/* Six Caps is loaded via next/font (self-hosted) — do not also pull Google Fonts CSS */}
         
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/images/gallery/logo.png" />
@@ -173,20 +170,10 @@ export default function RootLayout({
             }),
           }}
         />
-        <ServiceWorkerRegistration />
         <AnalyticsScripts />
         <AnalyticsProvider />
         <AnalyticsConsentBanner />
-        <Providers>
-          <MusicPlayerProvider>
-            <BackgroundImages />
-            <ConditionalHeader />
-            <main className="min-h-screen relative z-10 pb-56 sm:pb-64 md:pb-72 safe-area-bottom">{children}</main>
-            <ConditionalNavigationButtons />
-            <ConditionalFooter />
-            <GlobalMusicPlayer />
-          </MusicPlayerProvider>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

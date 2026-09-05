@@ -3,7 +3,32 @@
 public/audio/
 public/audio/**
 
-# Exclude large image files - these should be optimized or hosted on CDN
-# Exclude entire unreleased EP images directory (contains very large PNG files)
-public/images/audio/unreleased/eps/
+# Upcoming releases artwork currently references local paths under:
+# `public/images/audio/unreleased/eps/*`.
+# Do NOT ignore it, otherwise the Upcoming Releases grid renders blank art in production.
 
+# Local Next.js output & dev caches — must never be uploaded (can be GB+)
+/.next/
+/.next/**
+/.next-build/
+/.next-build/**
+/.next-dev-3001/
+/.next-dev-3001/**
+/.dev/
+/.dev/**
+/temp/
+/temp/**
+/data/migration-backup/
+/data/migration-backup/**
+/data/supabase-export/
+/data/supabase-export/**
+/playwright-report/
+/playwright-report/**
+/tsconfig.tsbuildinfo
+.env*
+!.env.example
+
+
+# Precomputed waveforms (regenerable; keep off Vercel upload)
+public/waveforms/
+public/waveforms/**

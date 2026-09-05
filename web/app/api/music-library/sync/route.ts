@@ -7,6 +7,16 @@ import { join } from 'path'
 import { readFileSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
+import { getMusicLibraryPublishVersion } from '@/lib/music-library-publish'
+import {
+  getCatalogSnapshot,
+  matchCatalogEtag,
+  setCatalogSnapshot,
+} from '@/lib/music-library/catalog-snapshot-cache'
+import { persistedCreatedDateFields } from '@/lib/music-library/track-created-date'
+
+/** PostgREST default max-rows is typically 1000 — page past it on sync. */
+const SYNC_TRACK_PAGE_SIZE = 1000
 
 // Logging utility (must be defined before use)
 // Use absolute path to avoid issues with process.cwd() in Next.js
@@ -22,14 +32,9 @@ const getLogPath = () => {
     return '/tmp/debug.log'
   }
 }
-const log = async (obj: any) => { 
-  try { 
-    const logPath = getLogPath()
-    await appendFile(logPath, JSON.stringify({...obj,timestamp:Date.now(),sessionId:'debug-session',runId:'run1'})+'\n'); 
-  } catch (logError) {
-    // Silently fail logging to prevent crashes - use console as fallback
-    console.error('Log write failed:', logError)
-  }
+const log = async (_obj: any) => {
+  // Hot-path no-op: previous debug appendFile to missing .cursor/debug.log
+  // added latency and flooded logs on every vault sync request.
 }
 
 /**
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
         : 'id,name,type,parent_id,hidden,is_archived,archived_at,artwork_url,year,display_order,created_at,updated_at'
       const tracksSelect = includeAnalysis
         ? '*'
-        : 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,created_at,date,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at'
+        : 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,genre,subgenre,tags,track_number,disc_number,created_at,date,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at'
       const playlistsSelect = includeAnalysis
         ? '*'
         : 'id,name,description,artwork_url,track_ids,is_archived,archived_at,created_at,updated_at'
@@ -168,6 +173,7 @@ export async function POST(request: NextRequest) {
               
               let trackId = track.id
               let trackData: any
+              let preservedRow: any = {}
 
               if (folder.id === 'folder-all-tracks') {
                 // All Tracks: use original ID, store complete track data
@@ -179,7 +185,7 @@ export async function POST(request: NextRequest) {
                 try {
                   const { data: existingTrack } = await supabase
                     .from('music_library_tracks')
-                    .select('audio_file_id, sonic_dna, bpm, key_signature, waveform, energy_level, danceability, duration, artwork_url, created_at, date, year')
+                    .select('audio_file_id, sonic_dna, bpm, key_signature, waveform, energy_level, danceability, duration, artwork_url, created_at, date, year, date_created, metadata')
                     .eq('id', trackId)
                     .maybeSingle()
                   if (existingTrack?.audio_file_id) {
@@ -187,6 +193,7 @@ export async function POST(request: NextRequest) {
                   }
                   if (existingTrack) {
                     preservedAnalysis = existingTrack
+                    preservedRow = existingTrack
                   }
                 } catch (e) {
                   // If lookup fails, continue with null
@@ -228,21 +235,31 @@ export async function POST(request: NextRequest) {
                 
                 if (!existingTrack) {
                   // Track doesn't exist in All Tracks yet, add it there first
-                  // Preserve audio_file_id if it exists elsewhere
+                  // Preserve audio_file_id + created date if it exists elsewhere
                   let preservedAudioFileId = null
+                  let preservedAnywhere: any = null
                   try {
                     const { data: existingTrackAnywhere } = await supabase
                       .from('music_library_tracks')
-                      .select('audio_file_id')
+                      .select('audio_file_id, date_created, metadata, year')
                       .eq('id', track.id)
-                      .not('audio_file_id', 'is', null)
                       .maybeSingle()
+                    preservedAnywhere = existingTrackAnywhere
                     if (existingTrackAnywhere?.audio_file_id) {
                       preservedAudioFileId = existingTrackAnywhere.audio_file_id
                     }
                   } catch (e) {
                     // If lookup fails, continue with null
                   }
+
+                  const allTracksCreated = persistedCreatedDateFields({
+                    existing: preservedAnywhere,
+                    incoming: {
+                      metadata: track.metadata,
+                      date_created: track.date_created,
+                      year: track.year,
+                    },
+                  })
                   
                   const allTracksTrackData = {
                     id: track.id,
@@ -261,9 +278,10 @@ export async function POST(request: NextRequest) {
                     danceability: track.danceability || null,
                     created_at: track.created_at || track.date || null,
                     date: track.date || null,
-                    year: track.year || null,
+                    year: track.year || allTracksCreated.year || null,
+                    date_created: allTracksCreated.date_created,
                     display_order: 0,
-                    metadata: {}
+                    metadata: allTracksCreated.metadata,
                   }
                   
                   const { error: allTracksError } = await supabase
@@ -277,6 +295,16 @@ export async function POST(request: NextRequest) {
                 
                 // Create reference in subfolder
                 trackId = `${track.id}-ref-${folder.id}`
+                try {
+                  const { data: existingRef } = await supabase
+                    .from('music_library_tracks')
+                    .select('audio_file_id, sonic_dna, bpm, key_signature, waveform, energy_level, danceability, duration, artwork_url, created_at, date, year, date_created, metadata')
+                    .eq('id', trackId)
+                    .maybeSingle()
+                  if (existingRef) preservedRow = existingRef
+                } catch {
+                  // continue
+                }
                 trackData = {
                   id: trackId,
                   folder_id: folder.id,
@@ -311,7 +339,7 @@ export async function POST(request: NextRequest) {
                 try {
                   const { data: existingTrack } = await supabase
                     .from('music_library_tracks')
-                    .select('audio_file_id, sonic_dna, bpm, key_signature, waveform, energy_level, danceability, duration, artwork_url, created_at, date, year')
+                    .select('audio_file_id, sonic_dna, bpm, key_signature, waveform, energy_level, danceability, duration, artwork_url, created_at, date, year, date_created, metadata')
                     .eq('id', trackId)
                     .maybeSingle()
                   if (existingTrack?.audio_file_id) {
@@ -319,6 +347,7 @@ export async function POST(request: NextRequest) {
                   }
                   if (existingTrack) {
                     preservedAnalysis = existingTrack
+                    preservedRow = existingTrack
                   }
                 } catch (e) {
                   // If lookup fails, continue with null
@@ -345,6 +374,20 @@ export async function POST(request: NextRequest) {
                   display_order: 0,
                   metadata: {}
                 }
+              }
+
+              const persistedCreated = persistedCreatedDateFields({
+                existing: preservedRow,
+                incoming: {
+                  metadata: track.metadata || trackData.metadata,
+                  date_created: track.date_created,
+                  year: trackData.year,
+                },
+              })
+              trackData.metadata = persistedCreated.metadata
+              trackData.date_created = persistedCreated.date_created
+              if (trackData.year == null && persistedCreated.year) {
+                trackData.year = persistedCreated.year
               }
 
               // Use upsert to handle both new tracks and updates
@@ -478,6 +521,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // Warm snapshot for lean public sync (no analysis / archived / hidden)
+    const leanPublic = !includeAnalysis && !includeArchived && !includeHidden
+    const earlyVersion = leanPublic ? await getMusicLibraryPublishVersion().catch(() => 0) : 0
+    if (leanPublic && earlyVersion) {
+      const cached = getCatalogSnapshot('sync', earlyVersion, 'public')
+      const ifNoneMatch = request.headers.get('if-none-match')
+      if (cached && matchCatalogEtag(ifNoneMatch, cached.etag)) {
+        return new NextResponse(null, {
+          status: 304,
+          headers: {
+            ETag: cached.etag,
+            'Cache-Control': 'private, max-age=0, s-maxage=60, stale-while-revalidate=300',
+            Vary: 'Cookie',
+          },
+        })
+      }
+      if (cached) {
+        return new NextResponse(cached.body, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            ETag: cached.etag,
+            'Cache-Control': 'private, max-age=0, s-maxage=60, stale-while-revalidate=300',
+            Vary: 'Cookie',
+          },
+        })
+      }
+    }
+
     // #region agent log
     try { await log({location:'sync/route.ts:388',message:'Creating Supabase client',data:{hasUrl:!!process.env.NEXT_PUBLIC_SUPABASE_URL,hasServiceKey:!!process.env.SUPABASE_SERVICE_ROLE_KEY},hypothesisId:'A'}); } catch {}
     // #endregion
@@ -491,27 +563,57 @@ export async function GET(request: NextRequest) {
       // #region agent log
       await log({location:'sync/route.ts:397',message:'Supabase client creation failed',data:{error:supabaseError?.message},hypothesisId:'A'})
       // #endregion
-      // Return empty structure instead of throwing - allows admin panel to load
-      console.error('[SYNC GET] Supabase client creation failed, returning empty structure')
-      return NextResponse.json({
-        description: 'Music library (Supabase unavailable)',
-        folders: [],
-        playlists: [],
-      }, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Content-Type': 'application/json',
+      console.error('[SYNC GET] Supabase client creation failed')
+      return NextResponse.json(
+        {
+          error: 'Music library catalog unavailable',
+          code: 'CATALOG_UNAVAILABLE',
+          details: { reason: 'supabase_client', message: supabaseError?.message || null },
         },
-      })
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
+          },
+        },
+      )
     }
 
-    // Fetch folders, tracks, playlists in parallel (reduces TTFB)
+    const trackSelect = includeAnalysis
+      ? 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,genre,subgenre,tags,track_number,disc_number,created_at,date,date_created,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,metadata'
+      : 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,genre,subgenre,tags,track_number,disc_number,created_at,date,date_created,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,metadata'
+
+    const fetchAllTracksPaged = async () => {
+      const rows: any[] = []
+      let from = 0
+      for (;;) {
+        let query = supabase
+          .from('music_library_tracks')
+          .select(trackSelect)
+          .order('display_order', { ascending: true })
+          .order('title', { ascending: true })
+          .range(from, from + SYNC_TRACK_PAGE_SIZE - 1)
+        if (!includeArchived) {
+          query = query.or('is_archived.is.null,is_archived.eq.false')
+        }
+        const { data, error } = await query
+        if (error) return { data: null as any[] | null, error }
+        if (!data?.length) break
+        rows.push(...data)
+        if (data.length < SYNC_TRACK_PAGE_SIZE) break
+        from += SYNC_TRACK_PAGE_SIZE
+      }
+      return { data: rows, error: null as null }
+    }
+
+    // Fetch folders, tracks, playlists, publish version in parallel (reduces TTFB)
     // #region agent log
     await log({location:'sync/route.ts:408',message:'Querying folders/tracks/playlists in parallel',data:{},hypothesisId:'B'})
     // #endregion
-    let foldersRes, tracksRes, playlistsRes
+    let foldersRes, tracksRes, playlistsRes, publishVersion
     try {
-      [foldersRes, tracksRes, playlistsRes] = await Promise.all([
+      ;[foldersRes, tracksRes, playlistsRes, publishVersion] = await Promise.all([
         (async () => {
           let query = supabase
             .from('music_library_folders')
@@ -535,26 +637,7 @@ export async function GET(request: NextRequest) {
             .order('display_order', { ascending: true })
             .order('name', { ascending: true })
         })(),
-        (includeArchived
-          ? supabase
-              .from('music_library_tracks')
-              .select(
-                includeAnalysis
-                  ? 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,created_at,date,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,metadata'
-                  : 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,created_at,date,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at',
-              )
-              .order('display_order', { ascending: true })
-              .order('title', { ascending: true })
-          : supabase
-              .from('music_library_tracks')
-              .select(
-                includeAnalysis
-                  ? 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,created_at,date,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,metadata'
-                  : 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,created_at,date,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at',
-              )
-              .or('is_archived.is.null,is_archived.eq.false')
-              .order('display_order', { ascending: true })
-              .order('title', { ascending: true })),
+        fetchAllTracksPaged(),
         (includeArchived
           ? supabase
               .from('music_library_playlists')
@@ -573,23 +656,27 @@ export async function GET(request: NextRequest) {
               )
               .or('is_archived.is.null,is_archived.eq.false')
               .order('created_at', { ascending: false })),
+        getMusicLibraryPublishVersion().catch(() => 0),
       ])
     } catch (queryError: any) {
-      // If queries fail (e.g., Supabase timeout), return empty structure
       console.error('[SYNC GET] Database queries failed:', queryError)
       // #region agent log
       await log({location:'sync/route.ts:430',message:'Database queries failed',data:{error:queryError?.message},hypothesisId:'B'})
       // #endregion
-      return NextResponse.json({
-        description: 'Music library (Supabase unavailable)',
-        folders: [],
-        playlists: [],
-      }, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Content-Type': 'application/json',
+      return NextResponse.json(
+        {
+          error: 'Music library catalog unavailable',
+          code: 'CATALOG_UNAVAILABLE',
+          details: { reason: 'query_throw', message: queryError?.message || null },
         },
-      })
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
+          },
+        },
+      )
     }
 
     const { data: folders, error: foldersError } = foldersRes
@@ -621,88 +708,28 @@ export async function GET(request: NextRequest) {
       // #region agent log
       await log({location:'sync/route.ts:450',message:'Database query errors or HTML response detected',data:{hasFoldersError:!!foldersError,hasTracksError:!!tracksError,hasPlaylistsError:!!playlistsError},hypothesisId:'B'})
       // #endregion
-      // Return empty structure instead of throwing - allows admin panel to load
-      return NextResponse.json({
-        description: 'Music library (Supabase unavailable)',
-        folders: [],
-        playlists: [],
-      }, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Content-Type': 'application/json',
+      return NextResponse.json(
+        {
+          error: 'Music library catalog unavailable',
+          code: 'CATALOG_UNAVAILABLE',
+          details: {
+            folders: foldersError?.message?.substring(0, 200) || null,
+            tracks: tracksError?.message?.substring(0, 200) || null,
+            playlists: playlistsError?.message?.substring(0, 200) || null,
+          },
         },
-      })
-    }
-
-    // Optional: include analysis blobs (expensive). Off by default for the public player.
-    const sonicDNACacheByTrackId = new Map<string, any>()
-    const sonicDNACacheByAudioFileId = new Map<string, any>()
-    const audioFilesMetaMap = new Map<string, any>()
-    const audioFilesFullMap = new Map<string, any>()
-
-    const hasAnalysisData = (sonicDna: any): boolean => {
-      if (!sonicDna) return false
-      try {
-        const dna = typeof sonicDna === 'string' ? JSON.parse(sonicDna) : sonicDna
-        if (dna.status && dna.hasData && !dna.genres && !dna.musical && !dna.technical && !dna.drums && !dna.comprehensive) {
-          return false
-        }
-        return !!(dna.genres || dna.musical || dna.technical || dna.drums || dna.comprehensive)
-      } catch {
-        return false
-      }
-    }
-
-    if (includeAnalysis) {
-      // Cache-first Sonic DNA: fetch cached sonic_dna + analysis fields by track_id
-      const trackIds = (tracks || []).map((t: any) => t.id)
-
-      if (trackIds.length > 0) {
-        const { data: cachedRows } = await supabase
-          .from('sonic_dna_cache')
-          .select('track_id, audio_file_id, sonic_dna, bpm, key_signature, energy_level, danceability')
-          .in('track_id', trackIds)
-
-        cachedRows?.forEach((row: any) => {
-          sonicDNACacheByTrackId.set(row.track_id, row)
-          if (row.audio_file_id) {
-            sonicDNACacheByAudioFileId.set(row.audio_file_id, row)
-          }
-        })
-      }
-
-      // Get all audio_file_ids (for waveform/duration/artwork + fallback sonic_dna)
-      const audioFileIds = (tracks || [])
-        .filter((track: any) => track && track.audio_file_id)
-        .map((track: any) => track.audio_file_id)
-        .filter((id: any) => id != null)
-
-      if (audioFileIds.length > 0) {
-        const { data: audioMeta } = await supabase
-          .from('audio_files')
-          .select('id, waveform_data, duration_seconds, artwork_url, created_at, metadata')
-          .in('id', audioFileIds)
-
-        audioMeta?.forEach((file: any) => {
-          audioFilesMetaMap.set(file.id, file)
-        })
-      }
-
-      const missingAudioFileIds = audioFileIds.filter(
-        (id: string) => !sonicDNACacheByAudioFileId.has(id),
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
+          },
+        },
       )
-
-      if (missingAudioFileIds.length > 0) {
-        const { data: audioFull } = await supabase
-          .from('audio_files')
-          .select('id, sonic_dna, bpm, key_signature, energy_level, danceability')
-          .in('id', missingAudioFileIds)
-
-        audioFull?.forEach((file: any) => {
-          audioFilesFullMap.set(file.id, file)
-        })
-      }
     }
+
+    // DNA/waveform are never attached on list sync — fetch per selected track via
+    // /api/audio/sonic-dna and /api/audio/waveform only.
 
     // Build hierarchical structure
     const folderMap = new Map()
@@ -749,7 +776,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Add tracks to folders - prefer sonic_dna_cache + fallback to audio_files data
+    // Add tracks to folders (metadata only — no DNA/waveform blobs)
     tracks?.forEach((track: any) => {
       const folder = folderMap.get(track.folder_id)
       if (!folder) {
@@ -779,103 +806,37 @@ export async function GET(request: NextRequest) {
         return
       }
 
-      // Prefer audio_files data as source of truth (it has the most complete Sonic DNA analysis)
-      let sonicDna = trackToUse.sonic_dna
-      let bpm = trackToUse.bpm
-      let keySignature = trackToUse.key_signature
-      let energyLevel = trackToUse.energy_level
-      let danceability = trackToUse.danceability
-      let waveform = trackToUse.waveform
-      let duration = trackToUse.duration
-      let artwork = trackToUse.artwork_url
-
-      // Fast path: cache first (by track id or audio file id)
-      const cached = sonicDNACacheByTrackId.get(trackToUse.id) ||
-        (trackToUse.audio_file_id ? sonicDNACacheByAudioFileId.get(trackToUse.audio_file_id) : null)
-
-      if (cached?.sonic_dna) {
-        sonicDna = cached.sonic_dna
-        if (cached.bpm !== null && cached.bpm !== undefined) bpm = cached.bpm
-        if (cached.key_signature) keySignature = cached.key_signature
-        if (cached.energy_level !== null && cached.energy_level !== undefined) energyLevel = cached.energy_level
-        if (cached.danceability !== null && cached.danceability !== undefined) danceability = cached.danceability
-      }
-
-      // Always merge lightweight audio meta (waveform/duration/artwork) if available
-      if (trackToUse.audio_file_id && audioFilesMetaMap.has(trackToUse.audio_file_id)) {
-        const audioMeta = audioFilesMetaMap.get(trackToUse.audio_file_id)
-        if (audioMeta.waveform_data) waveform = audioMeta.waveform_data
-        if (audioMeta.duration_seconds) duration = audioMeta.duration_seconds
-        if (audioMeta.artwork_url) artwork = audioMeta.artwork_url
-      }
-
-      // Fallback: if cache miss and we have a full audio row, prefer it
-      if (
-        (!cached || !cached.sonic_dna) &&
-        trackToUse.audio_file_id &&
-        audioFilesFullMap.has(trackToUse.audio_file_id)
-      ) {
-        const audioFile = audioFilesFullMap.get(trackToUse.audio_file_id)
-        // Always prefer audio_files sonic_dna if it has actual analysis data
-        if (audioFile.sonic_dna && hasAnalysisData(audioFile.sonic_dna)) {
-          sonicDna = audioFile.sonic_dna
-        } else if (!trackToUse.sonic_dna || !hasAnalysisData(trackToUse.sonic_dna)) {
-          // If track doesn't have analysis data, use audio_file even if it's just status
-          if (audioFile.sonic_dna) {
-            sonicDna = audioFile.sonic_dna
-          }
-        }
-        // Prefer audio_files data for other fields if available
-        if (audioFile.bpm) {
-          bpm = audioFile.bpm
-        }
-        if (audioFile.key_signature) {
-          keySignature = audioFile.key_signature
-        }
-        if (audioFile.energy_level !== null && audioFile.energy_level !== undefined) {
-          energyLevel = audioFile.energy_level
-        }
-        if (audioFile.danceability !== null && audioFile.danceability !== undefined) {
-          danceability = audioFile.danceability
-        }
-      }
-
-      // For subfolders of "All Tracks", we want to show tracks but they reference "All Tracks"
-      // So we add them, but they'll use the original track ID (not the reference ID)
       const trackId = isReference ? trackToUse.id : track.id
 
-      // Only add track if it's not a duplicate reference in "All Tracks" folder itself
-      // (reference tracks in All Tracks are skipped above, so this is safe)
-      
       // Check if this track already exists in this folder (avoid duplicates)
       const existingTrack = folder.tracks.find((t: any) => t.id === trackId)
       if (existingTrack) {
         return // Skip duplicate
       }
 
-      const trackOut: any = {
+      folder.tracks.push({
         id: trackId,
         audioFileId: trackToUse.audio_file_id || null,
         title: trackToUse.title,
         artist: trackToUse.artist,
-        duration: duration || trackToUse.duration,
+        duration: trackToUse.duration,
         file: trackToUse.file_url,
-        artwork: artwork || trackToUse.artwork_url,
-        bpm: bpm,
-        key_signature: keySignature,
-        energy_level: energyLevel,
-        danceability: danceability,
+        artwork: trackToUse.artwork_url,
+        bpm: trackToUse.bpm,
+        key_signature: trackToUse.key_signature,
+        energy_level: trackToUse.energy_level,
+        danceability: trackToUse.danceability,
+        genre: trackToUse.genre,
+        subgenre: trackToUse.subgenre,
+        tags: trackToUse.tags,
+        track_number: trackToUse.track_number,
+        disc_number: trackToUse.disc_number,
         created_at: trackToUse.created_at,
         date: trackToUse.date,
-        year: trackToUse.year
-      }
-
-      if (includeAnalysis) {
-        trackOut.sonic_dna = sonicDna
-        trackOut.waveform = waveform
-      }
-
-      folder.tracks.push(trackOut)
+        date_created: trackToUse.date_created,
+        year: trackToUse.year,
+        metadata: trackToUse.metadata,
+      })
     })
 
     // Map playlists to frontend format
@@ -893,19 +854,32 @@ export async function GET(request: NextRequest) {
     // #region agent log
     await log({location:'sync/route.ts:390',message:'GET /api/music-library/sync success',data:{foldersCount:rootFolders.length,playlistsCount:playlistsFormatted.length},hypothesisId:'A'})
     // #endregion
-    return NextResponse.json(
-      {
-        description: 'Music library exported from database',
-        folders: rootFolders,
-        playlists: playlistsFormatted,
-      },
-      {
+    const payload = {
+      description: 'Music library exported from database',
+      version: publishVersion || 0,
+      folders: rootFolders,
+      playlists: playlistsFormatted,
+    }
+
+    if (!includeAnalysis && !includeArchived && !includeHidden && publishVersion) {
+      const entry = setCatalogSnapshot('sync', publishVersion, 'public', payload)
+      return new NextResponse(entry.body, {
+        status: 200,
         headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
           'Content-Type': 'application/json',
+          ETag: entry.etag,
+          'Cache-Control': 'private, max-age=0, s-maxage=60, stale-while-revalidate=300',
+          Vary: 'Cookie',
         },
+      })
+    }
+
+    return NextResponse.json(payload, {
+      headers: {
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
+        'Content-Type': 'application/json',
       },
-    )
+    })
   } catch (error: any) {
     console.error('[SYNC GET] Caught error:', error)
     console.error('[SYNC GET] Error message:', error?.message)

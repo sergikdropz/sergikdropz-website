@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sergikdropz.com/schemas/sonic-dna-measured.v1.schema.json",
+  "title": "SonicDnaMeasured",
+  "description": "DSP-only Sonic DNA measurements. Agents may interpret these fields but must not invent them.",
+  "type": "object",
+  "required": ["schemaVersion", "source", "analyzedAt"],
+  "properties": {
+    "schemaVersion": { "type": "string", "enum": ["1.0", "1.1", "1.2"] },
+    "source": { "type": "string", "enum": ["librosa", "manual", "gold"] },
+    "analyzedAt": { "type": "string" },
+    "audioPath": { "type": ["string", "null"] },
+    "window": {
+      "type": "object",
+      "properties": {
+        "startSec": { "type": "number" },
+        "endSec": { "type": "number" },
+        "reason": { "type": "string" }
+      }
+    },
+    "bpm": { "type": ["number", "null"] },
+    "bpmCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "bpm": { "type": "number" },
+          "score": { "type": "number" }
+        }
+      }
+    },
+    "bpmConfidence": { "type": "number" },
+    "titleBpm": { "type": ["number", "null"] },
+    "timingFeel": { "type": "string", "enum": ["full-time", "half-time", "double-time", "unknown"] },
+    "effectiveBpm": { "type": ["number", "null"] },
+    "drumFamily": {
+      "type": "string",
+      "enum": [
+        "four-on-the-floor",
+        "half-time",
+        "breakbeat",
+        "boom-bap",
+        "dembow",
+        "one-drop",
+        "sparse",
+        "unknown"
+      ]
+    },
+    "kickSteps": { "type": "array", "items": { "type": "integer" } },
+    "snareSteps": { "type": "array", "items": { "type": "integer" } },
+    "snareBodySteps": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "Snare skin/body band only (160–380 Hz), before clap merge."
+    },
+    "clapSteps": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "Clap/transient band (1.8–5.5 kHz), separate from snare body."
+    },
+    "hatSteps": { "type": "array", "items": { "type": "integer" } },
+    "stepsPerBar": { "type": "integer", "const": 16 },
+    "phraseBars": { "type": "integer", "const": 8 },
+    "kickPhraseSteps": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 127 },
+      "description": "Active kick steps on the 8-bar phrase grid (16 steps/bar × 8)."
+    },
+    "snarePhraseSteps": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 127 }
+    },
+    "clapPhraseSteps": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 127 },
+      "description": "Clap steps on the 8-bar phrase grid."
+    },
+    "hatPhraseSteps": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 127 }
+    },
+    "swingPercent": { "type": ["number", "null"] },
+    "bass": {
+      "type": "object",
+      "properties": {
+        "lock": {
+          "type": "string",
+          "enum": ["follows-kick", "offbeat-syncopated", "sparse-808", "rolling", "pedal-root", "unknown"]
+        },
+        "rootNote": { "type": ["string", "null"] },
+        "slidesLikely": { "type": "boolean" }
+      }
+    },
+    "rootNote": { "type": ["string", "null"] },
+    "scale": { "type": ["string", "null"] },
+    "key": { "type": ["string", "null"] },
+    "camelot": { "type": ["string", "null"] },
+    "unpitched": { "type": "boolean" },
+    "keyConfidence": { "type": "number" },
+    "loudness": {
+      "type": "object",
+      "properties": {
+        "rms": { "type": "number" },
+        "peak": { "type": "number" },
+        "crest": { "type": "number" }
+      }
+    },
+    "genre": {
+      "type": "object",
+      "properties": {
+        "family": { "type": ["string", "null"] },
+        "primary": { "type": ["string", "null"] },
+        "subgenre": { "type": ["string", "null"] },
+        "confidence": { "type": "number" },
+        "reason": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "fourRatio": { "type": "number" },
+    "spectral": {
+      "type": "object",
+      "properties": {
+        "relative": { "type": "object" },
+        "centroidHz": { "type": "number" },
+        "flatness": { "type": "number" },
+        "zeroCrossingRate": { "type": "number" }
+      }
+    },
+    "instruments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "role": { "type": "string" },
+          "confidence": { "type": "number" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "instrumentUsage": {
+      "type": "object",
+      "properties": {
+        "bass": {
+          "type": ["object", "null"],
+          "properties": {
+            "type": { "type": "string" },
+            "category": { "type": "string" },
+            "role": { "type": "string" },
+            "confidence": { "type": "number" },
+            "source": { "type": "string", "enum": ["measured", "inferred", "agent"] },
+            "evidence": { "type": "string" },
+            "usage": { "type": "string" }
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "category": { "type": "string" },
+              "role": { "type": "string" },
+              "confidence": { "type": "number" },
+              "source": { "type": "string" },
+              "evidence": { "type": "string" },
+              "usage": { "type": "string" }
+            }
+          }
+        },
+        "lines": { "type": "array", "items": { "type": "string" } },
+        "summary": { "type": "string" },
+        "analyzedAt": { "type": "string" }
+      }
+    },
+    "percussion": {
+      "type": "object",
+      "properties": {
+        "kickRole": { "type": "string" },
+        "snareRole": { "type": "string" },
+        "hatGrid": { "type": "string" },
+        "kickSyncopation": { "type": "number" },
+        "styles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "report": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "facts": { "type": "array", "items": { "type": "string" } },
+        "connections": { "type": "array" },
+        "caveats": { "type": "array", "items": { "type": "string" } },
+        "method": { "type": "string" }
+      }
+    }
+  }
+}

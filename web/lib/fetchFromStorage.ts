@@ -8,6 +8,7 @@
 // In-memory cache for fetched storage data
 const storageCache = new Map<string, { data: any; expiresAt: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const MAX_CACHE_ENTRIES = 64
 
 /**
  * Fetch JSON data from a storage URL
@@ -35,13 +36,18 @@ export async function fetchJsonFromStorage(url: string | null): Promise<any | nu
     }
     
     const data = await response.json()
-    
-    // Cache the result
+
+    // Cache the result (LRU cap — waveform/sonic JSON blobs can be large)
+    if (storageCache.has(url)) storageCache.delete(url)
     storageCache.set(url, {
       data,
       expiresAt: Date.now() + CACHE_TTL,
     })
-    
+    while (storageCache.size > MAX_CACHE_ENTRIES) {
+      const oldest = storageCache.keys().next().value
+      if (oldest) storageCache.delete(oldest)
+    }
+
     return data
   } catch (error) {
     console.error(`Error fetching from storage: ${url}`, error)

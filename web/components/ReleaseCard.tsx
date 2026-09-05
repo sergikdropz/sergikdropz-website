@@ -4,10 +4,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect, memo } from 'react'
 import { FaSpotify, FaApple, FaAmazon, FaSoundcloud, FaYoutube, FaInstagram, FaLink, FaMusic } from 'react-icons/fa'
-import { SiTidal, SiBeatport } from 'react-icons/si'
 import SoundCloudEmbed from './SoundCloudEmbed'
 import artistData from '@/data/artist.json'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
 interface Release {
   id: string
@@ -45,7 +45,7 @@ const platformConfig = {
     description: 'All music, albums, discography'
   },
   TIDAL: {
-    icon: SiTidal,
+    icon: FaMusic,
     color: 'text-blue-400 hover:text-blue-300',
     bgColor: 'hover:bg-blue-500/10',
     name: 'TIDAL',
@@ -66,7 +66,7 @@ const platformConfig = {
     description: 'Artist station and all music'
   },
   Beatport: {
-    icon: SiBeatport,
+    icon: FaMusic,
     color: 'text-yellow-500 hover:text-yellow-400',
     bgColor: 'hover:bg-yellow-500/10',
     name: 'Beatport',
@@ -116,13 +116,20 @@ const platformConfig = {
   }
 }
 
-function ReleaseCard({ release }: { release: Release }) {
+function ReleaseCard({
+  release,
+  priority = false,
+}: {
+  release: Release
+  /** Prefer true for the first homepage tiles — they often win LCP (hero has no image). */
+  priority?: boolean
+}) {
   // Filter out invalid Spotify CDN URLs from initial image
   const getValidImageUrl = (url: string | null | undefined): string | null => {
     if (!url) return null
     const invalidCdnPatterns = ['image-cdn-fa.spotifycdn.com', 'image-cdn-ak.spotifycdn.com']
     const isInvalid = invalidCdnPatterns.some(pattern => url.includes(pattern))
-    return isInvalid ? null : url
+    return isInvalid ? null : resolveImageUrl(url)
   }
   
   const initialImageUrl = getValidImageUrl(release.image)
@@ -193,33 +200,9 @@ function ReleaseCard({ release }: { release: Release }) {
     return null
   }
 
-  // Get all available platforms - include all streaming platforms
-  const allAvailablePlatforms = [
-    ...release.platforms, // Include platforms listed in release
-    // Add all streaming platforms
-    'Spotify',
-    'Apple Music',
-    'Amazon Music',
-    'TIDAL',
-    'DEEZER',
-    'Pandora',
-    'Beatport',
-    'YouTube Music',
-    'Shazam',
-    'SoundCloud',
-    // Add platforms from artist.json
-    ...Object.keys(artistData.platforms || {})
-      .map(key => {
-        // Map platform keys to display names
-        if (key === 'spotify') return 'Spotify'
-        if (key === 'soundcloud') return 'SoundCloud'
-        if (key === 'youtube') return 'YouTube'
-        if (key === 'instagram') return 'Instagram'
-        if (key === 'linktree') return 'Linktree'
-        return null
-      })
-      .filter(Boolean) as string[]
-  ].filter((platform, index, self) => self.indexOf(platform) === index) // Remove duplicates
+  const listedPlatforms = (release.platforms || []).filter(
+    (platform, index, self) => self.indexOf(platform) === index
+  )
 
   // Try to fetch artwork from Spotify if no image and we have a track/album URL
   useEffect(() => {
@@ -264,8 +247,9 @@ function ReleaseCard({ release }: { release: Release }) {
             fill
             className="object-cover"
             unoptimized={shouldUnoptimizeImage(imageUrl)}
-            loading="lazy"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={priority}
+            loading={priority ? undefined : 'lazy'}
+            sizes="(max-width: 1024px) 50vw, 33vw"
             onError={(e) => {
               console.warn(`Failed to load image for ${release.title}:`, imageUrl)
               setImageUrl(null)
@@ -288,19 +272,19 @@ function ReleaseCard({ release }: { release: Release }) {
           </div>
         )}
       </div>
-      <div className="p-4 sm:p-6">
-        <div className="flex items-start justify-between mb-2 gap-2">
-          <h3 className="text-lg sm:text-xl font-semibold flex-1 min-w-0">{release.title}</h3>
-          <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded flex-shrink-0">
+      <div className="p-2.5 sm:p-6">
+        <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-1.5 sm:gap-2">
+          <h3 className="text-sm sm:text-xl font-semibold flex-1 min-w-0 line-clamp-2">{release.title}</h3>
+          <span className="text-[10px] sm:text-xs text-gray-400 bg-gray-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
             {release.type}
           </span>
         </div>
-        <p className="text-gray-400 text-sm mb-4">{release.year}</p>
+        <p className="text-gray-400 text-xs sm:text-sm mb-3 sm:mb-4">{release.year}</p>
         
         {/* Streaming Platform Icons */}
-        <div className="mb-4">
-          <div className="flex flex-wrap gap-2 sm:gap-3">
-            {allAvailablePlatforms.map((platformName) => {
+        <div className="mb-3 sm:mb-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-3">
+            {listedPlatforms.map((platformName) => {
               const config = platformConfig[platformName as keyof typeof platformConfig]
               const platformUrl = getPlatformUrl(platformName)
               
@@ -315,11 +299,11 @@ function ReleaseCard({ release }: { release: Release }) {
                   <button
                     key={platformName}
                     onClick={() => setShowSoundCloud(!showSoundCloud)}
-                    className={`p-2.5 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor} ${showSoundCloud ? 'bg-orange-500/20 border-orange-500/50' : ''}`}
+                    className={`p-2 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor} ${showSoundCloud ? 'bg-orange-500/20 border-orange-500/50' : ''}`}
                     title={`${showSoundCloud ? 'Hide' : 'Play on'} ${config.name} - ${config.description}`}
                     aria-label={`${showSoundCloud ? 'Hide' : 'Play on'} ${config.name} - ${config.description}`}
                   >
-                    <IconComponent className="text-lg sm:text-xl" />
+                    <IconComponent className="text-base sm:text-xl" />
                   </button>
                 )
               }
@@ -330,11 +314,11 @@ function ReleaseCard({ release }: { release: Release }) {
                   href={platformUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`p-2.5 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor}`}
+                  className={`p-2 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor}`}
                   title={`${config.name} - ${config.description}`}
                   aria-label={`${config.name} - ${config.description}`}
                 >
-                  <IconComponent className="text-lg sm:text-xl" />
+                  <IconComponent className="text-base sm:text-xl" />
                 </Link>
               )
             })}

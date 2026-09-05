@@ -3,10 +3,13 @@
 import { useState } from 'react'
 import { FaTimes } from 'react-icons/fa'
 import { createSmartPlaylist } from '@/utils/musicLibraryApi'
+import { CONTENT_AREA_OVERLAY_CLASS, VIEWPORT_OVERLAY_CLASS } from '@/lib/content-overlay'
 
 interface SmartPlaylistBuilderProps {
   onClose: () => void
   onCreated: () => void
+  /** When `content`, centers inside MusicLibraryMain instead of the viewport bottom layer. */
+  overlayScope?: 'viewport' | 'content'
 }
 
 interface RuleState {
@@ -24,7 +27,11 @@ interface RuleState {
   tags: string
 }
 
-export default function SmartPlaylistBuilder({ onClose, onCreated }: SmartPlaylistBuilderProps) {
+export default function SmartPlaylistBuilder({
+  onClose,
+  onCreated,
+  overlayScope = 'viewport',
+}: SmartPlaylistBuilderProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [sortBy, setSortBy] = useState('created_at_timestamp')
@@ -96,8 +103,13 @@ export default function SmartPlaylistBuilder({ onClose, onCreated }: SmartPlayli
     }
   }
 
+  const overlayClass =
+    overlayScope === 'content'
+      ? `${CONTENT_AREA_OVERLAY_CLASS} backdrop-blur-sm`
+      : `${VIEWPORT_OVERLAY_CLASS} backdrop-blur-sm`
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className={overlayClass}>
       <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-gray-800 flex items-center justify-between flex-shrink-0">

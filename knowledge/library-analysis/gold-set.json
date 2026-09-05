@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "1.0",
+  "description": "Detector-seeded gold set with ear-checked drum family and genre. Cosmic Cadillac is hip-hop/trap kick-snare with house-like hats, not house.",
+  "source": "detector-seed",
+  "drumFamily": [
+    "four-on-the-floor",
+    "half-time",
+    "breakbeat",
+    "boom-bap",
+    "dembow",
+    "one-drop",
+    "sparse"
+  ],
+  "tracks": [
+    {
+      "id": "873f95ed-e22c-4334-abc7-7091dcdd142a",
+      "title": "ANDINO x SERGIK - Bird Talk",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "G# major",
+      "camelot": "4B",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "No title BPM. Catalog previously listed 126. Detector: 123, 4/4, offbeat bass."
+    },
+    {
+      "id": "4e27fd2b-24db-40e0-b89f-2cda2b49f90f",
+      "title": "Andino x Sergik x Janis - Tradicion",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "G minor",
+      "camelot": "6A",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "No title BPM. Detector: 123 house-tempo 4/4."
+    },
+    {
+      "id": "20957f2d-bdcc-4966-a625-2cc5a2f06e9f",
+      "title": "Barrio Bros - Bloops",
+      "bpm": 126,
+      "titleBpm": null,
+      "key": "C minor",
+      "camelot": "5A",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "Half-time octave (63) rejected in favor of 126."
+    },
+    {
+      "id": "edde5ead-d197-4989-8b16-efdc00cb1b5a",
+      "title": "Ceemoar x Sergik - No Body",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": null,
+      "camelot": null,
+      "unpitched": true,
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "Key gated as unpitched (low chroma correlation). Confirm by ear."
+    },
+    {
+      "id": "1e0ff658-2b69-4685-aef9-337a82dea765",
+      "title": "SERGIK - Going Gone 122bpm",
+      "bpm": 122,
+      "titleBpm": 122,
+      "key": "A minor",
+      "camelot": "8A",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "Title BPM 122 matched. Ear-check: house 4/4 with bass off the kick (not folder Deep House)."
+    },
+    {
+      "id": "12fcc05e-2eef-4cf2-af20-0b003fa69d1d",
+      "title": "SERGIK x Bone - Cosmic Cadillac",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "A major",
+      "camelot": "11B",
+      "drumFamily": "half-time",
+      "timingFeel": "half-time",
+      "bassLock": "offbeat-syncopated",
+      "family": "Hip-Hop",
+      "primaryGenre": "Hip-Hop",
+      "subgenre": "Trap",
+      "notes": "Ear: hip-hop/trap kick-snare with house-like hats. Not house or tech house. Detector previously forced 4/4 from downbeat kicks at 123 BPM."
+    },
+    {
+      "id": "3d26f0f2-a583-47ae-9c8e-e30c74028691",
+      "title": "SERGIK - Cosmic Cadillac",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "A major",
+      "camelot": "11B",
+      "drumFamily": "half-time",
+      "timingFeel": "half-time",
+      "bassLock": "offbeat-syncopated",
+      "family": "Hip-Hop",
+      "primaryGenre": "Hip-Hop",
+      "subgenre": "Trap",
+      "notes": "Same WAV as Cosmic Cadillac (library duplicate). Ear: hip-hop/trap kick-snare, house-like hats."
+    }
+  ]
+}

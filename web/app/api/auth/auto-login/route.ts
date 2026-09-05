@@ -1,109 +1,136 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseClient, createSupabaseServerClient } from '@/lib/supabase'
+import { createSupabaseClient } from '@/lib/supabase'
+import { checkAdminStatus } from '@/lib/auth'
+import { applySupabaseSessionCookies } from '@/lib/auth/apply-supabase-session-cookies'
+import { resolveDevAutoLoginCredentials } from '@/lib/auth/dev-auto-login'
 
 export const dynamic = 'force-dynamic'
 
+function formatAuthError(message: string): string {
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network/i.test(message)) {
+    return 'Cannot reach Supabase. Check that your project is active and NEXT_PUBLIC_SUPABASE_URL in web/.env.local is correct.'
+  }
+  return message
+}
+
+function productionBlocked() {
+  return NextResponse.json(
+    { error: 'Auto-login disabled in production' },
+    { status: 403 }
+  )
+}
+
+async function signInAdmin(email: string, password: string) {
+  const supabase = createSupabaseClient()
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+  if (error) {
+    return { error: formatAuthError(error.message), status: 401 as const }
+  }
+  if (!data.user || !data.session) {
+    return { error: 'Authentication failed', status: 401 as const }
+  }
+
+  const isAdmin = await checkAdminStatus(email, data.user.id)
+  if (!isAdmin) {
+    await supabase.auth.signOut()
+    return { error: 'Access denied. Admin privileges required.', status: 403 as const }
+  }
+
+  return {
+    user: { id: data.user.id, email: data.user.email },
+    session: data.session,
+  }
+}
+
+function jsonWithSession(
+  payload: { success: true; user: { id: string; email?: string | null }; session: { access_token: string; refresh_token: string } }
+) {
+  const response = NextResponse.json(payload)
+  applySupabaseSessionCookies(response, payload.session, true)
+  return response
+}
+
+/**
+ * GET /api/auth/auto-login
+ * Development helper: sign in with ADMIN_AUTO_LOGIN_* / E2E_ADMIN_* and redirect to /admin.
+ */
+export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') return productionBlocked()
+
+  const creds = resolveDevAutoLoginCredentials()
+  if (!creds) {
+    return NextResponse.redirect(new URL('/admin/login?error=auto-login-not-configured', request.url))
+  }
+
+  const result = await signInAdmin(creds.email, creds.password)
+  if ('error' in result) {
+    const loginUrl = new URL('/admin/login', request.url)
+    loginUrl.searchParams.set('error', result.error ?? 'auto-login-failed')
+    return NextResponse.redirect(loginUrl)
+  }
+
+  const response = new NextResponse(null, {
+    status: 307,
+    headers: { Location: '/admin' },
+  })
+  applySupabaseSessionCookies(response, result.session, true)
+  return response
+}
+
 /**
  * POST /api/auth/auto-login
- * Auto-login endpoint for development/testing
- * Only works in development mode or with valid credentials
+ * Development helper. `{ fromEnv: true }` (or empty body) uses env credentials.
+ * Explicit email/password still accepted in development for URL auto-login.
  */
 export async function POST(request: NextRequest) {
   try {
-    // Only allow in development or with proper authentication
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        { error: 'Auto-login disabled in production' },
-        { status: 403 }
-      )
-    }
+    if (process.env.NODE_ENV === 'production') return productionBlocked()
 
-    const body = await request.json()
-    const { email, password } = body
+    let email = ''
+    let password = ''
+    let fromEnv = false
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
-      )
-    }
-
-    const supabase = createSupabaseClient()
-    
-    // Sign in the user
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 401 }
-      )
-    }
-
-    if (!data.user) {
-      return NextResponse.json(
-        { error: 'Authentication failed' },
-        { status: 401 }
-      )
-    }
-
-    // Check if user is admin
-    const adminEmails = process.env.ADMIN_EMAILS?.split(',') || []
-    const isAdmin = adminEmails.includes(email)
-
-    // Also check database for admin status
-    let dbAdminCheck = false
     try {
-      const supabaseServer = createSupabaseServerClient()
-      const { data: adminData } = await supabaseServer
-        .from('admins')
-        .select('id')
-        .eq('user_id', data.user.id)
-        .eq('active', true)
-        .single()
-      
-      dbAdminCheck = !!adminData
-    } catch (e) {
-      // Table might not exist, that's okay
+      const body = await request.json()
+      email = typeof body?.email === 'string' ? body.email.trim() : ''
+      password = typeof body?.password === 'string' ? body.password : ''
+      fromEnv = body?.fromEnv === true
+    } catch {
+      fromEnv = true
     }
 
-    if (!isAdmin && !dbAdminCheck) {
-      await supabase.auth.signOut()
-      return NextResponse.json(
-        { error: 'Access denied. Admin privileges required.' },
-        { status: 403 }
-      )
+    if (fromEnv || !email || !password) {
+      const creds = resolveDevAutoLoginCredentials()
+      if (!creds) {
+        return NextResponse.json(
+          {
+            error:
+              'Dev auto-login is not configured. Set ADMIN_AUTO_LOGIN_EMAIL and ADMIN_AUTO_LOGIN_PASSWORD (or E2E_ADMIN_*) in web/.env.local.',
+          },
+          { status: 400 }
+        )
+      }
+      email = creds.email
+      password = creds.password
     }
 
-    // Create response with session
-    const response = NextResponse.json({
+    const result = await signInAdmin(email, password)
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+
+    return jsonWithSession({
       success: true,
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-      },
+      user: result.user,
+      session: result.session,
     })
-
-    // Set auth token in cookie (30 days for auto-login)
-    if (data.session?.access_token) {
-      response.cookies.set('sb-auth-token', data.session.access_token, {
-        httpOnly: true,
-        secure: (process.env.NODE_ENV as string) === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: '/',
-      })
-    }
-
-    return response
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Auto-login error:', error)
+    const message = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: formatAuthError(message) },
+      { status: /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network/i.test(message) ? 503 : 500 }
     )
   }
 }

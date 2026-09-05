@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -14,6 +15,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
  */
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const { trackId, bpm } = await request.json()
 
     if (!trackId) {
@@ -169,18 +172,30 @@ export async function POST(request: Request) {
       .single()
 
     if (trackWithSonicDNA?.sonic_dna) {
-      const updatedSonicDNA = {
-        ...trackWithSonicDNA.sonic_dna,
+      const root = trackWithSonicDNA.sonic_dna as Record<string, unknown>
+      const updatedSonicDNA: Record<string, unknown> = {
+        ...root,
         technical: {
-          ...trackWithSonicDNA.sonic_dna.technical,
-          bpm: bpmValue
+          ...((root.technical as Record<string, unknown>) || {}),
+          bpm: bpmValue,
+        },
+      }
+      if (root.measured && typeof root.measured === 'object') {
+        updatedSonicDNA.measured = { ...(root.measured as object), bpm: bpmValue }
+      }
+      const comprehensive = root.comprehensive
+      if (comprehensive && typeof comprehensive === 'object') {
+        const comp = { ...(comprehensive as Record<string, unknown>) }
+        if (comp.measured && typeof comp.measured === 'object') {
+          comp.measured = { ...(comp.measured as object), bpm: bpmValue }
         }
+        updatedSonicDNA.comprehensive = comp
       }
 
       await supabase
         .from('audio_files')
         .update({
-          sonic_dna: updatedSonicDNA
+          sonic_dna: updatedSonicDNA,
         })
         .eq('id', trackId)
     }

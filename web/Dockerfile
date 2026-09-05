@@ -16,8 +16,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set environment variables for build
-ENV NEXT_TELEMETRY_DISABLED 1
+# Standalone output is required for this Dockerfile's runner stage.
+ENV NEXT_TELEMETRY_DISABLED=1
+ARG SERGIK_DOCKER_STANDALONE=1
+ENV SERGIK_DOCKER_STANDALONE=$SERGIK_DOCKER_STANDALONE
 
 # Build the application
 RUN npm run build

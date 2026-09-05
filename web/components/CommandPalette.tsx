@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { FaSearch, FaMusic, FaCompactDisc, FaSync, FaBolt, FaRocket, FaUpload } from 'react-icons/fa'
+import { invalidateMusicLibraryCache } from '@/utils/musicLibraryApi'
 
 interface Command {
   id: string
@@ -57,9 +58,21 @@ export default function CommandPalette({ onClose, onAction }: CommandPaletteProp
       label: 'Sync to Production',
       icon: FaSync,
       action: async () => {
+        if (
+          !confirm(
+            'Publish the admin catalog to the live site? Visitors will see current folders, EPs, albums, track order, and visibility.',
+          )
+        ) {
+          return
+        }
         const res = await fetch('/api/admin/sync-production', { method: 'POST' })
+        const data = await res.json().catch(() => ({}))
         if (res.ok) {
-          alert('Sync started! Check status in logs.')
+          invalidateMusicLibraryCache()
+          const folders = data.visibleFolders != null ? `${data.visibleFolders} folders` : 'catalog'
+          alert(`Published to live site (${folders}).`)
+        } else {
+          alert(data.error || 'Publish failed.')
         }
       },
       category: 'System',
@@ -124,35 +137,44 @@ export default function CommandPalette({ onClose, onAction }: CommandPaletteProp
   }, [search])
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-start justify-center pt-32">
-      <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-2xl shadow-2xl">
-        <div className="flex items-center gap-3 p-4 border-b border-gray-800">
-          <FaSearch className="text-gray-400" />
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 pt-32 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+    >
+      <div className="w-full max-w-2xl rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-gray-800 p-4">
+          <FaSearch className="text-gray-400" aria-hidden />
           <input
             ref={inputRef}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Type a command or search..."
-            className="bg-transparent text-white flex-1 outline-none"
+            className="flex-1 bg-transparent text-white outline-none"
+            aria-label="Search commands"
           />
-          <kbd className="px-2 py-1 bg-gray-800 rounded text-xs text-gray-400">ESC</kbd>
+          <kbd className="rounded bg-gray-800 px-2 py-1 text-xs text-gray-400">ESC</kbd>
         </div>
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto" role="listbox" aria-label="Commands">
           {filteredCommands.length > 0 ? (
             filteredCommands.map((cmd, idx) => {
               const Icon = cmd.icon
               return (
                 <button
                   key={cmd.id}
+                  type="button"
+                  role="option"
+                  aria-selected={idx === selectedIndex}
                   onClick={() => onAction(cmd.action)}
-                  className={`w-full flex items-center gap-3 p-4 hover:bg-gray-800 transition ${
+                  className={`flex w-full items-center gap-3 p-4 transition hover:bg-gray-800 ${
                     idx === selectedIndex ? 'bg-gray-800' : ''
                   }`}
                 >
-                  <Icon className="text-gray-400" />
+                  <Icon className="text-gray-400" aria-hidden />
                   <div className="flex-1 text-left">
-                    <div className="text-white font-medium">{cmd.label}</div>
+                    <div className="font-medium text-white">{cmd.label}</div>
                     <div className="text-xs text-gray-500">{cmd.category}</div>
                   </div>
                 </button>

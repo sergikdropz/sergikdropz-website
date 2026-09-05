@@ -7,22 +7,20 @@
 interface CachedUrl {
   url: string
   timestamp: number
+  ttlMs: number
 }
 
 const urlCache = new Map<string, CachedUrl>()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const DEFAULT_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Get cached URL if it exists and hasn't expired
- * @param filePath - The audio file path to look up
- * @returns Cached URL or null if not found/expired
  */
 export function getCachedUrl(filePath: string): string | null {
   const cached = urlCache.get(filePath)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (cached && Date.now() - cached.timestamp < cached.ttlMs) {
     return cached.url
   }
-  // Remove expired entry
   if (cached) {
     urlCache.delete(filePath)
   }
@@ -31,11 +29,10 @@ export function getCachedUrl(filePath: string): string | null {
 
 /**
  * Store URL in cache
- * @param filePath - The audio file path
- * @param url - The resolved URL to cache
+ * @param ttlMs optional TTL (e.g. presigned R2 URLs ~1h, use 50 min buffer)
  */
-export function setCachedUrl(filePath: string, url: string): void {
-  urlCache.set(filePath, { url, timestamp: Date.now() })
+export function setCachedUrl(filePath: string, url: string, ttlMs = DEFAULT_CACHE_TTL): void {
+  urlCache.set(filePath, { url, timestamp: Date.now(), ttlMs })
 }
 
 /**

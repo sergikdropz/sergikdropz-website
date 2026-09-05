@@ -1,6 +1,17 @@
 {
   "releases": [
     {
+      "id": "the-chan-suk-legend",
+      "title": "The Chan Suk Legend",
+      "type": "EP",
+      "year": 2026,
+      "platforms": [],
+      "spotify_url": "",
+      "soundcloud_url": "",
+      "image": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20The%20Chan%20Suk%20Legend/the-chan-suk-legend.png",
+      "fetch_from_spotify": false
+    },
+    {
       "id": "soul-candy",
       "title": "Soul Candy",
       "type": "EP",
@@ -162,7 +173,7 @@
       ],
       "spotify_url": "https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H",
       "soundcloud_url": "",
-      "image": "/images/audio/unreleased/eps/SERGIK - FTP/4A8196B2-EDF9-4BBF-A685-D754C455A2A0.jpeg",
+      "image": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20FTP/4A8196B2-EDF9-4BBF-A685-D754C455A2A0.jpeg",
       "fetch_from_spotify": false
     }
   ]

@@ -1,16 +1,7 @@
 {
   "username": "sergikdropz",
   "posts": [
-    "https://www.instagram.com/reel/DISJLopSccT/",
-    "https://www.instagram.com/reel/DIPk3IxBXy_/",
-    "https://www.instagram.com/reel/DHtFx20pEfG/",
-    "https://www.instagram.com/reel/DHCbjQASzY9/",
-    "https://www.instagram.com/reel/DGWLoRKyBzW/",
-    "https://www.instagram.com/reel/DF6DDXQPVju/",
     "https://www.instagram.com/p/DB9-VgyvP4g/",
-    "https://www.instagram.com/reel/C_TbTN3Ps-9/",
-    "https://www.instagram.com/reel/C_RziWppLiI/",
-    "https://www.instagram.com/reel/C_Qrh4_P48J/",
     "https://www.instagram.com/p/C-JY6Y-y6bh/",
     "https://www.instagram.com/p/C95bcGJyYdT/",
     "https://www.instagram.com/p/C8ah6rwSwL2/",
@@ -18,9 +9,6 @@
     "https://www.instagram.com/p/Cw0qFDrPzab/",
     "https://www.instagram.com/p/CpoKNbwPz7R/",
     "https://www.instagram.com/p/ClhnCoAJo97/",
-    "https://www.instagram.com/reel/CgTtxP6AMSo/",
-    "https://www.instagram.com/reel/CgSGvVbpqQi/",
-    "https://www.instagram.com/reel/CgBaFx3g4fi/",
     "https://www.instagram.com/p/Cfza0zPPPVC/",
     "https://www.instagram.com/p/CfzYMdhvkLT/",
     "https://www.instagram.com/p/CfzGPZSrz5U/",
@@ -29,7 +17,6 @@
     "https://www.instagram.com/p/CZ-Xg7iPB1C/",
     "https://www.instagram.com/p/CZK-eo8vMdc/",
     "https://www.instagram.com/p/CULD5uApvoE/",
-    "https://www.instagram.com/reel/CTixZORHXwk/",
     "https://www.instagram.com/p/CTiWrgkJEgL/",
     "https://www.instagram.com/p/CRmUkhkHvER/",
     "https://www.instagram.com/p/CI3w60clxyv/",
@@ -50,10 +37,5 @@
     "https://www.instagram.com/p/BAjiDjHrcga/",
     "https://www.instagram.com/p/8YXSNOrcqg/"
   ],
-  "lastUpdated": "2026-01-17T05:06:09.321Z",
-  "source": "api+scraping",
-  "total": 48,
-  "apiPosts": 48,
-  "scrapedPosts": 0,
   "note": "Automatically fetched from Instagram API and profile scraping. Includes collaboration posts where you are a collaborator."
 }

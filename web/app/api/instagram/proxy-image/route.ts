@@ -1,5 +1,59 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
+function instagramPermalinkFromUrl(mediaUrl: string): string | null {
+  try {
+    const u = new URL(mediaUrl)
+    if (!u.hostname.includes('instagram.com')) return null
+    const m = u.pathname.replace(/\/$/, '').match(/^\/(reel|p|tv)\/([^/?#]+)/)
+    if (m) return `https://www.instagram.com/${m[1]}/${m[2]}/`
+  } catch {
+    return null
+  }
+  return null
+}
+
+/** When Instagram blocks direct /media URLs, oEmbed still exposes a CDN thumbnail. */
+async function fetchOembedThumbnailUrl(permalink: string): Promise<string | null> {
+  const cleanUrl = permalink.split('?')[0].trim()
+  const ua =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+  try {
+    const oembedUrl = `https://api.instagram.com/oembed?url=${encodeURIComponent(cleanUrl)}`
+    const res = await fetch(oembedUrl, {
+      headers: { 'User-Agent': ua, Accept: 'application/json' },
+      cache: 'no-store',
+    })
+    if (res.ok) {
+      const data = (await res.json()) as { thumbnail_url?: string }
+      if (data.thumbnail_url) return data.thumbnail_url
+    }
+  } catch {
+    // ignore
+  }
+
+  const appId =
+    process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || process.env.INSTAGRAM_APP_ID
+  const appSecret =
+    process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || process.env.INSTAGRAM_APP_SECRET
+  if (!appId || !appSecret) return null
+
+  try {
+    const token = `${appId}|${appSecret}`
+    const graphUrl = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(
+      cleanUrl,
+    )}&access_token=${encodeURIComponent(token)}`
+    const res = await fetch(graphUrl, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data = (await res.json()) as { thumbnail_url?: string }
+    return data.thumbnail_url || null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Proxy endpoint to fetch Instagram images and videos server-side
  * This avoids CORS and 403 errors by fetching media on the server
@@ -74,6 +128,7 @@ export async function GET(request: Request) {
     
     // Fetch the media from Instagram
     let response: Response
+    let recoveredViaOembed = false
     try {
       response = await fetch(mediaUrl, {
         headers: fetchHeaders,
@@ -103,33 +158,60 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       console.error(`Failed to fetch media: ${response.status} ${response.statusText}`)
-      
-      // For videos, provide more helpful error message
-      if (isVideo && response.status === 403) {
+
+      const permalink = instagramPermalinkFromUrl(mediaUrl)
+      if (permalink && (response.status === 404 || response.status === 403)) {
+        const thumb = await fetchOembedThumbnailUrl(permalink)
+        if (thumb) {
+          try {
+            const imgRes = await fetch(thumb, {
+              headers: {
+                'User-Agent': fetchHeaders['User-Agent'] as string,
+                Referer: 'https://www.instagram.com/',
+                Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+              },
+            })
+            if (imgRes.ok) {
+              response = imgRes
+              recoveredViaOembed = true
+            }
+          } catch (e) {
+            console.error('oEmbed thumbnail fetch failed:', e)
+          }
+        }
+      }
+
+      if (!response.ok) {
+        // For videos, provide more helpful error message
+        if (isVideo && response.status === 403) {
+          return NextResponse.json(
+            {
+              error: 'Video access forbidden',
+              message: 'Instagram videos are blocked from direct access. The video may not be playable.',
+              requiresDownload: true,
+            },
+            { status: 403 },
+          )
+        }
+
         return NextResponse.json(
-          { 
-            error: 'Video access forbidden',
-            message: 'Instagram videos are blocked from direct access. The video may not be playable.',
-            requiresDownload: true,
-          },
-          { status: 403 }
+          { error: 'Failed to fetch media', status: response.status },
+          { status: response.status },
         )
       }
-      
-      return NextResponse.json(
-        { error: 'Failed to fetch media', status: response.status },
-        { status: response.status }
-      )
     }
 
+    const streamAsVideo = isVideo && !recoveredViaOembed
+
     // Get content type and length
-    const contentType = response.headers.get('content-type') || (isVideo ? 'video/mp4' : 'image/jpeg')
+    const contentType =
+      response.headers.get('content-type') || (streamAsVideo ? 'video/mp4' : 'image/jpeg')
     const contentLength = response.headers.get('content-length')
     const contentRange = response.headers.get('content-range')
     
     // For videos, stream the response instead of loading into memory
     // For images, we can load into memory (they're smaller)
-    if (isVideo && response.body) {
+    if (streamAsVideo && response.body) {
       // Stream video directly
       const responseHeaders: HeadersInit = {
         'Content-Type': contentType,

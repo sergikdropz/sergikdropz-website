@@ -7,11 +7,11 @@ interface Plan {
   id: string
   name: string
   price: number
-  interval: string
-  stripePriceId: string
-  description: string
-  features: string[]
-  color: string
+  interval?: string
+  stripePriceId?: string
+  description?: string
+  features?: string[]
+  color?: string
   popular?: boolean
 }
 
@@ -106,7 +106,7 @@ export default function MembershipPlans({ plans, returnPath }: MembershipPlansPr
               <p className="text-gray-400 text-sm mt-2">{plan.description}</p>
 
               <ul className="mt-4 space-y-2 flex-1">
-                {plan.features.map((feature, i) => (
+                {(plan.features ?? []).map((feature, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
                     <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />

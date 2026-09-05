@@ -26,6 +26,9 @@ yarn-error.log*
 
 # Local data dumps/backups (should not be versioned)
 web/data/backups/
+deploy/migrate/out/
+deploy/migrate/node_modules/
+deploy/migrate/.env
 
 # Environment variables
 .env*.local
@@ -34,6 +37,10 @@ web/data/backups/
 
 # Vercel
 .vercel
+
+# Local dumps / regenerable media (do not ship in git)
+db_cluster*.backup
+web/public/waveforms/
 
 # TypeScript
 *.tsbuildinfo
@@ -97,3 +104,12 @@ local.properties
 *.mp4
 *.m4v
 
+# Compiled per-track analysis (waveform peaks; regenerate with knowledge/scripts/compile_library_analysis.mjs)
+knowledge/library-analysis/tracks/
+knowledge/library-analysis/measured/*.json
+knowledge/scripts/.venv/
+knowledge/scripts/.numba_cache/
+
+cursor-provider-bridge/
+.playwright-mcp/
+web/.env.local.cloud.bak

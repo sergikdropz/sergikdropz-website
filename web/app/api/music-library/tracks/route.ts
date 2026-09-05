@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
-import { fetchSonicDNA } from '@/lib/fetchFromStorage'
 import { buildTrackMetadata } from '@/utils/trackIndexUtils'
 import { getServerSession } from '@/lib/auth'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
-import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import { applyPreferredGenreToSonicDna } from '@/lib/audio/groove-class-options'
+import {
+  applyCatalogLock,
+  catalogLockFromTrack,
+  stampCatalogOverrides,
+} from '@/lib/catalog-lock'
+import { bumpMusicLibraryPublishVersion, isUsableCatalogValue, preferCatalogValue } from '@/lib/music-library-publish'
+import { syncCatalogFieldsToCache } from '@/utils/sonicDNACache'
+import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
+import { persistedCreatedDateFields, normalizeTrackCreatedDate } from '@/lib/music-library/track-created-date'
+import { persistSystemicCover } from '@/lib/catalog-sync/persist-systemic-cover'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +49,23 @@ export async function GET(request: NextRequest) {
     }
     const { searchParams } = new URL(request.url)
     const folderId = searchParams.get('folderId')
+    const idsParam = searchParams.get('ids')
+    const requestedIds = (idsParam || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
     const includeArchived = searchParams.get('includeArchived') === 'true'
     const includeDebug = searchParams.get('include_debug') === 'true'
+
+    // Public list requires a scope — unbounded full-table reads hammer cold vault loads.
+    if (requestedIds.length === 0 && !folderId) {
+      if (!vaultSession?.isAdmin) {
+        return NextResponse.json(
+          { error: 'folderId or ids query param required' },
+          { status: 400, headers: { 'Cache-Control': 'no-cache' } },
+        )
+      }
+    }
 
     // Check if admin/full data is requested
     const includeFullData = searchParams.get('includeFullData') === 'true'
@@ -62,6 +86,7 @@ export async function GET(request: NextRequest) {
       'danceability',
       'created_at',
       'date',
+      'date_created',
       'year',
       'display_order',
       'is_archived',
@@ -75,14 +100,19 @@ export async function GET(request: NextRequest) {
       'last_played_at',
       'tags',
       'sort_artist',
-      'composer',
-      'comments',
+      'beat_grid_offset',
     ]
     
-    // Add full data fields for admin pages (sonic_dna, waveform, metadata)
-    const fields = includeFullData 
-      ? [...baseFields, 'sonic_dna', 'waveform', 'metadata']
-      : baseFields
+    // List endpoints stay lean: never TOAST-read sonic_dna / waveform for many rows
+    // unless hydrating sparse playlist/folder rows that lack bpm/key.
+    // Full DNA + waveform are fetched per selected track via /api/audio/sonic-dna and /api/audio/waveform.
+    // Always include metadata so created/original_date is available without a second fetch.
+    // Folder join keeps Album column in sync with Songs browse.
+    const fields = [
+      ...baseFields,
+      'metadata',
+      'music_library_folders(name, type, artwork_url)',
+    ]
 
     let query = supabase
       .from('music_library_tracks')
@@ -90,8 +120,15 @@ export async function GET(request: NextRequest) {
       .order('display_order', { ascending: true })
       .order('title', { ascending: true })
 
-    if (folderId) {
+    if (requestedIds.length > 0) {
+      query = query.in('id', requestedIds)
+    } else if (folderId) {
       query = query.eq('folder_id', folderId)
+    } else if (vaultSession?.isAdmin) {
+      // Admin unscoped: hard cap to avoid accidental full-table dumps
+      const limit = Math.min(Math.max(Number(searchParams.get('limit')) || 500, 1), 1000)
+      const offset = Math.max(Number(searchParams.get('offset')) || 0, 0)
+      query = query.range(offset, offset + limit - 1)
     }
     if (!includeArchived) {
       query = query.or('is_archived.is.null,is_archived.eq.false')
@@ -109,285 +146,109 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Cache-first Sonic DNA: fetch cached sonic_dna + analysis fields by track_id
-    const trackIds = (data || []).map((t: any) => t.id)
-    const sonicDNACacheByTrackId = new Map<string, any>()
-    const sonicDNACacheByAudioFileId = new Map<string, any>()
-
-    // Get all audio_file_ids for tracks
     const audioFileIds = (data || [])
       .filter((track: any) => track.audio_file_id)
       .map((track: any) => track.audio_file_id)
       .filter((id: any) => id != null)
 
-    if (trackIds.length > 0) {
-      // Use single query with OR condition for both track_id and audio_file_id lookups
-      const orConditions: string[] = []
-      if (trackIds.length > 0) {
-        orConditions.push(`track_id.in.(${trackIds.join(',')})`)
-      }
-      if (audioFileIds.length > 0) {
-        orConditions.push(`audio_file_id.in.(${audioFileIds.join(',')})`)
-      }
-
-      if (orConditions.length > 0) {
-        const { data: cachedRows } = await supabase
-          .from('sonic_dna_cache')
-          .select('track_id, audio_file_id, sonic_dna, bpm, key_signature, energy_level, danceability')
-          .or(orConditions.join(','))
-
-        cachedRows?.forEach((row: any) => {
-          sonicDNACacheByTrackId.set(row.track_id, row)
-          if (row.audio_file_id) {
-            sonicDNACacheByAudioFileId.set(row.audio_file_id, row)
-          }
-        })
-      }
+    const needsDnaHydration = (track: any) => {
+      const bpmMissing = track.bpm == null || !Number.isFinite(Number(track.bpm))
+      const keyMissing =
+        !track.key_signature ||
+        String(track.key_signature).trim() === '' ||
+        String(track.key_signature).toLowerCase() === 'unknown'
+      return bpmMissing || keyMissing
     }
 
-    // Get all audio_file_ids to fetch audio meta (waveform/duration/artwork) + fallback sonic_dna
+    const hydrateDna =
+      requestedIds.length > 0 || (data || []).some((t: any) => needsDnaHydration(t))
 
-    // Always fetch lightweight audio meta for stable output shape
     const audioFilesMetaMap = new Map<string, any>()
     if (audioFileIds.length > 0) {
+      const audioSelect = hydrateDna
+        ? 'id, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature, sonic_dna'
+        : 'id, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature'
       const { data: audioMeta } = await supabase
         .from('audio_files')
-        // Avoid pulling `waveform_data` / large JSON blobs here; they are the top Disk IO drivers.
-        .select('id, duration_seconds, artwork_url, created_at')
+        .select(audioSelect)
         .in('id', audioFileIds)
-
-      audioMeta?.forEach((file: any) => {
-        audioFilesMetaMap.set(file.id, file)
-      })
+      audioMeta?.forEach((file: any) => audioFilesMetaMap.set(file.id, file))
     }
 
-    const audioFilesFullMap = new Map<string, any>()
-    if (audioFileIds.length > 0) {
-      const { data: audioFull } = await supabase
-        .from('audio_files')
-        .select('id, sonic_dna, sonic_dna_json_url, bpm, key_signature, energy_level, danceability')
-        .in('id', audioFileIds)
-
-      audioFull?.forEach((file: any) => {
-        audioFilesFullMap.set(file.id, file)
-      })
-    }
-
-    // Helper to check if sonic_dna has actual analysis data
-    const hasAnalysisData = (sonicDna: any): boolean => {
-      if (!sonicDna) return false
-      try {
-        const dna = typeof sonicDna === 'string' ? JSON.parse(sonicDna) : sonicDna
-        // Check if it's just status metadata (has status/hasData but no actual analysis)
-        if (dna.status && dna.hasData && !dna.genres && !dna.musical && !dna.technical && !dna.drums && !dna.comprehensive) {
-          return false
+    // Prefer richer catalog twins (same title+artist) when playlist-ingest rows are sparse.
+    const twinByKey = new Map<string, any>()
+    const sparse = (data || []).filter((t: any) => needsDnaHydration(t) || !t.duration)
+    if (sparse.length > 0 && sparse.length <= 80) {
+      const titles = [...new Set(sparse.map((t: any) => String(t.title || '').trim()).filter(Boolean))]
+      if (titles.length > 0) {
+        const { data: twins } = await supabase
+          .from('music_library_tracks')
+          .select(
+            'id, title, artist, bpm, key_signature, genre, subgenre, duration, year, date, date_created, artwork_url, rating, play_count, folder_id, metadata, music_library_folders(name, type, artwork_url)',
+          )
+          .in('title', titles)
+          .or('is_archived.is.null,is_archived.eq.false')
+          .limit(200)
+        for (const twin of twins || []) {
+          const key = `${String(twin.title || '').trim().toLowerCase()}::${String(twin.artist || '').trim().toLowerCase()}`
+          const score =
+            (twin.bpm != null ? 4 : 0) +
+            (twin.key_signature && String(twin.key_signature).toLowerCase() !== 'unknown' ? 2 : 0) +
+            (twin.duration != null ? 2 : 0) +
+            (twin.artwork_url ? 1 : 0)
+          const prev = twinByKey.get(key)
+          const prevScore = prev
+            ? (prev.bpm != null ? 4 : 0) +
+              (prev.key_signature && String(prev.key_signature).toLowerCase() !== 'unknown' ? 2 : 0) +
+              (prev.duration != null ? 2 : 0) +
+              (prev.artwork_url ? 1 : 0)
+            : -1
+          if (score > prevScore) twinByKey.set(key, twin)
         }
-        // Check if it has actual analysis data
-        return !!(dna.genres || dna.musical || dna.technical || dna.drums || dna.comprehensive)
-      } catch {
-        return false
-      }
-    }
-
-    const extractKeyFromSonicDna = (sonicDna: any): string | null => {
-      if (!sonicDna) return null
-      const dna = typeof sonicDna === 'string' ? safeJsonParse(sonicDna) : sonicDna
-      if (!dna) return null
-      const key =
-        dna?.harmony?.keySignature ||
-        dna?.musical?.keySignature ||
-        dna?.comprehensive?.harmony?.keySignature ||
-        dna?.technical?.key?.key ||
-        dna?.comprehensive?.technical?.key?.key ||
-        dna?.key?.key ||
-        dna?.analysis?.key ||
-        dna?.harmony?.camelot ||
-        dna?.technical?.camelot ||
-        null
-      if (!key || key === 'Unknown') return null
-      return String(key).trim()
-    }
-
-    const safeJsonParse = (value: string) => {
-      try {
-        return JSON.parse(value)
-      } catch {
-        return null
       }
     }
 
-    // Map database fields to frontend format (snake_case to match front-end expectations)
-    let debugTotal = 0
-    let debugKeyFromDna = 0
-    let debugKeyFromField = 0
-    let debugKeyMissing = 0
-
-    const tracks = await Promise.all((data || []).map(async (track: any) => {
-      // Prefer audio_files data as source of truth (it has the most complete Sonic DNA analysis)
-      let sonicDna = track.sonic_dna
-      let bpm = track.bpm
-      let keySignature = track.key_signature
-      let energyLevel = track.energy_level
-      let danceability = track.danceability
-      let waveform = undefined
-      let duration = track.duration
-      let artwork = track.artwork_url
-      let createdAt = track.created_at
-      let trackMetadata = {}
-
-      // Fast path: cache first (by track id or audio file id)
-      const cached = sonicDNACacheByTrackId.get(track.id) ||
-        (track.audio_file_id ? sonicDNACacheByAudioFileId.get(track.audio_file_id) : null)
-
-      if (cached?.sonic_dna) {
-        sonicDna = cached.sonic_dna
-        if (cached.bpm !== null && cached.bpm !== undefined) bpm = cached.bpm
-        if (cached.key_signature) keySignature = cached.key_signature
-        if (cached.energy_level !== null && cached.energy_level !== undefined) energyLevel = cached.energy_level
-        if (cached.danceability !== null && cached.danceability !== undefined) danceability = cached.danceability
-      }
-
-      // Always merge lightweight audio meta (waveform/duration/artwork/createdAt/metadata) if available
-      if (track.audio_file_id && audioFilesMetaMap.has(track.audio_file_id)) {
-        const audioMeta = audioFilesMetaMap.get(track.audio_file_id)
-        if (audioMeta.duration_seconds) duration = audioMeta.duration_seconds
-        if (audioMeta.artwork_url) artwork = audioMeta.artwork_url
-        if (audioMeta.created_at) createdAt = audioMeta.created_at
-      }
-
-      // Fallback: if cache miss and we have a full audio row, prefer it
-      if (track.audio_file_id && audioFilesFullMap.has(track.audio_file_id)) {
-        const audioFile = audioFilesFullMap.get(track.audio_file_id)
-        // Always prefer audio_files sonic_dna if it has actual analysis data
-        if (audioFile.sonic_dna && hasAnalysisData(audioFile.sonic_dna)) {
-          sonicDna = audioFile.sonic_dna
-        } else if (!track.sonic_dna || !hasAnalysisData(track.sonic_dna)) {
-          // If track doesn't have analysis data, use audio_file even if it's just status
-          if (audioFile.sonic_dna) {
-            sonicDna = audioFile.sonic_dna
-          }
-        }
-        // If still missing, try fetching from storage URL
-        if ((!sonicDna || !hasAnalysisData(sonicDna)) && audioFile.sonic_dna_json_url) {
-          const fetched = await fetchSonicDNA({
-            sonic_dna: audioFile.sonic_dna,
-            sonic_dna_json_url: audioFile.sonic_dna_json_url,
-          })
-          if (fetched) {
-            sonicDna = fetched
-          }
-        }
-        // Otherwise keep track.sonic_dna if it has analysis data
-        // Prefer audio_files data for other fields if available
-        if (audioFile.bpm) {
-          bpm = audioFile.bpm
-        }
-        if (audioFile.key_signature) {
-          keySignature = audioFile.key_signature
-        }
-        if (audioFile.energy_level !== null && audioFile.energy_level !== undefined) {
-          energyLevel = audioFile.energy_level
-        }
-        if (audioFile.danceability !== null && audioFile.danceability !== undefined) {
-          danceability = audioFile.danceability
-        }
-        // (waveform/duration/artwork/createdAt/metadata are handled via audioFilesMetaMap)
-      }
-
-      // Always ensure sonic DNA is in metadata
-      const analysisData = {
-        bpm: bpm,
-        key_signature: keySignature,
-        energy_level: energyLevel,
-        danceability: danceability,
-        waveform_data: waveform,
-        duration_seconds: duration,
-        artwork_url: artwork
-      }
-
-      // Seed metadata with cached sonic_dna if present (fast path)
-      if (!sonicDna && cached?.sonic_dna) {
-        (analysisData as any).sonic_dna = cached.sonic_dna
-      }
-      
-      // Merge sonic DNA into metadata to ensure it's always available
-      const finalMetadata = mergeSonicDNAIntoMetadata(
-        trackMetadata,
-        sonicDna,
-        analysisData
-      )
-
-      // Backfill key_signature from sonic DNA if missing or Unknown
-      if (!keySignature || keySignature === 'Unknown') {
-        const keyFromDna = extractKeyFromSonicDna(sonicDna)
-        if (keyFromDna) keySignature = keyFromDna
-      }
-
-      debugTotal += 1
-      if (keySignature && keySignature !== 'Unknown') {
-        if (track.key_signature && track.key_signature !== 'Unknown') debugKeyFromField += 1
-        else debugKeyFromDna += 1
-      } else {
-        debugKeyMissing += 1
-      }
-
-      return {
-        id: track.id,
-        folderId: track.folder_id, // Keep camelCase for folderId (used in API)
-        audioFileId: track.audio_file_id, // Keep camelCase for audioFileId (used in API)
-        title: track.title,
-        artist: track.artist,
-        duration: duration || track.duration, // Use audio_files duration if available
-        file: normalizeVaultAudioUrl(track.file_url || ''),
-        artwork: artwork || track.artwork_url, // Use audio_files artwork if available
-        bpm: bpm,
-        key_signature: keySignature, // snake_case to match front-end Track interface
-        sonic_dna: sonicDna, // snake_case to match front-end Track interface - contains ALL column data
-        waveform: waveform,
-        energy_level: energyLevel, // snake_case for consistency
-        danceability: danceability,
-        created_at: createdAt || track.created_at, // snake_case to match front-end Track interface
-        date: track.date,
-        year: track.year,
-        display_order: track.display_order, // snake_case for consistency
-        is_archived: track.is_archived,
-        archived_at: track.archived_at,
-        metadata: finalMetadata,
-        genre: track.genre,
-        subgenre: track.subgenre,
-        track_number: track.track_number,
-        disc_number: track.disc_number,
-        rating: track.rating,
-        play_count: track.play_count,
-        last_played_at: track.last_played_at,
-        tags: track.tags,
-        sort_artist: track.sort_artist,
-        composer: track.composer,
-        comments: track.comments,
-      }
-    }))
-
-    return NextResponse.json(
-      {
-        tracks,
-        ...(includeDebug
+    const tracks = (data || []).map((track: any) => {
+      const folder = track.music_library_folders || null
+      const audio = track.audio_file_id ? audioFilesMetaMap.get(track.audio_file_id) : null
+      const twinKey = `${String(track.title || '').trim().toLowerCase()}::${String(track.artist || '').trim().toLowerCase()}`
+      const twin = twinByKey.get(twinKey)
+      const merged =
+        twin && twin.id !== track.id
           ? {
-              debug: {
-                total: debugTotal,
-                key_from_field: debugKeyFromField,
-                key_from_dna: debugKeyFromDna,
-                key_missing: debugKeyMissing,
-              },
+              ...track,
+              bpm: track.bpm ?? twin.bpm,
+              key_signature: track.key_signature || twin.key_signature,
+              genre: track.genre || twin.genre,
+              subgenre: track.subgenre || twin.subgenre,
+              duration: track.duration ?? twin.duration,
+              year: track.year ?? twin.year,
+              date: track.date || twin.date,
+              date_created: track.date_created || twin.date_created,
+              artwork_url: track.artwork_url || twin.artwork_url,
+              rating: track.rating ?? twin.rating,
+              play_count: track.play_count ?? twin.play_count,
+              metadata: track.metadata || twin.metadata,
+              music_library_folders: folder || twin.music_library_folders,
             }
-          : {}),
-      },
+          : track
+
+      return mapLibraryTrackToListItem(merged, {
+        audio,
+        folder: merged.music_library_folders || folder,
+        includeFullMetadata: includeFullData,
+      })
+    })
+    return NextResponse.json(
+      { tracks },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+          'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
           'Content-Type': 'application/json',
         },
       },
     )
+
   } catch (error: any) {
     console.error('Error in GET /api/music-library/tracks:', error)
     return NextResponse.json(
@@ -495,6 +356,17 @@ export async function POST(request: NextRequest) {
       display_order: displayOrder || display_order || 0, // Support both formats
       metadata: finalMetadata // Always includes sonic DNA and all analysis data
     }
+
+    const persistedCreated = persistedCreatedDateFields({
+      incoming: {
+        metadata: finalMetadata,
+        date_created: (body as any).date_created || (body as any).dateCreated,
+        year,
+      },
+    })
+    trackData.metadata = persistedCreated.metadata
+    trackData.date_created = persistedCreated.date_created
+    if (!trackData.year && persistedCreated.year) trackData.year = persistedCreated.year
     
     // Only include beat_grid_offset if it's provided (column may not exist in all schemas)
     if (beat_grid_offset !== undefined && beat_grid_offset !== null) {
@@ -570,12 +442,21 @@ export async function PUT(request: NextRequest) {
     if (updates.key_signature !== undefined) dbUpdates.key_signature = updates.key_signature
     if (updates.sonicDna !== undefined) dbUpdates.sonic_dna = updates.sonicDna
     if (updates.sonic_dna !== undefined) dbUpdates.sonic_dna = updates.sonic_dna
+    if (updates.sonic_dna_status !== undefined) dbUpdates.sonic_dna_status = updates.sonic_dna_status
+    if (updates.sonicDnaStatus !== undefined) dbUpdates.sonic_dna_status = updates.sonicDnaStatus
     if (updates.waveform !== undefined) dbUpdates.waveform = updates.waveform
     if (updates.energyLevel !== undefined) dbUpdates.energy_level = updates.energyLevel
     if (updates.energy_level !== undefined) dbUpdates.energy_level = updates.energy_level
     if (updates.danceability !== undefined) dbUpdates.danceability = updates.danceability
     if (updates.date !== undefined) dbUpdates.date = updates.date
     if (updates.year !== undefined) dbUpdates.year = updates.year
+    {
+      const nextCreated = normalizeTrackCreatedDate(
+        updates.date_created !== undefined ? updates.date_created : updates.dateCreated,
+      )
+      // Never stage a null write — empty form fields must not erase a stored created date.
+      if (nextCreated) dbUpdates.date_created = nextCreated
+    }
     if (updates.displayOrder !== undefined) dbUpdates.display_order = updates.displayOrder
     if (updates.display_order !== undefined) dbUpdates.display_order = updates.display_order
     if (updates.createdAt !== undefined) dbUpdates.created_at = updates.createdAt
@@ -593,6 +474,23 @@ export async function PUT(request: NextRequest) {
     if (updates.tags !== undefined) dbUpdates.tags = updates.tags
     if (updates.comments !== undefined) dbUpdates.comments = updates.comments
     if (updates.sort_artist !== undefined) dbUpdates.sort_artist = updates.sort_artist
+
+    const nextGenre = dbUpdates.genre !== undefined ? dbUpdates.genre : currentTrack?.genre
+    const nextSubgenre = dbUpdates.subgenre !== undefined ? dbUpdates.subgenre : currentTrack?.subgenre
+    if (
+      isUsableCatalogValue(nextGenre) &&
+      (
+        updates.genre !== undefined ||
+        updates.subgenre !== undefined ||
+        updates.sonicDna !== undefined ||
+        updates.sonic_dna !== undefined
+      )
+    ) {
+      const baseDna = dbUpdates.sonic_dna !== undefined
+        ? dbUpdates.sonic_dna
+        : currentTrack?.sonic_dna
+      dbUpdates.sonic_dna = applyPreferredGenreToSonicDna(baseDna, String(nextGenre || ''), String(nextSubgenre || ''))
+    }
 
     const audioFileId = currentTrack?.audio_file_id
     const shouldUpdateAudioFile =
@@ -612,7 +510,9 @@ export async function PUT(request: NextRequest) {
         updates.energyLevel !== undefined ||
         updates.energy_level !== undefined ||
         updates.danceability !== undefined ||
-        updates.duration !== undefined
+        updates.duration !== undefined ||
+        updates.genre !== undefined ||
+        updates.subgenre !== undefined
       )
 
     if (shouldUpdateAudioFile) {
@@ -661,6 +561,7 @@ export async function PUT(request: NextRequest) {
       if (updates.energy_level !== undefined) audioUpdates.energy_level = updates.energy_level
       if (updates.danceability !== undefined) audioUpdates.danceability = updates.danceability
       if (updates.duration !== undefined) audioUpdates.duration_seconds = updates.duration
+      if (dbUpdates.sonic_dna !== undefined) audioUpdates.sonic_dna = dbUpdates.sonic_dna
 
       await supabase
         .from('audio_files')
@@ -680,10 +581,14 @@ export async function PUT(request: NextRequest) {
       audio_file_id: currentTrack?.audio_file_id || null
     }
     
-    // If metadata is explicitly provided, use it and add index flags
+    // If metadata is explicitly provided, merge onto existing then add index flags
     if (updates.metadata !== undefined) {
-      // Rebuild index flags and merge with provided metadata
-      dbUpdates.metadata = buildTrackMetadata(finalTrackState, updates.metadata)
+      dbUpdates.metadata = buildTrackMetadata(finalTrackState, {
+        ...(currentTrack?.metadata && typeof currentTrack.metadata === 'object'
+          ? currentTrack.metadata
+          : {}),
+        ...updates.metadata,
+      })
     } else {
       // Get existing metadata and rebuild with index
       const existingMetadata = currentTrack?.metadata || {}
@@ -708,6 +613,28 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    dbUpdates.metadata = stampCatalogOverrides(dbUpdates.metadata || currentTrack?.metadata, {
+      bpm: dbUpdates.bpm,
+      key_signature: dbUpdates.key_signature,
+      genre: dbUpdates.genre,
+      subgenre: dbUpdates.subgenre,
+      title: dbUpdates.title,
+      artist: dbUpdates.artist,
+      year: dbUpdates.year,
+    })
+
+    const persistedCreated = persistedCreatedDateFields({
+      existing: currentTrack,
+      incoming: {
+        metadata: dbUpdates.metadata,
+        date_created: dbUpdates.date_created ?? updates.date_created ?? updates.dateCreated,
+        year: dbUpdates.year,
+      },
+    })
+    dbUpdates.metadata = persistedCreated.metadata
+    if (persistedCreated.date_created) dbUpdates.date_created = persistedCreated.date_created
+    if (dbUpdates.year == null && persistedCreated.year) dbUpdates.year = persistedCreated.year
+
     const { data, error } = await supabase
       .from('music_library_tracks')
       .update(dbUpdates)
@@ -723,7 +650,66 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ track: data })
+    const saved = data || currentTrack
+    let systemic: { folderId: string | null; playlistId: string | null; tracksUpdated: number } | null = null
+    if (updates.artwork !== undefined) {
+      const folderIdForCover = (dbUpdates.folder_id as string | undefined) || currentTrack?.folder_id || null
+      if (folderIdForCover) {
+        try {
+          systemic = await persistSystemicCover(
+            supabase,
+            folderIdForCover,
+            (updates.artwork as string) || null,
+          )
+        } catch (propagateError) {
+          console.error('[tracks PUT] Failed to persist systemic cover:', propagateError)
+        }
+      }
+    }
+
+    await syncCatalogFieldsToCache(id, audioFileId || saved?.audio_file_id || null, {
+      bpm: saved?.bpm,
+      key_signature: saved?.key_signature,
+      genre: saved?.genre,
+      subgenre: saved?.subgenre,
+      sonic_dna: saved?.sonic_dna,
+    })
+
+    // Only bump when browse-facing catalog fields change.
+    // Playback always rewrites metadata (and often sonic_dna / beat_grid_offset) for grid
+    // lock — that must NOT invalidate the vault UI or SergBrowser flashes "Loading…".
+    const catalogBumpFields = [
+      'bpm',
+      'key_signature',
+      'genre',
+      'subgenre',
+      'title',
+      'artist',
+      'year',
+      'date',
+      'date_created',
+      'artwork_url',
+    ] as const
+    const catalogChanged =
+      catalogBumpFields.some((field) => dbUpdates[field] !== undefined) ||
+      updates.metadata !== undefined ||
+      updates.artwork !== undefined
+    let publishVersion: number | null = null
+    if (catalogChanged) {
+      try {
+        publishVersion = await bumpMusicLibraryPublishVersion()
+      } catch (bumpError) {
+        console.warn('[tracks PUT] Failed to bump catalog version:', bumpError)
+      }
+    }
+
+    return NextResponse.json({
+      track: data,
+      folderId: systemic?.folderId || currentTrack?.folder_id || null,
+      playlistId: systemic?.playlistId || null,
+      tracksUpdated: systemic?.tracksUpdated || 0,
+      publishVersion,
+    })
   } catch (error: any) {
     console.error('Error in PUT /api/music-library/tracks:', error)
     return NextResponse.json(

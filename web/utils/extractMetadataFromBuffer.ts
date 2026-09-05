@@ -15,6 +15,8 @@ export interface BufferMetadata {
   bpm?: number
   sampleRate?: number
   bitrate?: number
+  year?: number
+  date?: string
 }
 
 /**
@@ -26,7 +28,9 @@ export async function extractMetadataFromBuffer(
 ): Promise<BufferMetadata> {
   try {
     const metadata = await parseBuffer(buffer)
-    
+    const { originalDateFromEmbeddedTags } = await import('@/lib/audio/original-file-date')
+    const original = originalDateFromEmbeddedTags(metadata.common as any)
+
     return {
       title: metadata.common.title || fileName.replace(/\.[^/.]+$/, ''),
       artist: metadata.common.artist || 'SERGIK',
@@ -34,7 +38,9 @@ export async function extractMetadataFromBuffer(
       format: metadata.format.container?.toUpperCase() || fileName.split('.').pop()?.toUpperCase() || 'MP3',
       key: metadata.common.key?.[0] || undefined,
       sampleRate: metadata.format.sampleRate,
-      bitrate: metadata.format.bitrate
+      bitrate: metadata.format.bitrate,
+      year: original?.year,
+      date: original?.isoDate,
     }
   } catch (error: any) {
     console.warn(`[Metadata] Failed to extract from buffer: ${error.message}`)

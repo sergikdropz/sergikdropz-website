@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { createRevelatorClient } from '@/lib/studio/distributor'
+import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
+import { validateSelfDistribute } from '@/lib/studio/self-distribute'
+import { generateInternalUpc } from '@/lib/studio/upc'
 import { logActivity } from '@/lib/activity-log'
 
 /**
@@ -64,11 +67,61 @@ export async function POST(
       )
     }
 
-    // Create distributor client
+    const body = await request.json().catch(() => ({}))
+    const mode = body?.mode === 'aggregator' ? 'aggregator' : 'self'
+    const force = Boolean(body?.force)
+
+    if (mode === 'self') {
+      const readiness = await getSingleReleaseCopyrightReadiness(supabase, params.id)
+      const validation = validateSelfDistribute({
+        releaseId: params.id,
+        title: release.title,
+        upc: release.upc,
+        readiness,
+        trackCount: tracks.length,
+        tracksWithIsrc: tracks.filter((t) => t.isrc_full).length,
+        force,
+      })
+      if (!validation.ok) {
+        return NextResponse.json(
+          { error: 'Release not ready for self launch', blockers: validation.blockers },
+          { status: 400 }
+        )
+      }
+      const upc = release.upc?.trim() || validation.suggestedUpc || generateInternalUpc()
+      const { error: selfError } = await supabase
+        .from('distribution_releases')
+        .update({
+          distributor_status: 'live',
+          distribution_mode: 'self',
+          distributor_release_id: `self-${params.id}`,
+          upc,
+        })
+        .eq('id', params.id)
+      if (selfError) {
+        return NextResponse.json({ error: selfError.message }, { status: 500 })
+      }
+      await logActivity({
+        actionType: 'go_live_release',
+        resourceType: 'release',
+        resourceId: params.id,
+        details: { mode: 'self', upc },
+      })
+      return NextResponse.json({
+        success: true,
+        mode: 'self',
+        distributorReleaseId: `self-${params.id}`,
+        upc,
+      })
+    }
+
     const distributor = createRevelatorClient()
     if (!distributor) {
       return NextResponse.json(
-        { error: 'Distributor API not configured' },
+        {
+          error:
+            'Aggregator API not configured. Use mode "self" to publish on SERGIK without Revelator.',
+        },
         { status: 500 }
       )
     }

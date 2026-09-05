@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 /**
  * API Route: List Audio Files from Supabase
@@ -24,6 +25,8 @@ export const revalidate = 300
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format')
     const purchasable = searchParams.get('purchasable')
@@ -41,6 +44,16 @@ export async function GET(request: Request) {
     // Guardrails: prevent accidentally pulling massive TOAST columns at high volume.
     // (Waveform + metadata + AI analysis are the biggest Disk IO drivers in this project.)
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(limitRaw, 2000)) : 100
+    // DNA/waveform blobs are selected-track only — refuse bulk TOAST reads.
+    if ((includeSonicDNA || includeWaveform) && limit > 1) {
+      return NextResponse.json(
+        {
+          error:
+            'include_sonic_dna / include_waveform require limit=1. Load analysis per selected track via /api/audio/sonic-dna and /api/audio/waveform.',
+        },
+        { status: 400 },
+      )
+    }
 
     const supabase = createSupabaseServerClient()
 

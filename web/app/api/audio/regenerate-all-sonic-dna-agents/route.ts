@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { generateSonicDNAWithAgents, batchProcessTracks } from '@/utils/generateSonicDNAWithAgents'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const { searchParams } = new URL(request.url)
     const force = searchParams.get('force') === 'true'
     const limitParam = searchParams.get('limit')
@@ -241,6 +244,8 @@ async function processTracksBatch(tracks: any[], supabase: any, batchSize: numbe
  */
 export async function GET(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const supabase = createSupabaseServerClient()
 
     // Get all tracks

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { generateSonicDNAWithAgents } from '@/utils/generateSonicDNAWithAgents'
 import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
+import { requireAdminApi } from '@/lib/auth/route-policy'
+import { lockAnalysisForAudioFile } from '@/lib/catalog-lock'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +20,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const { searchParams } = new URL(request.url)
     const force = searchParams.get('force') === 'true'
     const limitParam = searchParams.get('limit')
@@ -115,6 +119,8 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const supabase = createSupabaseServerClient()
 
     // Get all tracks
@@ -213,7 +219,7 @@ async function analyzeTrackAsync(track: any, supabase: any) {
 
     // Generate Sonic DNA using agent pipeline
     console.log(`[${fresh.title}] Generating Sonic DNA with agent team...`)
-    const sonicDNA = await generateSonicDNAWithAgents(
+    let sonicDNA = await generateSonicDNAWithAgents(
       fresh.title,
       fresh.artist,
       fresh.id,
@@ -238,7 +244,7 @@ async function analyzeTrackAsync(track: any, supabase: any) {
     console.log(`[${track.title}] Storing results in database...`)
     
     // Prepare analysis data
-    const analysisData = {
+    let analysisData = {
       bpm: sonicDNA.technical?.bpm || fresh.bpm || null,
       key_signature: sonicDNA.harmony?.keySignature || sonicDNA.technical?.key?.key || fresh.key_signature || null,
       energy_level: sonicDNA.technical?.energyLevel || fresh.energy_level || null,
@@ -248,6 +254,10 @@ async function analyzeTrackAsync(track: any, supabase: any) {
       duration_seconds: fresh.duration_seconds || null,
       artwork_url: fresh.artwork_url || null
     }
+
+    const locked = await lockAnalysisForAudioFile(supabase, fresh.id, sonicDNA, analysisData)
+    sonicDNA = locked.sonicDNA
+    analysisData = locked.analysisData
     
     // Merge sonic DNA and analysis data into metadata
     const updatedMetadata = mergeSonicDNAIntoMetadata(

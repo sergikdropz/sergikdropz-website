@@ -1,8 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
+import type { ServerAuthSession } from '@/lib/auth'
 
 interface AuthContextType {
   user: User | null
@@ -15,111 +16,137 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+type SessionApiResponse = {
+  authenticated?: boolean
+  isAdmin?: boolean
+  user?: { id: string; email?: string | null }
+}
 
-  async function checkAdminStatus(user: User) {
-    try {
-      const response = await fetch('/api/auth/session')
-      const data = await response.json()
-      setIsAdmin(data.authenticated && data.isAdmin)
-    } catch (error: any) {
-      setIsAdmin(false)
+async function fetchServerSession(): Promise<SessionApiResponse | null> {
+  try {
+    const response = await fetch('/api/auth/session', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!response.ok) return null
+    return (await response.json()) as SessionApiResponse
+  } catch {
+    return null
+  }
+}
+
+function userFromSessionPayload(data: SessionApiResponse): User | null {
+  if (!data.authenticated || !data.user?.id) return null
+  return {
+    id: data.user.id,
+    email: data.user.email ?? undefined,
+  } as User
+}
+
+export function AuthProvider({
+  children,
+  initialSession = null,
+}: {
+  children: ReactNode
+  initialSession?: ServerAuthSession | null
+}) {
+  const [user, setUser] = useState<User | null>(initialSession?.user ?? null)
+  const [loading, setLoading] = useState(!initialSession)
+  const [isAdmin, setIsAdmin] = useState(initialSession?.isAdmin ?? false)
+  const serverSessionValidRef = useRef(Boolean(initialSession?.isAdmin))
+
+  async function applyServerSession(data: SessionApiResponse | null) {
+    if (data?.authenticated && data.user) {
+      const nextUser = userFromSessionPayload(data)
+      setUser(nextUser)
+      setIsAdmin(Boolean(data.isAdmin))
+      serverSessionValidRef.current = Boolean(data.isAdmin)
+      return true
     }
+
+    setUser(null)
+    setIsAdmin(false)
+    serverSessionValidRef.current = false
+    return false
   }
 
   async function checkSession() {
     try {
-      // First check server-side session via API (this uses the cookie)
-      // This is more reliable than client-side Supabase session which may not be set
-      const sessionResponse = await fetch('/api/auth/session', { credentials: 'include' })
-      const sessionData = await sessionResponse.json()
-      
-      if (sessionData.authenticated && sessionData.user) {
-        // Server-side session is valid - create a user object from the API response
-        const user = {
-          id: sessionData.user.id,
-          email: sessionData.user.email,
-        } as User
-        
-        setUser(user)
-        setIsAdmin(sessionData.isAdmin || false)
-        
-        // Also try to sync with Supabase client session if possible
-        try {
-          const supabase = getSupabaseClient()
-          const { data: { session } } = await supabase.auth.getSession()
-          if (!session && sessionData.authenticated) {
-            // If client session is missing but server session is valid, try to restore it
-            // This happens when page reloads and Supabase client loses session
-            // Note: We can't restore without the tokens, but at least we have the user info
-          }
-        } catch (e) {
-          // Supabase client error - that's okay, we have server session
-        }
-      } else {
-        // No server session - also check Supabase client as fallback
-        try {
-          const supabase = getSupabaseClient()
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-          if (session?.user) {
-            setUser(session.user)
-            await checkAdminStatus(session.user)
+      const sessionData = await fetchServerSession()
+      if (sessionData?.authenticated && sessionData.user) {
+        await applyServerSession(sessionData)
+        return
+      }
+
+      // Fallback: Supabase client session (e.g. right after setSession on login)
+      try {
+        const supabase = getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          setUser(session.user)
+          const adminData = await fetchServerSession()
+          if (adminData?.authenticated) {
+            await applyServerSession(adminData)
             return
           }
-        } catch (e) {
-          // Supabase not configured or error
         }
-        
-        setUser(null)
-        setIsAdmin(false)
+      } catch {
+        // Supabase not configured
       }
-    } catch (error: any) {
-      // Supabase not configured or error - set defaults
+
+      await applyServerSession(null)
+    } catch {
       setUser(null)
       setIsAdmin(false)
+      serverSessionValidRef.current = false
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    // Check initial session
-    checkSession()
+    if (!initialSession) {
+      void checkSession()
+    }
 
-    // Get supabase client for auth state listener
     let supabase: ReturnType<typeof getSupabaseClient> | null = null
     try {
       supabase = getSupabaseClient()
-    } catch (error) {
-      // Supabase not configured
+    } catch {
       setLoading(false)
       return
     }
 
-    // Listen for auth changes
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          if (session?.user) {
-            setUser(session.user)
-            await checkAdminStatus(session.user)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (session?.user) {
+          setUser(session.user)
+          const adminData = await fetchServerSession()
+          if (adminData?.authenticated) {
+            await applyServerSession(adminData)
           } else {
-            setUser(null)
             setIsAdmin(false)
+            serverSessionValidRef.current = false
           }
           setLoading(false)
+          return
         }
-      )
 
-      return () => {
-        subscription.unsubscribe()
+        // Cookie-based sessions do not populate the Supabase client. Before clearing
+        // auth state, confirm the httpOnly session is actually gone.
+        const adminData = await fetchServerSession()
+        if (adminData?.authenticated) {
+          await applyServerSession(adminData)
+        } else if (!serverSessionValidRef.current) {
+          setUser(null)
+          setIsAdmin(false)
+        }
+        setLoading(false)
       }
-    } catch (error) {
-      // If auth setup fails, just set loading to false
-      setLoading(false)
+    )
+
+    return () => {
+      subscription.unsubscribe()
     }
   }, [])
 
@@ -140,26 +167,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: data.error || 'Login failed' }
       }
 
-      // Refresh session after successful login
       await refreshSession()
-
       return {}
-    } catch (error: any) {
-      return { error: error.message || 'Login failed' }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Login failed'
+      return { error: message }
     }
   }
 
   async function logout() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       try {
         const supabase = getSupabaseClient()
         await supabase.auth.signOut()
-      } catch (error) {
-        // Supabase not configured, continue with logout
+      } catch {
+        // Supabase not configured
       }
-      
-      // Clear remembered credentials on logout
+
       if (typeof window !== 'undefined') {
         try {
           localStorage.removeItem('admin_remember_me')
@@ -167,7 +192,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Ignore storage errors
         }
       }
-      
+
+      serverSessionValidRef.current = false
       setUser(null)
       setIsAdmin(false)
     } catch (error) {
@@ -176,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshSession() {
+    setLoading(true)
     await checkSession()
   }
 
@@ -198,15 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    // Always return safe defaults in browser to prevent crashes during hot reload
-    // This can happen during hot module replacement when the component tree is recreated
     if (typeof window !== 'undefined') {
-      // We're in the browser - return safe defaults to prevent crashes
-      // This handles hot reload scenarios where the provider might not be mounted yet
-      // Suppress warning in development to reduce console noise during hot reload
-      // if (process.env.NODE_ENV === 'development') {
-      //   console.warn('useAuth called outside AuthProvider (likely during hot reload). Returning safe defaults.')
-      // }
       return {
         user: null,
         loading: true,
@@ -216,8 +235,7 @@ export function useAuth() {
         refreshSession: async () => {},
       }
     }
-    
-    // Server-side: throw error to catch actual bugs
+
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context

@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sergikdropz.com/schemas/sergik-dna-manifest.schema.json",
+  "title": "SergikDnaManifest",
+  "description": "Machine-readable composition DNA manifest for SERGIK-generated tracks. Adapted from the Talon/Substrate DNA schema (MichaelCrowe11/talon) with SERGIK's musical psychology mapped in.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "track",
+    "composition",
+    "environment",
+    "arrangement",
+    "render",
+    "decompositionSources",
+    "compliance"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","title","archetype","zone","key","camelot","bpm","targetDurationSec","emotionalCenter"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "archetype": {
+          "type": "string",
+          "enum": ["desert_groove","warehouse_communion","funk_memory","dark_circuit","after_hours_return","collaboration_bloom"]
+        },
+        "zone": {
+          "type": "string",
+          "enum": ["house","tech_house","downtempo","hip_hop","funk_fusion","cross_zone"]
+        },
+        "key": { "type": "string", "minLength": 1, "description": "e.g. D major, A minor" },
+        "camelot": { "type": "string", "pattern": "^[0-9]{1,2}[AB]$", "description": "Camelot wheel position e.g. 10B" },
+        "bpm": { "type": "number", "minimum": 60, "maximum": 150 },
+        "targetDurationSec": { "type": "number", "minimum": 240, "maximum": 720 },
+        "emotionalCenter": { "type": "string", "minLength": 16, "description": "One-sentence description of the emotional state this track develops" },
+        "collaborators": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names from SERGIK's collaborator list if applicable"
+        }
+      }
+    },
+
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["harmonicThesis","emotionalArc","hasChangedReturn","containsBreakSection","sections"],
+      "properties": {
+        "harmonicThesis": { "type": "string", "minLength": 20 },
+        "emotionalArc": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "string",
+            "enum": [
+              "patient_expansion","underground_solidarity","funk_inheritance",
+              "desert_solitude","collaborative_warmth","after_hours_truth",
+              "hypnotic_drive","earned_release","collective_body","dark_momentum",
+              "soulful_recall","groove_inevitability","melancholic_depth","joyful_urgency"
+            ]
+          }
+        },
+        "hasChangedReturn": { "type": "boolean" },
+        "containsBreakSection": { "type": "boolean" },
+        "sections": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name","startSec","endSec","density","dramaticRole","environmentAudible"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "startSec": { "type": "number", "minimum": 0 },
+              "endSec": { "type": "number", "exclusiveMinimum": 0 },
+              "density": {
+                "type": "string",
+                "enum": ["minimal","sparse","moderate","dense","wall_of_sound"]
+              },
+              "dramaticRole": {
+                "type": "string",
+                "enum": [
+                  "establish_world","introduce_groove","escalation",
+                  "groove_peak","break","after_break_return","dissolve"
+                ]
+              },
+              "environmentAudible": { "type": "boolean" },
+              "grooveLayerCount": { "type": "integer", "minimum": 0 },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roomDefinition","room","layers"],
+      "properties": {
+        "roomDefinition": { "type": "string", "minLength": 20 },
+        "room": {
+          "type": "string",
+          "enum": ["desert_heat","warehouse_concrete","after_hours_haze","studio_dark","collaborative_space","internal_geography"]
+        },
+        "layers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role","sourceKind","subjectLink","audibleInIntro","audibleInOutro"],
+            "properties": {
+              "role": { "type": "string", "minLength": 1 },
+              "sourceKind": {
+                "type": "string",
+                "enum": [
+                  "field_recording","synthesized_environment","processed_noise",
+                  "sub_drone","vinyl_artifact","room_resonance","crowd_texture","mechanical_hum"
+                ]
+              },
+              "subjectLink": { "type": "string", "minLength": 16 },
+              "audibleInIntro": { "type": "boolean" },
+              "audibleInOutro": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "arrangement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["harmonicBed","emotionalSpear","pulseAndGravity","orchestralBloom","conversationPairs"],
+      "properties": {
+        "harmonicBed": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "emotionalSpear": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "pulseAndGravity": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Kick architecture + bass + sub — the layers that keep the body in the room"
+        },
+        "orchestralBloom": { "type": "array", "items": { "type": "string" } },
+        "conversationPairs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["left","right","relationship"],
+            "properties": {
+              "left": { "type": "string" },
+              "right": { "type": "string" },
+              "relationship": { "type": "string", "minLength": 8 }
+            }
+          }
+        }
+      }
+    },
+
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pipelineMode","stemOrder","stems","masterBus"],
+      "properties": {
+        "pipelineMode": { "type": "string", "const": "stem_first" },
+        "stemOrder": {
+          "type": "array",
+          "minItems": 5,
+          "items": { "type": "string" },
+          "description": "Rendering order from first to last — environment before kick, kick before bass, etc."
+        },
+        "stems": {
+          "type": "array",
+          "minItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role","isolated","processing"],
+            "properties": {
+              "role": { "type": "string" },
+              "isolated": { "type": "boolean" },
+              "sourceType": {
+                "type": "string",
+                "enum": ["demucs_separated","midi_generated","synthesized","sampled","field_recording","original_stem"]
+              },
+              "processing": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "enum": ["highpass","lowpass","equalizer","aecho","acompressor","afade","volume","ducking","sidechain","limiter","automation","reverb"]
+                }
+              }
+            }
+          }
+        },
+        "vocalDucking": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "type": "string", "enum": ["authored_windows","sidechain","none"] },
+            "targetLayers": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "masterBus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetLUFS","truePeakDb","minDynamicRange","stereoCorrelationMin"],
+          "properties": {
+            "targetLUFS": { "type": "number", "minimum": -16, "maximum": -9 },
+            "truePeakDb": { "type": "number", "maximum": -0.5 },
+            "minDynamicRange": { "type": "number", "minimum": 4 },
+            "stereoCorrelationMin": { "type": "number", "minimum": 0.5, "maximum": 1 }
+          }
+        }
+      }
+    },
+
+    "decompositionSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Links to the source tracks this composition is derived from",
+      "properties": {
+        "sourceWavs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title","filepath","role"],
+            "properties": {
+              "title": { "type": "string" },
+              "filepath": { "type": "string" },
+              "role": {
+                "type": "string",
+                "enum": ["primary_reference","harmonic_source","rhythm_source","texture_source","collaboration_source"]
+              },
+              "demucsStemsPath": { "type": "string" },
+              "midiExtractionPath": { "type": "string" }
+            }
+          }
+        },
+        "abletonProjects": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "compliance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sectionMapWritten","harmonicThesisPresent","environmentPresent",
+        "stemIsolationRetained","grooveEarnsResolution","outroHasEnvironment",
+        "masteringTargetsMet"
+      ],
+      "properties": {
+        "sectionMapWritten": { "type": "boolean" },
+        "harmonicThesisPresent": { "type": "boolean" },
+        "environmentPresent": { "type": "boolean" },
+        "stemIsolationRetained": { "type": "boolean" },
+        "grooveEarnsResolution": { "type": "boolean", "description": "The climax is accumulated, not scheduled" },
+        "outroHasEnvironment": { "type": "boolean" },
+        "masteringTargetsMet": { "type": "boolean" }
+      }
+    }
+  }
+}

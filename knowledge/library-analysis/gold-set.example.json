@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "description": "Ear-labeled gold set for Sonic DNA detectors. Fill BPM, Camelot/root, drum family, bass lock, and primary genre by ear; then score measure_sonic_dna.py against this file.",
+  "drumFamily": [
+    "four-on-the-floor",
+    "half-time",
+    "breakbeat",
+    "boom-bap",
+    "dembow",
+    "one-drop",
+    "sparse"
+  ],
+  "tracks": [
+    {
+      "id": "REPLACE-WITH-AUDIO-FILE-UUID",
+      "title": "Example — Going Gone 122bpm",
+      "bpm": 122,
+      "key": "Unknown until labeled",
+      "camelot": null,
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "House-tempo 4/4; bass plays around the kick."
+    }
+  ]
+}

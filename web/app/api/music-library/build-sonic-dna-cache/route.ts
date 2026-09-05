@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { updateSonicDNACache } from '@/utils/sonicDNACache'
 
@@ -8,6 +9,9 @@ import { updateSonicDNACache } from '@/utils/sonicDNACache'
  * Body: { force?: boolean } (force currently treated as "re-upsert everything")
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
     const body = await request.json().catch(() => ({}))
@@ -104,6 +108,9 @@ export async function POST(request: NextRequest) {
  * Return cache stats.
  */
 export async function GET() {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
     const { count, error } = await supabase

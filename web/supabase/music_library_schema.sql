@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS music_library_folders (
   archived_at TIMESTAMP WITH TIME ZONE,
   artwork_url TEXT,
   year INTEGER,
+  album_artist TEXT,
+  is_compilation BOOLEAN DEFAULT false,
+  genre TEXT,
   display_order INTEGER DEFAULT 0,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -49,6 +52,7 @@ CREATE TABLE IF NOT EXISTS music_library_tracks (
   danceability DECIMAL(3, 1),
   created_at TIMESTAMP WITH TIME ZONE,
   date TEXT,
+  date_created DATE,
   year INTEGER,
   is_archived BOOLEAN DEFAULT false,
   archived_at TIMESTAMP WITH TIME ZONE,
@@ -65,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_music_library_tracks_title ON music_library_track
 CREATE INDEX IF NOT EXISTS idx_music_library_tracks_artist ON music_library_tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_music_library_tracks_archived ON music_library_tracks(is_archived);
 CREATE INDEX IF NOT EXISTS idx_music_library_tracks_display_order ON music_library_tracks(display_order);
+CREATE INDEX IF NOT EXISTS idx_music_library_tracks_date_created ON music_library_tracks(date_created);
 
 -- ============================================
 -- FUNCTIONS

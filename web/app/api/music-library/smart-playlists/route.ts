@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
+import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +11,9 @@ export const dynamic = 'force-dynamic'
  * List smart playlists and optionally resolve their tracks
  */
 export async function GET(request: NextRequest) {
+  const gate = await getMusicVaultApiAccess(request)
+  if (!gate.ok) return gate.response
+
   try {
     const supabase = createSupabaseServerClient()
     const { searchParams } = new URL(request.url)
@@ -37,7 +43,14 @@ export async function GET(request: NextRequest) {
       .order('is_system', { ascending: false })
       .order('name', { ascending: true })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // Home-server restores may omit this table — don't break the library UI
+    if (error) {
+      const missing =
+        error.code === '42P01' ||
+        /does not exist|relation .*smart_playlists/i.test(error.message || '')
+      if (missing) return NextResponse.json({ playlists: [] })
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
     return NextResponse.json({ playlists: playlists || [] })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -49,6 +62,9 @@ export async function GET(request: NextRequest) {
  * Create a new smart playlist
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
     const body = await request.json()
@@ -85,6 +101,9 @@ export async function POST(request: NextRequest) {
  * DELETE /api/music-library/smart-playlists?id=xxx
  */
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
     const { searchParams } = new URL(request.url)
@@ -105,7 +124,8 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-const TRACK_SELECT = 'id, title, artist, duration, file_url, artwork_url, bpm, key_signature, energy_level, danceability, genre, subgenre, rating, play_count, last_played_at, folder_id, year, created_at_timestamp, tags'
+const TRACK_SELECT =
+  'id, title, artist, duration, file_url, artwork_url, bpm, key_signature, energy_level, danceability, genre, subgenre, rating, play_count, last_played_at, folder_id, audio_file_id, year, date, date_created, created_at_timestamp, created_at, tags, metadata, music_library_folders(name, type, artwork_url)'
 
 async function resolveSmartPlaylist(
   supabase: ReturnType<typeof createSupabaseServerClient>,
@@ -189,25 +209,7 @@ async function resolveSmartPlaylist(
 }
 
 function mapTrack(t: any) {
-  return {
-    id: t.id,
-    title: t.title,
-    artist: t.artist,
-    duration: t.duration,
-    file: t.file_url,
-    artwork: t.artwork_url,
-    bpm: t.bpm,
-    key_signature: t.key_signature,
-    energy_level: t.energy_level,
-    danceability: t.danceability,
-    genre: t.genre,
-    subgenre: t.subgenre,
-    rating: t.rating,
-    play_count: t.play_count,
-    last_played_at: t.last_played_at,
-    folderId: t.folder_id,
-    year: t.year,
-    tags: t.tags,
-    created_at: t.created_at_timestamp,
-  }
+  return mapLibraryTrackToListItem(t, {
+    folder: t.music_library_folders || null,
+  })
 }

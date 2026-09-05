@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes
@@ -40,6 +41,8 @@ function needsEnhancedAnalysis(sonicDna: any): boolean {
 
 export async function GET() {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const supabase = createSupabaseServerClient()
     
     // Get all audio files with sonic DNA info
@@ -106,6 +109,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const { searchParams } = new URL(request.url)
     const force = searchParams.get('force') === 'true'
     const limitParam = searchParams.get('limit')

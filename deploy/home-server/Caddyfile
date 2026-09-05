@@ -1,0 +1,41 @@
+:8000 {
+	header {
+		Access-Control-Allow-Origin *
+		Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+		Access-Control-Allow-Headers *
+		Access-Control-Expose-Headers "Content-Length, Content-Range, Content-Type, Range"
+	}
+
+	@options method OPTIONS
+	handle @options {
+		respond 204
+	}
+
+	handle /rest/v1* {
+		uri strip_prefix /rest/v1
+		reverse_proxy rest:3000
+	}
+
+	handle /auth/v1* {
+		uri strip_prefix /auth/v1
+		reverse_proxy auth:9999
+	}
+
+	handle /storage/v1* {
+		header Content-Type application/json
+		respond `{"error":"storage_unavailable","gateway":"sergik-home-api","message":"This gateway has no Storage service. Use local public files."}` 501
+	}
+
+	# Vault MP3s served straight from the mounted web/public. One public tunnel
+	# to :8000 covers both PostgREST and /audio, and there is no host-side media
+	# process to keep alive. file_server handles Range requests for seeking.
+	handle /audio* {
+		root * /srv/public
+		file_server
+	}
+
+	handle {
+		header Content-Type application/json
+		respond `{"ok":true,"gateway":"sergik-home-api"}` 200
+	}
+}

@@ -1,25 +1,21 @@
 import { NextResponse } from 'next/server'
+import { getShopCatalog } from '@/lib/marketing/shop-catalog'
+
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+}
 
 export async function GET() {
   try {
-    const products = await import('@/data/products.json')
-    const purchasableTracks = await import('@/data/purchasable-tracks.json')
-    const licenseTiers = await import('@/data/license-tiers.json')
-
+    const { data } = await getShopCatalog()
     const catalog = {
-      products: products.products.map((p: any) => ({
-        ...p,
-        productType: 'ep-bundle',
-      })),
-      tracks: purchasableTracks.tracks.map((t: any) => ({
-        ...t,
-        productType: 'track',
-      })),
-      licenseTiers: licenseTiers.tiers,
-      categories: products.categories,
+      products: data.products,
+      tracks: data.tracks,
+      licenseTiers: data.licenseTiers,
+      categories: data.categories,
     }
 
-    return NextResponse.json(catalog)
+    return NextResponse.json(catalog, { headers: CACHE_HEADERS })
   } catch (error: any) {
     console.error('Error loading shop catalog:', error)
     return NextResponse.json(

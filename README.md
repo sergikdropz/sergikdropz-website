@@ -86,6 +86,8 @@ Project docs are organized under `docs/` (root) and `web/docs/` (web app).
 - `docs/project/DEV_ENTRY.md`
 - `docs/project/README_ETL.md`
 - `docs/project/READY_TO_USE.md`
+- `web/CONTRIBUTING.md` — Playwright setup, E2E secrets, site knowledge snapshot, pre-merge commands
+- `knowledge/SITE_INDEX.md` — site architecture index and links to generated route inventory (`knowledge/generated/site-knowledge.json`)
 
 ### Deployment & environment
 - `docs/deployment/DEPLOYMENT_GUIDE.md`

@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { getPerformanceReport } from '@/utils/agentPerformanceMonitor'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const performanceReport = getPerformanceReport()
     
     // Get database stats

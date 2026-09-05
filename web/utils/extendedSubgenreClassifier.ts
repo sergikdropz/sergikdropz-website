@@ -24,7 +24,7 @@ export interface SubgenreProfile {
   bpmRange: { min: number; max: number; typical: number }
   keyPreference: 'minor' | 'major' | 'modal' | 'any'
   energyRange: { min: number; max: number }
-  timingFeel: ('full-time' | 'half-time' | 'double-time' | 'variable')[]
+  timingFeel: TimingFeel['type'][]
   drumSignatures: string[]
   bassSignatures: string[]
   productionCharacteristics: string[]
@@ -253,6 +253,25 @@ export const SUBGENRE_PROFILES: Record<string, SubgenreProfile> = {
     musicbrainzTags: ['vocal house', 'vocal'],
     characteristics: ['catchy', 'commercial', 'vocal-driven', 'uplifting'],
     relatedSubgenres: ['garage_house', 'progressive_house', 'euro_house']
+  },
+
+  psychedelic_house: {
+    name: 'Psychedelic House',
+    parent: 'House',
+    aliases: ['Psych House', 'Psy House', 'Cosmic House'],
+    bpmRange: { min: 118, max: 128, typical: 122 },
+    keyPreference: 'modal',
+    energyRange: { min: 5, max: 8 },
+    timingFeel: ['full-time'],
+    drumSignatures: ['four-on-the-floor', 'offbeat-hats', 'delayed-percussion'],
+    bassSignatures: ['filtered', 'analog', 'hypnotic'],
+    productionCharacteristics: ['delay', 'phaser', 'filter-sweeps', 'spacious'],
+    instrumentSignatures: ['analog-synths', 'drones', 'wah-guitar', 'pads'],
+    era: { start: 1988, peak: 2016 },
+    origins: ['UK', 'Europe', 'Ibiza'],
+    musicbrainzTags: ['psychedelic house', 'cosmic house', 'acid house'],
+    characteristics: ['hypnotic', 'trippy', 'expansive', 'immersive'],
+    relatedSubgenres: ['organic_house', 'progressive_house', 'deep_house']
   },
 
   // =========================================================================
@@ -683,6 +702,256 @@ export const SUBGENRE_PROFILES: Record<string, SubgenreProfile> = {
     musicbrainzTags: ['future bass', 'melodic bass'],
     characteristics: ['melodic', 'bright', 'emotional', 'uplifting'],
     relatedSubgenres: ['trap', 'edm', 'melodic_dubstep']
+  },
+
+  // =========================================================================
+  // Experimental Bass Subgenres
+  // =========================================================================
+  spacebass: {
+    name: 'Spacebass',
+    parent: 'Experimental Bass',
+    aliases: ['Space Bass', 'Cosmic Bass'],
+    bpmRange: { min: 120, max: 150, typical: 140 },
+    keyPreference: 'minor',
+    energyRange: { min: 5, max: 8 },
+    timingFeel: ['half-time', 'broken'],
+    drumSignatures: ['sparse', 'halftime-snare', 'atmospheric'],
+    bassSignatures: ['sub', 'designed', 'modulated', 'wide'],
+    productionCharacteristics: ['spacious', 'sound-design', 'psychedelic'],
+    instrumentSignatures: ['wavetable-bass', 'pads', 'fx-sweeps', 'reverb-tails'],
+    era: { start: 2010, peak: 2018 },
+    origins: ['UK', 'Global'],
+    musicbrainzTags: ['spacebass', 'space bass', 'bass music'],
+    characteristics: ['spacious', 'psychedelic', 'sound-design', 'sub-heavy'],
+    relatedSubgenres: ['wonky', 'leftfield_bass', 'wubs', 'uk_bass']
+  },
+
+  wubs: {
+    name: 'Wubs',
+    parent: 'Experimental Bass',
+    aliases: ['Wobble Bass', 'Wubstep'],
+    bpmRange: { min: 135, max: 150, typical: 140 },
+    keyPreference: 'minor',
+    energyRange: { min: 6, max: 9 },
+    timingFeel: ['half-time'],
+    drumSignatures: ['two-step', 'half-time', 'punchy'],
+    bassSignatures: ['wobble', 'LFO', 'modulated', 'growl'],
+    productionCharacteristics: ['bass-led', 'drop-focused', 'LFO-driven'],
+    instrumentSignatures: ['wobble-bass', 'sub', 'risers', 'snare-reverb'],
+    era: { start: 2006, peak: 2012 },
+    origins: ['UK'],
+    musicbrainzTags: ['wobble', 'dubstep', 'bass music'],
+    characteristics: ['wobbly', 'physical', 'bass-led', 'hypnotic'],
+    relatedSubgenres: ['deep_dubstep', 'brostep', 'spacebass', 'riddim']
+  },
+
+  wonky: {
+    name: 'Wonky',
+    parent: 'Experimental Bass',
+    aliases: ['Wonky Bass', 'Purple Sound'],
+    bpmRange: { min: 80, max: 110, typical: 95 },
+    keyPreference: 'minor',
+    energyRange: { min: 4, max: 7 },
+    timingFeel: ['swing', 'broken', 'off-grid'],
+    drumSignatures: ['off-grid', '808', 'sparse-kick', 'skitter'],
+    bassSignatures: ['808', 'bent', 'glitchy', 'melodic'],
+    productionCharacteristics: ['off-kilter', 'sample-based', 'leftfield'],
+    instrumentSignatures: ['bent-808', 'chip-synths', 'glitch-fx', 'weird-samples'],
+    era: { start: 2008, peak: 2012 },
+    origins: ['UK', 'USA'],
+    musicbrainzTags: ['wonky', 'wonky bass', 'purple'],
+    characteristics: ['off-kilter', 'playful', 'glitchy', 'leftfield'],
+    relatedSubgenres: ['leftfield_bass', 'footwork', 'spacebass', 'future_bass']
+  },
+
+  leftfield_bass: {
+    name: 'Leftfield Bass',
+    parent: 'Experimental Bass',
+    aliases: ['Leftfield', 'Experimental Club', 'Club Bass'],
+    bpmRange: { min: 110, max: 150, typical: 130 },
+    keyPreference: 'minor',
+    energyRange: { min: 5, max: 8 },
+    timingFeel: ['broken', 'half-time', 'polymetric'],
+    drumSignatures: ['broken-kick', 'sparse', 'unusual-grid'],
+    bassSignatures: ['designed', 'sub', 'textural'],
+    productionCharacteristics: ['avant-garde', 'club', 'sound-design'],
+    instrumentSignatures: ['designed-bass', 'found-sounds', 'modular', 'negative-space'],
+    era: { start: 2009, peak: 2016 },
+    origins: ['UK', 'Berlin', 'Global'],
+    musicbrainzTags: ['leftfield', 'experimental bass', 'bass music'],
+    characteristics: ['avant-garde', 'unpredictable', 'club', 'textural'],
+    relatedSubgenres: ['wonky', 'spacebass', 'idm', 'uk_bass']
+  },
+
+  uk_bass: {
+    name: 'UK Bass',
+    parent: 'Experimental Bass',
+    aliases: ['UK Bass Music', 'Post-Dubstep'],
+    bpmRange: { min: 125, max: 145, typical: 135 },
+    keyPreference: 'minor',
+    energyRange: { min: 5, max: 8 },
+    timingFeel: ['half-time', 'broken', 'garage'],
+    drumSignatures: ['broken', 'garage-shuffle', 'sparse-kick'],
+    bassSignatures: ['sub', 'warm', 'designed'],
+    productionCharacteristics: ['post-dubstep', 'garage-adjacent', 'UK'],
+    instrumentSignatures: ['sub-bass', 'vocal-chops', 'garage-drums', 'pads'],
+    era: { start: 2008, peak: 2014 },
+    origins: ['UK', 'London', 'Bristol'],
+    musicbrainzTags: ['uk bass', 'bass music', 'post-dubstep'],
+    characteristics: ['UK', 'post-dubstep', 'garage-adjacent', 'sub-heavy'],
+    relatedSubgenres: ['deep_dubstep', 'wonky', 'leftfield_bass', 'grime']
+  },
+
+  broken_808: {
+    name: 'Broken 808',
+    parent: 'Experimental Bass',
+    aliases: ['Broken Bass', '808 Broken'],
+    bpmRange: { min: 100, max: 140, typical: 120 },
+    keyPreference: 'minor',
+    energyRange: { min: 5, max: 8 },
+    timingFeel: ['broken', 'half-time'],
+    drumSignatures: ['broken-kick', '808', 'syncopated'],
+    bassSignatures: ['808', 'tuned', 'lead'],
+    productionCharacteristics: ['808-led', 'syncopated', 'sparse-hats'],
+    instrumentSignatures: ['808-kick', '808-bass', 'sparse-hats', 'claps'],
+    era: { start: 2010, peak: 2020 },
+    origins: ['UK', 'USA'],
+    musicbrainzTags: ['bass music', '808', 'experimental bass'],
+    characteristics: ['broken', '808-led', 'syncopated', 'physical'],
+    relatedSubgenres: ['half_time_bass', 'sparse_808', 'wonky', 'trap']
+  },
+
+  half_time_bass: {
+    name: 'Half-time Bass',
+    parent: 'Experimental Bass',
+    aliases: ['Halftime Bass', 'Halftime'],
+    bpmRange: { min: 130, max: 175, typical: 140 },
+    keyPreference: 'minor',
+    energyRange: { min: 6, max: 9 },
+    timingFeel: ['half-time'],
+    drumSignatures: ['halftime-snare', 'sparse-kick', 'triplet-hats'],
+    bassSignatures: ['sub', '808', 'modulated'],
+    productionCharacteristics: ['halftime', 'heavy', 'drop-oriented'],
+    instrumentSignatures: ['sub-bass', 'halftime-snare', 'designed-bass'],
+    era: { start: 2012, peak: 2020 },
+    origins: ['UK', 'USA'],
+    musicbrainzTags: ['halftime', 'bass music'],
+    characteristics: ['halftime', 'heavy', 'sub-heavy', 'physical'],
+    relatedSubgenres: ['broken_808', 'halftime_dnb', 'dubstep', 'trap']
+  },
+
+  sparse_808: {
+    name: 'Sparse 808',
+    parent: 'Experimental Bass',
+    aliases: ['Minimal 808', 'Space 808'],
+    bpmRange: { min: 90, max: 130, typical: 110 },
+    keyPreference: 'minor',
+    energyRange: { min: 3, max: 6 },
+    timingFeel: ['sparse', 'half-time'],
+    drumSignatures: ['sparse-kick', 'minimal', 'negative-space'],
+    bassSignatures: ['808', 'sub', 'sparse'],
+    productionCharacteristics: ['minimal', 'negative-space', '808-led'],
+    instrumentSignatures: ['808', 'silence', 'light-hats', 'pads'],
+    era: { start: 2014, peak: 2022 },
+    origins: ['Global'],
+    musicbrainzTags: ['bass music', '808', 'minimal'],
+    characteristics: ['sparse', 'minimal', 'space', '808-led'],
+    relatedSubgenres: ['broken_808', 'spacebass', 'leftfield_bass', 'downtempo']
+  },
+
+  footwork: {
+    name: 'Footwork',
+    parent: 'Experimental Bass',
+    aliases: ['Juke', 'Chicago Footwork', 'Juke Footwork'],
+    bpmRange: { min: 150, max: 170, typical: 160 },
+    keyPreference: 'minor',
+    energyRange: { min: 7, max: 9 },
+    timingFeel: ['broken', 'polymetric'],
+    drumSignatures: ['sliced-kick', 'rapid', 'syncopated'],
+    bassSignatures: ['808', 'sampled', 'punchy'],
+    productionCharacteristics: ['high-BPM', 'sample-chops', 'dance-battle'],
+    instrumentSignatures: ['sliced-samples', '808', 'rapid-kicks', 'vocal-chops'],
+    era: { start: 1996, peak: 2012 },
+    origins: ['Chicago', 'USA'],
+    musicbrainzTags: ['footwork', 'juke', 'chicago footwork'],
+    characteristics: ['fast', 'syncopated', 'battle-dance', 'sample-heavy'],
+    relatedSubgenres: ['wonky', 'leftfield_bass', 'jungle', 'trap']
+  },
+
+  colour_bass: {
+    name: 'Colour Bass',
+    parent: 'Experimental Bass',
+    aliases: ['Color Bass', 'Melodic Dubstep'],
+    bpmRange: { min: 140, max: 155, typical: 145 },
+    keyPreference: 'minor',
+    energyRange: { min: 6, max: 9 },
+    timingFeel: ['half-time'],
+    drumSignatures: ['half-time', 'punchy', 'sidechained'],
+    bassSignatures: ['melodic', 'designed', 'colourful', 'modulated'],
+    productionCharacteristics: ['melodic', 'sound-design', 'festival-adjacent'],
+    instrumentSignatures: ['designed-bass', 'supersaws', 'vocal-chops', 'risers'],
+    era: { start: 2016, peak: 2022 },
+    origins: ['USA', 'Global'],
+    musicbrainzTags: ['colour bass', 'color bass', 'melodic dubstep'],
+    characteristics: ['melodic', 'colourful', 'designed', 'emotional'],
+    relatedSubgenres: ['future_bass', 'wubs', 'spacebass', 'brostep']
+  },
+
+  neurobass: {
+    name: 'Neurobass',
+    parent: 'Experimental Bass',
+    aliases: ['Neuro Bass', 'Techstep Bass'],
+    bpmRange: { min: 135, max: 150, typical: 140 },
+    keyPreference: 'minor',
+    energyRange: { min: 7, max: 9 },
+    timingFeel: ['half-time'],
+    drumSignatures: ['tight', 'technical', 'punchy'],
+    bassSignatures: ['neuro', 'Reese', 'modulated', 'distorted'],
+    productionCharacteristics: ['technical', 'dark', 'sound-design'],
+    instrumentSignatures: ['Reese-bass', 'neuro-growls', 'tight-drums', 'FX'],
+    era: { start: 2012, peak: 2020 },
+    origins: ['UK', 'Global'],
+    musicbrainzTags: ['neurobass', 'neuro bass', 'bass music'],
+    characteristics: ['technical', 'dark', 'aggressive', 'designed'],
+    relatedSubgenres: ['neurofunk', 'wubs', 'tearout', 'riddim']
+  },
+
+  tearout: {
+    name: 'Tearout',
+    parent: 'Experimental Bass',
+    aliases: ['Tearout Dubstep', 'Heavy Tearout'],
+    bpmRange: { min: 140, max: 150, typical: 145 },
+    keyPreference: 'minor',
+    energyRange: { min: 8, max: 10 },
+    timingFeel: ['half-time'],
+    drumSignatures: ['heavy-kick', 'aggressive-snare', 'drops'],
+    bassSignatures: ['aggressive', 'distorted', 'tearout'],
+    productionCharacteristics: ['aggressive', 'heavy', 'festival'],
+    instrumentSignatures: ['tearout-bass', 'growls', 'risers', 'impact-FX'],
+    era: { start: 2018, peak: 2023 },
+    origins: ['USA', 'Global'],
+    musicbrainzTags: ['tearout', 'tearout dubstep'],
+    characteristics: ['aggressive', 'heavy', 'distorted', 'festival'],
+    relatedSubgenres: ['brostep', 'neurobass', 'riddim', 'wubs']
+  },
+
+  wave: {
+    name: 'Wave',
+    parent: 'Experimental Bass',
+    aliases: ['Wave Music', 'Hardwave'],
+    bpmRange: { min: 130, max: 160, typical: 140 },
+    keyPreference: 'minor',
+    energyRange: { min: 6, max: 9 },
+    timingFeel: ['half-time', 'full-time'],
+    drumSignatures: ['trap-influenced', 'punchy', 'sidechained'],
+    bassSignatures: ['distorted', 'hardstyle-adjacent', 'modulated'],
+    productionCharacteristics: ['internet-era', 'hard', 'emotional'],
+    instrumentSignatures: ['distorted-bass', 'pads', 'vocal-chops', 'hard-kicks'],
+    era: { start: 2013, peak: 2019 },
+    origins: ['Global', 'Internet'],
+    musicbrainzTags: ['wave', 'hardwave', 'bass music'],
+    characteristics: ['hard', 'emotional', 'internet-era', 'bass-led'],
+    relatedSubgenres: ['future_bass', 'trap', 'colour_bass', 'wonky']
   },
 
   // =========================================================================
@@ -1147,64 +1416,65 @@ function calculateSubgenreScore(
   bassline: { type: BasslineType } | null,
   energy: number | null,
   musicbrainzTags: string[] = [],
-  genreHints: string[] = []
+  genreHints: string[] = [],
+  detectedInstruments: string[] = [],
 ): { score: number; matchedFeatures: string[] } {
   let score = 0
   const matchedFeatures: string[] = []
   
-  // BPM match (25 points)
-  if (bpm !== null) {
-    if (bpm >= profile.bpmRange.min && bpm <= profile.bpmRange.max) {
-      const bpmScore = 25 * (1 - Math.abs(bpm - profile.bpmRange.typical) / 30)
-      score += Math.max(15, bpmScore)
-      matchedFeatures.push(`BPM ${bpm} in range`)
-    } else if (Math.abs(bpm - profile.bpmRange.typical) < 15) {
-      score += 10
-      matchedFeatures.push(`BPM ${bpm} close to range`)
-    }
-  }
-  
-  // Timing feel match (20 points)
-  if (profile.timingFeel.includes(timing.type)) {
-    score += 20
-    matchedFeatures.push(`${timing.type} timing`)
-  }
-  
-  // Drum signature match (15 points)
+  // Drum signature match (45 points) — primary identity
   const drumMatches = profile.drumSignatures.filter(sig =>
     drumGenre.primary.toLowerCase().includes(sig.split('-')[0]) ||
     drumGenre.secondary.some(s => s.toLowerCase().includes(sig.split('-')[0]))
   )
   if (drumMatches.length > 0) {
-    score += 15 * Math.min(1, drumMatches.length / 2)
+    score += 45 * Math.min(1, drumMatches.length / 2)
     matchedFeatures.push(`drum: ${drumMatches.slice(0, 2).join(', ')}`)
   }
   
-  // Bass signature match (10 points)
+  // Timing feel match (15 points)
+  if (profile.timingFeel.includes(timing.type)) {
+    score += 15
+    matchedFeatures.push(`${timing.type} timing`)
+  }
+
+  // BPM match (20 points) — after drums
+  if (bpm !== null) {
+    if (bpm >= profile.bpmRange.min && bpm <= profile.bpmRange.max) {
+      const bpmScore = 20 * (1 - Math.abs(bpm - profile.bpmRange.typical) / 30)
+      score += Math.max(8, bpmScore)
+      matchedFeatures.push(`BPM ${bpm} in range`)
+    } else if (Math.abs(bpm - profile.bpmRange.typical) < 15) {
+      score += 6
+      matchedFeatures.push(`BPM ${bpm} close to range`)
+    }
+  }
+  
+  // Bass signature match (20 points) — how bass sits on the grid
   if (bassline) {
     const bassMatches = profile.bassSignatures.filter(sig =>
       bassline.type.toLowerCase().includes(sig.split('-')[0])
     )
     if (bassMatches.length > 0) {
-      score += 10
+      score += 20
       matchedFeatures.push(`bass: ${bassline.type}`)
     }
   }
   
-  // Energy match (10 points)
+  // Energy match (3 points) — tie-breaker only
   if (energy !== null) {
     if (energy >= profile.energyRange.min && energy <= profile.energyRange.max) {
-      score += 10
+      score += 3
       matchedFeatures.push(`energy ${energy}`)
     }
   }
   
-  // MusicBrainz tag match (15 points)
+  // MusicBrainz tag match (4 points) — never outranks the groove
   const tagMatches = profile.musicbrainzTags.filter(tag =>
     musicbrainzTags.some(t => t.toLowerCase().includes(tag.toLowerCase()))
   )
   if (tagMatches.length > 0) {
-    score += 15 * Math.min(1, tagMatches.length / 2)
+    score += 4
     matchedFeatures.push(`tags: ${tagMatches.slice(0, 2).join(', ')}`)
   }
   
@@ -1216,6 +1486,35 @@ function calculateSubgenreScore(
   if (hintMatches.length > 0) {
     score += 5
     matchedFeatures.push(`hint: ${hintMatches[0]}`)
+  }
+
+  // Instrument signature match (8 points) — tie-breaker from measured instrument usage
+  if (detectedInstruments.length > 0 && profile.instrumentSignatures?.length) {
+    const normalized = detectedInstruments.map((i) => i.toLowerCase().replace(/\s+/g, '-'))
+    const instMatches = profile.instrumentSignatures.filter((sig) => {
+      const needle = sig.toLowerCase()
+      return normalized.some(
+        (inst) => inst.includes(needle.split('-')[0]) || needle.includes(inst.split('-')[0]),
+      )
+    })
+    if (instMatches.length > 0) {
+      score += Math.min(8, 4 + instMatches.length * 2)
+      matchedFeatures.push(`instruments: ${instMatches.slice(0, 3).join(', ')}`)
+    }
+  }
+
+  // Production characteristics soft match (4 points) — spectral/timbre hints
+  if (detectedInstruments.length > 0 && profile.productionCharacteristics?.length) {
+    const prodNeedles = ['spacious', 'sound-design', 'minimal', 'analog', 'live', 'organic', 'electronic']
+    const instBlob = detectedInstruments.join(' ').toLowerCase()
+    const prodMatches = profile.productionCharacteristics.filter((trait) => {
+      const t = trait.toLowerCase()
+      return prodNeedles.some((p) => t.includes(p) && instBlob.includes(p.split('-')[0]))
+    })
+    if (prodMatches.length > 0) {
+      score += 4
+      matchedFeatures.push(`production: ${prodMatches.slice(0, 2).join(', ')}`)
+    }
   }
   
   return { score: Math.round(score), matchedFeatures }
@@ -1250,7 +1549,10 @@ const TITLE_GENRE_KEYWORDS: Record<string, string[]> = {
   'hip-hop': ['boom_bap', 'trap', 'lo_fi_hip_hop'],
   'trap': ['trap', 'drill'],
   'drill': ['drill', 'trap'],
-  'house': ['deep_house', 'tech_house', 'classic_house'],
+  'house': ['deep_house', 'tech_house', 'classic_house', 'psychedelic_house'],
+  'psychedelic': ['psychedelic_house', 'psytrance'],
+  'psych house': ['psychedelic_house'],
+  'psy house': ['psychedelic_house'],
   'techno': ['detroit_techno', 'minimal_techno', 'acid_techno'],
   'jungle': ['jungle', 'ragga_jungle'],
   'dnb': ['liquid_dnb', 'neurofunk', 'jump_up'],
@@ -1304,11 +1606,12 @@ export function classifySubgenres(
   energy: number | null,
   musicbrainzTags: string[] = [],
   genreHints: string[] = [],
-  trackTitle: string = ''
+  trackTitle: string = '',
+  detectedInstruments: string[] = [],
 ): SubgenreClassificationResult {
   const scores: { name: string; parent: string; score: number; matchedFeatures: string[] }[] = []
   
-  // Extract title-based genre hints (HIGHEST PRIORITY)
+  // Title keywords are weak hints only (see score boosts below).
   const titleHints = extractTitleGenreHints(trackTitle)
   const titleBoostSubgenres = new Set(titleHints.subgenres)
   
@@ -1322,24 +1625,22 @@ export function classifySubgenres(
       drumAnalysis?.bassline || null,
       energy,
       musicbrainzTags,
-      genreHints
+      genreHints,
+      detectedInstruments,
     )
     
-    // TITLE-BASED BOOST (HIGHEST priority - 60 points)
-    // If the track title contains genre keywords, this is the strongest signal
-    // Genre in title = artist's explicit intent
+    // Title is a tie-breaker only (never outranks drum grid / tempo / bass).
     if (titleBoostSubgenres.has(key)) {
-      score += 60
+      score += 8
       matchedFeatures.push(`title: ${titleHints.keywords.join(', ')}`)
     }
     
-    // Also boost by profile name/alias match in title (50 points)
     const normalizedTitle = trackTitle.toLowerCase()
     if (normalizedTitle.includes(profile.name.toLowerCase())) {
-      score += 50
+      score += 6
       matchedFeatures.push(`title-match: ${profile.name}`)
     } else if (profile.aliases.some(a => normalizedTitle.includes(a.toLowerCase()))) {
-      score += 45
+      score += 5
       matchedFeatures.push(`title-alias: ${profile.aliases.find(a => normalizedTitle.includes(a.toLowerCase()))}`)
     }
     

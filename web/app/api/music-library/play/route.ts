@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
+import { checkRateLimit, clientKeyFromRequest } from '@/lib/rate-limit'
 import { createSupabaseServerClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,21 +10,32 @@ export const dynamic = 'force-dynamic'
  * Record a track play event and increment play_count
  */
 export async function POST(request: NextRequest) {
+  const rl = checkRateLimit(`music-play:${clientKeyFromRequest(request)}`, 120, 60_000)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many play events' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
+    )
+  }
+
   try {
     const supabase = createSupabaseServerClient()
-    const { trackId, fanId, duration, source = 'library' } = await request.json()
+    const { trackId, duration, source = 'library' } = await request.json()
 
-    if (!trackId) {
+    if (!trackId || typeof trackId !== 'string') {
       return NextResponse.json({ error: 'trackId is required' }, { status: 400 })
     }
+
+    // Never trust client-supplied fan identity for attribution.
+    const safeFanId = null
 
     // Try RPC first, fall back to manual insert + update
     try {
       await supabase.rpc('record_track_play', {
         p_track_id: trackId,
-        p_fan_id: fanId || null,
-        p_duration: duration || null,
-        p_source: source,
+        p_fan_id: safeFanId,
+        p_duration: typeof duration === 'number' ? duration : null,
+        p_source: typeof source === 'string' ? source.slice(0, 64) : 'library',
       })
     } catch {
       // RPC may not exist yet — do it manually
@@ -30,9 +43,9 @@ export async function POST(request: NextRequest) {
         .from('track_plays')
         .insert({
           track_id: trackId,
-          fan_id: fanId || null,
-          duration_listened: duration || null,
-          source,
+          fan_id: safeFanId,
+          duration_listened: typeof duration === 'number' ? duration : null,
+          source: typeof source === 'string' ? source.slice(0, 64) : 'library',
         })
 
       await supabase
@@ -54,6 +67,9 @@ export async function POST(request: NextRequest) {
  * Query params: ?type=recent|top|history&limit=25&trackId=xxx
  */
 export async function GET(request: NextRequest) {
+  const gate = await getMusicVaultApiAccess(request)
+  if (!gate.ok) return gate.response
+
   try {
     const supabase = createSupabaseServerClient()
     const { searchParams } = new URL(request.url)

@@ -3,10 +3,13 @@
  * Provides a Promise-based API that maintains compatibility with existing code
  */
 
+import type { DspEnvelopeBucket } from '@/lib/audio/waveform-dsp-envelope'
+
 export interface PeakData {
   data: number[]
   length: number
   sampleRate: number
+  envelopes?: DspEnvelopeBucket[]
 }
 
 interface WorkerMessage {
@@ -88,40 +91,60 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
+function canAnalyzeAudioWaveform(): boolean {
+  if (typeof window === 'undefined') return false
+  const w = window as Window & { webkitAudioContext?: typeof AudioContext }
+  return Boolean(typeof AudioContext !== 'undefined' || w.webkitAudioContext)
+}
+
+function isAudioContextUnavailableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /audiocontext is not supported/i.test(msg)
+}
+
 /**
  * Generate peak data from audio file using Web Worker
  * Falls back to main thread if worker is unavailable
  */
 export async function generatePeakData(audioFile: string, samples: number = 2000): Promise<PeakData> {
-  const worker = getWorker()
-  
-  // Fallback to main thread if worker unavailable
-  if (!worker) {
-    return generatePeakDataMainThread(audioFile, samples)
+  if (!canAnalyzeAudioWaveform()) {
+    throw new Error('AudioContext is not supported in this environment')
   }
-  
-  return new Promise((resolve, reject) => {
-    const id = generateId()
-    
-    pendingRequests.set(id, { resolve, reject })
-    
-    const message: WorkerMessage = {
-      id,
-      type: 'generatePeaks',
-      audioUrl: audioFile,
-      samples
-    }
-    
-    worker.postMessage(message)
-    
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (pendingRequests.has(id)) {
-        pendingRequests.delete(id)
-        reject(new Error('Worker timeout'))
+
+  const worker = getWorker()
+
+  const runWorker = (): Promise<PeakData> =>
+    new Promise((resolve, reject) => {
+      if (!worker) {
+        reject(new Error('Worker unavailable'))
+        return
       }
-    }, 30000)
-  }).then((data: any) => data.peaks)
+      const id = generateId()
+      pendingRequests.set(id, { resolve, reject })
+      const message: WorkerMessage = {
+        id,
+        type: 'generatePeaks',
+        audioUrl: audioFile,
+        samples,
+      }
+      worker.postMessage(message)
+      setTimeout(() => {
+        if (pendingRequests.has(id)) {
+          pendingRequests.delete(id)
+          reject(new Error('Worker timeout'))
+        }
+      }, 30000)
+    }).then((data: any) => data.peaks as PeakData)
+
+  if (worker) {
+    try {
+      return await runWorker()
+    } catch (err) {
+      if (!isAudioContextUnavailableError(err)) throw err
+    }
+  }
+
+  return generatePeakDataMainThread(audioFile, samples)
 }
 
 /**

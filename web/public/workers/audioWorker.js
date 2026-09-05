@@ -3,31 +3,76 @@
  * Runs in a separate thread to avoid blocking the main UI
  */
 
-// Generate peak data from audio buffer
+// Generate professional Peak+RMS+band envelopes from audio buffer (DAW/DJ/MiniMeters DSP)
 function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
-  const rawData = audioBuffer.getChannelData(0) // Get first channel
-  const blockSize = Math.floor(rawData.length / samples)
-  const filteredData = []
-  
-  for (let i = 0; i < samples; i++) {
-    const blockStart = blockSize * i
-    let sum = 0
-    let max = 0
-    
-    for (let j = 0; j < blockSize; j++) {
-      const sample = Math.abs(rawData[blockStart + j])
-      sum += sample
-      max = Math.max(max, sample)
+  const left = audioBuffer.getChannelData(0)
+  const right = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null
+  const n = left.length
+  const buckets = Math.max(64, Math.min(8192, samples | 0))
+  const block = Math.max(1, Math.floor(n / buckets))
+  const sr = audioBuffer.sampleRate || 44100
+  const aLow = 1 - Math.exp((-2 * Math.PI * 250) / sr)
+  const aMid = 1 - Math.exp((-2 * Math.PI * 2500) / sr)
+
+  let lpLow = 0
+  let lpMid = 0
+  const envelopes = []
+  let maxPeak = 1e-8
+  let maxBand = 1e-8
+
+  for (let b = 0; b < buckets; b++) {
+    const start = b * block
+    const end = b === buckets - 1 ? n : Math.min(n, start + block)
+    let sumSq = 0
+    let peak = 0
+    let sumLow = 0
+    let sumMid = 0
+    let sumHigh = 0
+    let count = 0
+    for (let i = start; i < end; i++) {
+      const l = left[i] || 0
+      const r = right ? right[i] || 0 : l
+      const x = (l + r) * 0.5
+      const ax = Math.abs(x)
+      lpLow += aLow * (x - lpLow)
+      lpMid += aMid * (x - lpMid)
+      const low = lpLow
+      const mid = lpMid - lpLow
+      const high = x - lpMid
+      peak = Math.max(peak, ax)
+      sumSq += x * x
+      sumLow += Math.abs(low)
+      sumMid += Math.abs(mid)
+      sumHigh += Math.abs(high)
+      count++
     }
-    
-    // Use RMS for smoother visualization, but keep peak for transients
-    const rms = Math.sqrt(sum / blockSize)
-    const peak = max
-    // Combine RMS and peak for better transient visibility
-    filteredData.push((rms * 0.7 + peak * 0.3))
+    const c = Math.max(1, count)
+    const env = {
+      peak,
+      rms: Math.sqrt(sumSq / c),
+      low: sumLow / c,
+      mid: sumMid / c,
+      high: sumHigh / c,
+    }
+    if (env.peak > maxPeak) maxPeak = env.peak
+    if (env.rms > maxPeak) maxPeak = env.rms
+    if (env.low > maxBand) maxBand = env.low
+    if (env.mid > maxBand) maxBand = env.mid
+    if (env.high > maxBand) maxBand = env.high
+    envelopes.push(env)
   }
-  
-  return filteredData
+
+  for (let i = 0; i < envelopes.length; i++) {
+    const e = envelopes[i]
+    e.peak /= maxPeak
+    e.rms /= maxPeak
+    e.low /= maxBand
+    e.mid /= maxBand
+    e.high /= maxBand
+  }
+
+  const data = envelopes.map((e) => e.rms * 0.7 + e.peak * 0.3)
+  return { data, envelopes }
 }
 
 // Detect onsets (beat starts) in audio data
@@ -235,7 +280,12 @@ self.addEventListener('message', async (event) => {
   
   try {
     // Download and decode audio
-    const response = await fetch(audioUrl)
+    const response = await fetch(audioUrl, {
+      headers: {
+        // ngrok free interstitial bypass (no-op for other hosts)
+        'ngrok-skip-browser-warning': '1',
+      },
+    })
     if (!response.ok) {
       throw new Error(`Failed to fetch audio: ${response.statusText}`)
     }
@@ -265,8 +315,9 @@ self.addEventListener('message', async (event) => {
     if (type === 'generatePeaks' || type === 'both') {
       const peakData = generatePeakDataFromBuffer(audioBuffer, samples)
       result.peaks = {
-        data: peakData,
-        length: samples,
+        data: peakData.data,
+        envelopes: peakData.envelopes,
+        length: peakData.data.length,
         sampleRate: audioBuffer.sampleRate
       }
     }

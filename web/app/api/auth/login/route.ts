@@ -8,6 +8,13 @@ export const dynamic = 'force-dynamic'
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const LOGIN_MAX_ATTEMPTS = 20
 
+function formatAuthError(message: string): string {
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network/i.test(message)) {
+    return 'Cannot reach Supabase. Check that your project is active and NEXT_PUBLIC_SUPABASE_URL in web/.env.local is correct.'
+  }
+  return message
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rl = checkRateLimit(
@@ -44,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       return NextResponse.json(
-        { error: error.message },
+        { error: formatAuthError(error.message) },
         { status: 401 }
       )
     }
@@ -108,9 +115,10 @@ export async function POST(request: NextRequest) {
     return response
   } catch (error: any) {
     console.error('Login error:', error)
+    const message = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: formatAuthError(message) },
+      { status: /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network/i.test(message) ? 503 : 500 }
     )
   }
 }

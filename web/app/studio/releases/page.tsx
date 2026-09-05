@@ -2,18 +2,38 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/AdminAuthContext'
 import { useNotifications } from '@/contexts/NotificationContext'
 import Link from 'next/link'
-import { FaPlus, FaRocket, FaCalendarAlt, FaEdit, FaSave, FaTimes, FaTrash } from 'react-icons/fa'
+import StudioPageShell from '@/components/studio/StudioPageShell'
+import ReleaseReadinessRing from '@/components/studio/ReleaseReadinessRing'
+import { STATUS_STYLES } from '@/lib/studio/constants'
+import { useStudioReleases } from '@/lib/api/studio-hooks'
+import {
+  FaPlus,
+  FaRocket,
+  FaCalendarAlt,
+  FaEdit,
+  FaSave,
+  FaTimes,
+  FaTrash,
+  FaSatellite,
+} from 'react-icons/fa'
 
 export default function ReleasesPage() {
   const { user, isAdmin, loading } = useAuth()
   const { showNotification } = useNotifications()
   const router = useRouter()
-  const [releases, setReleases] = useState<any[]>([])
-  const [loadingReleases, setLoadingReleases] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const apiFilter = filter === 'pending' ? 'pending' : null
+  const {
+    data: queryReleases = [],
+    isLoading: loadingReleases,
+  } = useStudioReleases(
+    filter === 'scheduled' ? null : apiFilter,
+    Boolean(isAdmin) && filter !== 'scheduled'
+  )
+  const releases = filter === 'scheduled' ? [] : queryReleases
 
   // Scheduled releases from API
   const [scheduledReleases, setScheduledReleases] = useState<any[]>([])
@@ -33,12 +53,6 @@ export default function ReleasesPage() {
   })
   const [savingScheduled, setSavingScheduled] = useState(false)
   const [deletingScheduled, setDeletingScheduled] = useState(false)
-
-  useEffect(() => {
-    if (isAdmin) {
-      fetchReleases()
-    }
-  }, [isAdmin, filter])
 
   const fetchScheduledReleases = useCallback(async () => {
     try {
@@ -60,24 +74,6 @@ export default function ReleasesPage() {
       fetchScheduledReleases()
     }
   }, [isAdmin, filter, fetchScheduledReleases])
-
-  async function fetchReleases() {
-    try {
-      setLoadingReleases(true)
-      const url = filter === 'all'
-        ? '/api/studio/releases'
-        : `/api/studio/releases?filter=${filter}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setReleases(data.releases || [])
-      }
-    } catch (error) {
-      console.error('Error fetching releases:', error)
-    } finally {
-      setLoadingReleases(false)
-    }
-  }
 
   function startEditScheduled(release: any) {
     setEditForm({
@@ -178,19 +174,19 @@ export default function ReleasesPage() {
   const inputClass = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500'
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Releases</h1>
-          <Link
-            href="/studio/releases/new"
-            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2"
-          >
-            <FaPlus />
-            New Release
-          </Link>
-        </div>
-
+    <StudioPageShell
+      title="Releases"
+      subtitle="Draft, rights-check, and go-live — your internal distributor pipeline"
+      actions={
+        <Link
+          href="/studio/releases/new"
+          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition"
+        >
+          <FaPlus />
+          New release
+        </Link>
+      }
+    >
         {/* Filters */}
         <div className="flex gap-2 mb-6 flex-wrap">
           <button
@@ -224,8 +220,15 @@ export default function ReleasesPage() {
             Scheduled
           </button>
           <Link
-            href="/studio/releases/pipeline"
+            href="/studio/releases/command-center"
             className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition flex items-center gap-2 ml-auto"
+          >
+            <FaSatellite />
+            Command
+          </Link>
+          <Link
+            href="/studio/releases/pipeline"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
           >
             <FaRocket />
             Pipeline
@@ -407,33 +410,45 @@ export default function ReleasesPage() {
         {/* Releases List */}
         {filter !== 'scheduled' && releases.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {releases.map((release) => (
-              <Link
-                key={release.id}
-                href={`/studio/releases/${release.id}`}
-                className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-purple-500 transition-all duration-200 transform hover:scale-[1.02]"
-              >
-                <div className="mb-4">
-                  {release.artwork_url && (
-                    <img
-                      src={release.artwork_url}
-                      alt={release.title}
-                      className="w-full aspect-square object-cover rounded-lg mb-4"
-                    />
+            {releases.map((release) => {
+              const statusKey = release.distributor_status || 'draft'
+              const st = STATUS_STYLES[statusKey] || STATUS_STYLES.draft
+              const score = release.copyright?.readiness_score ?? 0
+              return (
+                <Link
+                  key={release.id}
+                  href={`/studio/releases/${release.id}`}
+                  className="group bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 hover:border-violet-500/50 transition-all"
+                >
+                  <div className="flex gap-4 mb-2">
+                    {release.artwork_url ? (
+                      <img
+                        src={release.artwork_url}
+                        alt=""
+                        className="w-20 h-20 rounded-xl object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-xl bg-zinc-800 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg font-semibold truncate">{release.title}</h3>
+                      <p className="text-sm text-zinc-500 capitalize">{release.type}</p>
+                      <span
+                        className={`inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${st.bg} ${st.text}`}
+                      >
+                        {st.label}
+                      </span>
+                    </div>
+                    <ReleaseReadinessRing score={score} size={48} />
+                  </div>
+                  {release.copyright?.blockers?.[0] && (
+                    <p className="text-xs text-amber-400/90 line-clamp-1">
+                      {release.copyright.blockers[0]}
+                    </p>
                   )}
-                  <h3 className="text-xl font-semibold mb-2">{release.title}</h3>
-                  <p className="text-sm text-gray-400 capitalize">{release.type}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm font-medium ${statusColors[release.distributor_status] || 'text-gray-400'}`}>
-                    {release.distributor_status}
-                  </span>
-                  {release.distributor_status === 'draft' && (
-                    <FaRocket className="text-purple-400" />
-                  )}
-                </div>
-              </Link>
-            ))}
+                </Link>
+              )
+            })}
           </div>
         ) : filter !== 'scheduled' ? (
           <div className="text-center py-16 text-gray-400">
@@ -446,7 +461,6 @@ export default function ReleasesPage() {
             </Link>
           </div>
         ) : null}
-      </div>
-    </div>
+    </StudioPageShell>
   )
 }

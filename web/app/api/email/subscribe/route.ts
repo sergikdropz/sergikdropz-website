@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { isSyntheticFanEmail } from '@/lib/fan-crm'
 import { sendEmail } from '@/lib/email'
 
 export async function POST(request: Request) {
@@ -31,6 +32,45 @@ export async function POST(request: Request) {
     if (dbError) {
       console.error('Error saving subscriber:', dbError)
       return NextResponse.json({ error: 'Failed to subscribe' }, { status: 500 })
+    }
+
+    try {
+      const normalized = email.toLowerCase().trim()
+      if (!isSyntheticFanEmail(normalized)) {
+        const { data: existingFan } = await supabase
+          .from('fans')
+          .select('id, name, source, tags')
+          .eq('email', normalized)
+          .maybeSingle()
+        const tags = Array.from(
+          new Set([
+            ...((existingFan?.tags as string[]) || []),
+            'email_subscriber',
+          ]),
+        )
+        if (existingFan?.id) {
+          await supabase
+            .from('fans')
+            .update({
+              name: name || existingFan.name || '',
+              tags,
+              last_engaged_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingFan.id)
+        } else {
+          await supabase.from('fans').insert({
+            email: normalized,
+            name: name || '',
+            tags,
+            source: source || 'email_subscriber',
+            consent_email: true,
+            last_engaged_at: new Date().toISOString(),
+          })
+        }
+      }
+    } catch (fanErr) {
+      console.warn('email subscribe fan persist skipped:', fanErr)
     }
 
     // Build download URL if this is a free download request

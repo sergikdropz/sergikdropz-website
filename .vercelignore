@@ -1,11 +1,11 @@
 # Exclude large audio files from Vercel deployment (18GB+)
-# These files are hosted on Supabase Storage, not Vercel
+# These files are hosted on Supabase Storage / R2, not Vercel
 web/public/audio/
 web/public/audio/**
 
-# Exclude large image files
-web/public/images/audio/unreleased/eps/
-web/public/images/audio/unreleased/eps/**
+# Upcoming releases artwork currently references local paths under:
+# `web/public/images/audio/unreleased/eps/*`.
+# Do NOT ignore it, otherwise the Upcoming Releases grid renders blank art in production.
 
 # Exclude temp files
 web/temp/
@@ -18,6 +18,27 @@ mobile/
 **/node_modules
 web/node_modules/
 
+# Local Next.js build outputs / caches (often multi‑GB; never deploy)
+web/.next/
+web/.next/**
+web/.next-build/
+web/.next-build/**
+web/.next-dev-3001/
+web/.next-dev-3001/**
+web/.dev/
+web/.dev/**
+web/temp/
+web/temp/**
+web/data/migration-backup/
+web/data/migration-backup/**
+web/data/supabase-export/
+web/data/supabase-export/**
+web/playwright-report/
+web/playwright-report/**
+web/tsconfig.tsbuildinfo
+web/.env*
+!web/.env.example
+
 # Exclude Docker files
 docker-compose.yml
 **/Dockerfile
@@ -28,10 +49,23 @@ docker-compose.yml
 !README.md
 !web/README.md
 
-# Exclude scripts (not needed in production)
-web/scripts/
+# Keep web/scripts — `npm run build` runs knowledge:build from there.
 
 # Exclude Supabase exports
 web/data/supabase-export/*.json
 !web/data/supabase-export/export-summary.json
 
+# Heavy local-only trees
+knowledge/
+knowledge/**
+deploy/
+deploy/**
+kb/
+kb/**
+.continue/
+.cursor/
+.playwright-mcp/
+db_cluster*.backup
+
+web/public/waveforms/
+web/public/waveforms/**

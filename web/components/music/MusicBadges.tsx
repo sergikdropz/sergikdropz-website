@@ -418,11 +418,14 @@ export const DnaMatchScoreBadge = memo(function DnaMatchScoreBadge({
 export const CompatibleKeysBadge = memo(function CompatibleKeysBadge({ 
   currentKey,
   compatibleKeys,
-  size = 'sm'
+  size = 'sm',
+  showLabel = true,
 }: { 
   currentKey?: string | null
   compatibleKeys?: string[] | null
   size?: 'xs' | 'sm' | 'md'
+  /** Set false when the parent already shows a “Mix with” label. */
+  showLabel?: boolean
 }) {
   // If no compatible keys provided, calculate from current key
   const keys = compatibleKeys || (currentKey ? KEY_TRANSITIONS[currentKey] || [] : [])
@@ -436,8 +439,8 @@ export const CompatibleKeysBadge = memo(function CompatibleKeysBadge({
   }
   
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      <span className="text-xs text-gray-500">Mix with:</span>
+    <div className="flex items-center gap-1 flex-wrap min-w-0">
+      {showLabel ? <span className="text-xs text-gray-500 shrink-0">Mix with:</span> : null}
       {keys.slice(0, 4).map(key => {
         const isMajor = key.includes('B')
         const color = isMajor 

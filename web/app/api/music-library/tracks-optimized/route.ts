@@ -4,6 +4,7 @@ import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
 import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import { leanCatalogMetadata } from '@/lib/music-library/track-list-fields'
 
 // Cookie + vault gating: incompatible with static/ISR. HTTP caching via headers only if needed.
 export const dynamic = 'force-dynamic'
@@ -44,7 +45,8 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'display_order'
     const sortOrder = searchParams.get('sortOrder') || 'asc'
     const fields = searchParams.get('fields')?.split(',') || ['basic']
-    const includeArchived = searchParams.get('includeArchived') === 'true'
+    const includeArchivedRequested = searchParams.get('includeArchived') === 'true'
+    const includeArchived = includeArchivedRequested && Boolean(gate.session?.isAdmin)
 
     // Build base query with selective fields
     // Select fields based on request
@@ -79,7 +81,11 @@ export async function GET(request: NextRequest) {
         'last_played_at',
         'track_number',
         'disc_number',
-        'tags'
+        'tags',
+        'year',
+        'date',
+        'date_created',
+        'metadata',
       )
     }
 
@@ -157,64 +163,16 @@ export async function GET(request: NextRequest) {
     const total = count || 0
     const hasMore = offset + limit < total
 
-    const trackIds = (data || []).map((t: any) => t.id).filter(Boolean)
-    const audioFileIds = (data || [])
-      .map((t: any) => t.audio_file_id)
-      .filter((id: any) => id != null)
-
-    const keyByTrackId = new Map<string, string>()
-    const keyByAudioId = new Map<string, string>()
-
-    if (trackIds.length > 0 || audioFileIds.length > 0) {
-      const orConditions: string[] = []
-      if (trackIds.length > 0) orConditions.push(`track_id.in.(${trackIds.join(',')})`)
-      if (audioFileIds.length > 0) orConditions.push(`audio_file_id.in.(${audioFileIds.join(',')})`)
-
-      if (orConditions.length > 0) {
-        const { data: cacheRows } = await supabase
-          .from('sonic_dna_cache')
-          .select('track_id, audio_file_id, key_signature')
-          .or(orConditions.join(','))
-
-        cacheRows?.forEach((row: any) => {
-          if (row.track_id && row.key_signature && row.key_signature !== 'Unknown') {
-            keyByTrackId.set(row.track_id, row.key_signature)
-          }
-          if (row.audio_file_id && row.key_signature && row.key_signature !== 'Unknown') {
-            keyByAudioId.set(row.audio_file_id, row.key_signature)
-          }
-        })
-      }
-    }
-
-    if (audioFileIds.length > 0) {
-      const { data: audioKeys } = await supabase
-        .from('audio_files')
-        .select('id, key_signature')
-        .in('id', audioFileIds)
-
-      audioKeys?.forEach((row: any) => {
-        if (row.id && row.key_signature && row.key_signature !== 'Unknown') {
-          keyByAudioId.set(row.id, row.key_signature)
-        }
-      })
-    }
-
-    // Transform data to match frontend expectations
+    // List loads use key_signature on the track row only — no sonic_dna_cache /
+    // audio_files enrichment (that doubled latency per page for little browse value).
     let keyMissing = 0
     const tracks = (data || []).map((track: any) => {
-      const keyFallback =
-        (track.id ? keyByTrackId.get(track.id) : undefined) ||
-        (track.audio_file_id ? keyByAudioId.get(track.audio_file_id) : undefined) ||
-        undefined
-      const keySignature =
-        track.key_signature && track.key_signature !== 'Unknown'
-          ? track.key_signature
-          : keyFallback
+      const keySignature = track.key_signature || undefined
       if (!keySignature || keySignature === 'Unknown') {
         keyMissing += 1
       }
 
+      const metadata = leanCatalogMetadata(track.metadata)
       return {
         id: track.id,
         folderId: track.folder_id,
@@ -229,6 +187,9 @@ export async function GET(request: NextRequest) {
         energy_level: track.energy_level,
         danceability: track.danceability,
         created_at: track.created_at,
+        date: track.date || undefined,
+        date_created: track.date_created || undefined,
+        year: track.year ?? undefined,
         display_order: track.display_order,
         is_archived: track.is_archived,
         archived_at: track.archived_at,
@@ -240,6 +201,7 @@ export async function GET(request: NextRequest) {
         track_number: track.track_number,
         disc_number: track.disc_number,
         tags: track.tags,
+        ...(metadata ? { metadata } : {}),
       }
     })
 
@@ -252,6 +214,8 @@ export async function GET(request: NextRequest) {
       limit,
       search: search || null,
       folderId: folderId || null,
+    }, {
+      headers: { 'Cache-Control': 'private, no-store, max-age=0, must-revalidate' },
     })
 
   } catch (error) {

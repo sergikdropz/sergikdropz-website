@@ -125,7 +125,7 @@ function CamelotWheel({
     const isMajor = key.includes('B')
 
     // Base color
-    let baseColor = isMajor ? 'rgb(16, 185, 129)' : 'rgb(139, 92, 246)' // emerald vs violet
+    const baseColor = isMajor ? 'rgb(16, 185, 129)' : 'rgb(139, 92, 246)' // emerald vs violet
 
     if (isActive) {
       return isMajor ? 'rgb(52, 211, 153)' : 'rgb(167, 139, 250)' // Lighter when active

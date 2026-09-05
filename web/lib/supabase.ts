@@ -1,5 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
+/** Headers needed when the API is fronted by ngrok free / similar tunnels. */
+function supabaseGlobalHeaders(clientInfo: string): Record<string, string> {
+  return {
+    'X-Client-Info': clientInfo,
+    'ngrok-skip-browser-warning': '1',
+  }
+}
+
 // Client-side Supabase client (for browser)
 export const createSupabaseClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -23,11 +31,24 @@ export const createSupabaseClient = () => {
       schema: 'public',
     },
     global: {
-      headers: {
-        'X-Client-Info': 'sergik-web',
-      },
+      headers: supabaseGlobalHeaders('sergik-web'),
     },
   })
+}
+
+/** True when the app is pointed at the self-hosted gateway (no Storage service). */
+export function isLocalHomeSupabase(url = process.env.NEXT_PUBLIC_SUPABASE_URL): boolean {
+  if (!url) return false
+  try {
+    const { hostname } = new URL(url)
+    if (hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1') return true
+    // Production tunnels to the Mac/Pi home-server API
+    if (hostname.endsWith('.ngrok-free.dev') || hostname.endsWith('.ngrok.io')) return true
+    if (hostname.endsWith('.trycloudflare.com')) return true
+    return false
+  } catch {
+    return /127\.0\.0\.1|localhost|ngrok|trycloudflare/i.test(url)
+  }
 }
 
 // Server-side Supabase client singleton (for API routes)
@@ -72,9 +93,7 @@ export const createSupabaseServerClient = () => {
       persistSession: false,
     },
     global: {
-      headers: {
-        'X-Client-Info': 'sergik-web-server',
-      },
+      headers: supabaseGlobalHeaders('sergik-web-server'),
     },
   })
 

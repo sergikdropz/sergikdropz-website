@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { reprocessExistingTrack, batchProcessTracks } from '@/utils/trackUploadPipeline'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -18,6 +19,8 @@ export const maxDuration = 300
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const body = await request.json()
     const { trackId, trackIds } = body
 

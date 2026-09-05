@@ -1,67 +1,83 @@
 /**
  * Description Writer Agent
- * Specializes in: Writing comprehensive track descriptions
+ * Specializes in: Writing comprehensive track descriptions from the shared blackboard.
  */
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { formatBlackboardPrompt, peerAgentData } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
 
 export class DescriptionWriterAgent extends BaseAgent {
   type = AgentType.DESCRIPTION_WRITER
   capabilities: AgentCapabilities = {
-    canProcessInParallel: true,
+    canProcessInParallel: false,
     requiresAudioFile: false,
     requiresMusicBrainz: false,
-    estimatedProcessingTime: 4000, // AI call
-    priority: 8
+    estimatedProcessingTime: 4000,
+    priority: 8,
   }
 
   async process(context: AgentContext): Promise<AgentResult> {
     const startTime = Date.now()
 
     try {
-      const { trackTitle, artistName, audioFeatures, comprehensiveAnalysis, musicbrainzData, previousAgentResults } = context
+      const {
+        trackTitle,
+        artistName,
+        audioFeatures,
+        comprehensiveAnalysis,
+        previousAgentResults,
+        blackboard,
+      } = context
 
-      // Use previous agent results if available
-      const technical = previousAgentResults?.[AgentType.TECHNICAL_ANALYZER]?.data
-      const intention = previousAgentResults?.[AgentType.INTENTION_ANALYST]?.data?.intention
+      const technical = peerAgentData(previousAgentResults, AgentType.TECHNICAL_ANALYZER)
+      const intention = peerAgentData(previousAgentResults, AgentType.INTENTION_ANALYST)?.intention
+      const drums = peerAgentData(previousAgentResults, AgentType.DRUM_PATTERN_EXPERT)
+      const genre = peerAgentData(previousAgentResults, AgentType.GENRE_SPECIALIST)
+      const psychology = peerAgentData(previousAgentResults, AgentType.PSYCHOLOGY_ANALYST)
+      const psycho = peerAgentData(previousAgentResults, AgentType.PSYCHOACOUSTICS_ANALYST)
+      const boardBlock = formatBlackboardPrompt(blackboard)
 
-      const bpm = audioFeatures?.bpm || 'Unknown'
-      const isHalfTime = bpm !== 'Unknown' && typeof bpm === 'number' && bpm < 100
-      const timingContext = isHalfTime ? 'HALF-TIME (slower, laid-back feel)' : 'FULL-TIME (standard tempo feel)'
-      
-      const prompt = `You are an expert music analyst. Write a CONCISE, CONTEXT-AWARE track description based on the actual track data:
+      const bpm = blackboard?.measured?.bpm ?? audioFeatures?.bpm ?? 'Unknown'
+      const feel = blackboard?.measured?.timingFeel
+      const isHalfTime =
+        feel === 'half-time' || (bpm !== 'Unknown' && typeof bpm === 'number' && bpm < 100)
+      const timingContext = isHalfTime
+        ? 'HALF-TIME (slower, laid-back feel)'
+        : 'FULL-TIME (standard tempo feel)'
+
+      const keyLine = technical?.key
+        ? typeof technical.key === 'object'
+          ? `Key: ${technical.key.key} ${technical.key.mode || ''}`.trim()
+          : `Key: ${technical.key}`
+        : blackboard?.measured?.key
+          ? `Key: ${blackboard.measured.key}`
+          : ''
+
+      const prompt = `You are an expert music analyst writing from a shared measured + encyclopedia blackboard.
+
+${boardBlock}
 
 Track: "${trackTitle}" by ${artistName}
 BPM: ${bpm}
 Timing: ${timingContext}
-${technical?.key ? `Key: ${technical.key.key} ${technical.key.mode}` : ''}
-${comprehensiveAnalysis?.genres?.primary ? `Genres: ${comprehensiveAnalysis.genres.primary.join(', ')}` : ''}
+${keyLine}
+${genre?.primaryGenres?.length ? `Genres: ${genre.primaryGenres.join(', ')}` : comprehensiveAnalysis?.genres?.primary ? `Genres: ${comprehensiveAnalysis.genres.primary.join(', ')}` : ''}
 ${intention ? `Intention: ${intention}` : ''}
+${drums?.signatureMatch?.name || drums?.pattern?.patternType ? `Drum family: ${drums?.signatureMatch?.name || drums?.pattern?.patternType}` : ''}
+${psychology?.psychologicalProfile ? `Psychology: ${String(psychology.psychologicalProfile).slice(0, 140)}` : ''}
+${psycho?.activationFormula || psycho?.report ? `Psychoacoustics: ${String(psycho.activationFormula || psycho.report).slice(0, 140)}` : ''}
 ${comprehensiveAnalysis?.technical?.energyLevel ? `Energy Level: ${comprehensiveAnalysis.technical.energyLevel}` : ''}
-${comprehensiveAnalysis?.harmony?.scale ? `Scale: ${comprehensiveAnalysis.harmony.scale}` : ''}
-${comprehensiveAnalysis?.technical?.timeSignature ? `Time Signature: ${comprehensiveAnalysis.technical.timeSignature}` : ''}
 
 CRITICAL RULES:
-- ACCURATELY identify timing: Half-time (60-100 BPM) vs Full-time (standard tempo)
-- ACCURATELY distinguish HIP-HOP (60-100 BPM, 808s) from DRUM & BASS (160-180 BPM, high energy)
-- Match energy level to timing: Half-time = moderate/low energy, NOT high energy
-- Be CONTEXT-AWARE: Use the actual track data provided above
-- Be CONCISE but COMPREHENSIVE: Maximum 100 words total
-- Cover: sound signature, production, instrumentation, rhythm, emotion, genre, and distinctive features
-- Write like a professional music critic - engaging and insightful
-
-Write a CONCISE track description (80-100 words) that covers:
-- Overall sound signature and production quality
-- Key musical elements and instrumentation
-- Rhythmic characteristics (address timing: half-time vs full-time)
-- Emotional tone and atmosphere
-- Genre identification and stylistic elements
-- What makes this track distinctive
+- Quote measured BPM / Drums / Groove class literally at least once
+- Prefer blackboard encyclopedia + psychology/psychoacoustics peers over crate/title guesses
+- ACCURATELY identify timing from measured feel when present
+- Be CONCISE but COMPREHENSIVE: Maximum 120 words total
 
 Return ONLY a JSON object:
 {
-  "description": "Your concise, context-aware description here (80-100 words maximum)"
+  "description": "Your concise, context-aware description here (80-120 words maximum)"
 }`
 
       const result = await this.callAI(this.withUserDirective(prompt, context), 2000)
@@ -70,9 +86,8 @@ Return ONLY a JSON object:
 
       if (description) {
         return this.createSuccess({ description }, 0.85, processingTime)
-      } else {
-        return this.createFailure('AI analysis failed', processingTime)
       }
+      return this.createFailure('AI analysis failed', processingTime)
     } catch (error: any) {
       return this.createFailure(error.message, Date.now() - startTime)
     }

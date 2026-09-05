@@ -5,6 +5,7 @@
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { formatBlackboardPrompt } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
 
 export class CulturalAnalystAgent extends BaseAgent {
   type = AgentType.CULTURAL_ANALYST
@@ -23,16 +24,19 @@ export class CulturalAnalystAgent extends BaseAgent {
       const { comprehensiveAnalysis, musicbrainzData } = context
 
       const cultural = comprehensiveAnalysis?.cultural
-      if (!cultural) {
+      const kb = context.blackboard?.kb
+      if (!cultural && !kb) {
         return this.createFailure('No cultural data available', Date.now() - startTime)
       }
 
-      // Extract cultural data
+      // Extract cultural data (seed from encyclopedia when comprehensive is thin)
       const culturalData = {
-        regions: cultural.regions || [],
-        culturalInfluences: cultural.culturalInfluences || [],
-        regionalCharacteristics: cultural.regionalCharacteristics || '',
-        crossCulturalElements: cultural.crossCulturalElements || []
+        regions: cultural?.regions?.length ? cultural.regions : kb?.regions || [],
+        culturalInfluences: cultural?.culturalInfluences?.length
+          ? cultural.culturalInfluences
+          : kb?.related || [],
+        regionalCharacteristics: cultural?.regionalCharacteristics || '',
+        crossCulturalElements: cultural?.crossCulturalElements || kb?.related?.slice(0, 5) || [],
       }
 
       // Generate description if we have meaningful data
@@ -54,27 +58,34 @@ export class CulturalAnalystAgent extends BaseAgent {
   }
 
   private async generateDescription(culturalData: any, context: AgentContext): Promise<string | null> {
-    const prompt = `You are an expert ethnomusicologist. Provide a CONCISE, CONTEXT-AWARE cultural analysis:
+    const kb = context.blackboard?.kb
+    const regions = [
+      ...culturalData.regions,
+      ...(kb?.regions || []),
+    ].filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
+    const influences = [
+      ...culturalData.culturalInfluences,
+      ...(kb?.related || []),
+    ].filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
+
+    const prompt = `You are an expert ethnomusicologist writing on a shared Sonic DNA blackboard.
+
+${formatBlackboardPrompt(context.blackboard)}
 
 Track: "${context.trackTitle}" by ${context.artistName}
-Regions: ${culturalData.regions.join(', ') || 'Unknown'}
-Cultural Influences: ${culturalData.culturalInfluences.join(', ') || 'None'}
-Regional Characteristics: ${culturalData.regionalCharacteristics || 'Unknown'}
+Regions: ${regions.join(', ') || 'Unknown'}
+Cultural Influences / related traditions: ${influences.join(', ') || 'None'}
+Regional Characteristics: ${culturalData.regionalCharacteristics || kb?.profileExcerpt?.slice(0, 200) || 'Unknown'}
 Cross-Cultural Elements: ${culturalData.crossCulturalElements.join(', ') || 'None'}
-BPM: ${context.audioFeatures?.bpm || 'Unknown'}
-Energy Level: ${context.audioFeatures?.energyLevel || 'Unknown'}
-${context.comprehensiveAnalysis?.genres?.primary ? `Genres: ${context.comprehensiveAnalysis.genres.primary.join(', ')}` : ''}
+BPM: ${(context.blackboard?.measured?.bpm ?? context.audioFeatures?.bpm) || 'Unknown'}
 
-Write a CONCISE cultural analysis (80-100 words). Be CONTEXT-AWARE and cover:
-- Regional characteristics and musical traditions (if regions provided)
-- Cultural context and significance
-- Cross-cultural elements and fusion (if present)
-- How cultural elements manifest in the music
-- Social/cultural meanings (if relevant)
+CRITICAL: Bind culture to measured drum/bass usage. Never invent from title/folder/crate names.
+
+Write a CONCISE cultural analysis (80-120 words).
 
 Return JSON:
 {
-  "description": "Your concise, context-aware cultural analysis here (80-100 words maximum) or null if cultural data is insufficient"
+  "description": "Your concise, context-aware cultural analysis here (80-120 words maximum) or null if cultural data is insufficient"
 }`
 
     const result = await this.callAI(this.withUserDirective(prompt, context), 2000)

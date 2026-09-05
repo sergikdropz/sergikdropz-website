@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import {
+  extractVaultRelativePath,
+  normalizeVaultAudioUrl,
+} from '@/utils/normalizeVaultAudioUrl'
+import { resolveVaultPlaybackUrl } from '@/lib/audio/resolve-vault-playback-url'
+
+const RESOLVE_CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+}
 
 /**
  * API Route: Resolve Audio File Path to Supabase URL
@@ -28,9 +37,33 @@ export async function GET(request: Request) {
       )
     }
 
+    const vaultPlayback = await resolveVaultPlaybackUrl(filePath)
+    if (vaultPlayback && vaultPlayback.source !== 'normalized') {
+      return NextResponse.json(
+        {
+          url: vaultPlayback.url,
+          source: vaultPlayback.source,
+          expiresIn: vaultPlayback.expiresIn,
+        },
+        { headers: RESOLVE_CACHE_HEADERS },
+      )
+    }
+
     // Remove leading slash and 'audio/' prefix if present
-    let storagePath = filePath.replace(/^\/audio\//, '').replace(/^\//, '')
-    
+    const storagePath = filePath.replace(/^\/audio\//, '').replace(/^\//, '')
+
+    // The media server addresses files by their vault path, so a recognizable
+    // path is already playable. Answer from the path alone and keep playback
+    // working while the database/gateway is unreachable.
+    const mediaServesByPath =
+      !!process.env.NEXT_PUBLIC_AUDIO_BASE_URL || process.env.NEXT_PUBLIC_LOCAL_AUDIO === '1'
+    if (mediaServesByPath && extractVaultRelativePath(filePath)) {
+      return NextResponse.json(
+        { url: normalizeVaultAudioUrl(filePath) },
+        { headers: RESOLVE_CACHE_HEADERS },
+      )
+    }
+
     // Check if Supabase is configured
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -73,6 +106,7 @@ export async function GET(request: Request) {
     const normalizedPath = storagePath.replace(/^\/+|\/+$/g, '').replace(/\\/g, '/')
     
     // First, try exact match on file_path (normalized)
+    // eslint-disable-next-line prefer-const
     let { data: file, error } = await supabase
       .from('audio_files')
       .select('file_url, file_path, file_name')
@@ -117,9 +151,12 @@ export async function GET(request: Request) {
       }
     }
 
-    // If found in database, return the Supabase URL
+    // If found in database, return a playable URL (media tunnel / mp3 normalized)
     if (file && file.file_url) {
-      return NextResponse.json({ url: file.file_url })
+      return NextResponse.json(
+        { url: normalizeVaultAudioUrl(file.file_url) },
+        { headers: RESOLVE_CACHE_HEADERS },
+      )
     }
 
     // If not found in database, construct Supabase URL directly
@@ -129,13 +166,17 @@ export async function GET(request: Request) {
         .from('audio-files')
         .getPublicUrl(storagePath)
       
-      // In production, ALWAYS return Supabase URL (even if file doesn't exist yet)
+      const publicUrl = normalizeVaultAudioUrl(urlData.publicUrl)
+
+      // In production, ALWAYS return a playable URL (even if file doesn't exist yet)
       // This ensures production never tries to use local files
       if (!isDevelopment) {
-        // Production: Always return Supabase URL
-        return NextResponse.json({ url: urlData.publicUrl })
+        return NextResponse.json({ url: publicUrl })
       } else {
-        // Development: Return null to allow local file fallback
+        // Development: allow media-base rewrite, else null for local /audio fallback
+        if (process.env.NEXT_PUBLIC_AUDIO_BASE_URL || process.env.NEXT_PUBLIC_LOCAL_AUDIO === '1') {
+          return NextResponse.json({ url: publicUrl })
+        }
         return NextResponse.json({ url: null })
       }
     }

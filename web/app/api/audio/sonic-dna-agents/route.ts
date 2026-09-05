@@ -8,6 +8,9 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { generateSonicDNAWithAgents } from '@/utils/generateSonicDNAWithAgents'
 import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
 import { updateSonicDNACache } from '@/utils/sonicDNACache'
+import { requireAdminApi } from '@/lib/auth/route-policy'
+import { findAudioFile } from '@/lib/findAudioFile'
+import { lockAnalysisForAudioFile } from '@/lib/catalog-lock'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +25,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const { searchParams } = new URL(request.url)
     const trackId = searchParams.get('trackId')
     const force = searchParams.get('force') === 'true'
@@ -45,17 +50,15 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseServerClient()
 
-    // Get track from database with all necessary fields
-    const { data: track, error: trackError } = await supabase
-      .from('audio_files')
-      .select('*')
-      .eq('id', trackId)
-      .single()
+    const track = await findAudioFile(supabase, {
+      trackId,
+      select: '*',
+    })
 
-    if (trackError || !track) {
-      console.error('Track not found in database:', { trackId, error: trackError })
+    if (!track) {
+      console.error('Track not found in database:', { trackId })
       return NextResponse.json(
-        { error: 'Track not found in database', details: trackError?.message },
+        { error: 'Track not found in database' },
         { status: 404 }
       )
     }
@@ -90,10 +93,10 @@ export async function POST(request: Request) {
     await supabase
       .from('audio_files')
       .update({ sonic_dna_status: 'processing' })
-      .eq('id', trackId)
+      .eq('id', track.id)
 
     // Generate using agent pipeline
-    const sonicDNA = await generateSonicDNAWithAgents(
+    let sonicDNA = await generateSonicDNAWithAgents(
       track.title,
       track.artist,
       track.id,
@@ -115,7 +118,7 @@ export async function POST(request: Request) {
     )
 
     // Prepare analysis data
-    const analysisData = {
+    let analysisData = {
       bpm: sonicDNA.technical?.bpm || track.bpm || null,
       key_signature: sonicDNA.harmony?.keySignature || sonicDNA.technical?.key?.key || track.key_signature || null,
       energy_level: sonicDNA.technical?.energyLevel || track.energy_level || null,
@@ -125,6 +128,10 @@ export async function POST(request: Request) {
       duration_seconds: track.duration_seconds || null,
       artwork_url: track.artwork_url || null
     }
+
+    const locked = await lockAnalysisForAudioFile(supabase, track.id, sonicDNA, analysisData)
+    sonicDNA = locked.sonicDNA
+    analysisData = locked.analysisData
     
     // Merge sonic DNA and analysis data into metadata
     const updatedMetadata = mergeSonicDNAIntoMetadata(
@@ -155,7 +162,7 @@ export async function POST(request: Request) {
     const { error: updateError } = await supabase
       .from('audio_files')
       .update(updateData)
-      .eq('id', trackId)
+      .eq('id', track.id)
 
     if (updateError) {
       // Handle original_bpm column gracefully
@@ -164,7 +171,7 @@ export async function POST(request: Request) {
         const { error: retryError } = await supabase
           .from('audio_files')
           .update(updateData)
-          .eq('id', trackId)
+          .eq('id', track.id)
         
         if (retryError) {
           throw new Error(`Database update failed: ${retryError.message}`)

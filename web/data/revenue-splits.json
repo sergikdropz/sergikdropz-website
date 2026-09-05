@@ -41,6 +41,12 @@
       "name": "Lugh Haurie",
       "email": null,
       "paymentMethod": null
+    },
+    {
+      "id": "bone",
+      "name": "Bone",
+      "email": null,
+      "paymentMethod": null
     }
   ],
   "splits": {
@@ -125,6 +131,47 @@
           "title": "Zoned",
           "collaboratorId": "lugh-haurie",
           "collaboratorName": "Lugh Haurie",
+          "splitPercent": 50
+        }
+      ]
+    },
+    "ep-the-chan-suk-legend": {
+      "epTitle": "The Chan Suk Legend EP",
+      "totalTracks": 6,
+      "collabTracks": [
+        {
+          "trackId": "track-unreleased-eps-SERGIK - The Chan Suk Legend-sergik-x-bone---motion-in-collection-unreleased-eps-sergik---the-chan-suk-legend-",
+          "title": "Motion",
+          "collaboratorId": "bone",
+          "collaboratorName": "Bone",
+          "splitPercent": 50
+        },
+        {
+          "trackId": "track-unreleased-eps-SERGIK - The Chan Suk Legend-sergik-x-bones---momentum-in-collection-unreleased-eps-sergik---the-chan-suk-legend-",
+          "title": "Momentum",
+          "collaboratorId": "bones",
+          "collaboratorName": "Bones",
+          "splitPercent": 50
+        },
+        {
+          "trackId": "track-unreleased-eps-SERGIK - The Chan Suk Legend-sergik-x-bone---cosmic-cadillac-in-collection-unreleased-eps-sergik---the-chan-suk-legend-",
+          "title": "Cosmic Cadillac",
+          "collaboratorId": "bone",
+          "collaboratorName": "Bone",
+          "splitPercent": 50
+        },
+        {
+          "trackId": "track-unreleased-eps-SERGIK - The Chan Suk Legend-sergik-x-bone---realm-transfer-in-collection-unreleased-eps-sergik---the-chan-suk-legend-",
+          "title": "Realm Transfer",
+          "collaboratorId": "bone",
+          "collaboratorName": "Bone",
+          "splitPercent": 50
+        },
+        {
+          "trackId": "track-unreleased-eps-SERGIK - The Chan Suk Legend-sergik-x-bone---revelation-in-collection-unreleased-eps-sergik---the-chan-suk-legend-",
+          "title": "Revelation",
+          "collaboratorId": "bone",
+          "collaboratorName": "Bone",
           "splitPercent": 50
         }
       ]

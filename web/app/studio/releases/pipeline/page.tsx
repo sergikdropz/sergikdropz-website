@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/AdminAuthContext'
 import { useNotifications } from '@/contexts/NotificationContext'
 import Link from 'next/link'
 import {
@@ -121,30 +121,27 @@ export default function PipelinePage() {
       const release = releases.find((r) => r.id === releaseId)
       if (!release) return
 
-      const promises: Promise<any>[] = []
-      if (!release.campaign) {
-        promises.push(
-          fetch('/api/studio/release-pipeline/campaign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ release_id: releaseId }),
-          })
-        )
+      const res = await fetch('/api/studio/release-pipeline/launch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `launch-${releaseId}-${Date.now().toString(36)}`,
+        },
+        body: JSON.stringify({
+          release_id: releaseId,
+          create_campaign: !release.campaign,
+          create_smart_link: !release.smart_link_data,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok && res.status !== 207) {
+        throw new Error(data.error || 'Launch failed')
       }
-      if (!release.smart_link_data) {
-        promises.push(
-          fetch('/api/studio/release-pipeline/smart-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ release_id: releaseId }),
-          })
+      if (data.partial || res.status === 207) {
+        showNotification(
+          `Partial launch: ${(data.errors || ['some steps failed']).join('; ')}`,
+          'error'
         )
-      }
-
-      const results = await Promise.all(promises)
-      const failed = results.filter((r) => !r.ok)
-      if (failed.length > 0) {
-        showNotification('Some actions failed', 'error')
       } else {
         showNotification('Marketing launched for release', 'success')
       }

@@ -94,6 +94,9 @@ export function mergeSonicDNA(
   
   // Merge musicbrainz data
   merged.musicbrainz = mergeObjectFields(existing.musicbrainz, newData.musicbrainz, opts)
+
+  // DSP measurements are never overwritten by LLM/folder inference.
+  merged.measured = newData.measured || existing.measured || merged.measured
   
   // Update metadata
   merged._metadata = {

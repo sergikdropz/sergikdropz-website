@@ -7,6 +7,8 @@
  * Based on SERGIK DNA profile and music theory knowledge base.
  */
 
+import { classifyWithGenreEngine } from '@/lib/audio/genre-engine'
+
 // =============================================================================
 // Types & Interfaces
 // =============================================================================
@@ -583,13 +585,13 @@ const GENRE_PROFILES: Record<string, GenreProfile> = {
 // =============================================================================
 
 const SCORING_WEIGHTS = {
-  bpm: 25,              // BPM match is crucial
-  drumPatterns: 25,     // Drum patterns are equally important
-  keyScale: 10,         // Key/scale preference
-  harmony: 10,          // Harmonic complexity
-  instruments: 15,      // Instrument signatures
-  energy: 10,           // Energy level match
-  production: 5         // Production characteristics
+  drumPatterns: 45,     // Drum grid first
+  bpm: 20,              // Tempo / feel after drums
+  harmony: 25,          // Bass lock vs drums lives here (bassType)
+  keyScale: 4,
+  instruments: 3,
+  energy: 2,
+  production: 1
 };
 
 // =============================================================================
@@ -610,6 +612,25 @@ export class GenreAnalyzer {
     this.characteristics = { ...this.characteristics, ...characteristics };
   }
 
+  private grooveFromCharacteristics() {
+    const kick = String(this.characteristics.drums?.kickPattern || '').toLowerCase()
+    let family: string = 'unknown'
+    if (kick.includes('4-on') || kick.includes('four-on') || kick.includes('four on')) family = 'four-on-the-floor'
+    else if (kick.includes('half')) family = 'half-time'
+    else if (kick.includes('dembow') || kick.includes('reggaeton')) family = 'dembow'
+    else if (kick.includes('one-drop') || kick.includes('one drop')) family = 'one-drop'
+    else if (kick.includes('boom')) family = 'boom-bap'
+    else if (kick.includes('break')) family = 'breakbeat'
+    else if (kick.includes('sparse')) family = 'sparse'
+    if (family === 'unknown') return null
+    return classifyWithGenreEngine({
+      bpm: this.characteristics.bpm,
+      drumFamily: family,
+      bass: { lock: this.characteristics.harmony?.bassType || 'unknown' },
+      swingPercent: this.characteristics.drums?.swing,
+    })
+  }
+
   /**
    * Main analysis method - returns comprehensive genre analysis
    */
@@ -618,6 +639,25 @@ export class GenreAnalyzer {
     
     // Sort by score descending
     allScores.sort((a, b) => b.score - a.score);
+
+    const groove = this.grooveFromCharacteristics()
+    if (groove && groove.confidence >= 0.55 && groove.primary !== 'Unclassified') {
+      const grooveScore: GenreScore = {
+        genre: groove.primary,
+        subgenre: groove.subgenre || undefined,
+        score: Math.round(groove.confidence * 100),
+        confidence: groove.confidence >= 0.75 ? 'high' : 'medium',
+        matchingFactors: groove.reason,
+      }
+      const rest = allScores.filter((g) => g.genre !== grooveScore.genre)
+      return {
+        primaryGenre: grooveScore,
+        secondaryGenres: rest.slice(0, 3).filter((g) => g.score >= 30),
+        allScores: [grooveScore, ...rest],
+        characteristics: this.deriveCharacteristics(grooveScore),
+        recommendations: this.generateRecommendations(grooveScore, rest.slice(0, 3)),
+      }
+    }
     
     const primaryGenre = allScores[0];
     const secondaryGenres = allScores.slice(1, 4).filter(g => g.score >= 30);
@@ -833,20 +873,20 @@ export class GenreAnalyzer {
     const factors: string[] = [];
     const maxScore = SCORING_WEIGHTS.harmony;
 
-    // Complexity match (50%)
+    // Complexity match (20%) — color, not identity
     if (harmony.chordComplexity && profile.harmonyProfile.complexity.includes(harmony.chordComplexity)) {
-      score += maxScore * 0.5;
+      score += maxScore * 0.2;
       factors.push(`${harmony.chordComplexity} harmony`);
     }
 
-    // Bass type match (30%)
+    // Bass type match (70%) — bass vs drum grid is the subgenre lock
     if (harmony.bassType) {
       const bassLower = harmony.bassType.toLowerCase();
       const bassMatch = profile.harmonyProfile.bassType.some(b => 
         bassLower.includes(b.toLowerCase()) || b.toLowerCase().includes(bassLower)
       );
       if (bassMatch) {
-        score += maxScore * 0.3;
+        score += maxScore * 0.7;
         factors.push(`Bass: ${harmony.bassType}`);
       }
     }
@@ -1120,35 +1160,52 @@ export function extractCharacteristicsFromSonicDna(sonicDna: any): TrackCharacte
   if (!sonicDna) return {};
   
   const dna = typeof sonicDna === 'string' ? JSON.parse(sonicDna) : sonicDna;
+  const measured = dna?.measured;
 
   return {
-    bpm: dna?.bpm || dna?.tempo?.bpm || dna?.audioFeatures?.bpm,
-    key: dna?.key || dna?.harmony?.key || dna?.audioFeatures?.key,
+    bpm: measured?.bpm || dna?.bpm || dna?.tempo?.bpm || dna?.audioFeatures?.bpm,
+    key: measured?.camelot || measured?.key || dna?.key || dna?.harmony?.key || dna?.audioFeatures?.key,
     energy: dna?.energy || dna?.audioFeatures?.energy || dna?.mood?.energy,
     drums: {
-      kickPattern: dna?.drums?.kickPattern || dna?.drums?.patternType || dna?.comprehensive?.drums?.kickPattern,
-      hatPattern: dna?.drums?.hihatPattern || dna?.drums?.hatStyle || dna?.comprehensive?.drums?.hihatPattern,
-      snarePattern: dna?.drums?.snarePattern || dna?.drums?.snareStyle,
-      swing: dna?.drums?.swing || dna?.drums?.groove?.swing,
+      kickPattern:
+        measured?.drumFamily === 'four-on-the-floor'
+          ? '4-on-the-floor'
+          : measured?.drumFamily || dna?.drums?.kickPattern || dna?.drums?.patternType || dna?.comprehensive?.drums?.kickPattern,
+      hatPattern: measured?.percussion?.hatGrid || dna?.drums?.hihatPattern || dna?.drums?.hatStyle || dna?.comprehensive?.drums?.hihatPattern,
+      snarePattern:
+        measured?.percussion?.snareRole ||
+        (measured?.drumFamily === 'half-time'
+          ? 'halftime-backbeat'
+          : dna?.drums?.snarePattern || dna?.drums?.snareStyle),
+      swing: measured?.swingPercent ?? dna?.drums?.swing ?? dna?.drums?.groove?.swing,
       complexity: dna?.drums?.complexity
     },
     harmony: {
       chordComplexity: dna?.harmony?.complexity || dna?.comprehensive?.harmony?.complexity,
       progression: dna?.harmony?.progression || dna?.comprehensive?.harmony?.chordProgression,
-      bassType: dna?.bass?.type || dna?.comprehensive?.bass?.character,
-      padTextures: !!dna?.instruments?.pads || !!dna?.comprehensive?.instruments?.pads
+      bassType: measured?.bass?.lock || dna?.bass?.type || dna?.comprehensive?.bass?.character,
+      padTextures:
+        (measured?.instruments || []).some((item: { id?: string }) => item.id === 'harmonic-pad') ||
+        !!dna?.instruments?.pads ||
+        !!dna?.comprehensive?.instruments?.pads
     },
     instruments: {
-      has808: dna?.instruments?.has808 || dna?.bass?.type?.includes('808'),
+      has808: measured?.bass?.lock === 'sparse-808' || dna?.instruments?.has808 || dna?.bass?.type?.includes('808'),
       hasAcidBass: dna?.instruments?.acid || dna?.bass?.type?.includes('acid'),
       hasAcousticDrums: dna?.drums?.isAcoustic,
       hasStrings: !!dna?.instruments?.strings,
-      hasPads: !!dna?.instruments?.pads,
+      hasPads:
+        (measured?.instruments || []).some((item: { id?: string }) => item.id === 'harmonic-pad') ||
+        !!dna?.instruments?.pads,
       hasChoppedVocals: dna?.vocals?.chopped,
-      hasSynthLead: !!dna?.instruments?.synthLead,
+      hasSynthLead:
+        (measured?.instruments || []).some((item: { id?: string }) => item.id === 'mid-lead') ||
+        !!dna?.instruments?.synthLead,
       hasOrgan: !!dna?.instruments?.organ,
       hasPiano: !!dna?.instruments?.piano || !!dna?.instruments?.rhodes,
-      hasGuitar: !!dna?.instruments?.guitar
+      hasGuitar:
+        (measured?.instruments || []).some((item: { id?: string }) => item.id === 'plucked-mid') ||
+        !!dna?.instruments?.guitar
     },
     production: {
       era: dna?.production?.era || dna?.comprehensive?.production?.era,

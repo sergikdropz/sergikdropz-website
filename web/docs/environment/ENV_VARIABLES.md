@@ -83,13 +83,27 @@ RESEND_API_KEY=re_...
 NEXT_PUBLIC_FROM_EMAIL=noreply@sergikdropz.com
 
 # ============================================
-# AI APIs (Optional - for Sonic DNA analysis)
-# ============================================
-# Get OpenAI key from: https://platform.openai.com/api-keys
-OPENAI_API_KEY=sk-...
+# AI — Admin assistant + Sonic DNA review/challenge (Optional)
+# Anthropic (recommended): https://console.anthropic.com/settings/keys
+ANTHROPIC_API_KEY=
+# Optional model override (default: claude-sonnet-4-6)
+# ANTHROPIC_CHAT_MODEL=claude-sonnet-4-6
+# Force one provider: anthropic | openai | ollama | crowelogic
+ADMIN_AI_CHAT_PROVIDER=anthropic
+# Local Ollama fallback (default http://127.0.0.1:11434). Use a fast model for reviews.
+# OLLAMA_BASE_URL=http://127.0.0.1:11434
+# OLLAMA_MODEL=sergikai:latest
+# ADMIN_AI_OLLAMA_TIMEOUT_MS=120000
 
-# Get Anthropic key from: https://console.anthropic.com/settings/keys
-ANTHROPIC_API_KEY=sk-ant-api03-...
+# OpenAI alternative
+# OPENAI_API_KEY=
+# OPENAI_CHAT_MODEL=gpt-4o-mini
+
+# Crowe Logic / CroweLM (OpenAI-compatible — local bridge or hosted gateway)
+# CROWELOGIC_BASE_URL=http://127.0.0.1:8011
+# CROWELOGIC_API_KEY=your-key
+# CROWELOGIC_MODEL=auto
+# Aliases: CROWE_API_KEY, CROWE_LOGIC_URL, CROWE_LOGIC_KEY, FOUNDRY_BASE_URL
 ```
 
 ## Quick Setup

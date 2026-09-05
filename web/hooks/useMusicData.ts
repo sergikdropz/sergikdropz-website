@@ -58,10 +58,10 @@ async function fetchMusicLibrary(): Promise<MusicLibraryData> {
 
 // Fetch tracks for a specific folder
 async function fetchTracks(folderId?: string): Promise<Track[]> {
-  const url = folderId
-    ? `/api/music-library/tracks?folderId=${folderId}`
-    : '/api/music-library/tracks'
-  const response = await fetch(url)
+  if (!folderId) {
+    throw new Error('folderId required for track list')
+  }
+  const response = await fetch(`/api/music-library/tracks?folderId=${folderId}`)
   if (!response.ok) {
     throw new Error('Failed to fetch tracks')
   }

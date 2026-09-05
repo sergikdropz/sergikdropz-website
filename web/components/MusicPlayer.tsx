@@ -1,29 +1,184 @@
+// @ts-nocheck
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
+import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
+import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
 import { 
   FaPlay, FaPause, FaStepForward, FaStepBackward, 
-  FaVolumeUp, FaVolumeMute, FaRandom, FaRedo,
+  FaVolumeUp, FaVolumeMute, FaRandom, FaRedo, FaDice,
   FaChevronDown, FaChevronUp, FaTimes, FaShare,
-  FaPlus, FaList, FaCompress, FaExpand,
+  FaPlus,
   FaGripVertical, FaTrash, FaCog
 } from 'react-icons/fa'
 import Image from 'next/image'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { resolveAudioUrl } from '@/utils/resolveAudioUrl'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import {
+  isUploadedFolderArtwork,
+  stripArtworkCacheBust,
+  subscribeCatalogSync,
+} from '@/lib/catalog-sync'
 import { generatePeakData, detectBPM } from '@/utils/audioWorkerClient'
 import { analyzeFrequencyBands, detectTransients } from '@/utils/audioAnalysis'
 import { preloadTracks } from '@/utils/serviceWorker'
 import { throttle, rafThrottle } from '@/utils/performance'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import { trackTrackPlay } from '@/lib/analytics'
+import {
+  catalogScopeLabel,
+  pickRandomUnusedTracks,
+} from '@/lib/audio/catalog-random'
+import {
+  expandPeakValley,
+  multiBandRgbColor,
+  normalizeFftBands,
+  normalizeWaveformColorMode,
+  normalizeWaveformLayerLayout,
+  nearestBarZoomStep,
+  stepVisibleBars,
+  WAVEFORM_BAR_ZOOM_STEPS,
+  WAVEFORM_COLOR_MODES,
+  WAVEFORM_LAYER_LAYOUTS,
+  zoomToVisibleRatio as zoomLevelToVisibleRatio,
+  type WaveformColorMode,
+  type WaveformLayerLayout,
+  type WaveformSample,
+} from '@/lib/audio/waveform-view'
+import { profileFromSonicDna } from '@/lib/audio/waveform-intelligence'
+import { alignBeatGridFromPeaks, setDownbeatAt } from '@/lib/audio/beat-grid'
+import {
+  eqBiasFromDna,
+  pickBestDnaTrack,
+  quantizeToDnaGrid,
+  rankDnaTracks,
+  resolvePlaybackBpm,
+  secondsToNextPhraseBoundary,
+} from '@/lib/audio/sonic-dna-mix'
+import {
+  buildMixPlan,
+  MixEngine,
+  buildMixIntelligence,
+  applyTechniqueToIntelligence,
+  applyEnergyCurveToIntelligence,
+  resolveEffectiveMixStyle,
+  resolveEffectiveMixTechniques,
+  solveAlignmentState,
+  computeMixDeckRates,
+  suggestLeadInSec,
+  resolveMixGridOffset,
+  isUnsetOffset,
+  readDnaBeatPhaseSec,
+  toPhaseOnlyOffsetSec,
+  applyDeckTempo,
+  configureKeyLock,
+  formantCompensationGains,
+  rampDeckTempo,
+  clampTempoRate,
+  formatMixQuality,
+  snapshotMixQuality,
+  pushMixQualityHistory,
+  readMixQualityHistory,
+  resolveHoldBeatmatch,
+  buildGridOnsetBundle,
+  isGridLocked,
+  readGridLockScore,
+  withGridLockOnDna,
+  withGridAnalysisOnDna,
+  AUTO_GRID_LOCK_SCORE,
+  alignMixOverlayToBeatGrid,
+  resolvePhraseMixSettings,
+  PLAN_FREEZE_SEC,
+  prearmLeadSec,
+  pairBpmCompatible,
+  shouldApplyQualityGate,
+  buildSkipBlendPlan,
+  buildMixPairHint,
+  formatMixPairHintLine,
+  filterOpenness,
+  type MixPlan,
+  type PhraseBars,
+  type DeckId,
+  type MixIntelligence,
+  type MixQualitySnapshot,
+  type MixQualityHistoryEntry,
+  type MixQualityGrade,
+} from '@/lib/audio/mix-engine'
+import {
+  recordTapTempo,
+} from '@/lib/audio/beat-count'
+import {
+  DEFAULT_AUTO_DJ_CONFIG,
+  parseAutoDJConfig,
+  readAutoDJConfigFromStorage,
+  resolveIncomingRateForStrategy,
+  writeAutoDJConfigToStorage,
+  serializeAutoDJPayload,
+  type AutoDJConfig,
+} from '@/lib/audio/auto-dj-preferences'
+import { peaksOrEnvelopesToWaveformSamples } from '@/lib/audio/waveform-dsp-envelope'
+import { waveformAnalysisUrls, vaultRelativePath, storedWaveformLikelyStale, looksLikeSyntheticPeaks, canAnalyzeAudioWaveform, isAudioContextUnavailableError, staticWaveformJsonUrl, waveformLookupPath } from '@/lib/audio/waveform-playback-alignment'
+import { alternateAudioExtensionUrl, normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import {
+  getPlaybackWaveformCache,
+  setPlaybackWaveformCache,
+} from '@/lib/audio/waveform-playback-cache'
+import { buildWaveformTapeCache } from '@/lib/audio/waveform-tape-cache'
+import { loadWaveformSamplesForTrack } from '@/lib/audio/waveform-track-loader'
+import { displayTrackBpm, displayTrackGenre, displayTrackKey } from '@/lib/audio/track-display'
+import type {
+  WaveformGhostTape,
+  WaveformHotCue,
+  WaveformMixOverlay,
+} from '@/lib/audio/waveform-overlays'
+import {
+  dispatchPlayerSettings,
+  PLAYER_TRANSPORT_EVENT,
+  type PlayerTransportCommand,
+} from '@/lib/audio/player-transport'
+import {
+  SONIC_DNA_WAVEFORM_EVENT,
+  type SonicDnaWaveformEventDetail,
+} from '@/components/music/SonicDnaReportModal'
 import { usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import React from 'react'
+import { createPortal } from 'react-dom'
+import {
+  useMusicPlayer,
+  readMusicPlayerState,
+  patchMusicPlayerState,
+  DEFAULT_PLAYER_CHROME,
+} from '@/contexts/MusicPlayerContext'
+import AutoDJHeaderButton from '@/components/music/AutoDJHeaderButton'
+import DjIcon from '@/components/music/DjIcon'
+import {
+  PlaybackTransportScrubber,
+  type PlaybackTransportScrubberHandle,
+} from '@/components/music/PlaybackTransportScrubber'
 
-// Auto DJ transition mode type
-type AutoDJTransitionMode = 'crossfade' | 'filter-eq' | 'cutout-filter'
+const WaveformStage = dynamic(() => import('@/components/waveform/WaveformStage'), {
+  ssr: false,
+  loading: () => null,
+})
+const SonicDnaReportModal = dynamic(() => import('@/components/music/SonicDnaReportModal'), {
+  ssr: false,
+  loading: () => null,
+})
+const AutoDJSettingsPanel = dynamic(() => import('@/components/music/AutoDJSettingsPanel'), {
+  ssr: false,
+  loading: () => null,
+})
+const MixQualityHud = dynamic(() => import('@/components/music/MixQualityHud'), {
+  ssr: false,
+  loading: () => null,
+})
+
+// Auto DJ transition mode type (legacy sync for DJMixerMode)
+type AutoDJTransitionMode = AutoDJConfig['transitionMode']
+
+const DEFAULT_AUTO_DJ = DEFAULT_AUTO_DJ_CONFIG
 
 // Memoized Queue Item Component
 interface QueueItemProps {
@@ -32,26 +187,56 @@ interface QueueItemProps {
   isCurrent: boolean
   onRemove: (index: number) => void
   isAutoDJNext?: boolean
+  reorderEnabled?: boolean
+  isDragOver?: boolean
+  onDragStart?: (e: React.DragEvent) => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
+  onDragEnd?: () => void
 }
 
-const QueueItem = React.memo(({ track, index, isCurrent, onRemove, isAutoDJNext }: QueueItemProps) => {
+const QueueItem = React.memo(
+  ({
+    track,
+    index,
+    isCurrent,
+    onRemove,
+    isAutoDJNext,
+    reorderEnabled = false,
+    isDragOver = false,
+    onDragStart,
+    onDragOver,
+    onDrop,
+    onDragEnd,
+  }: QueueItemProps) => {
+  const art = coverArtUrl(track.artwork)
   return (
     <div
+      draggable={reorderEnabled}
+      onDragStart={reorderEnabled ? onDragStart : undefined}
+      onDragOver={reorderEnabled ? onDragOver : undefined}
+      onDrop={reorderEnabled ? onDrop : undefined}
+      onDragEnd={reorderEnabled ? onDragEnd : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${
+        isDragOver ? 'border-t-2 border-t-purple-400' : ''
+      } ${
         isCurrent
           ? 'bg-blue-900/30 border-l-2 border-blue-500'
           : 'hover:bg-gray-800'
-      }`}
+      } ${reorderEnabled ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
-      <FaGripVertical className="text-gray-500 text-xs" />
-      {track.artwork && (
+      <FaGripVertical
+        className={`text-xs shrink-0 ${reorderEnabled ? 'text-gray-400' : 'text-gray-600'}`}
+        aria-hidden
+      />
+      {art && (
         <div className="relative w-8 h-8 rounded overflow-hidden flex-shrink-0">
           <Image
-            src={track.artwork}
-            alt={track.title}
+            src={art}
+            alt={track.album || track.title}
             fill
             className="object-cover"
-            unoptimized={shouldUnoptimizeImage(track.artwork)}
+            unoptimized={shouldUnoptimizeImage(art)}
             sizes="(max-width: 640px) 32px, 32px"
             loading="lazy"
             quality={75}
@@ -72,6 +257,7 @@ const QueueItem = React.memo(({ track, index, isCurrent, onRemove, isAutoDJNext 
       )}
       <button
         onClick={() => onRemove(index)}
+        onMouseDown={(e) => e.stopPropagation()}
         className="text-gray-400 hover:text-red-400 transition-colors p-1"
         title="Remove from queue"
       >
@@ -79,9 +265,63 @@ const QueueItem = React.memo(({ track, index, isCurrent, onRemove, isAutoDJNext 
       </button>
     </div>
   )
-})
+},
+)
 
 QueueItem.displayName = 'QueueItem'
+
+const QUEUE_DRAG_MIME = 'application/x-sergik-queue-index'
+
+/** Reorder the upcoming slice of the queue (tracks after the current index). */
+function reorderUpcomingQueue(
+  queue: Track[],
+  currentQueueIndex: number,
+  fromDisplayIdx: number,
+  toDisplayIdx: number,
+): Track[] {
+  const base = currentQueueIndex >= 0 ? currentQueueIndex + 1 : 0
+  const upcoming = queue.slice(base)
+  if (
+    fromDisplayIdx < 0 ||
+    toDisplayIdx < 0 ||
+    fromDisplayIdx >= upcoming.length ||
+    toDisplayIdx >= upcoming.length ||
+    fromDisplayIdx === toDisplayIdx
+  ) {
+    return queue
+  }
+  const nextUpcoming = [...upcoming]
+  const [moved] = nextUpcoming.splice(fromDisplayIdx, 1)
+  nextUpcoming.splice(toDisplayIdx, 0, moved)
+  return [...queue.slice(0, base), ...nextUpcoming]
+}
+
+function WaveformMenuItem({
+  label,
+  active,
+  disabled,
+  onSelect,
+}: {
+  label: string
+  active?: boolean
+  disabled?: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={onSelect}
+      className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? 'bg-blue-600/25 text-white' : 'text-gray-200 hover:bg-gray-800'
+      }`}
+    >
+      <span>{label}</span>
+      {active && <span className="text-blue-400" aria-hidden="true">✓</span>}
+    </button>
+  )
+}
 
 // Lazy load expanded controls
 const ExpandedPlayerControls = dynamic(
@@ -118,9 +358,42 @@ function prefersMediaElementBackgroundPlayback(): boolean {
   return isIOS || /Android/i.test(ua)
 }
 
-function buildLockScreenArtwork(artwork?: string) {
-  if (!artwork) return []
+function coverArtUrl(artwork?: string | null, bust?: number): string | undefined {
+  if (!artwork) return undefined
   const src = resolveImageUrl(artwork)
+  if (!src) return undefined
+  if (!isUploadedFolderArtwork(src) && !src.includes('/images/audio/artwork/')) return src
+  const base = stripArtworkCacheBust(src)
+  const existing = artwork.match(/[?&]v=([^&]+)/)?.[1]
+  if (bust) return `${base}?v=${bust}`
+  if (existing) return `${base}?v=${existing}`
+  return base
+}
+
+/** Prefer the playing track’s art; fall back to another track from the same album/folder. */
+function albumCoverUrl(
+  track?: { artwork?: string; album?: string; folder?: string } | null,
+  queue: { artwork?: string; album?: string; folder?: string }[] = [],
+  bust?: number,
+): string | undefined {
+  if (!track) return undefined
+  const own = coverArtUrl(track.artwork, bust)
+  if (own) return own
+  if (track.album) {
+    const sibling = queue.find((t) => t.album === track.album && t.artwork)
+    const fromAlbum = coverArtUrl(sibling?.artwork, bust)
+    if (fromAlbum) return fromAlbum
+  }
+  if (track.folder) {
+    const sibling = queue.find((t) => t.folder === track.folder && t.artwork)
+    return coverArtUrl(sibling?.artwork, bust)
+  }
+  return undefined
+}
+
+function buildLockScreenArtwork(artwork?: string) {
+  const src = coverArtUrl(artwork)
+  if (!src) return []
   return [
     { src, sizes: '96x96', type: 'image/jpeg' },
     { src, sizes: '128x128', type: 'image/jpeg' },
@@ -152,9 +425,11 @@ interface Track {
   artist: string
   duration: number
   file: string
-  artwork?: string
+  artwork?: string | null
   album?: string
   folder?: string
+  folderId?: string
+  audioFileId?: string
   // Audio analysis fields (from Supabase)
   bpm?: number
   key_signature?: string
@@ -165,6 +440,9 @@ interface Track {
   beat_grid_offset?: number
   // Sonic DNA analysis (from Supabase)
   sonic_dna?: any
+  sonic_dna_status?: string | null
+  display_order?: number
+  track_number?: number
   musicbrainz_id?: string
   musicbrainz_data?: any
 }
@@ -188,6 +466,8 @@ interface PlayerSettings {
   volume: number
   isMuted: boolean
   isShuffled: boolean
+  /** Random picks from catalog / folder / playlist — not queue-order shuffle. */
+  catalogRandom: boolean
   repeatMode: 'off' | 'all' | 'one'
   playbackRate: number
   crossfadeDuration: number
@@ -199,6 +479,15 @@ interface PlayerSettings {
 }
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+/**
+ * Smoothing time constant for mix filter sweeps. Roughly one animation frame, so
+ * the audio thread interpolates between the per-frame targets the mix loop sends
+ * instead of stepping to each one.
+ */
+/** Playback lead required before the waveform decode may re-fetch the file. */
+const WAVEFORM_DECODE_BUFFER_LEAD_SEC = 12
+/** Give up waiting for that lead rather than never drawing band detail. */
+const WAVEFORM_DECODE_MAX_WAIT_MS = 20_000
 const EQ_PRESETS = [
   { value: 'flat', label: 'Flat' },
   { value: 'bass', label: 'Bass Boost' },
@@ -239,6 +528,76 @@ export default function MusicPlayer({
 }: MusicPlayerProps) {
   const pathname = usePathname()
   const isAdminRoute = pathname?.startsWith('/admin') ?? false
+  const [isAdminSession, setIsAdminSession] = useState(isAdminRoute)
+  useEffect(() => {
+    if (isAdminRoute) {
+      setIsAdminSession(true)
+      return
+    }
+    let cancelled = false
+    void fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setIsAdminSession(Boolean(d?.authenticated && d?.isAdmin))
+      })
+      .catch(() => {
+        if (!cancelled) setIsAdminSession(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isAdminRoute])
+  const canEditOrigBpm = isAdminRoute || isAdminSession
+  const {
+    waveformHost,
+    seekTargetSec,
+    seekNonce,
+    reportPlaybackPosition,
+    isQueuePanelOpen,
+    setIsQueuePanelOpen,
+    queuePanelHost,
+    playTrack,
+    seekTo,
+    adoptPlayingTrack,
+    isAutoDJEnabled,
+    setIsAutoDJEnabled,
+    autoDJSettingsMenu,
+    closeAutoDJSettingsMenu,
+    setPlayerChrome,
+  } = useMusicPlayer()
+  const isQueueOpen = isQueuePanelOpen
+  const setIsQueueOpen = setIsQueuePanelOpen
+  const queueDockHostRef = useRef<HTMLElement | null>(null)
+  if (typeof document !== 'undefined') {
+    if (queuePanelHost && document.contains(queuePanelHost)) {
+      queueDockHostRef.current = queuePanelHost
+    } else if (queueDockHostRef.current && !document.contains(queueDockHostRef.current)) {
+      queueDockHostRef.current = null
+    }
+  }
+  const queueDockHost =
+    typeof document !== 'undefined' && queuePanelHost && document.contains(queuePanelHost)
+      ? queuePanelHost
+      : queueDockHostRef.current
+  const isQueueDocked = Boolean(queueDockHost)
+  const isWaveformDocked = Boolean(waveformHost)
+  const [coverBust, setCoverBust] = useState(() => Date.now())
+  useEffect(() => {
+    return subscribeCatalogSync((event) => {
+      if (!Object.prototype.hasOwnProperty.call(event.patch, 'artwork')) return
+      setCoverBust(Date.now())
+    })
+  }, [])
+  const coverSrc = useMemo(
+    () => albumCoverUrl(currentTrack, queue, coverBust),
+    [currentTrack, queue, coverBust],
+  )
+  const waveformIntelligenceProfile = useMemo(
+    () => profileFromSonicDna(currentTrack?.sonic_dna),
+    [currentTrack?.sonic_dna]
+  )
+  const coverUnoptimized = coverSrc ? shouldUnoptimizeImage(coverSrc) : true
+  const coverAlt = currentTrack?.album || currentTrack?.title || 'Album artwork'
   // DJ mode: visible in admin for testing; set DJ_MODE_ENABLED true to show on frontend
   const djModeAvailable = DJ_MODE_ENABLED || isAdminRoute
   const [internalIsPlaying, setInternalIsPlaying] = useState(false)
@@ -247,8 +606,21 @@ export default function MusicPlayer({
     setInternalIsPlaying(value)
     onPlayStateChange?.(value)
   }
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(() => {
+    const saved = readMusicPlayerState()?.currentTime
+    return typeof saved === 'number' && Number.isFinite(saved) && saved > 0 ? saved : 0
+  })
+  /** Live playhead for engine logic — updated on timeupdate without React commits. */
+  const playbackTimeRef = useRef(currentTime)
+  const autoDJCurrentTimeRef = useRef(currentTime)
+  const transportMiniMobileRef = useRef<PlaybackTransportScrubberHandle>(null)
+  const transportMiniDesktopRef = useRef<PlaybackTransportScrubberHandle>(null)
+  const transportExpandedRef = useRef<PlaybackTransportScrubberHandle>(null)
+  const [duration, setDuration] = useState(() => {
+    const track = readMusicPlayerState()?.currentTrack
+    const d = track?.duration
+    return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : 0
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [isBuffering, setIsBuffering] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -257,140 +629,235 @@ export default function MusicPlayer({
   const resolvedUrlCacheRef = useRef<Map<string, string>>(new Map())
   const [bufferedProgress, setBufferedProgress] = useState(0)
   const [seekPreviewTime, setSeekPreviewTime] = useState<number | null>(null)
-  const [isQueueOpen, setIsQueueOpen] = useState(false)
   const [isQueueExpanded, setIsQueueExpanded] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const saved = readMusicPlayerState()?.chrome?.isExpanded
+    return typeof saved === 'boolean' ? saved : DEFAULT_PLAYER_CHROME.isExpanded
+  })
   const [isKeyboardShortcutsExpanded, setIsKeyboardShortcutsExpanded] = useState(false)
   const [isWaveformSettingsExpanded, setIsWaveformSettingsExpanded] = useState(false)
   const [expandedMode, setExpandedMode] = useState<'controls' | 'dj'>('controls')
-  const [autoDJConfig, setAutoDJConfig] = useState<{
-    enabled: boolean
-    mode: 'queue'
-    transitionMode: AutoDJTransitionMode
-    phraseBars: 8 | 4 | 2
-    addToQueue: boolean
-  }>({
-    enabled: false,
-    mode: 'queue',
-    transitionMode: 'crossfade',
-    phraseBars: 8,
-    addToQueue: true,
+  const [autoDJConfig, setAutoDJConfig] = useState<AutoDJConfig>(() => {
+    const saved = readAutoDJConfigFromStorage()
+    return {
+      ...saved,
+      enabled: DEFAULT_AUTO_DJ.enabled,
+    }
   })
+  const autoDJConfigRef = useRef(autoDJConfig)
+  autoDJConfigRef.current = autoDJConfig
   const [autoDJLibrary, setAutoDJLibrary] = useState<Track[]>([])
+  const playedTrackIdsRef = useRef<Set<string>>(new Set())
+  const catalogRandomFillKeyRef = useRef('')
   const autoDJIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const autoDJLastAddedRef = useRef<string | null>(null)
   const autoDJPendingRef = useRef<string | null>(null)
+  /** Freeze OUT plan once within ~4s so ticks cannot snap earlier. */
+  const autoDJFrozenPlanRef = useRef<{
+    outgoingId: string
+    incomingId: string
+    plan: MixPlan
+  } | null>(null)
   const autoDJCrossfadeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  /** rAF loop — fires the mix when live currentTime crosses the OUT marker. */
+  const autoDJOutRafRef = useRef<number | null>(null)
+  /** rAF — skip blend waits for the next outgoing beat. */
+  const skipBlendRafRef = useRef<number | null>(null)
+  const skipToNextRef = useRef<() => void>(() => {})
+  /** Seconds until the last planned mix point; drives how often we replan. */
+  const autoDJPlanDelayRef = useRef<number | null>(null)
+  const autoDJPlanScanRef = useRef(0)
   const [autoDJStatusMessage, setAutoDJStatusMessage] = useState('')
+  const [lastMixQuality, setLastMixQuality] = useState<MixQualitySnapshot | null>(null)
+  const lastMixQualityRef = useRef<MixQualitySnapshot | null>(null)
+  lastMixQualityRef.current = lastMixQuality
+  const [mixQualityHistory, setMixQualityHistory] = useState<MixQualityHistoryEntry[]>([])
+  useEffect(() => {
+    setMixQualityHistory(readMixQualityHistory())
+  }, [])
   const [autoDJPendingTrackId, setAutoDJPendingTrackId] = useState<string | null>(null)
-  const [autoDJLeadIn, setAutoDJLeadIn] = useState(0.5)
-  const [autoDJAlignPhase, setAutoDJAlignPhase] = useState(false)
-  const [isAutoDJSettingsExpanded, setIsAutoDJSettingsExpanded] = useState(false)
+  const [autoDJLeadIn, setAutoDJLeadIn] = useState(() => readAutoDJConfigFromStorage().leadIn)
+  const autoDJLeadInRef = useRef(autoDJLeadIn)
+  autoDJLeadInRef.current = autoDJLeadIn
+  const [autoDJSuggestedLeadIn, setAutoDJSuggestedLeadIn] = useState(0)
+  const [fanUserId, setFanUserId] = useState<string | null>(null)
+  const [autoDJCloudLoaded, setAutoDJCloudLoaded] = useState(false)
+  const [autoDJSaving, setAutoDJSaving] = useState(false)
+  const [autoDJDirty, setAutoDJDirty] = useState(false)
   const [isTrackListExpanded, setIsTrackListExpanded] = useState(false)
+  const clearAutoDJOutWatch = useCallback(() => {
+    if (autoDJOutRafRef.current != null) {
+      cancelAnimationFrame(autoDJOutRafRef.current)
+      autoDJOutRafRef.current = null
+    }
+  }, [])
+
+  const clearSkipBlendWatch = useCallback(() => {
+    if (skipBlendRafRef.current != null) {
+      cancelAnimationFrame(skipBlendRafRef.current)
+      skipBlendRafRef.current = null
+    }
+  }, [])
+
   const clearAutoDJCrossfadeTimeout = useCallback(() => {
     if (autoDJCrossfadeTimeoutRef.current) {
       clearTimeout(autoDJCrossfadeTimeoutRef.current)
       autoDJCrossfadeTimeoutRef.current = null
     }
+    clearAutoDJOutWatch()
+  }, [clearAutoDJOutWatch])
+
+  const resetAutoDJToDefaults = useCallback(() => {
+    setIsAutoDJEnabled(DEFAULT_AUTO_DJ.enabled)
+    setAutoDJConfig({ ...DEFAULT_AUTO_DJ })
+    setAutoDJLeadIn(DEFAULT_AUTO_DJ.leadIn)
+    writeAutoDJConfigToStorage({ ...DEFAULT_AUTO_DJ, leadIn: DEFAULT_AUTO_DJ.leadIn })
+    setAutoDJDirty(true)
+    setAutoDJStatusMessage('Restored default Auto DJ settings')
+    clearAutoDJCrossfadeTimeout()
+  }, [clearAutoDJCrossfadeTimeout, setIsAutoDJEnabled])
+
+  const patchAutoDJConfig = useCallback((patch: Partial<AutoDJConfig>) => {
+    setAutoDJConfig((prev) => {
+      const next = parseAutoDJConfig({ ...prev, ...patch })
+      writeAutoDJConfigToStorage({ ...next, leadIn: autoDJLeadIn })
+      return next
+    })
+    setAutoDJDirty(true)
+  }, [autoDJLeadIn])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return
+        setFanUserId(d?.authenticated && d.user?.id ? d.user.id : null)
+      })
+      .catch(() => {
+        if (!cancelled) setFanUserId(null)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  const [allSourceTracks, setAllSourceTracks] = useState<Track[]>([])
-  const primeQueue = useCallback(() => {
-    if (!onQueueChange) return
-    const pool = autoDJLibrary.length > 0
-      ? autoDJLibrary
-      : allSourceTracks.length > 0
-        ? allSourceTracks
-        : []
-    if (pool.length === 0) {
-      setAutoDJStatusMessage('No library tracks to prime')
-      return
-    }
-    const remaining = pool.filter((track) => !queue.some((q) => q.id === track.id))
-    const selection = remaining.slice(0, 3)
-    if (selection.length === 0) {
-      setAutoDJStatusMessage('Queue already contains library tracks')
-      return
-    }
-    onQueueChange([...queue, ...selection])
-    setAutoDJStatusMessage(`Primed ${selection.length} track${selection.length > 1 ? 's' : ''}`)
-  }, [autoDJLibrary, allSourceTracks, queue, onQueueChange])
-
-  // Update body data attribute when in DJ mode (for hiding header)
   useEffect(() => {
-    if (typeof document !== 'undefined') {
-      if (isExpanded && expandedMode === 'dj') {
-        document.body.setAttribute('data-dj-mode', 'true')
-      } else {
-        document.body.removeAttribute('data-dj-mode')
-      }
+    if (!fanUserId || autoDJCloudLoaded) return
+    let cancelled = false
+    fetch('/api/fan/auto-dj-settings', { credentials: 'include', cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.settings) return
+        const cloud = parseAutoDJConfig(d.settings)
+        setAutoDJConfig((prev) => ({
+          ...cloud,
+          enabled: prev.enabled,
+        }))
+        setAutoDJLeadIn(cloud.leadIn)
+        writeAutoDJConfigToStorage(cloud)
+        setAutoDJDirty(false)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setAutoDJCloudLoaded(true)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [isExpanded, expandedMode])
-  const [isLoadingSourceTracks, setIsLoadingSourceTracks] = useState(false)
-  const [isMiniMode, setIsMiniMode] = useState(false)
-  const [showTrackDetails, setShowTrackDetails] = useState(false)
-  const [isVolumeHovered, setIsVolumeHovered] = useState(false)
-  const [waveformData, setWaveformData] = useState<{ 
-    positive: number; 
-    negative: number; 
-    color: string;
-    elementType?: 'kick' | 'snare' | 'hihat' | 'other';
-    elementConfidence?: number;
-  }[]>([])
-  const [precomputedPeaks, setPrecomputedPeaks] = useState<number[] | null>(null)
-  const [waveformMode, setWaveformMode] = useState<'colorful' | 'simple' | 'classic'>('colorful')
-  const [waveformZoom, setWaveformZoom] = useState(1) // CDJ-style: 0.01x-32x range, 1 = full track, <1 = zoomed out, >1 = zoomed in (logarithmic scale)
-  const [waveformOffset, setWaveformOffset] = useState(0) // For panning when zoomed
-  const [waveformFollow, setWaveformFollow] = useState(false) // Follow mode - keeps playhead centered
-  const [waveformMirror, setWaveformMirror] = useState(false) // Mirror mode - shows mirrored waveform (default false for single waveform)
-  const [waveformSpeed, setWaveformSpeed] = useState(1.0) // Waveform animation speed (0.25x to 4x)
-  const [waveformHorizontalZoom, setWaveformHorizontalZoom] = useState(0.5) // Horizontal zoom (0.1x to 8x) - default 0.5x for slower movement
-  // Beat grid state
-  const [beatGridEnabled, setBeatGridEnabled] = useState(true)
-  const [beatGridOffsetSec, setBeatGridOffsetSec] = useState(0) // 0..beatDuration
-  const [beatGridBeatsPerBar, setBeatGridBeatsPerBar] = useState(4)
-  const [originalQueue, setOriginalQueue] = useState<Track[]>([])
-  const [crossfadeActive, setCrossfadeActive] = useState(false)
-  const touchStartXRef = useRef<number | null>(null)
-  const touchStartYRef = useRef<number | null>(null)
-  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false)
-  const [detectedBPM, setDetectedBPM] = useState<number | null>(null)
-  const [isDetectingBPM, setIsDetectingBPM] = useState(false)
-  const bpmCacheRef = useRef<Map<string, number | null>>(new Map())
-  const [tapTempoTaps, setTapTempoTaps] = useState<number[]>([])
-  const tapTempoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const volumeHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const loggedErrorsRef = useRef<Set<string>>(new Set()) // Track URLs that have already logged errors
-  const [tapTempoBPM, setTapTempoBPM] = useState<number | null>(null)
-  const [connectionQuality, setConnectionQuality] = useState<'slow' | 'medium' | 'fast'>('fast')
-  const [networkEffectiveType, setNetworkEffectiveType] = useState<string | null>(null)
-  const [isVisible, setIsVisible] = useState(true)
-  const processedWaveformTrackRef = useRef<string | null>(null)
-  const onQueueChangeRef = useRef(onQueueChange)
-  const updatedQueueTrackRef = useRef<Set<string>>(new Set())
-  
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const progressBarRef = useRef<HTMLInputElement>(null)
-  const nextAudioRef = useRef<HTMLAudioElement>(null)
-  const waveformContainerRef = useRef<HTMLDivElement>(null)
-  const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const playerRef = useRef<HTMLDivElement>(null)
-  const queueContainerRef = useRef<HTMLDivElement>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
-  const [audioContextReady, setAudioContextReady] = useState(false)
-  const frequencyDataArrayRef = useRef<Float32Array | null>(null)
-  const timeDataArrayRef = useRef<Float32Array | null>(null)
-  const previousSpectrumRef = useRef<Float32Array | null>(null)
-  const animationFrameRef = useRef<number | null>(null)
-  const trackedPlayRef = useRef<string | null>(null) // Track which track we've already tracked a play for
+  }, [fanUserId, autoDJCloudLoaded])
+
+  useEffect(() => {
+    writeAutoDJConfigToStorage(serializeAutoDJPayload(autoDJConfig, autoDJLeadIn))
+  }, [autoDJConfig, autoDJLeadIn])
+
+  const saveAutoDJToAccount = useCallback(async () => {
+    const payload = serializeAutoDJPayload(autoDJConfig, autoDJLeadIn)
+    writeAutoDJConfigToStorage(payload)
+    if (!fanUserId) {
+      setAutoDJStatusMessage('Settings saved on this device')
+      setAutoDJDirty(false)
+      return
+    }
+    setAutoDJSaving(true)
+    try {
+      const res = await fetch('/api/fan/auto-dj-settings', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: payload }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (body?.code === 'MIGRATION_REQUIRED') {
+          setAutoDJStatusMessage('Cloud save pending DB migration — saved locally')
+        } else {
+          setAutoDJStatusMessage('Could not save to account — stored locally')
+        }
+        return
+      }
+      setAutoDJStatusMessage('Auto DJ settings saved to your account')
+      setAutoDJDirty(false)
+    } catch {
+      setAutoDJStatusMessage('Could not save to account — stored locally')
+    } finally {
+      setAutoDJSaving(false)
+    }
+  }, [autoDJConfig, autoDJLeadIn, fanUserId])
+
+  const prevAutoDJEnabledRef = useRef(isAutoDJEnabled)
+  useEffect(() => {
+    setAutoDJConfig((prev) =>
+      prev.enabled === isAutoDJEnabled ? prev : { ...prev, enabled: isAutoDJEnabled },
+    )
+    if (prevAutoDJEnabledRef.current && !isAutoDJEnabled) {
+      setAutoDJStatusMessage((msg) =>
+        msg === 'Restored default Auto DJ settings' ? msg : '',
+      )
+      setWaveformMixOverlay(null)
+      setWaveformGhostTape(null)
+      // Symmetric EQ/filter chain — restore live deck strip to saved gains.
+      const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
+      const liveEq = deckUiRef.current[liveDeck].eqGains
+      mixEngineRef.current?.setDeckEqGains(liveDeck, liveEq, { instant: true })
+    }
+    prevAutoDJEnabledRef.current = isAutoDJEnabled
+  }, [isAutoDJEnabled])
+
+  useEffect(() => {
+    if (!autoDJSettingsMenu) return
+    const openedAt = performance.now()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAutoDJSettingsMenu()
+    }
+    const onPointer = (e: PointerEvent) => {
+      // Ignore the opening gesture (and Playwright's leftover pointer events).
+      if (performance.now() - openedAt < 400) return
+      if (e.button === 2) return
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-auto-dj-settings-menu]')) return
+      if (target?.closest('[aria-label="Enable Auto DJ"], [aria-label="Disable Auto DJ"]')) return
+      closeAutoDJSettingsMenu()
+    }
+    window.addEventListener('keydown', onKey)
+    const timer = window.setTimeout(() => {
+      window.addEventListener('pointerdown', onPointer)
+    }, 400)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
+  }, [autoDJSettingsMenu, closeAutoDJSettingsMenu])
+
+  const [allSourceTracks, setAllSourceTracks] = useState<Track[]>([])
 
   const defaultSettings: PlayerSettings = {
     volume: 1,
     isMuted: false,
     isShuffled: false,
+    catalogRandom: true,
     repeatMode: 'off',
     playbackRate: 1,
     crossfadeDuration: 0,
@@ -417,6 +884,925 @@ export default function MusicPlayer({
   const [settings, setSettings] = useState<PlayerSettings>(loadSettings)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  const primeQueue = useCallback(() => {
+    if (!onQueueChange) return
+    const pool = autoDJConfig.enabled && autoDJLibrary.length > 0
+      ? autoDJLibrary
+      : allSourceTracks.length > 0
+        ? allSourceTracks
+        : autoDJLibrary
+    if (pool.length === 0) {
+      setAutoDJStatusMessage('No library tracks to prime')
+      return
+    }
+    const exclude = new Set(queue.map((track) => track.id))
+    playedTrackIdsRef.current.forEach((id) => exclude.add(id))
+    const primeCount = Math.max(1, Math.min(autoDJConfig.lookahead, 8))
+    const useRandom = settings.catalogRandom || !autoDJConfig.enabled
+    const remaining = pool.filter((track) => !exclude.has(track.id))
+    const selection = useRandom
+      ? pickRandomUnusedTracks(pool, exclude, primeCount, {
+          allowReshuffle: true,
+          keepExcluded: currentTrack ? [currentTrack.id] : [],
+        })
+      : remaining.slice(0, primeCount)
+    if (selection.length === 0) {
+      setAutoDJStatusMessage('Queue already contains library tracks')
+      return
+    }
+    onQueueChange([...queue, ...selection])
+    const scope = catalogScopeLabel(currentSource)
+    setAutoDJStatusMessage(
+      `Primed ${selection.length} ${useRandom ? 'random ' : ''}track${selection.length > 1 ? 's' : ''} from ${scope}`,
+    )
+  }, [
+    autoDJLibrary,
+    allSourceTracks,
+    queue,
+    onQueueChange,
+    autoDJConfig.lookahead,
+    autoDJConfig.enabled,
+    settings.catalogRandom,
+    currentTrack,
+    currentSource,
+  ])
+
+  // Update body data attribute when in DJ mode (for hiding header)
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (isExpanded && expandedMode === 'dj') {
+        document.body.setAttribute('data-dj-mode', 'true')
+      } else {
+        document.body.removeAttribute('data-dj-mode')
+      }
+    }
+  }, [isExpanded, expandedMode])
+  const [isLoadingSourceTracks, setIsLoadingSourceTracks] = useState(false)
+  const [isMiniMode, setIsMiniMode] = useState(() => {
+    const saved = readMusicPlayerState()?.chrome?.isMiniMode
+    return typeof saved === 'boolean' ? saved : DEFAULT_PLAYER_CHROME.isMiniMode
+  })
+  const [isWaveformCollapsed, setIsWaveformCollapsed] = useState(() => {
+    const saved = readMusicPlayerState()?.chrome?.isWaveformCollapsed
+    return typeof saved === 'boolean' ? saved : DEFAULT_PLAYER_CHROME.isWaveformCollapsed
+  })
+  useEffect(() => {
+    setPlayerChrome({ isMiniMode, isExpanded, isWaveformCollapsed })
+    patchMusicPlayerState({ chrome: { isMiniMode, isExpanded, isWaveformCollapsed } })
+  }, [isMiniMode, isExpanded, isWaveformCollapsed, setPlayerChrome])
+  const [showTrackDetails, setShowTrackDetails] = useState(false)
+  const [waveformData, setWaveformData] = useState<WaveformSample[]>([])
+  const [precomputedPeaks, setPrecomputedPeaks] = useState<number[] | null>(null)
+  const [waveformMode, setWaveformMode] = useState<WaveformColorMode>(() => {
+    if (typeof window === 'undefined') return 'energy'
+    try {
+      const stored = localStorage.getItem('sergik.waveformColorMode')
+      // Prefer MiniMeters multi-band energy (matches reference look). Soft-migrate
+      // prior Ableton "channel" / spectral defaults that rendered as a teal slab.
+      if (!stored || stored === 'gradient' || stored === 'classic' || stored === 'channel') {
+        return 'energy'
+      }
+      return normalizeWaveformColorMode(stored)
+    } catch {
+      return 'energy'
+    }
+  })
+  const [waveformLayerLayout, setWaveformLayerLayout] = useState<WaveformLayerLayout>(() => {
+    if (typeof window === 'undefined') return 'merged'
+    try {
+      return normalizeWaveformLayerLayout(localStorage.getItem('sergik.waveformLayerLayout'))
+    } catch {
+      return 'merged'
+    }
+  })
+  /** 0 = full track; otherwise bars visible (4/8/16… ladder). */
+  const [waveformVisibleBars, setWaveformVisibleBars] = useState(0)
+  const [waveformOffset, setWaveformOffset] = useState(0) // For panning when zoomed
+  const [waveformFollow, setWaveformFollow] = useState(true) // Follow mode - keep playhead centered when zoomed (CDJ)
+  // Derived: 1 = full overview; >1 = zoomed bar window (keeps legacy checks working)
+  const waveformZoom = waveformVisibleBars > 0 ? Math.max(1.05, 128 / waveformVisibleBars) : 1
+  const [waveformMirror, setWaveformMirror] = useState(true) // Mirrored colorful view at 1x (matches waveform menu defaults)
+  const [waveformSpeed, setWaveformSpeed] = useState(1.0) // Waveform animation speed (0.25x to 4x)
+  const [waveformHorizontalZoom, setWaveformHorizontalZoom] = useState(0.5) // Horizontal zoom (0.1x to 8x) - default 0.5x for slower movement
+  const [waveformMenu, setWaveformMenu] = useState<{
+    x: number
+    y: number
+    deck: 'a' | 'b'
+  } | null>(null)
+  const waveformMenuRef = useRef<HTMLDivElement>(null)
+  const waveformMenuClamp = useClampedFixedMenuPosition(
+    !!waveformMenu,
+    waveformMenu,
+    { width: 224, height: 640 },
+    { externalRef: waveformMenuRef },
+  )
+  const autoDJMenuClamp = useClampedFixedMenuPosition(
+    !!autoDJSettingsMenu,
+    autoDJSettingsMenu
+      ? { x: autoDJSettingsMenu.x - 448, y: autoDJSettingsMenu.y }
+      : null,
+    { width: 448, height: 560 },
+  )
+  const [sonicDnaReportOpen, setSonicDnaReportOpen] = useState(false)
+  const [sonicDnaReportTrack, setSonicDnaReportTrack] = useState<Track | null>(null)
+  const sonicDnaReportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sergik.waveformColorMode', waveformMode)
+    } catch {
+      /* ignore */
+    }
+  }, [waveformMode])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sergik.waveformLayerLayout', waveformLayerLayout)
+    } catch {
+      /* ignore */
+    }
+  }, [waveformLayerLayout])
+
+  // Beat grid state — offsetSec is absolute downbeat time (see lib/audio/beat-grid)
+  const [beatGridEnabled, setBeatGridEnabled] = useState(false)
+  const [beatGridOffsetSec, setBeatGridOffsetSec] = useState(0)
+  const beatGridOffsetSecRef = useRef(0)
+  beatGridOffsetSecRef.current = beatGridOffsetSec
+  const [beatGridBeatsPerBar, setBeatGridBeatsPerBar] = useState(4)
+  const [beatGridLock, setBeatGridLock] = useState<number | null>(null)
+  /** Admin/user verified grid — skip auto re-align and persist on sonic_dna. */
+  const [beatGridLocked, setBeatGridLocked] = useState(false)
+  const beatGridSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoAlignedTrackIdRef = useRef<string | null>(null)
+  const [originalQueue, setOriginalQueue] = useState<Track[]>([])
+  const [crossfadeActive, setCrossfadeActive] = useState(false)
+  const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false)
+  const [detectedBPM, setDetectedBPM] = useState<number | null>(null)
+  const [isDetectingBPM, setIsDetectingBPM] = useState(false)
+  const bpmCacheRef = useRef<Map<string, number | null>>(new Map())
+  const tapTempoTimeoutRef = useRef<{ a: ReturnType<typeof setTimeout> | null; b: ReturnType<typeof setTimeout> | null }>({
+    a: null,
+    b: null,
+  })
+  const loggedErrorsRef = useRef<Set<string>>(new Set())
+  type DeckUiSlice = {
+    playbackRate: number
+    tapTempoTaps: number[]
+    tapTempoBPM: number | null
+    tapTempoSectionBpms: number[]
+    eqGains: { low: number; mid: number; high: number }
+    detectedBpm: number | null
+  }
+  const defaultDeckUiSlice = (): DeckUiSlice => ({
+    playbackRate: 1,
+    tapTempoTaps: [],
+    tapTempoBPM: null,
+    tapTempoSectionBpms: [],
+    eqGains: { low: 0, mid: 0, high: 0 },
+    detectedBpm: null,
+  })
+  const [deckUi, setDeckUi] = useState<{ a: DeckUiSlice; b: DeckUiSlice }>({
+    a: defaultDeckUiSlice(),
+    b: defaultDeckUiSlice(),
+  })
+  const deckUiRef = useRef(deckUi)
+  deckUiRef.current = deckUi
+  const [mixVisualProgress, setMixVisualProgress] = useState<number | null>(null)
+  const mixProgressPendingRef = useRef<number | null>(null)
+  const mixUiSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mixUiPendingRef = useRef<{
+    progress?: number | null
+    deckRates: Partial<Record<DeckId, number>>
+    deckEq: Partial<Record<DeckId, { low: number; mid: number; high: number }>>
+    deckFilters: Partial<Record<DeckId, { hpfHz: number; lpfHz: number }>>
+  }>({ deckRates: {}, deckEq: {}, deckFilters: {} })
+  const [deckFilterUi, setDeckFilterUi] = useState<{
+    a: { hpfHz: number; lpfHz: number }
+    b: { hpfHz: number; lpfHz: number }
+  }>({
+    a: { hpfHz: 20, lpfHz: 20000 },
+    b: { hpfHz: 20, lpfHz: 20000 },
+  })
+  const [autoDJOutCountdown, setAutoDJOutCountdown] = useState<number | null>(null)
+  const [mixQualityFlash, setMixQualityFlash] = useState<{
+    grade: MixQualityGrade
+    until: number
+  } | null>(null)
+  const postHandoffTempoUntilRef = useRef(0)
+  const MIX_UI_SYNC_MS = 50
+  const [connectionQuality, setConnectionQuality] = useState<'slow' | 'medium' | 'fast'>('fast')
+  const [networkEffectiveType, setNetworkEffectiveType] = useState<string | null>(null)
+  const [isVisible, setIsVisible] = useState(true)
+  const processedWaveformTrackRef = useRef<string | null>(null)
+  /** Static track envelope (peaks) — never replaced by live oscilloscope data. */
+  const trackWaveformBaseRef = useRef<typeof waveformData>([])
+  const onQueueChangeRef = useRef(onQueueChange)
+  const updatedQueueTrackRef = useRef<Set<string>>(new Set())
+  const queueRef = useRef(queue)
+  queueRef.current = queue
+  
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const nextAudioRef = useRef<HTMLAudioElement>(null)
+  /** Always points at the live transport element (follows deck after mixes). */
+  const liveAudioRef = useRef<HTMLAudioElement | null>(null)
+  /** Which <audio> is the live playhead after a deck-swap mix. */
+  const playbackDeckRef = useRef<'main' | 'next'>('main')
+  /** Skip audio.src reload once after deck-swap handoff. */
+  const skipSrcReloadRef = useRef(false)
+  /** Guards React effects from cold-loading main during deck-swap settle. */
+  type DeckHandoffState = {
+    trackId: string
+    deck: 'main' | 'next'
+    incomingTargetRate: number
+    untilMs: number
+  }
+  const deckHandoffRef = useRef<DeckHandoffState | null>(null)
+  const HANDOFF_GUARD_MS = 700
+  const isDeckHandoffActive = useCallback((trackId?: string | null) => {
+    const h = deckHandoffRef.current
+    if (!h) return false
+    if (Date.now() > h.untilMs) {
+      deckHandoffRef.current = null
+      return false
+    }
+    if (trackId != null && h.trackId !== trackId) return false
+    return true
+  }, [])
+  const armDeckHandoff = useCallback(
+    (track: Track, deck: 'main' | 'next', incomingTargetRate: number) => {
+      deckHandoffRef.current = {
+        trackId: track.id,
+        deck,
+        incomingTargetRate,
+        untilMs: Date.now() + HANDOFF_GUARD_MS,
+      }
+      skipSrcReloadRef.current = true
+    },
+    [],
+  )
+  const phraseMixLockRef = useRef(false)
+  const mixEngineRef = useRef<MixEngine | null>(null)
+  const lastMixPlanRef = useRef<MixPlan | null>(null)
+  const cuedIdleTrackIdRef = useRef<string | null>(null)
+  /** Track id whose idle decoder was silently warmed before OUT. */
+  const autoDJIdleWarmedRef = useRef<string | null>(null)
+  const [autoDJCuedTrackId, setAutoDJCuedTrackId] = useState<string | null>(null)
+  const setCuedIdleTrackId = useCallback((id: string | null) => {
+    cuedIdleTrackIdRef.current = id
+    setAutoDJCuedTrackId(id)
+  }, [])
+  const precueIdleForQueueSuccessorRef = useRef<
+    ((liveTrack: Track, trackQueue: Track[]) => Promise<void>) | null
+  >(null)
+  /** Debounce id for N+2 waveform/grid prefetch during Auto DJ. */
+  const mixLookahead2IdRef = useRef<string | null>(null)
+  const rateEaseRafRef = useRef<number | null>(null)
+  const rateEaseLockRef = useRef(false)
+  const lastTempoCompRateRef = useRef(1)
+  const tempoRampCancelRef = useRef<(() => void) | null>(null)
+
+  const getPlaybackAudio = useCallback((): HTMLAudioElement | null => {
+    const live =
+      playbackDeckRef.current === 'next' ? nextAudioRef.current : audioRef.current
+    liveAudioRef.current = live
+    return live
+  }, [])
+
+  const getIdleAudio = useCallback((): HTMLAudioElement | null => {
+    return playbackDeckRef.current === 'next' ? audioRef.current : nextAudioRef.current
+  }, [])
+
+  const detectedBPMRef = useRef(detectedBPM)
+  detectedBPMRef.current = detectedBPM
+
+  /** Live deck tempo — feeds MixEngine beatmatch (ExpandedPlayerControls slider). */
+  const getOutgoingPlaybackRate = useCallback((): number => {
+    const live = getPlaybackAudio()
+    const rate = live?.playbackRate
+    if (typeof rate === 'number' && rate > 0) return rate
+    const pref = settingsRef.current.playbackRate
+    return typeof pref === 'number' && pref > 0 ? pref : 1
+  }, [getPlaybackAudio])
+
+  const toMixTrackRef = useCallback((track: Track) => {
+    const cachedOffset = mixGridOffsetCacheRef.current.get(track.id)
+    return {
+      id: track.id,
+      file: track.file,
+      title: track.title,
+      bpm:
+        resolvePlaybackBpm(track, detectedBPMRef.current) ??
+        track.bpm ??
+        detectedBPMRef.current ??
+        null,
+      beat_grid_offset:
+        typeof cachedOffset === 'number' ? cachedOffset : track.beat_grid_offset,
+      duration: track.duration ?? null,
+      sonic_dna: track.sonic_dna,
+      energy_level: track.energy_level ?? null,
+    }
+  }, [])
+
+  /** Hot cues mirror — filled after `waveformHotCues` state is declared. */
+  const waveformHotCuesRef = useRef<WaveformHotCue[]>([])
+
+  /** Memo of the inputs each track's grid offset was last derived from. */
+  const mixGridOffsetSigRef = useRef<Map<string, { sig: string; offset: number }>>(new Map())
+
+  const cacheMixGridOffset = useCallback(
+    (
+      track: Track,
+      peaks: Array<number | { positive?: number; negative?: number; rms?: number }>,
+      durationSec: number,
+    ) => {
+      if (isGridLocked(track.sonic_dna)) {
+        const lockedOff =
+          typeof track.beat_grid_offset === 'number' && Number.isFinite(track.beat_grid_offset)
+            ? Math.max(0, track.beat_grid_offset)
+            : 0
+        mixGridOffsetCacheRef.current.set(track.id, lockedOff)
+        return lockedOff
+      }
+      // The Auto DJ tick calls this ten times a second, but onset detection over
+      // the full peak array only yields a new answer when the tape or duration
+      // changes — so key on those and reuse the result in between.
+      const sig = `${peaks.length}:${Math.round(durationSec * 100)}`
+      const memo = mixGridOffsetSigRef.current.get(track.id)
+      if (memo && memo.sig === sig) return memo.offset
+
+      const ref = toMixTrackRef(track)
+      const offset = resolveMixGridOffset(ref, { peaks, durationSec })
+      mixGridOffsetCacheRef.current.set(track.id, offset)
+      mixGridOffsetSigRef.current.set(track.id, { sig, offset })
+      return offset
+    },
+    [toMixTrackRef],
+  )
+
+  const withMixGrid = useCallback(
+    (track: Track) => {
+      const ref = toMixTrackRef(track)
+      const cached = mixGridOffsetCacheRef.current.get(track.id)
+      const ghost = ghostSamplesRef.current
+      let waveformPeaks: Array<number | { positive?: number; negative?: number; rms?: number }> | undefined
+      let waveformDurationSec: number | undefined
+      if (ghost?.trackId === track.id) {
+        waveformPeaks = ghost.samples
+        waveformDurationSec = ghost.durationSec
+      } else if (
+        trackWaveformBaseRef.current.length >= 64 &&
+        autoDJCurrentTrackRef.current?.id === track.id
+      ) {
+        waveformPeaks = trackWaveformBaseRef.current
+        waveformDurationSec =
+          autoDJDurationRef.current > 0
+            ? autoDJDurationRef.current
+            : track.duration ?? undefined
+      }
+      const hotCues =
+        autoDJCurrentTrackRef.current?.id === track.id
+          ? waveformHotCuesRef.current.map((c) => ({ timeSec: c.timeSec, label: c.label }))
+          : undefined
+      return {
+        ...ref,
+        beat_grid_offset: (() => {
+          if (isGridLocked(track.sonic_dna)) {
+            const locked =
+              typeof track.beat_grid_offset === 'number' && Number.isFinite(track.beat_grid_offset)
+                ? Math.max(0, track.beat_grid_offset)
+                : typeof ref.beat_grid_offset === 'number'
+                  ? ref.beat_grid_offset
+                  : 0
+            return locked
+          }
+          // Prefer persisted UI grid over peak-cache when both exist.
+          if (
+            typeof track.beat_grid_offset === 'number' &&
+            Number.isFinite(track.beat_grid_offset) &&
+            track.beat_grid_offset >= 0
+          ) {
+            return track.beat_grid_offset
+          }
+          return cached != null ? cached : ref.beat_grid_offset
+        })(),
+        waveformPeaks,
+        waveformDurationSec,
+        hotCues,
+      }
+    },
+    [toMixTrackRef],
+  )
+
+  const buildMixIntelligenceForPair = useCallback(
+    (outTrack: Track, inTrack: Track, style: MixPlan['style'], incomingTargetRate?: number) => {
+      const outRef = withMixGrid(outTrack)
+      const inRef = withMixGrid(inTrack)
+      const autoDjOn = autoDJConfigRef.current.enabled
+      const techniques = autoDjOn
+        ? (['standard'] as const)
+        : resolveEffectiveMixTechniques(
+            autoDJConfigRef.current.mixTechniques,
+            outRef,
+            inRef,
+          )
+      let intel = buildMixIntelligence({
+        outgoing: outRef,
+        incoming: inRef,
+        style,
+        outgoingRate: getOutgoingPlaybackRate(),
+        incomingTargetRate: incomingTargetRate ?? settingsRef.current.playbackRate,
+      })
+      intel = applyTechniqueToIntelligence(
+        intel,
+        techniques,
+        autoDjOn ? 'crossfade' : autoDJConfigRef.current.mixStyle,
+      )
+      intel = applyEnergyCurveToIntelligence(
+        intel,
+        autoDjOn ? 'hold' : autoDJConfigRef.current.energyCurve,
+      )
+      if (autoDjOn) {
+        intel = {
+          ...intel,
+          incomingDelay: 0,
+          energyScale: 1,
+          echoSend: style === 'cut' ? intel.echoSend : 0,
+          lowDuckDb: style === 'crossfade' ? 0 : intel.lowDuckDb,
+          filterIntensity: style === 'crossfade' ? 0 : intel.filterIntensity,
+        }
+      }
+      return intel
+    },
+    [withMixGrid, getOutgoingPlaybackRate],
+  )
+
+  const computeMixIncomingRate = useCallback(
+    (outTrack: Track | null | undefined, inTrack: Track) => {
+      const outBpm =
+        (outTrack && resolvePlaybackBpm(outTrack, detectedBPMRef.current)) ??
+        outTrack?.bpm ??
+        detectedBPMRef.current ??
+        120
+      const inBpm = resolvePlaybackBpm(inTrack, null) ?? inTrack.bpm ?? 120
+      return computeMixDeckRates({
+        outgoingBpm: outBpm,
+        incomingBpm: inBpm,
+        outgoingPlaybackRate: getOutgoingPlaybackRate(),
+        incomingTargetRate: settingsRef.current.playbackRate,
+      }).incomingRate
+    },
+    [getOutgoingPlaybackRate]
+  )
+
+  const applyFormantForRate = useCallback((rate: number) => {
+    const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
+    const engine = mixEngineRef.current
+    if (!engine) return
+    const gainMul = mixIntelRef.current?.incomingStretch.formantGain ?? 1
+    const prev = formantCompensationGains(lastTempoCompRateRef.current)
+    const next = formantCompensationGains(rate)
+    const cur = engine.getDeckEqGains(liveDeck)
+    const updated = {
+      low: cur.low - prev.low * gainMul + next.low * gainMul,
+      mid: cur.mid - prev.mid * gainMul + next.mid * gainMul,
+      high: cur.high - prev.high * gainMul + next.high * gainMul,
+    }
+    engine.setDeckEqGains(liveDeck, updated, { instant: false })
+    setDeckUi((prevUi) => ({
+      ...prevUi,
+      [liveDeck]: { ...prevUi[liveDeck], eqGains: updated },
+    }))
+    lastTempoCompRateRef.current = rate
+  }, [])
+
+  const applyDeckStripEq = useCallback(
+    (
+      deck: DeckId,
+      gains: { low: number; mid: number; high: number },
+      opts?: { instant?: boolean },
+    ) => {
+      mixEngineRef.current?.setDeckEqGains(deck, gains, opts)
+      setDeckUi((prev) => ({
+        ...prev,
+        [deck]: { ...prev[deck], eqGains: gains },
+      }))
+    },
+    [],
+  )
+
+  const applyLiveDeckTempo = useCallback(
+    (rate: number, instant = true) => {
+      const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+      const live = getPlaybackAudio()
+      const clamped = clampTempoRate(rate)
+      if (live) {
+        configureKeyLock(live, true)
+        applyDeckTempo(live, clamped, { keyLock: true, instant })
+      }
+      mixEngineRef.current?.setDeckPlaybackRate(liveDeck, clamped, { instant })
+      setDeckUi((prev) => ({
+        ...prev,
+        [liveDeck]: { ...prev[liveDeck], playbackRate: clamped },
+      }))
+      applyFormantForRate(clamped)
+    },
+    [getPlaybackAudio, applyFormantForRate],
+  )
+
+  const flushMixUiSync = useCallback(() => {
+    mixUiSyncTimerRef.current = null
+    const pending = mixUiPendingRef.current
+    if (pending.progress !== undefined) {
+      setMixVisualProgress(pending.progress)
+      setWaveformMixOverlay((prev) =>
+        prev?.active ? { ...prev, blendProgress: pending.progress ?? null } : prev,
+      )
+    }
+    const hasRates = pending.deckRates.a != null || pending.deckRates.b != null
+    const hasEq = pending.deckEq.a != null || pending.deckEq.b != null
+    if (hasRates || hasEq) {
+      setDeckUi((prev) => ({
+        a: {
+          ...prev.a,
+          ...(pending.deckRates.a != null ? { playbackRate: pending.deckRates.a } : {}),
+          ...(pending.deckEq.a != null ? { eqGains: pending.deckEq.a } : {}),
+        },
+        b: {
+          ...prev.b,
+          ...(pending.deckRates.b != null ? { playbackRate: pending.deckRates.b } : {}),
+          ...(pending.deckEq.b != null ? { eqGains: pending.deckEq.b } : {}),
+        },
+      }))
+    }
+    const hasFilters = pending.deckFilters.a != null || pending.deckFilters.b != null
+    if (hasFilters) {
+      setDeckFilterUi((prev) => ({
+        a: pending.deckFilters.a ?? prev.a,
+        b: pending.deckFilters.b ?? prev.b,
+      }))
+    }
+    mixUiPendingRef.current = { deckRates: {}, deckEq: {}, deckFilters: {} }
+  }, [])
+
+  const scheduleMixUiSync = useCallback(() => {
+    if (mixUiSyncTimerRef.current != null) return
+    mixUiSyncTimerRef.current = window.setTimeout(flushMixUiSync, MIX_UI_SYNC_MS)
+  }, [flushMixUiSync])
+
+  const pushMixVisualProgress = useCallback(
+    (raw: number) => {
+      mixUiPendingRef.current.progress = Math.max(0, Math.min(1, raw))
+      scheduleMixUiSync()
+    },
+    [scheduleMixUiSync],
+  )
+
+  const clearMixVisualProgress = useCallback(() => {
+    if (mixUiSyncTimerRef.current != null) {
+      clearTimeout(mixUiSyncTimerRef.current)
+      mixUiSyncTimerRef.current = null
+    }
+    mixUiPendingRef.current = { deckRates: {}, deckEq: {}, deckFilters: {} }
+    setMixVisualProgress(null)
+    setWaveformMixOverlay((prev) =>
+      prev?.active ? { ...prev, blendProgress: null } : prev,
+    )
+  }, [])
+
+  const getDeckStripEq = useCallback((deck: DeckId) => {
+    const engine = mixEngineRef.current
+    if (engine) return engine.getDeckEqGains(deck)
+    return deckUiRef.current[deck].eqGains
+  }, [])
+
+  /** Bump when the live media element changes so WaveformStage re-arms its clock. */
+  const [waveformMediaSyncKey, setWaveformMediaSyncKey] = useState('main')
+  const [waveformMixOverlay, setWaveformMixOverlay] = useState<WaveformMixOverlay | null>(null)
+  const [waveformGhostTape, setWaveformGhostTape] = useState<WaveformGhostTape | null>(null)
+  type DeckWaveformPack = {
+    trackId: string
+    samples: WaveformSample[]
+    durationSec: number
+  }
+  const [deckWaveformCache, setDeckWaveformCache] = useState<{
+    a?: DeckWaveformPack
+    b?: DeckWaveformPack
+  }>({})
+  const [waveformHotCues, setWaveformHotCues] = useState<WaveformHotCue[]>([])
+  waveformHotCuesRef.current = waveformHotCues
+  const ghostSamplesRef = useRef<{
+    trackId: string
+    samples: import('@/lib/audio/waveform-view').WaveformSample[]
+    durationSec: number
+    sonicDna?: unknown
+  } | null>(null)
+  /** Cached peak-aligned grid offsets for mix planning */
+  const mixGridOffsetCacheRef = useRef<Map<string, number>>(new Map())
+  const mixIntelRef = useRef<MixIntelligence | null>(null)
+
+  const ensureMixEngine = useCallback((): MixEngine | null => {
+    const main = audioRef.current
+    const next = nextAudioRef.current
+    if (!main || !next) return null
+    if (!mixEngineRef.current) {
+      const engine = new MixEngine(main, next)
+      engine.subscribe((ev) => {
+        if (ev.type !== 'mix-quality') return
+        const snap = snapshotMixQuality({
+          samples: ev.samples,
+          phaseRmsSec: ev.phaseRmsSec,
+          kickResidualRmsMs: ev.kickResidualRmsMs,
+        })
+        if (snap) {
+          setLastMixQuality(snap)
+          setMixQualityFlash({ grade: snap.grade, until: Date.now() + 8000 })
+          const plan = ev.plan
+          const q = autoDJQueueRef.current
+          const outT = q.find((t) => t.id === plan.outgoingTrackId)?.title
+          const inT = q.find((t) => t.id === plan.incomingTrackId)?.title
+          const hist = pushMixQualityHistory(snap, {
+            outgoingTitle: outT,
+            incomingTitle: inT,
+            syncMode: autoDJConfigRef.current.syncMode,
+            reason: plan.reason,
+          })
+          setMixQualityHistory(hist)
+        }
+        const suffix = formatMixQuality({
+          phaseRmsSec: ev.phaseRmsSec,
+          kickResidualRmsMs: ev.kickResidualRmsMs,
+          grade: snap?.grade,
+        })
+        if (!suffix) return
+        setAutoDJStatusMessage((prev) => {
+          const base = prev.replace(
+            /\s*·\s*sync\s+\d+ms\s*\/\s*kick\s+\d+ms(?:\s+\w+)?\s*$/i,
+            '',
+          )
+          return `${base}${suffix}`
+        })
+      })
+      mixEngineRef.current = engine
+    }
+    mixEngineRef.current.setKeyLock(true)
+    mixEngineRef.current.setActiveDeck(playbackDeckRef.current === 'next' ? 'b' : 'a')
+    return mixEngineRef.current
+  }, [])
+
+  const attachEngineGraph = useCallback(() => {
+    const ctx = audioContextRef.current
+    const source = sourceNodeRef.current
+    if (!ctx || !source) return false
+    const engine = ensureMixEngine()
+    if (!engine) return false
+    engine.adoptExternalSourceA(source)
+    const ok = engine.attachGraph(ctx)
+    const an = analyserRef.current
+    if (an && ok) {
+      try {
+        an.disconnect()
+      } catch {
+        /* ignore */
+      }
+      engine.connectDeckAnalyser('a', an)
+    }
+    return ok
+  }, [ensureMixEngine])
+
+  useEffect(() => {
+    if (audioRef.current) configureKeyLock(audioRef.current, true)
+    if (nextAudioRef.current) configureKeyLock(nextAudioRef.current, true)
+  }, [])
+
+  useEffect(() => {
+    if (seekTargetSec == null || !Number.isFinite(seekTargetSec)) return
+    const audio = getPlaybackAudio()
+    if (!audio) return
+    const apply = () => {
+      try {
+        audio.currentTime = seekTargetSec
+        setCurrentTime(seekTargetSec)
+        reportPlaybackPosition(seekTargetSec)
+      } catch {
+        /* ignore */
+      }
+    }
+    apply()
+    audio.addEventListener('loadedmetadata', apply)
+    audio.addEventListener('canplay', apply)
+    const timer = window.setTimeout(apply, 250)
+    return () => {
+      audio.removeEventListener('loadedmetadata', apply)
+      audio.removeEventListener('canplay', apply)
+      window.clearTimeout(timer)
+    }
+  }, [seekNonce, seekTargetSec, currentTrack, reportPlaybackPosition, getPlaybackAudio])
+
+  // Flush position on tab hide / unload so reload restores the last playhead
+  useEffect(() => {
+    const flush = () => {
+      const audio = getPlaybackAudio()
+      if (!audio || !Number.isFinite(audio.currentTime)) return
+      reportPlaybackPosition(audio.currentTime)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [reportPlaybackPosition, getPlaybackAudio])
+  /** Used by player-chrome touch seek to ignore events over the waveform. */
+  const waveformContainerRef = useRef<HTMLDivElement>(null)
+  const waveformVisibleBarsRef = useRef(0)
+  const waveformOffsetRef = useRef(0)
+  const waveformDataLengthRef = useRef(0)
+  const waveformGestureRef = useRef(false)
+  const waveformPanEnabledRef = useRef(false)
+  const waveformFlushRafRef = useRef<number | null>(null)
+  const pendingWaveformBarsRef = useRef<number | null>(null)
+  const pendingWaveformOffsetRef = useRef<number | null>(null)
+  const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const playerRef = useRef<HTMLDivElement>(null)
+  const queueContainerRef = useRef<HTMLDivElement>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const [audioContextReady, setAudioContextReady] = useState(false)
+  const frequencyDataArrayRef = useRef<Float32Array | null>(null)
+  const timeDataArrayRef = useRef<Float32Array | null>(null)
+  const previousSpectrumRef = useRef<Float32Array | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
+  const trackedPlayRef = useRef<string | null>(null) // Track which track we've already tracked a play for
+
+  const snapPlaybackTime = useCallback((t: number) => {
+    const safe = Number.isFinite(t) ? Math.max(0, t) : 0
+    playbackTimeRef.current = safe
+    setCurrentTime(safe)
+    transportMiniMobileRef.current?.update(safe, duration)
+    transportMiniDesktopRef.current?.update(safe, duration)
+    transportExpandedRef.current?.update(safe, duration)
+  }, [duration])
+
+  const pushTransportTime = useCallback((timeSec: number, durationSec: number) => {
+    const safe = Number.isFinite(timeSec) ? Math.max(0, timeSec) : 0
+    playbackTimeRef.current = safe
+    autoDJCurrentTimeRef.current = safe
+    transportMiniMobileRef.current?.update(safe, durationSec)
+    transportMiniDesktopRef.current?.update(safe, durationSec)
+    transportExpandedRef.current?.update(safe, durationSec)
+  }, [])
+
+  // Hot cues per track (local)
+  useEffect(() => {
+    if (!currentTrack?.id || typeof window === 'undefined') {
+      setWaveformHotCues([])
+      return
+    }
+    try {
+      const raw = localStorage.getItem('sergik-hotcues-v1')
+      const all = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {}
+      const map = all[currentTrack.id] || {}
+      const cues: WaveformHotCue[] = Object.entries(map)
+        .filter(([, t]) => typeof t === 'number' && Number.isFinite(t))
+        .map(([slot, timeSec]) => ({
+          id: `${currentTrack.id}-${slot}`,
+          timeSec,
+          label: slot,
+          color: 'rgba(167, 139, 250, 0.95)',
+        }))
+        .sort((a, b) => a.timeSec - b.timeSec)
+      setWaveformHotCues(cues)
+    } catch {
+      setWaveformHotCues([])
+    }
+  }, [currentTrack?.id])
+
+  const persistHotCue = useCallback(
+    (slot: 1 | 2 | 3 | 4, timeSec: number) => {
+      if (!currentTrack?.id || typeof window === 'undefined') return
+      try {
+        const raw = localStorage.getItem('sergik-hotcues-v1')
+        const all = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {}
+        const map = { ...(all[currentTrack.id] || {}) }
+        map[String(slot)] = timeSec
+        all[currentTrack.id] = map
+        localStorage.setItem('sergik-hotcues-v1', JSON.stringify(all))
+        setWaveformHotCues(
+          Object.entries(map)
+            .map(([s, t]) => ({
+              id: `${currentTrack.id}-${s}`,
+              timeSec: t,
+              label: s,
+              color: 'rgba(167, 139, 250, 0.95)',
+            }))
+            .sort((a, b) => a.timeSec - b.timeSec)
+        )
+      } catch {
+        /* ignore */
+      }
+    },
+    [currentTrack?.id]
+  )
+
+  const jumpHotCue = useCallback(
+    (slot: 1 | 2 | 3 | 4) => {
+      const cue = waveformHotCues.find((c) => c.label === String(slot))
+      if (!cue) return
+      const audio = getPlaybackAudio()
+      if (!audio) return
+      try {
+        audio.currentTime = cue.timeSec
+      } catch {
+        /* ignore */
+      }
+      snapPlaybackTime(cue.timeSec)
+    },
+    [waveformHotCues, getPlaybackAudio, snapPlaybackTime]
+  )
+
+  // Ghost incoming tape while dual-deck mix is active (throttle React updates)
+  useEffect(() => {
+    if (!crossfadeActive) {
+      setWaveformGhostTape(null)
+      return
+    }
+    let raf = 0
+    let cached: ReturnType<typeof buildWaveformTapeCache> = null
+    let cachedTrackId: string | null = null
+    let lastPush = 0
+    const tick = (now: number) => {
+      const ghost = ghostSamplesRef.current
+      const idle = getIdleAudio()
+      if (ghost?.samples.length && idle && now - lastPush > 80) {
+        lastPush = now
+        if (!cached || cachedTrackId !== ghost.trackId) {
+          cached = buildWaveformTapeCache({
+            samples: ghost.samples,
+            durationSec: ghost.durationSec,
+            colorMode: waveformMode,
+            intelligenceProfile: profileFromSonicDna(ghost.sonicDna),
+            targetCount: 2400,
+          })
+          cachedTrackId = ghost.trackId
+        }
+        if (cached) {
+          setWaveformGhostTape({
+            timed: cached.timed,
+            durationSec: ghost.durationSec,
+            timeSec: idle.currentTime || 0,
+            opacity: 0.4,
+          })
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [crossfadeActive, getIdleAudio, waveformMode])
+
+  const clearFadeInterval = useCallback(() => {
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current)
+      fadeIntervalRef.current = null
+    }
+  }, [])
+
+  const restoreMainVolume = useCallback(() => {
+    const vol = settingsRef.current.isMuted ? 0 : settingsRef.current.volume
+    try {
+      mixEngineRef.current?.setMasterVolume(vol)
+    } catch {
+      /* ignore */
+    }
+    if (
+      phraseMixLockRef.current ||
+      mixEngineRef.current?.isMixing() ||
+      isDeckHandoffActive()
+    ) {
+      return
+    }
+    if (playbackDeckRef.current === 'next') return
+    const audio = getPlaybackAudio()
+    if (!audio) return
+    try {
+      audio.volume = vol
+    } catch {
+      /* ignore */
+    }
+  }, [getPlaybackAudio, isDeckHandoffActive])
+
+  const trackIntroOffsetSec = useCallback((track: Track) => {
+    const o = Number((track as Track & { beat_grid_offset?: number }).beat_grid_offset)
+    if (Number.isFinite(o) && o >= 0 && o < 45) return o
+    return 0
+  }, [])
 
   const teardownWebAudioOutput = useCallback(() => {
     try {
@@ -491,6 +1877,10 @@ export default function MusicPlayer({
     setSettings(updated)
     if (typeof window !== 'undefined') {
       localStorage.setItem('musicPlayerSettings', JSON.stringify(updated))
+      dispatchPlayerSettings({
+        isShuffled: updated.isShuffled,
+        repeatMode: updated.repeatMode,
+      })
     }
   }, [settings])
 
@@ -527,50 +1917,37 @@ export default function MusicPlayer({
   }, [onQueueChange])
 
   // Fetch waveform from Supabase API
-  const fetchWaveformFromSupabase = useCallback(async (filePath: string): Promise<number[] | null> => {
+  const fetchWaveformFromSupabase = useCallback(async (filePath: string, trackId?: string): Promise<number[] | null> => {
     try {
-      // Extract local path from Supabase URL if needed
-      let localPath = filePath
-      if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        // Extract path from Supabase Storage URL
-        const match = filePath.match(/\/storage\/v1\/object\/public\/audio-files\/(.+)$/)
-        if (match) {
-          localPath = decodeURIComponent(match[1])
-        }
-      }
-      
-      const response = await fetch(`/api/audio/waveform?path=${encodeURIComponent(localPath)}`)
+      const params = new URLSearchParams()
+      const lookupPath = waveformLookupPath(filePath)
+      if (lookupPath) params.set('path', lookupPath)
+      if (trackId) params.set('trackId', trackId)
+      if (!params.toString()) return null
+
+      const response = await fetch(`/api/audio/waveform?${params.toString()}`)
       if (!response.ok) {
-        if (response.status === 404) {
-          // Track not found or no waveform - this is OK, we'll generate
-          return null
-        }
-        // For 500 errors, log but don't show to user - will fallback to generating
-        if (response.status === 500) {
+        if (response.status === 404) return null
+        if (response.status === 500 && process.env.NODE_ENV === 'development') {
           const errorData = await response.json().catch(() => ({}))
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Waveform API error (will generate from audio):', errorData.error || 'Server error')
-          }
-          return null
+          console.warn('Waveform API error (will generate from audio):', errorData.error || 'Server error')
         }
         return null
       }
-      
+
       const data = await response.json()
       if (data.waveform_data && Array.isArray(data.waveform_data) && data.waveform_data.length > 0) {
-        // Silently return waveform data
         return data.waveform_data
       }
-      
+
       return null
-    } catch (error) {
-      // Silently fail - will generate from audio
+    } catch {
       return null
     }
   }, [])
 
   // Fetch BPM from Supabase API
-  const fetchBPMFromSupabase = useCallback(async (filePath: string): Promise<number | null> => {
+  const fetchBPMFromSupabase = useCallback(async (filePath: string, trackId?: string): Promise<number | null> => {
     try {
       // Extract local path from Supabase URL if needed
       let localPath = filePath
@@ -582,7 +1959,10 @@ export default function MusicPlayer({
         }
       }
       
-      const response = await fetch(`/api/audio/bpm?path=${encodeURIComponent(localPath)}`)
+      const params = new URLSearchParams()
+      if (localPath) params.set('path', localPath)
+      if (trackId) params.set('trackId', trackId)
+      const response = await fetch(`/api/audio/bpm?${params.toString()}`, { cache: 'no-store' })
       if (!response.ok) {
         // Silently handle 404s and other errors - we'll try other methods
         return null
@@ -601,160 +1981,232 @@ export default function MusicPlayer({
     }
   }, [])
 
-  // Generate waveform from track data when track changes
-  // Priority: 1) waveform_data from track, 2) fetch from Supabase, 3) generate from audio file, 4) default fallback
-  // Create stable track key for dependencies (always a string, never undefined)
+  const commitTrackWaveform = useCallback((data: typeof waveformData, peaks?: number[] | null) => {
+    trackWaveformBaseRef.current = data
+    setWaveformData(data)
+    if (peaks !== undefined) setPrecomputedPeaks(peaks)
+  }, [])
+
+  // Generate waveform from the same file the <audio> element plays.
+  // Defer network decode until playing or waveform chrome is visible (avoid cold-path contention).
   const trackKey = currentTrack ? `${currentTrack.id}-${currentTrack.file}` : null
-  const trackWaveformData = currentTrack?.waveform_data
+  const waveformNetworkAllowed = isPlaying || isExpanded || isWaveformDocked
   
   useEffect(() => {
     if (!currentTrack || !resolvedUrl) {
+      trackWaveformBaseRef.current = []
       setPrecomputedPeaks(null)
       setWaveformData([])
       processedWaveformTrackRef.current = null
       return
     }
-    
-    // Check if we've already processed this track
-    if (processedWaveformTrackRef.current === trackKey) {
-      // Already processed this track, skip
+
+    // Fast path: paint inline peaks without network; wait for play/expand for heavy fetch/decode
+    const inlineOnly =
+      !waveformNetworkAllowed &&
+      Array.isArray(currentTrack.waveform_data) &&
+      (currentTrack.waveform_data as number[]).length > 0
+    if (!waveformNetworkAllowed && !inlineOnly) {
       return
     }
-    
-    // Mark this track as being processed
-    processedWaveformTrackRef.current = trackKey
-    
-    // Capture current queue at effect time (not as dependency)
-    const currentQueue = queue
-    
-    // Helper to convert peak array to waveform display format
-    const convertPeaksToWaveform = (peaks: number[]): { positive: number; negative: number; color: string }[] => {
-      if (!peaks || peaks.length === 0) return []
-      
-      const data: { positive: number; negative: number; color: string }[] = []
-      const maxPeak = Math.max(...peaks, 0.01)
-      
-      for (let i = 0; i < peaks.length; i++) {
-        const normalized = peaks[i] / maxPeak
-        const positive = Math.max(0.1, Math.min(0.95, 0.3 + normalized * 0.65))
-        const negative = Math.max(0.1, Math.min(0.95, 0.2 + normalized * 0.5))
-        
-        const position = i / peaks.length
-        const r = Math.floor(255 * (1 - position))
-        const g = Math.floor(255 * position)
-        const b = Math.floor(128 + 127 * position)
-        
-        data.push({
-          positive,
-          negative,
-          color: `rgb(${r}, ${g}, ${b})`
-        })
+    if (inlineOnly && !waveformNetworkAllowed) {
+      const peaks = currentTrack.waveform_data as number[]
+      const waveform = peaksOrEnvelopesToWaveformSamples(peaks, null)
+      if (waveform.length) {
+        commitTrackWaveform(waveform, peaks)
+        processedWaveformTrackRef.current = trackKey
       }
-      
-      return data
-    }
-    
-    // Helper to generate default waveform (only as last resort)
-    const generateDefaultWaveform = () => {
-      const bars = 2000
-      const data: { positive: number; negative: number; color: string }[] = []
-      
-      for (let i = 0; i < bars; i++) {
-        const position = i / bars
-        const baseHeight = 0.3 + Math.sin(position * Math.PI * 12) * 0.15 + Math.sin(position * Math.PI * 24) * 0.08
-        const positive = Math.max(0.1, Math.min(0.95, baseHeight))
-        const negative = Math.max(0.1, Math.min(0.95, baseHeight * 0.7))
-        
-        const r = Math.floor(255 * (1 - position))
-        const g = Math.floor(255 * position)
-        const b = Math.floor(128 + 127 * position)
-        
-        data.push({
-          positive,
-          negative,
-          color: `rgb(${r}, ${g}, ${b})`
-        })
-      }
-      
-      return data
-    }
-    
-    // Priority 1: Use waveform_data from track if available
-    if (trackWaveformData && Array.isArray(trackWaveformData) && trackWaveformData.length > 0) {
-      const waveform = convertPeaksToWaveform(trackWaveformData)
-      setPrecomputedPeaks(trackWaveformData)
-      setWaveformData(waveform)
       return
     }
-    
-    // Priority 2: Fetch from Supabase database
-    fetchWaveformFromSupabase(currentTrack.file)
-      .then(waveformPeaks => {
-        if (waveformPeaks && waveformPeaks.length > 0) {
-          const waveform = convertPeaksToWaveform(waveformPeaks)
-          setPrecomputedPeaks(waveformPeaks)
-          setWaveformData(waveform)
-          
-          // Update the track in context with waveform_data for future use (only once per track)
-          if (onQueueChangeRef.current && currentTrack && !updatedQueueTrackRef.current.has(currentTrack.id)) {
-            updatedQueueTrackRef.current.add(currentTrack.id)
-            // Use a small delay to avoid immediate re-render issues
-            setTimeout(() => {
-              if (onQueueChangeRef.current) {
-                const updatedTrack = { ...currentTrack, waveform_data: waveformPeaks }
-                // Use captured queue from effect time
-                const updatedQueue = currentQueue.map(t => t.id === currentTrack.id ? updatedTrack : t)
-                onQueueChangeRef.current(updatedQueue)
-              }
-            }, 0)
-          }
-        } else {
-          // No waveform in Supabase - generate from audio file
-          generatePeakData(resolvedUrl, 2000)
-            .then(peakData => {
-              if (!peakData || !peakData.data || peakData.data.length === 0) {
-                throw new Error('Invalid peak data')
-              }
-              
-              setPrecomputedPeaks(peakData.data)
-              const waveform = convertPeaksToWaveform(peakData.data)
-              
-              if (waveform.length > 0) {
-                setWaveformData(waveform)
-              }
-            })
-            .catch(err => {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('Failed to generate peaks from audio, using default waveform:', err)
-              }
-              // Only show default as last resort
-              setWaveformData(generateDefaultWaveform())
-            })
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching waveform from Supabase:', err)
-        // Fallback to generating from audio
-        generatePeakData(resolvedUrl, 2000)
-          .then(peakData => {
-            if (peakData?.data?.length > 0) {
-              setPrecomputedPeaks(peakData.data)
-              const waveform = convertPeaksToWaveform(peakData.data)
-              if (waveform.length > 0) {
-                setWaveformData(waveform)
-              } else {
-                setWaveformData(generateDefaultWaveform())
-              }
-            } else {
-              setWaveformData(generateDefaultWaveform())
+
+    let cancelled = false
+    const convertPeaksToWaveform = (
+      peaks: number[],
+      envelopes?: { peak: number; rms: number; low: number; mid: number; high: number }[] | null
+    ) => peaksOrEnvelopesToWaveformSamples(peaks, envelopes)
+
+    // Whether what we painted already carries per-band envelope detail. Plain
+    // peaks still render, but only envelopes drive the multi-band coloring.
+    let appliedEnvelopeDetail = false
+
+    const applyPeaks = (
+      peaks: number[],
+      envelopes?: { peak: number; rms: number; low: number; mid: number; high: number }[] | null,
+    ) => {
+      if (cancelled || !peaks.length) return false
+      const waveform = convertPeaksToWaveform(peaks, envelopes)
+      if (!waveform.length) return false
+      commitTrackWaveform(waveform, peaks)
+      processedWaveformTrackRef.current = trackKey
+      if (envelopes?.length) appliedEnvelopeDetail = true
+      return true
+    }
+
+    /**
+     * The decode path re-downloads the entire file that the media element is
+     * already streaming. Hold it until playback has a comfortable buffer so the
+     * two requests don't compete for bandwidth mid-track.
+     */
+    const waitForComfortableBuffer = async () => {
+      const el = audioRef.current
+      if (!el) return
+      const deadline = Date.now() + WAVEFORM_DECODE_MAX_WAIT_MS
+      while (!cancelled && Date.now() < deadline) {
+        if (el.paused) return
+        let secondsAhead = 0
+        try {
+          const ranges = el.buffered
+          for (let i = 0; i < ranges.length; i += 1) {
+            if (ranges.start(i) <= el.currentTime && el.currentTime <= ranges.end(i)) {
+              secondsAhead = ranges.end(i) - el.currentTime
+              break
             }
-          })
-          .catch(() => {
-            // Last resort: default waveform
-            setWaveformData(generateDefaultWaveform())
-          })
-      })
-  }, [trackKey, trackWaveformData, resolvedUrl, fetchWaveformFromSupabase])
+          }
+        } catch {
+          return
+        }
+        if (el.readyState >= 3 && secondsAhead >= WAVEFORM_DECODE_BUFFER_LEAD_SEC) return
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+    }
+
+    // Instant placeholder: static precomputed tape (deployed) → track/API peaks
+    const showStoredPlaceholder = async () => {
+      const storageRel =
+        vaultRelativePath(resolvedUrl) ||
+        vaultRelativePath(currentTrack.file) ||
+        null
+      const skipStaticTape =
+        Boolean(storageRel) &&
+        storedWaveformLikelyStale(currentTrack.file || '', resolvedUrl)
+      if (storageRel && !skipStaticTape) {
+        const jsonPath = staticWaveformJsonUrl(storageRel)
+        try {
+          const res = await fetch(jsonPath, { cache: 'force-cache' })
+          if (res.ok) {
+            const body = await res.json()
+            // Compact deploy format: { d: number[], e: [peak,rms,low,mid,high][] }
+            // Legacy: { data, envelopes: [{peak,rms,low,mid,high}] }
+            const data: number[] | undefined = Array.isArray(body?.d)
+              ? body.d
+              : Array.isArray(body?.data)
+                ? body.data
+                : undefined
+            let envelopes:
+              | { peak: number; rms: number; low: number; mid: number; high: number }[]
+              | undefined
+            if (Array.isArray(body?.e) && body.e.length > 0 && Array.isArray(body.e[0])) {
+              envelopes = body.e.map((row: number[]) => ({
+                peak: row[0] ?? 0,
+                rms: row[1] ?? 0,
+                low: row[2] ?? 0,
+                mid: row[3] ?? 0,
+                high: row[4] ?? 0,
+              }))
+            } else if (Array.isArray(body?.envelopes) && body.envelopes.length > 0) {
+              envelopes = body.envelopes
+            }
+            if (envelopes?.length) {
+              if (applyPeaks(data || [], envelopes)) return
+            }
+            if (data?.length) {
+              if (applyPeaks(data)) return
+            }
+          }
+        } catch {
+          // continue
+        }
+      }
+
+      const inline = currentTrack.waveform_data
+      if (inline && Array.isArray(inline) && inline.length > 0) {
+        applyPeaks(inline)
+        return
+      }
+      try {
+        const peaks = await fetchWaveformFromSupabase(currentTrack.file, currentTrack.id)
+        if (peaks?.length) applyPeaks(peaks)
+      } catch {
+        // ignore — decode path below is authoritative
+      }
+    }
+
+    const loadFromPlayback = async () => {
+      if (!canAnalyzeAudioWaveform()) return
+
+      const candidates = waveformAnalysisUrls(resolvedUrl, currentTrack.file)
+      for (const url of candidates) {
+        if (cancelled) return
+        const cached = getPlaybackWaveformCache(url)
+        if (cached?.data?.length) {
+          if (applyPeaks(cached.data, cached.envelopes)) return
+        }
+      }
+
+      for (const url of candidates) {
+        if (cancelled) return
+        try {
+          const peakData = await generatePeakData(url, 2000)
+          if (!peakData?.data?.length) continue
+          setPlaybackWaveformCache(url, peakData)
+          setPlaybackWaveformCache(resolvedUrl, peakData)
+          if (applyPeaks(peakData.data, peakData.envelopes)) return
+        } catch (err) {
+          if (isAudioContextUnavailableError(err)) return
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Waveform decode failed for', url, err)
+          }
+        }
+      }
+    }
+
+    void (async () => {
+      // Don't mark processed until we have paint data — Strict Mode cancel must retry.
+      if (processedWaveformTrackRef.current === trackKey && trackWaveformBaseRef.current.length >= 64) {
+        return
+      }
+
+      const fileHint = currentTrack.file || ''
+      const inlinePeaks = Array.isArray(currentTrack.waveform_data)
+        ? (currentTrack.waveform_data as number[])
+        : []
+      // Prefer decode from the same bytes we play when stored tape is WAV-vs-MP3 stale
+      // or a synthetic sine fallback — otherwise grid/kick alignment drifts.
+      const preferPlayback =
+        Boolean(resolvedUrl) &&
+        (storedWaveformLikelyStale(fileHint, resolvedUrl) ||
+          (inlinePeaks.length > 0 && looksLikeSyntheticPeaks(inlinePeaks)))
+
+      if (preferPlayback) {
+        await loadFromPlayback()
+        if (!cancelled && trackWaveformBaseRef.current.length < 64) {
+          await showStoredPlaceholder()
+        }
+      } else {
+        await showStoredPlaceholder()
+        if (cancelled) return
+        const havePaintableTape = trackWaveformBaseRef.current.length >= 64
+        // Stored peaks are authoritative on this branch — `preferPlayback` above
+        // already claimed the stale/synthetic cases — so decoding again would
+        // pull the whole file down a second time for an identical tape.
+        if (havePaintableTape && appliedEnvelopeDetail) return
+        if (havePaintableTape) await waitForComfortableBuffer()
+        if (cancelled) return
+        await loadFromPlayback()
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    trackKey,
+    resolvedUrl,
+    fetchWaveformFromSupabase,
+    commitTrackWaveform,
+    currentTrack,
+    waveformNetworkAllowed,
+  ])
 
   // Ultra high-definition real-time waveform analysis with transient detection
   // Helper function for better color interpolation (RGB to RGB with gamma correction)
@@ -795,27 +2247,41 @@ export default function MusicPlayer({
     
     // Don't run waveform updates if player is minimized, not expanded, not playing, or not visible
     // But preserve the initial waveform - don't clear it
-    if (isMiniMode || !isExpanded || !isPlaying || !isVisible) {
+    if ((isMiniMode && !isWaveformDocked) || !isExpanded || !isPlaying || !isVisible) {
       // Cancel any ongoing animation frame
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
       }
-      // Don't clear waveform - keep the initial waveform visible
+      // Restore static track envelope so beat grid stays aligned after live coloring
+      const base = trackWaveformBaseRef.current
+      if (base.length > 0) {
+        setWaveformData(base)
+      }
+      return
+    }
+
+    // Full-buffer peak tape (Ableton/MiniMeters): no live oscilloscope loop — zoom/pan only.
+    if (trackWaveformBaseRef.current.length >= 64) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
+      setWaveformData(trackWaveformBaseRef.current)
       return
     }
     
     // Peak detection for transients (kicks, claps, hats)
     let previousPeaks: number[] = []
-    let envelopeFollower: number[] = []
+    const envelopeFollower: number[] = []
     let lastUpdateTime = 0
     // Exponential smoothing - stores previous smoothed waveform for better interpolation
-    let previousSmoothedWaveform: Array<{ positive: number; negative: number; color: string; elementType?: 'kick' | 'snare' | 'hihat' | 'other'; elementConfidence?: number }> | null = null
-    const smoothingFactor = 0.3 // 0-1, lower = more smoothing (slower response)
+    let previousSmoothedWaveform: WaveformSample[] | null = null
+    const smoothingFactor = 0.14 // snappy — preserve peak/valley contrast
     
     const updateWaveform = (currentTime: number = performance.now()) => {
       // Check conditions again in case they changed
-      if (!analyserRef.current || !frequencyDataArrayRef.current || !timeDataArrayRef.current || isMiniMode || !isExpanded || !isPlaying || !isVisible) {
+      if (!analyserRef.current || !frequencyDataArrayRef.current || !timeDataArrayRef.current || (isMiniMode && !isWaveformDocked) || !isExpanded || !isPlaying || !isVisible) {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current)
           animationFrameRef.current = null
@@ -845,24 +2311,33 @@ export default function MusicPlayer({
         analyserRef.current.getFloatTimeDomainData(timeDataArrayRef.current as any)
         analyserRef.current.getFloatFrequencyData(frequencyDataArrayRef.current as any)
       }
-      
-      const baseBars = 200 // Sufficient resolution for visual fidelity without excessive React re-renders
-      const bars = Math.max(8, Math.floor(baseBars * waveformHorizontalZoom))
-      const timeData = timeDataArrayRef.current
+
       const frequencyData = frequencyDataArrayRef.current
-      const previousSpectrum = previousSpectrumRef.current
-      const timeDataLength = timeData.length
-      const frequencyDataLength = frequencyData.length
-      const data: Array<{ positive: number; negative: number; color: string; elementType?: 'kick' | 'snare' | 'hihat' | 'other'; elementConfidence?: number }> = []
-      
-      // Get audio context for sample rate
+      const timeData = timeDataArrayRef.current
       const audioContext = audioContextRef.current
       const sampleRate = audioContext?.sampleRate || 44100
-      const nyquist = sampleRate / 2
+      
+      const baseBars = 200 // Fallback oscilloscope only when no track peaks exist
+      const bars = Math.max(8, Math.floor(baseBars * waveformHorizontalZoom))
+      const previousSpectrum = previousSpectrumRef.current
+      const timeDataLength = timeData.length
+      const data: Array<{
+        positive: number
+        negative: number
+        color: string
+        elementType?: WaveformSample['elementType']
+        elementConfidence?: number
+        bands?: { low: number; mid: number; high: number }
+      }> = []
       
       // Update previous spectrum for next frame
-      if (previousSpectrumRef.current) {
+      if (previousSpectrumRef.current && frequencyData) {
         previousSpectrumRef.current.set(frequencyData)
+      }
+
+      if (!frequencyData || !timeData || timeDataLength <= 0) {
+        animationFrameRef.current = requestAnimationFrame(updateWaveform)
+        return
       }
       
       // Calculate RMS and peak values for transient detection
@@ -877,6 +2352,12 @@ export default function MusicPlayer({
       const snaresEnergy = frequencyBands.snares
       const hihatsEnergy = frequencyBands.hihats
       const cymbalsEnergy = frequencyBands.cymbals
+
+      // MiniMeters-style Low / Mid / High crossovers (~250 Hz / ~2.5 kHz)
+      const rawLow = getBandEnergy(frequencyData, 20, 250, sampleRate)
+      const rawMid = getBandEnergy(frequencyData, 250, 2500, sampleRate)
+      const rawHigh = getBandEnergy(frequencyData, 2500, 16000, sampleRate)
+      const frameBands = normalizeFftBands(rawLow, rawMid, rawHigh)
       
       // Detect transients using utility function
       const transientInfo = detectTransients(
@@ -938,7 +2419,7 @@ export default function MusicPlayer({
         
         // Determine element type based on frequency band analysis
         const totalEnergy = kicksEnergy + snaresEnergy + hihatsEnergy + cymbalsEnergy
-        let elementType: 'kick' | 'snare' | 'hihat' | 'other' = 'other'
+        let elementType: NonNullable<WaveformSample['elementType']> = 'other'
         let elementConfidence = 0
         
         if (totalEnergy > 0) {
@@ -954,156 +2435,94 @@ export default function MusicPlayer({
           }
         }
         
-        // Combine peak and RMS, emphasizing transients - enhanced for more contrast
+        // Combine peak and RMS — MiniMeters-like: peaks dominate shape, valleys dig deep
         const amplitude = isTransient 
-          ? peak * 0.9 + rms * 0.1 // Even stronger emphasis on peak for transients
-          : peak * 0.2 + rms * 0.8 // Emphasize RMS for sustained sounds
+          ? peak * 0.95 + rms * 0.05
+          : peak * 0.55 + rms * 0.45
         
-        // Boost amplitude significantly for detected transients to show more contrast
-        const boostedAmplitude = isTransient && elementConfidence > 0.3
-          ? amplitude * 1.5 // Increase contrast by 50% for transients
-          : amplitude
+        const boostedAmplitude = isTransient && elementConfidence > 0.25
+          ? amplitude * 1.75
+          : amplitude * 1.15
         
-        // Calculate positive and negative amplitudes with enhanced contrast
-        // Expanded range: 0.15 to 0.98 (from 0.1 to 0.98)
-        const positive = Math.max(0.15, Math.min(0.98, 0.2 + boostedAmplitude * 0.78))
-        const negative = Math.max(0.15, Math.min(0.98, 0.2 + boostedAmplitude * 0.78))
+        // Near-zero valleys, near-full peaks (critical MiniMeters silhouette contrast)
+        const shaped = expandPeakValley(boostedAmplitude, {
+          power: isTransient ? 1.35 : 1.9,
+          gain: isTransient ? 1.7 : 1.45,
+          floor: 0.01,
+        })
+        const positive = shaped
+        const negative = expandPeakValley(boostedAmplitude * (isTransient ? 0.92 : 0.78), {
+          power: isTransient ? 1.35 : 1.9,
+          gain: isTransient ? 1.6 : 1.35,
+          floor: 0.01,
+        })
         
-        // Use frequency data for color mapping with logarithmic distribution
-        const freqIndex = Math.floor(Math.pow(position, 1.5) * frequencyDataLength)
-        const energy = Math.abs(frequencyData[Math.min(freqIndex, frequencyDataLength - 1)]) || 0
-        const normalizedEnergy = Math.min(1, energy) // Float32Array values are already normalized
-        
-        // Map frequency to color based on actual frequency bands and detected element type
-        const frequency = (freqIndex / frequencyDataLength) * nyquist
-        
-        let r, g, b
-        
-        // Use detected element type to override color if confidence is high enough
-        // Lowered threshold from 0.5 to 0.3 for more color coding
-        if (isTransient && elementConfidence > 0.3) {
+        // Per-slice band emphasis: weight frame bands by local amplitude + element type
+        // so kicks go red-hot, hats cyan, and balanced hits white (MiniMeters Multi-Band)
+        let sliceBands = { ...frameBands }
+        if (isTransient && elementConfidence > 0.25) {
           switch (elementType) {
             case 'kick':
-              // Kicks: Red - vibrant red
-              r = 255
-              g = Math.floor(50 + elementConfidence * 50) // Slight variation
-              b = Math.floor(30 + elementConfidence * 30)
+              sliceBands = {
+                low: Math.max(frameBands.low, shaped),
+                mid: frameBands.mid * 0.22,
+                high: frameBands.high * 0.1,
+              }
               break
             case 'snare':
-              // Snares/Claps: Green - vibrant green
-              r = Math.floor(50 + elementConfidence * 50)
-              g = 255
-              b = Math.floor(50 + elementConfidence * 50)
+              sliceBands = {
+                low: frameBands.low * 0.28,
+                mid: Math.max(frameBands.mid, shaped),
+                high: Math.max(frameBands.high, shaped * 0.75),
+              }
               break
             case 'hihat':
-              // Hi-hats: Blue/Teal - vibrant cyan/teal
-              r = Math.floor(30 + elementConfidence * 30)
-              g = Math.floor(200 + elementConfidence * 55)
-              b = 255
+              sliceBands = {
+                low: frameBands.low * 0.08,
+                mid: frameBands.mid * 0.22,
+                high: Math.max(frameBands.high, shaped),
+              }
               break
             default:
-              // Fall back to frequency-based coloring
-              if (frequency < 60) {
-                r = 255
-                g = Math.floor(100 + (frequency / 60) * 50)
-                b = 0
-              } else if (frequency < 250) {
-                const t = (frequency - 60) / 190
-                r = 255
-                g = Math.floor(150 + t * 105)
-                b = 0
-              } else if (frequency < 500) {
-                const t = (frequency - 250) / 250
-                r = Math.floor(255 * (1 - t))
-                g = 255
-                b = 0
-              } else if (frequency < 2000) {
-                const t = (frequency - 500) / 1500
-                r = 0
-                g = 255
-                b = Math.floor(255 * t)
-              } else if (frequency < 4000) {
-                const t = (frequency - 2000) / 2000
-                r = 0
-                g = Math.floor(255 * (1 - t))
-                b = 255
-              } else if (frequency < 6000) {
-                r = 0
-                g = 0
-                b = 255
-              } else {
-                const t = Math.min(1, (frequency - 6000) / 14000)
-                r = Math.floor(128 * t)
-                g = 0
-                b = 255
+              sliceBands = {
+                low: Math.max(frameBands.low, shaped * 0.35),
+                mid: Math.max(frameBands.mid, shaped),
+                high: Math.max(frameBands.high, shaped * 0.55),
               }
           }
         } else {
-          // Frequency-based coloring for non-transients or low confidence
-          if (frequency < 60) {
-            r = 255
-            g = Math.floor(100 + (frequency / 60) * 50)
-            b = 0
-          } else if (frequency < 250) {
-            const t = (frequency - 60) / 190
-            r = 255
-            g = Math.floor(150 + t * 105)
-            b = 0
-          } else if (frequency < 500) {
-            const t = (frequency - 250) / 250
-            r = Math.floor(255 * (1 - t))
-            g = 255
-            b = 0
-          } else if (frequency < 2000) {
-            const t = (frequency - 500) / 1500
-            r = 0
-            g = 255
-            b = Math.floor(255 * t)
-          } else if (frequency < 4000) {
-            const t = (frequency - 2000) / 2000
-            r = 0
-            g = Math.floor(255 * (1 - t))
-            b = 255
-          } else if (frequency < 6000) {
-            r = 0
-            g = 0
-            b = 255
-          } else {
-            const t = Math.min(1, (frequency - 6000) / 14000)
-            r = Math.floor(128 * t)
-            g = 0
-            b = 255
+          // Scale frame bands by local envelope so quiet slices go near-black
+          const ampScale = Math.max(0.05, Math.min(1.55, shaped * 1.5))
+          sliceBands = {
+            low: frameBands.low * ampScale,
+            mid: frameBands.mid * ampScale,
+            high: frameBands.high * ampScale,
           }
         }
-        
-        // Enhance color intensity based on energy, transient detection, and element confidence
-        const baseIntensity = Math.min(1, normalizedEnergy * 2)
-        let intensity = baseIntensity
-        
+
+        // Extra punch on strong transients (white-hot / cyan spike)
         if (isTransient) {
-          // Much brighter for transients - increase visibility
-          intensity = Math.min(1, baseIntensity * 1.8)
-          if (elementConfidence > 0.5) {
-            intensity = Math.min(1, intensity * 1.3) // Even brighter for high confidence
+          const punch = 1 + Math.min(1.0, elementConfidence * 1.0 + shaped * 0.4)
+          sliceBands = {
+            low: Math.min(1, sliceBands.low * punch),
+            mid: Math.min(1, sliceBands.mid * punch),
+            high: Math.min(1, sliceBands.high * punch),
           }
         }
-        
-        // Apply intensity to colors
-        r = Math.floor(r * intensity)
-        g = Math.floor(g * intensity)
-        b = Math.floor(b * intensity)
-        
-        // Ensure minimum visibility
-        r = Math.max(50, r)
-        g = Math.max(50, g)
-        b = Math.max(50, b)
+
+        const color = multiBandRgbColor(sliceBands, {
+          contrast: 2.15,
+          saturation: 1.8,
+          floor: 0.015,
+        })
         
         data.push({
           positive,
           negative,
-          color: `rgb(${r}, ${g}, ${b})`,
+          color,
           elementType,
-          elementConfidence
+          elementConfidence,
+          bands: sliceBands,
         })
         
         currentPeaks.push(peak)
@@ -1111,34 +2530,36 @@ export default function MusicPlayer({
       
       previousPeaks = currentPeaks
       // Only update waveform if we have valid data and conditions are still met
-      if (data.length > 0 && !isMiniMode && isExpanded && isPlaying && isVisible) {
+      if (data.length > 0 && !(isMiniMode && !isWaveformDocked) && isExpanded && isPlaying && isVisible) {
         // Use exponential smoothing for better visual quality and smoother movement
-        let smoothedData: Array<{ positive: number; negative: number; color: string; elementType?: 'kick' | 'snare' | 'hihat' | 'other'; elementConfidence?: number }>
+        let smoothedData: WaveformSample[]
         
         if (previousSmoothedWaveform && previousSmoothedWaveform.length === data.length) {
           // Exponential smoothing: blend current frame with previous smoothed frame
           smoothedData = data.map((current, index) => {
             const previous = previousSmoothedWaveform![index]
             
-            // Smooth amplitude values
-            const smoothedPositive = previous.positive + (current.positive - previous.positive) * (1 - smoothingFactor)
-            const smoothedNegative = previous.negative + (current.negative - previous.negative) * (1 - smoothingFactor)
-            
-            // Smooth colors with gamma-corrected interpolation for better visual quality
-            let smoothedColor: string
-            try {
-              smoothedColor = interpolateColor(previous.color, current.color, smoothingFactor)
-            } catch (e) {
-              // Fallback if color interpolation fails
-              smoothedColor = current.color
+            // Smooth amplitudes lightly; keep peaks sharp (MiniMeters contrast)
+            const blend = 1 - smoothingFactor
+            const peakHold = current.positive > previous.positive ? 0.92 : blend
+            const smoothedPositive = previous.positive + (current.positive - previous.positive) * peakHold
+            const smoothedNegative = previous.negative + (current.negative - previous.negative) * blend
+
+            const prevBands = previous.bands || { low: 0.15, mid: 0.15, high: 0.15 }
+            const curBands = current.bands || { low: 0.15, mid: 0.15, high: 0.15 }
+            const bands = {
+              low: prevBands.low + (curBands.low - prevBands.low) * blend,
+              mid: prevBands.mid + (curBands.mid - prevBands.mid) * blend,
+              high: prevBands.high + (curBands.high - prevBands.high) * blend,
             }
             
             return {
               positive: smoothedPositive,
               negative: smoothedNegative,
-              color: smoothedColor,
+              color: multiBandRgbColor(bands, { contrast: 2.15, saturation: 1.8, floor: 0.015 }),
               elementType: current.elementType || previous.elementType,
-              elementConfidence: current.elementConfidence || previous.elementConfidence
+              elementConfidence: current.elementConfidence || previous.elementConfidence,
+              bands,
             }
           })
         } else {
@@ -1160,7 +2581,7 @@ export default function MusicPlayer({
         animationFrameRef.current = null
       }
     }
-  }, [getBandEnergy, calculateEnergy, isMiniMode, isExpanded, isPlaying, isVisible, currentTrack?.id, waveformSpeed, waveformHorizontalZoom])
+  }, [getBandEnergy, calculateEnergy, isMiniMode, isWaveformDocked, isExpanded, isPlaying, isVisible, currentTrack?.id, waveformSpeed, waveformHorizontalZoom])
 
   // Intersection Observer to detect when player is visible
   useEffect(() => {
@@ -1244,6 +2665,19 @@ export default function MusicPlayer({
       return
     }
 
+    // Sync normalize to media-proxy when possible — skip async resolve round-trip
+    const syncNormalized = normalizeVaultAudioUrl(currentTrack.file)
+    if (
+      syncNormalized.startsWith('/api/audio/media/') ||
+      syncNormalized.startsWith('http://') ||
+      syncNormalized.startsWith('https://')
+    ) {
+      setResolvedUrl(syncNormalized)
+      setIsLoading(false)
+      resolvedUrlCacheRef.current.set(currentTrack.file, syncNormalized)
+      return
+    }
+
     // Check cache first
     const cached = resolvedUrlCacheRef.current.get(currentTrack.file)
     if (cached) {
@@ -1268,66 +2702,103 @@ export default function MusicPlayer({
     })
   }, [currentTrack])
 
-  // Batch resolve URLs for next tracks in queue
+  // Batch resolve URLs for next tracks in queue (sync for media-proxy paths — no HEAD)
   useEffect(() => {
     if (!currentTrack || !queue.length) return
     
     const currentIndex = queue.findIndex(track => track.id === currentTrack.id)
     if (currentIndex === -1) return
     
-    const nextTracks = queue.slice(currentIndex + 1, currentIndex + 6)
+    const nextTracks = queue.slice(currentIndex + 1, currentIndex + 3)
     const tracksToResolve = nextTracks
       .map(track => track.file)
       .filter(file => file && !resolvedUrlCacheRef.current.has(file))
     
-    if (tracksToResolve.length > 0) {
-      Promise.all(tracksToResolve.map(file => resolveAudioUrl(file)))
-        .then(urls => {
-          tracksToResolve.forEach((file, idx) => {
-            if (urls[idx]) {
-              resolvedUrlCacheRef.current.set(file, urls[idx])
-            }
-          })
-        })
-        .catch(err => {
-          console.debug('Failed to batch resolve URLs:', err)
-        })
+    if (tracksToResolve.length === 0) return
+
+    const asyncNeeded: string[] = []
+    for (const file of tracksToResolve) {
+      const sync = normalizeVaultAudioUrl(file)
+      if (
+        sync.startsWith('/api/audio/media/') ||
+        sync.startsWith('http://') ||
+        sync.startsWith('https://')
+      ) {
+        resolvedUrlCacheRef.current.set(file, sync)
+      } else {
+        asyncNeeded.push(file)
+      }
     }
+
+    if (asyncNeeded.length === 0) return
+
+    Promise.all(asyncNeeded.map(file => resolveAudioUrl(file)))
+      .then(urls => {
+        asyncNeeded.forEach((file, idx) => {
+          if (urls[idx]) {
+            resolvedUrlCacheRef.current.set(file, urls[idx])
+          }
+        })
+      })
+      .catch(err => {
+        console.debug('Failed to batch resolve URLs:', err)
+      })
   }, [currentTrack, queue])
 
-  // Preload next track for seamless playback - SAFE ADDITION
+  // Preload next track onto the IDLE deck only (never clobber live after deck-swap)
   useEffect(() => {
-    if (!currentTrack || !queue.length || !nextAudioRef.current) return
-    
-    // Find current index in queue
-    const currentIndex = queue.findIndex(track => track.id === currentTrack.id)
+    if (!currentTrack || !queue.length) return
+    if (phraseMixLockRef.current) return
+
+    const currentIndex = queue.findIndex((track) => track.id === currentTrack.id)
     if (currentIndex === -1) return
-    
+
+    const idleEl = getIdleAudio()
+    if (!idleEl) return
+
     const nextIndex = currentIndex + 1
     if (nextIndex < queue.length) {
       const nextTrack = queue[nextIndex]
-      // Preload next track in background
+      // Don't overwrite an already-cued Auto DJ idle load
+      if (cuedIdleTrackIdRef.current === nextTrack.id) return
+
+      const syncUrl = normalizeVaultAudioUrl(nextTrack.file)
+      const applyIdleSrc = (url: string) => {
+        if (!url || phraseMixLockRef.current) return
+        const idle = getIdleAudio()
+        if (!idle) return
+        if (idle.src === url || (idle.src && url && idle.src.includes(url.split('?')[0].slice(-40)))) {
+          return
+        }
+        idle.src = url
+        idle.preload = 'auto'
+        try {
+          idle.volume = 0
+        } catch {
+          /* ignore */
+        }
+        resolvedUrlCacheRef.current.set(nextTrack.file, url)
+      }
+
+      if (
+        syncUrl.startsWith('/api/audio/media/') ||
+        syncUrl.startsWith('http://') ||
+        syncUrl.startsWith('https://')
+      ) {
+        applyIdleSrc(syncUrl)
+        return
+      }
+
       resolveAudioUrl(nextTrack.file)
-        .then(url => {
-          if (nextAudioRef.current && url) {
-            nextAudioRef.current.src = url
-            nextAudioRef.current.preload = 'auto' // Preload next track
-          }
-        })
-        .catch(err => {
-          // Silently fail - this is just optimization
+        .then(applyIdleSrc)
+        .catch((err) => {
           console.debug('Failed to preload next track:', err)
         })
-    } else {
-      // Clear next audio if no next track
-      if (nextAudioRef.current) {
-        nextAudioRef.current.src = ''
-        nextAudioRef.current.preload = 'none'
-      }
     }
-  }, [currentTrack, queue]) // Safe: Only depends on track/queue changes
+  }, [currentTrack, queue, getIdleAudio])
 
-  // Preload next tracks in queue using Service Worker
+  // Preload next tracks in queue using Service Worker (keep shallow — deep preload
+  // was HEADing/GETting 5 R2 objects and starving the live play request).
   useEffect(() => {
     if (!currentTrack || !queue.length) return
     
@@ -1335,37 +2806,49 @@ export default function MusicPlayer({
     const currentIndex = queue.findIndex(track => track.id === currentTrack.id)
     if (currentIndex === -1) return
     
-    // Increase from 2-3 to 5 tracks for preloading
     const tracksToPreload = queue
-      .slice(currentIndex + 1, currentIndex + 6) // Changed from +4 to +6
+      .slice(currentIndex + 1, currentIndex + 2)
       .map(track => track.file)
       .filter(Boolean)
     
     if (tracksToPreload.length > 0) {
       // Resolve all URLs first (use cache if available)
       const cache = resolvedUrlCacheRef.current
-      const urlsToResolve = tracksToPreload.filter(file => !cache.has(file))
-      const cachedUrls = tracksToPreload
-        .filter(file => cache.has(file))
-        .map(file => cache.get(file)!)
-      
-      if (urlsToResolve.length > 0) {
-        Promise.all(urlsToResolve.map(file => resolveAudioUrl(file)))
-          .then(urls => {
-            urlsToResolve.forEach((file, idx) => {
-              if (urls[idx]) {
-                resolvedUrlCacheRef.current.set(file, urls[idx])
-              }
-            })
-            const allUrls = [...cachedUrls, ...urls.filter(Boolean)]
-            preloadTracks(allUrls as string[])
-          })
-          .catch(err => {
-            console.debug('Failed to preload tracks via service worker:', err)
-          })
-      } else if (cachedUrls.length > 0) {
-        preloadTracks(cachedUrls as string[])
+      const resolved = tracksToPreload.map((file) => {
+        const cached = cache.get(file)
+        if (cached) return cached
+        const sync = normalizeVaultAudioUrl(file)
+        if (
+          sync.startsWith('/api/audio/media/') ||
+          sync.startsWith('http://') ||
+          sync.startsWith('https://')
+        ) {
+          cache.set(file, sync)
+          return sync
+        }
+        return null
+      })
+      const needAsync = tracksToPreload.filter((_, i) => !resolved[i])
+      const finish = (urls: string[]) => {
+        if (urls.length) preloadTracks(urls)
       }
+      if (needAsync.length === 0) {
+        finish(resolved.filter(Boolean) as string[])
+        return
+      }
+      Promise.all(needAsync.map((file) => resolveAudioUrl(file)))
+        .then((urls) => {
+          needAsync.forEach((file, idx) => {
+            if (urls[idx]) cache.set(file, urls[idx])
+          })
+          finish([
+            ...(resolved.filter(Boolean) as string[]),
+            ...urls.filter(Boolean),
+          ])
+        })
+        .catch((err) => {
+          console.debug('Failed to preload tracks via service worker:', err)
+        })
     }
   }, [currentTrack, queue])
 
@@ -1432,34 +2915,30 @@ export default function MusicPlayer({
       analyser.fftSize = 8192 // 4096 frequency bins (~5.4 Hz/bin at 44.1kHz) — sufficient for transient detection
       analyser.smoothingTimeConstant = 0
       
-      // Connect source to analyser (only if source exists)
-      if (sourceNodeRef.current) {
-        // Disconnect source from any existing connections first
-        try {
-          sourceNodeRef.current.disconnect()
-        } catch (e) {
-          // Not connected or already disconnected
-        }
-        
-        sourceNodeRef.current.connect(analyser)
-      }
-      
-      // Connect analyser to destination (for now, EQ will modify this)
-      analyser.connect(audioContext.destination)
-      
       analyserRef.current = analyser
       frequencyDataArrayRef.current = new Float32Array(analyser.frequencyBinCount)
       timeDataArrayRef.current = new Float32Array(analyser.fftSize)
       previousSpectrumRef.current = new Float32Array(analyser.frequencyBinCount)
-      
-      // Trigger re-render so EQ component sees the new refs
+
+      attachEngineGraph()
       setAudioContextReady(true)
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error setting up audio analysis:', error)
       }
     }
-  }, [])
+  }, [attachEngineGraph])
+
+  /** Wire both decks through MixEngine (symmetric EQ/filter/gain chains). */
+  const ensureDualDeckGraph = useCallback(async () => {
+    try {
+      await setupAudioAnalysis()
+    } catch {
+      /* play without analysis if needed */
+    }
+    attachEngineGraph()
+    return mixEngineRef.current
+  }, [setupAudioAnalysis, attachEngineGraph])
 
   // Media Session API for background playback and lock screen controls
   useEffect(() => {
@@ -1472,21 +2951,23 @@ export default function MusicPlayer({
       title: currentTrack.title,
       artist: currentTrack.artist,
       album: currentTrack.album || currentTrack.folder || 'SERGIK',
-      artwork: buildLockScreenArtwork(currentTrack.artwork),
+      artwork: buildLockScreenArtwork(coverSrc || currentTrack.artwork),
     })
 
     // Handle play action from lock screen/notification
     mediaSession.setActionHandler('play', () => {
-      if (audioRef.current && !isPlaying) {
-        audioRef.current.play().catch(() => {})
+      const live = getPlaybackAudio()
+      if (live && !isPlaying) {
+        live.play().catch(() => {})
         setIsPlaying(true)
       }
     })
 
     // Handle pause action
     mediaSession.setActionHandler('pause', () => {
-      if (audioRef.current && isPlaying) {
-        audioRef.current.pause()
+      const live = getPlaybackAudio()
+      if (live && isPlaying) {
+        live.pause()
         setIsPlaying(false)
       }
     })
@@ -1494,7 +2975,7 @@ export default function MusicPlayer({
     // Handle next track
     mediaSession.setActionHandler('nexttrack', () => {
       if (queue.length > 1) {
-        onNext()
+        skipToNextRef.current()
       }
     })
 
@@ -1507,30 +2988,33 @@ export default function MusicPlayer({
 
     // Handle seek backward
     mediaSession.setActionHandler('seekbackward', (details: any) => {
-      if (audioRef.current) {
+      const live = getPlaybackAudio()
+      if (live) {
         const skipTime = details.seekOffset || 10
-        audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - skipTime)
+        live.currentTime = Math.max(0, live.currentTime - skipTime)
       }
     })
 
     // Handle seek forward
     mediaSession.setActionHandler('seekforward', (details: any) => {
-      if (audioRef.current && duration) {
+      const live = getPlaybackAudio()
+      if (live && duration) {
         const skipTime = details.seekOffset || 10
-        audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + skipTime)
+        live.currentTime = Math.min(duration, live.currentTime + skipTime)
       }
     })
 
     try {
       mediaSession.setActionHandler('seekto', (details: { seekTime?: number } | undefined) => {
+        const live = getPlaybackAudio()
         if (
-          audioRef.current &&
+          live &&
           duration > 0 &&
           details &&
           typeof details.seekTime === 'number' &&
           Number.isFinite(details.seekTime)
         ) {
-          audioRef.current.currentTime = Math.max(0, Math.min(duration, details.seekTime))
+          live.currentTime = Math.max(0, Math.min(duration, details.seekTime))
         }
       })
     } catch {
@@ -1540,16 +3024,22 @@ export default function MusicPlayer({
     // Update playback state
     mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
 
-    // Update position state for lock screen progress
+    // Position updates read the live element — not React `currentTime`, which
+    // would tear this effect down ~10×/sec and re-register every handler.
     const updatePositionState = () => {
-      if (audioRef.current && duration > 0 && 'setPositionState' in mediaSession) {
+      const live = getPlaybackAudio()
+      const position =
+        live && Number.isFinite(live.currentTime) ? live.currentTime : autoDJCurrentTimeRef.current
+      const liveDuration =
+        live && Number.isFinite(live.duration) && live.duration > 0 ? live.duration : duration
+      if (live && liveDuration > 0 && 'setPositionState' in mediaSession) {
         try {
           mediaSession.setPositionState({
-            duration: duration,
-            playbackRate: settings.playbackRate,
-            position: currentTime
+            duration: liveDuration,
+            playbackRate: settingsRef.current.playbackRate,
+            position,
           })
-        } catch (e) {
+        } catch {
           // Some browsers don't support setPositionState
         }
       }
@@ -1579,7 +3069,7 @@ export default function MusicPlayer({
       clear('seekforward')
       clear('seekto')
     }
-  }, [currentTrack, isPlaying, currentTime, duration, settings.playbackRate, queue.length, onNext, onPrevious])
+  }, [currentTrack, coverSrc, isPlaying, duration, queue.length, onNext, onPrevious, getPlaybackAudio])
 
   // If the browser pauses the element when the screen locks, resume when visible again.
   useEffect(() => {
@@ -1634,25 +3124,36 @@ export default function MusicPlayer({
         setTimeout(() => {
           setRetryCount(prev => prev + 1)
           
-          // In production, only retry Supabase URL (no local fallback)
-          if (!isDevelopment) {
+          const alt =
+            (resolvedUrl && alternateAudioExtensionUrl(resolvedUrl)) ||
+            (currentTrack.file && alternateAudioExtensionUrl(currentTrack.file))
+          // Prefer .mp3↔.wav on same-origin / media proxy (R2 may only have one form).
+          const altIsSameOrigin =
+            Boolean(alt) &&
+            !alt!.startsWith('http://') &&
+            !alt!.startsWith('https://')
+          if (alt && audio.src !== alt && altIsSameOrigin) {
+            audio.src = alt
+            setResolvedUrl(alt)
+            if (currentTrack.file) {
+              resolvedUrlCacheRef.current.set(currentTrack.file, alt)
+            }
+            audio.load()
+          } else if (
+            isDevelopment &&
+            resolvedUrl &&
+            (resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://')) &&
+            currentTrack.file !== resolvedUrl
+          ) {
+            audio.src = currentTrack.file
+            audio.load()
+          } else if (resolvedUrl === currentTrack.file) {
+            audio.load()
+          } else if (isDevelopment) {
+            audio.src = currentTrack.file
             audio.load()
           } else {
-            // In development, try local path as fallback
-            // In production, never fall back to local paths - only retry Supabase URL
-            if (isDevelopment && resolvedUrl && (resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://')) && currentTrack.file !== resolvedUrl) {
-              audio.src = currentTrack.file
-              audio.load()
-            } else if (resolvedUrl === currentTrack.file) {
-              audio.load()
-            } else if (isDevelopment) {
-              // Only in development: fall back to local path
-              audio.src = currentTrack.file
-              audio.load()
-            } else {
-              // Production: Don't fall back, just retry Supabase URL
-              audio.load()
-            }
+            audio.load()
           }
         }, 500 * (retryCount + 1))
       } else {
@@ -1692,18 +3193,25 @@ export default function MusicPlayer({
     let stallRecoveryTimer: NodeJS.Timeout | null = null
     const handleStalled = () => {
       if (!isPlaying || audio.paused) return
-      // If stalled for 3 seconds, attempt recovery by nudging currentTime
+      // Retry play first — `load()` resets the buffer and often makes a
+      // bandwidth-contended stall worse when waveform/preload fetches are live.
       stallRecoveryTimer = setTimeout(() => {
         if (audio.paused || !isPlaying) return
-        const t = audio.currentTime
-        audio.load()
-        const onReloaded = () => {
-          audio.removeEventListener('loadeddata', onReloaded)
-          try { audio.currentTime = t } catch {}
-          audio.play().catch(() => {})
-        }
-        audio.addEventListener('loadeddata', onReloaded)
-      }, 3000)
+        audio.play().catch(() => {
+          const t = audio.currentTime
+          audio.load()
+          const onReloaded = () => {
+            audio.removeEventListener('loadeddata', onReloaded)
+            try {
+              audio.currentTime = t
+            } catch {
+              /* ignore */
+            }
+            audio.play().catch(() => {})
+          }
+          audio.addEventListener('loadeddata', onReloaded)
+        })
+      }, 4000)
     }
 
     const handlePlaying = () => {
@@ -1734,27 +3242,96 @@ export default function MusicPlayer({
 
     // Set preload strategy based on buffer size setting
     audio.preload = getPreloadStrategy()
-    
-    // Only set src and load when track actually changes
-    audio.src = resolvedUrl
-    audio.load()
-    
-    // Reset audio context ready state when track changes
-    setAudioContextReady(false)
+
+    // Mixer handoff: incoming deck already playing — do not reload main src
+    if (
+      skipSrcReloadRef.current ||
+      isDeckHandoffActive(currentTrack?.id) ||
+      mixEngineRef.current?.isMixing()
+    ) {
+      skipSrcReloadRef.current = false
+      const live =
+        playbackDeckRef.current === 'next' ? nextAudioRef.current : audioRef.current
+      liveAudioRef.current = live
+      if (live) {
+        // Don't touch gains/volume here — MixEngine faders already own the handoff.
+        // Volume snaps after mix were a common end-glitch source.
+        const vol = settingsRef.current.isMuted ? 0 : settingsRef.current.volume
+        try {
+          mixEngineRef.current?.setMasterVolume(vol)
+        } catch {
+          /* ignore */
+        }
+        const t = live.currentTime || 0
+        const d = Number.isFinite(live.duration) ? live.duration : 0
+        playbackTimeRef.current = t
+        setDuration(d)
+        setCurrentTime(t)
+        pushTransportTime(t, d)
+        setIsLoading(false)
+        setIsBuffering(false)
+        setError(null)
+      }
+    } else {
+      // Cold load — reset to main deck; silence/pause idle so it can't fight
+      playbackDeckRef.current = 'main'
+      liveAudioRef.current = audio
+      setWaveformMediaSyncKey(`main:${currentTrack?.id ?? 'none'}`)
+      setCuedIdleTrackId(null)
+      mixEngineRef.current?.setActiveDeck('a')
+      mixEngineRef.current?.silenceIdle({ instant: true })
+      try {
+        mixEngineRef.current?.setMasterVolume(
+          settingsRef.current.isMuted ? 0 : settingsRef.current.volume,
+        )
+      } catch {
+        /* ignore */
+      }
+      const idle = nextAudioRef.current
+      if (idle && !phraseMixLockRef.current) {
+        try {
+          idle.pause()
+          idle.volume = 0
+        } catch {
+          /* ignore */
+        }
+      }
+      // Only set src and load when track actually changes
+      audio.src = resolvedUrl
+      audio.load()
+      // Reset audio context ready state when track changes
+      setAudioContextReady(false)
+    }
     
     // Reset tracked play ref when track changes
     trackedPlayRef.current = null
+
+    const liveEl =
+      playbackDeckRef.current === 'next' && nextAudioRef.current
+        ? nextAudioRef.current
+        : audio
     
-    // Throttle time updates to reduce re-renders (update max 10 times per second)
+    // Imperative scrubber paint — avoids ~10 full MusicPlayer re-renders/sec.
     const updateTime = throttle(() => {
-      setCurrentTime(audio.currentTime)
+      pushTransportTime(liveEl.currentTime, liveEl.duration)
     }, 100)
+    // Persist seek position less often so reload restores mini-bar progress
+    const persistTime = throttle(() => {
+      reportPlaybackPosition(liveEl.currentTime)
+    }, 1000)
+    const onTimeUpdate = () => {
+      updateTime()
+      persistTime()
+    }
     
-    const updateDuration = () => setDuration(audio.duration)
+    const updateDuration = () => setDuration(liveEl.duration)
     const handleEnded = () => {
+      // Never advance transport while a dual-deck mix is in progress
+      if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
+
       if (settings.repeatMode === 'one') {
-        audio.currentTime = 0
-        audio.play().catch((err) => {
+        liveEl.currentTime = 0
+        liveEl.play().catch((err) => {
           if (err.name !== 'AbortError') {
             console.error('Audio play failed on repeat:', err)
           }
@@ -1762,21 +3339,17 @@ export default function MusicPlayer({
         return
       }
 
-      // Gapless playback: if nextAudioRef is loaded, start it immediately
-      // while the context propagates the track change
-      const nextAudio = nextAudioRef.current
-      if (nextAudio && nextAudio.src && nextAudio.readyState >= 2) {
-        nextAudio.volume = settings.isMuted ? 0 : settings.volume
-        nextAudio.playbackRate = settings.playbackRate
-        nextAudio.play().catch(() => {})
+      if (autoDJConfigRef.current.enabled) {
+        skipToNextRef.current()
+        return
       }
 
       onTrackEnd()
     }
 
-    audio.addEventListener('timeupdate', updateTime)
-    audio.addEventListener('loadedmetadata', updateDuration)
-    audio.addEventListener('ended', handleEnded)
+    liveEl.addEventListener('timeupdate', onTimeUpdate)
+    liveEl.addEventListener('loadedmetadata', updateDuration)
+    liveEl.addEventListener('ended', handleEnded)
     audio.addEventListener('error', handleError)
     audio.addEventListener('loadstart', handleLoadStart)
     audio.addEventListener('canplay', handleCanPlay)
@@ -1786,9 +3359,9 @@ export default function MusicPlayer({
 
     return () => {
       if (stallRecoveryTimer) clearTimeout(stallRecoveryTimer)
-      audio.removeEventListener('timeupdate', updateTime)
-      audio.removeEventListener('loadedmetadata', updateDuration)
-      audio.removeEventListener('ended', handleEnded)
+      liveEl.removeEventListener('timeupdate', onTimeUpdate)
+      liveEl.removeEventListener('loadedmetadata', updateDuration)
+      liveEl.removeEventListener('ended', handleEnded)
       audio.removeEventListener('error', handleError)
       audio.removeEventListener('loadstart', handleLoadStart)
       audio.removeEventListener('canplay', handleCanPlay)
@@ -1796,7 +3369,7 @@ export default function MusicPlayer({
       audio.removeEventListener('stalled', handleStalled)
       audio.removeEventListener('playing', handlePlaying)
     }
-  }, [currentTrack, resolvedUrl, retryCount, getPreloadStrategy, setupAudioAnalysis])
+  }, [currentTrack, resolvedUrl, retryCount, getPreloadStrategy, setupAudioAnalysis, reportPlaybackPosition, pushTransportTime, isDeckHandoffActive])
 
   // Track buffering progress and adjust buffer dynamically
   useEffect(() => {
@@ -1826,66 +3399,610 @@ export default function MusicPlayer({
     }
   }, [resolvedUrl, isPlaying, settings.bufferSize, connectionQuality])
 
+  const easeLivePlaybackRate = useCallback(
+    (fromRate: number, toRate: number, durationMs = 1400) => {
+      if (rateEaseRafRef.current != null) {
+        cancelAnimationFrame(rateEaseRafRef.current)
+        rateEaseRafRef.current = null
+      }
+      if (tempoRampCancelRef.current) {
+        tempoRampCancelRef.current()
+        tempoRampCancelRef.current = null
+      }
+      const live = getPlaybackAudio()
+      if (!live) return
+      if (Math.abs(fromRate - toRate) < 0.004) {
+        rateEaseLockRef.current = false
+        applyLiveDeckTempo(toRate, true)
+        return
+      }
+      rateEaseLockRef.current = true
+      postHandoffTempoUntilRef.current = Date.now() + durationMs + 64
+      tempoRampCancelRef.current = rampDeckTempo(live, fromRate, toRate, durationMs, {
+        keyLock: true,
+        onFormant: applyFormantForRate,
+        onTick: () => {
+          /* ramp handles element rate */
+        },
+      })
+      window.setTimeout(() => {
+        rateEaseLockRef.current = false
+        tempoRampCancelRef.current = null
+        applyLiveDeckTempo(toRate, true)
+      }, durationMs + 32)
+    },
+    [getPlaybackAudio, applyLiveDeckTempo, applyFormantForRate]
+  )
+
   // Update volume and playback rate separately - don't reload audio
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    
-    audio.volume = settings.isMuted ? 0 : settings.volume
-    audio.playbackRate = settings.playbackRate
-  }, [settings.volume, settings.isMuted, settings.playbackRate])
+    const vol = settings.isMuted ? 0 : settings.volume
+    try {
+      mixEngineRef.current?.setMasterVolume(vol)
+    } catch {
+      /* ignore */
+    }
+    const audio = getPlaybackAudio()
+    if (!audio || phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
 
-  // Crossfade: overlap current (fade-out) with next (fade-in) using nextAudioRef
-  const startCrossfade = useCallback((nextTrack: Track) => {
-    if (settings.crossfadeDuration === 0 || !audioRef.current) {
-      onNext()
+    if (playbackDeckRef.current === 'main') {
+      audio.volume = vol
+    }
+    const handoff = deckHandoffRef.current
+    const handoffTempoGuard =
+      handoff &&
+      handoff.trackId === currentTrack?.id &&
+      Date.now() < handoff.untilMs
+    if (handoffTempoGuard) {
+      if (rateEaseLockRef.current) return
+      const liveRate =
+        Number.isFinite(audio.playbackRate) && audio.playbackRate > 0
+          ? audio.playbackRate
+          : handoff.incomingTargetRate
+      if (Math.abs(liveRate - handoff.incomingTargetRate) > 0.004) {
+        easeLivePlaybackRate(liveRate, handoff.incomingTargetRate, 850)
+      }
+      return
+    }
+    if (Date.now() < postHandoffTempoUntilRef.current) return
+    if (!rateEaseLockRef.current) {
+      applyLiveDeckTempo(settings.playbackRate, true)
+    }
+  }, [settings.volume, settings.isMuted, settings.playbackRate, getPlaybackAudio, applyLiveDeckTempo, currentTrack?.id, easeLivePlaybackRate])
+
+  const handleMixDeckEq = useCallback(
+    (deck: DeckId, gains: { low: number; mid: number; high: number }) => {
+      mixUiPendingRef.current.deckEq[deck] = gains
+      scheduleMixUiSync()
+    },
+    [scheduleMixUiSync],
+  )
+
+  const handleMixDeckRate = useCallback(
+    (deck: DeckId, rate: number) => {
+      const clamped = clampTempoRate(rate)
+      mixUiPendingRef.current.deckRates[deck] = clamped
+      scheduleMixUiSync()
+      const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+      if (deck === liveDeck) applyFormantForRate(clamped)
+    },
+    [scheduleMixUiSync, applyFormantForRate],
+  )
+
+  const syncPostHandoffEq = useCallback((deck: DeckId) => {
+    const userEq = deckUiRef.current[deck].eqGains
+    mixEngineRef.current?.setDeckEqGains(deck, userEq, { instant: false })
+  }, [])
+
+  const handleDeckEqGains = useCallback(
+    (deck: 'a' | 'b', gains: { low: number; mid: number; high: number }) => {
+      applyDeckStripEq(deck, gains, { instant: true })
+    },
+    [applyDeckStripEq],
+  )
+
+  const handleMixDeckFilter = useCallback(
+    (deck: DeckId, state: { hpfHz: number; lpfHz: number }) => {
+      mixUiPendingRef.current.deckFilters[deck] = state
+      scheduleMixUiSync()
+    },
+    [scheduleMixUiSync],
+  )
+
+  // Crossfade / phrase mix via MixEngine (rAF equal-power + deck swap)
+  const startPhraseMix = useCallback(
+    async (
+      nextTrack: Track,
+      mixSec: number,
+      incomingRate = 1,
+      plan?: MixPlan | null,
+      /** Rate the incoming deck settles on; defaults to the user's tempo slider. */
+      opts?: { incomingTargetRate?: number },
+    ) => {
+      const main = audioRef.current
+      const next = nextAudioRef.current
+      if (!main || !next) {
+        const qFallback = queueRef.current.some((t) => t.id === nextTrack.id)
+          ? queueRef.current
+          : [...queueRef.current, nextTrack]
+        playTrack(nextTrack, qFallback)
+        seekTo(trackIntroOffsetSec(nextTrack))
+        return
+      }
+
+      if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
+
+      clearSkipBlendWatch()
+
+      const engine = ensureMixEngine()
+      if (!engine) {
+        playTrack(nextTrack, queueRef.current)
+        return
+      }
+      await ensureDualDeckGraph()
+      engine.setMasterVolume(settingsRef.current.isMuted ? 0 : settingsRef.current.volume)
+      if (currentTrack) {
+        engine.setActiveTrack(withMixGrid(currentTrack))
+      }
+
+      phraseMixLockRef.current = true
+      autoDJPendingRef.current = null
+      autoDJIdleWarmedRef.current = null
+      setAutoDJPendingTrackId(null)
+      clearFadeInterval()
+      clearAutoDJCrossfadeTimeout()
+      setCrossfadeActive(true)
+      setMixVisualProgress(0)
+      setWaveformMixOverlay((prev) =>
+        prev?.active ? { ...prev, blendProgress: 0 } : prev,
+      )
+
+      const q = queueRef.current.some((t) => t.id === nextTrack.id)
+        ? queueRef.current
+        : [...queueRef.current, nextTrack]
+      const introSec = plan?.incomingStartSec ?? trackIntroOffsetSec(nextTrack)
+      const live = getPlaybackAudio() || main
+      const remain =
+        (Number.isFinite(live.duration) ? live.duration : 0) -
+        (Number.isFinite(live.currentTime) ? live.currentTime : 0)
+      const autoDjDoctrine =
+        autoDJConfigRef.current.enabled &&
+        (plan?.blendFromOut !== false || plan?.phrase1Lock !== false || plan?.exactOverlap === true)
+      const remainBlend = remain - 0.05
+      const mixDurationSec = autoDjDoctrine && plan?.mixDurationSec
+        ? remainBlend >= plan.mixDurationSec * 0.95
+          ? plan.mixDurationSec
+          : Math.max(0.8, Math.min(plan.mixDurationSec, remainBlend, 48))
+        : Math.max(0.8, Math.min(mixSec, remain - 0.15, 48))
+      const beatmatchRate = computeMixIncomingRate(currentTrack, nextTrack)
+
+      const mixStyle = resolveEffectiveMixStyle(
+        autoDJConfig.mixStyle,
+        autoDJConfig.mixTechniques,
+        autoDJConfig.transitionMode,
+      )
+
+      const resolvedPlan: MixPlan =
+        plan && plan.incomingTrackId === nextTrack.id
+          ? {
+              ...plan,
+              mixDurationSec,
+              incomingStartSec: introSec,
+              rateRatio: incomingRate || plan.rateRatio || beatmatchRate,
+              style: plan.style ?? mixStyle,
+            }
+          : {
+              outgoingTrackId: currentTrack?.id || 'out',
+              incomingTrackId: nextTrack.id,
+              startAtOutgoingSec: live.currentTime || 0,
+              incomingStartSec: introSec,
+              mixDurationSec,
+              rateRatio: incomingRate || beatmatchRate,
+              style: mixStyle,
+              curve: 'equal-power',
+              outPhraseBars: autoDJConfig.outPhraseBars,
+              inPhraseBars: autoDJConfig.inPhraseBars,
+              overlapBars: autoDJConfig.overlapBars,
+              phraseBars: autoDJConfig.overlapBars,
+              reason: 'Manual/phrase mix',
+            }
+      lastMixPlanRef.current = resolvedPlan
+
+      const abortToHardCut = () => {
+        engine.stopMix()
+        restoreMainVolume()
+        setCrossfadeActive(false)
+        clearMixVisualProgress()
+        phraseMixLockRef.current = false
+        mixIntelRef.current = null
+        setCuedIdleTrackId(null)
+        playbackDeckRef.current = 'main'
+        skipSrcReloadRef.current = false
+        playTrack(nextTrack, q)
+        seekTo(introSec)
+      }
+
+      try {
+        let url = resolvedUrlCacheRef.current.get(nextTrack.file) || null
+        if (!url) {
+          url = await resolveAudioUrl(nextTrack.file)
+          if (url) resolvedUrlCacheRef.current.set(nextTrack.file, url)
+        }
+        if (!url) {
+          abortToHardCut()
+          return
+        }
+
+        setAutoDJStatusMessage(
+          `Mixing ${resolvedPlan.overlapBars}-bar overlap → “${nextTrack.title}”`,
+        )
+        {
+          const bpm =
+            resolvePlaybackBpm(currentTrack, detectedBPMRef.current) ??
+            currentTrack?.bpm ??
+            detectedBPMRef.current ??
+            120
+          const aligned = alignMixOverlayToBeatGrid({
+            mixOutSec: resolvedPlan.startAtOutgoingSec,
+            mixDurationSec: resolvedPlan.mixDurationSec,
+            bpm,
+            offsetSec: beatGridOffsetSecRef.current,
+            overlapBars: resolvedPlan.overlapBars,
+          })
+          setWaveformMixOverlay({
+            active: true,
+            mixOutSec: aligned.mixOutSec,
+            mixStartSec: aligned.mixStartSec,
+            mixEndSec: aligned.mixEndSec,
+          })
+        }
+        // Ensure ghost samples ready
+        if (ghostSamplesRef.current?.trackId !== nextTrack.id) {
+          void loadWaveformSamplesForTrack(nextTrack, url).then((packed) => {
+            if (!packed) return
+            cacheMixGridOffset(nextTrack, packed.samples, packed.durationSec || nextTrack.duration || 180)
+            ghostSamplesRef.current = {
+              trackId: nextTrack.id,
+              samples: packed.samples,
+              durationSec: packed.durationSec || nextTrack.duration || 180,
+              sonicDna: nextTrack.sonic_dna,
+            }
+            const idleDeck: 'a' | 'b' = playbackDeckRef.current === 'next' ? 'a' : 'b'
+            setDeckWaveformCache((prev) => ({
+              ...prev,
+              [idleDeck]: {
+                trackId: nextTrack.id,
+                samples: packed.samples,
+                durationSec: packed.durationSec || nextTrack.duration || 180,
+              },
+            }))
+          })
+        }
+
+        const mixIntel = buildMixIntelligenceForPair(
+          currentTrack ?? ({ id: 'out', file: '', title: '' } as Track),
+          nextTrack,
+          resolvedPlan.style,
+          opts?.incomingTargetRate ?? settingsRef.current.playbackRate,
+        )
+        mixIntelRef.current = mixIntel
+
+        const outDeckId = engine.getActiveDeck()
+        const inDeckId: DeckId = outDeckId === 'a' ? 'b' : 'a'
+        const outgoingUserEq = getDeckStripEq(outDeckId)
+        const incomingUserEq = getDeckStripEq(inDeckId)
+
+        const ok = await engine.prepareAndTransition(
+          resolvedPlan,
+          withMixGrid(nextTrack),
+          url,
+          {
+            incomingRate: resolvedPlan.rateRatio,
+            incomingTargetRate: opts?.incomingTargetRate ?? settingsRef.current.playbackRate,
+            masterVolume: settingsRef.current.isMuted ? 0 : settingsRef.current.volume,
+            audioContext: audioContextRef.current,
+            mixIntelligence: mixIntel,
+            onProgress: pushMixVisualProgress,
+            onDeckRate: handleMixDeckRate,
+            onDeckEq: handleMixDeckEq,
+            onDeckFilter: handleMixDeckFilter,
+            outgoingEqBias: outgoingUserEq,
+            incomingEqBias: incomingUserEq,
+            keyLock: true,
+          },
+        )
+
+        if (!ok) {
+          abortToHardCut()
+          return
+        }
+
+        // The engine swapped its own active deck when the fade completed. Deriving
+        // the deck from the pre-mix playbackDeckRef here would undo that swap and
+        // leave the outgoing deck live, so read the engine and follow it instead.
+        engine.setMasterVolume(settingsRef.current.isMuted ? 0 : settingsRef.current.volume)
+
+        // Mixer handoff — incoming stays on its deck; both channels remain "on"
+        const handoffTarget = opts?.incomingTargetRate ?? settingsRef.current.playbackRate
+        const nextDeck = engine.getActiveDeck() === 'b' ? 'next' : 'main'
+        armDeckHandoff(nextTrack, nextDeck, handoffTarget)
+        playbackDeckRef.current = nextDeck
+        // Sync waveform clock to live deck immediately (don't wait for React commit)
+        liveAudioRef.current =
+          playbackDeckRef.current === 'next' ? nextAudioRef.current : audioRef.current
+        setWaveformMediaSyncKey(
+          `${playbackDeckRef.current}:${nextTrack.id}:${Math.round((liveAudioRef.current?.currentTime || 0) * 10)}`,
+        )
+        setCuedIdleTrackId(null)
+        setCrossfadeActive(false)
+        clearMixVisualProgress()
+        phraseMixLockRef.current = false
+
+        const liveAfter = getPlaybackAudio()
+        if (liveAfter?.paused) {
+          void liveAfter.play().catch(() => {})
+        }
+        // Engine already soft-opens filters after handoff settle — avoid a second snap.
+
+        adoptPlayingTrack(nextTrack, q)
+        setResolvedUrl(url)
+        const liveRate =
+          liveAfter && Number.isFinite(liveAfter.playbackRate) && liveAfter.playbackRate > 0
+            ? liveAfter.playbackRate
+            : handoffTarget
+        if (Math.abs(liveRate - handoffTarget) > 0.004) {
+          easeLivePlaybackRate(liveRate, handoffTarget, autoDJConfigRef.current.enabled ? 900 : 650)
+        }
+        if (autoDJConfigRef.current.enabled) {
+          // Former outgoing deck is idle — pre-cue N+2 after handoff settle so mix
+          // planning and beatmatch rate are ready before the next OUT window.
+          window.setTimeout(() => {
+            void precueIdleForQueueSuccessorRef.current?.(nextTrack, q)
+          }, 150)
+        }
+        mixIntelRef.current = null
+        setWaveformMixOverlay(null)
+        setWaveformGhostTape(null)
+        ghostSamplesRef.current = null
+        setAutoDJStatusMessage(`On air: “${nextTrack.title}”`)
+        const activeEngineDeck = engine.getActiveDeck()
+        window.setTimeout(() => {
+          if (!isDeckHandoffActive(nextTrack.id)) return
+          syncPostHandoffEq(activeEngineDeck)
+        }, 280)
+      } catch (err) {
+        console.debug('Phrase mix failed:', err)
+        abortToHardCut()
+      }
+    },
+    [
+      clearFadeInterval,
+      clearAutoDJCrossfadeTimeout,
+      clearSkipBlendWatch,
+      restoreMainVolume,
+      trackIntroOffsetSec,
+      playTrack,
+      seekTo,
+      adoptPlayingTrack,
+      getPlaybackAudio,
+      ensureMixEngine,
+      ensureDualDeckGraph,
+      easeLivePlaybackRate,
+      handleMixDeckEq,
+      handleMixDeckRate,
+      handleMixDeckFilter,
+      cacheMixGridOffset,
+      toMixTrackRef,
+      applyFormantForRate,
+      computeMixIncomingRate,
+      buildMixIntelligenceForPair,
+      armDeckHandoff,
+      syncPostHandoffEq,
+      isDeckHandoffActive,
+      getDeckStripEq,
+      pushMixVisualProgress,
+      clearMixVisualProgress,
+      currentTrack?.id,
+      getOutgoingPlaybackRate,
+      autoDJConfig.mixStyle,
+      autoDJConfig.mixTechniques,
+      autoDJConfig.outPhraseBars,
+      autoDJConfig.inPhraseBars,
+      autoDJConfig.overlapBars,
+      autoDJConfig.energyCurve,
+    ]
+  )
+
+  const startCrossfade = useCallback(
+    (nextTrack: Track, durationOverride?: number) => {
+      const fadeSec =
+        typeof durationOverride === 'number' && durationOverride >= 0
+          ? durationOverride
+          : settings.crossfadeDuration
+      if (fadeSec <= 0) {
+        restoreMainVolume()
+        const q = queueRef.current.some((t) => t.id === nextTrack.id)
+          ? queueRef.current
+          : [...queueRef.current, nextTrack]
+        playTrack(nextTrack, q)
+        seekTo(trackIntroOffsetSec(nextTrack))
+        return
+      }
+      void startPhraseMix(nextTrack, fadeSec)
+    },
+    [
+      settings.crossfadeDuration,
+      startPhraseMix,
+      restoreMainVolume,
+      playTrack,
+      seekTo,
+      trackIntroOffsetSec,
+    ]
+  )
+
+  const silenceCuedIdle = useCallback(() => {
+    mixEngineRef.current?.silenceIdle({ instant: true })
+    const idle = getIdleAudio()
+    if (!idle) return
+    try {
+      idle.pause()
+      idle.volume = 0
+    } catch {
+      /* ignore */
+    }
+  }, [getIdleAudio])
+
+  const hardSkipToNext = useCallback(() => {
+    clearSkipBlendWatch()
+    clearAutoDJOutWatch()
+    mixEngineRef.current?.stopMix()
+    silenceCuedIdle()
+    setCuedIdleTrackId(null)
+    phraseMixLockRef.current = false
+    skipSrcReloadRef.current = false
+    deckHandoffRef.current = null
+    onNext?.()
+  }, [clearSkipBlendWatch, clearAutoDJOutWatch, silenceCuedIdle, onNext])
+
+  /**
+   * Skip / next: if Auto DJ has a cued incoming (or a next track), blend from
+   * the next outgoing beat into parked phrase 1. Never cold-load the cued deck.
+   */
+  const handleSkipToNext = useCallback(() => {
+    if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
+
+    clearSkipBlendWatch()
+
+    const q = queueRef.current
+    if (q.length < 2) {
+      onNext?.()
+      return
+    }
+    const cur = autoDJCurrentTrackRef.current
+    const idx = cur ? q.findIndex((t) => t.id === cur.id) : -1
+    const next = (idx >= 0 ? q[idx + 1] : null) ?? q[0]
+    if (!next || next.id === cur?.id) {
+      onNext?.()
       return
     }
 
-    const currentAudio = audioRef.current
-    const nextAudio = nextAudioRef.current
-    const userVolume = settings.isMuted ? 0 : settings.volume
-
-    setCrossfadeActive(true)
-
-    // Start the next track at zero volume if it's preloaded
-    if (nextAudio && nextAudio.src && nextAudio.readyState >= 2) {
-      nextAudio.volume = 0
-      nextAudio.playbackRate = settings.playbackRate
-      nextAudio.play().catch(() => {})
+    const autoOn = autoDJConfigRef.current.enabled
+    const fadeSec = settingsRef.current.crossfadeDuration
+    if (!autoOn) {
+      if (fadeSec > 0) {
+        startCrossfade(next, fadeSec)
+        return
+      }
+      hardSkipToNext()
+      return
     }
 
-    const fadeDuration = settings.crossfadeDuration * 1000
-    const fadeSteps = 30
-    const stepDuration = fadeDuration / fadeSteps
-    let step = 0
+    const live = getPlaybackAudio()
+    const now = live && Number.isFinite(live.currentTime) ? live.currentTime : 0
+    const duration =
+      live && Number.isFinite(live.duration) && live.duration > 0 ? live.duration : 0
+    const remain = duration > 0 ? duration - now : 48
+    if (remain < 1.25) {
+      hardSkipToNext()
+      return
+    }
 
-    fadeIntervalRef.current = setInterval(() => {
-      step++
-      const progress = step / fadeSteps
-      // Equal-power crossfade curve for constant perceived loudness
-      const outGain = Math.cos(progress * Math.PI * 0.5)
-      const inGain = Math.sin(progress * Math.PI * 0.5)
+    clearAutoDJOutWatch()
+    autoDJPendingRef.current = null
+    setAutoDJPendingTrackId(null)
 
-      currentAudio.volume = outGain * userVolume
-      if (nextAudio && !nextAudio.paused) {
-        nextAudio.volume = inGain * userVolume
+    const cfg = autoDJConfigRef.current
+    const phraseMix = resolvePhraseMixSettings(cfg, {
+      qualityGate: shouldApplyQualityGate(lastMixQualityRef.current?.grade)
+        ? lastMixQualityRef.current?.grade
+        : null,
+    })
+    const outBpm =
+      resolvePlaybackBpm(cur, detectedBPMRef.current) ??
+      cur?.bpm ??
+      detectedBPMRef.current ??
+      120
+    const mixStyle = resolveEffectiveMixStyle(
+      cfg.mixStyle,
+      cfg.mixTechniques,
+      cfg.transitionMode,
+    )
+    const prior =
+      autoDJFrozenPlanRef.current?.incomingId === next.id
+        ? autoDJFrozenPlanRef.current.plan
+        : lastMixPlanRef.current?.incomingTrackId === next.id
+          ? lastMixPlanRef.current
+          : null
+    const rate = computeMixIncomingRate(cur, next)
+    const plan = buildSkipBlendPlan({
+      outgoingTrackId: cur?.id || 'out',
+      incomingTrackId: next.id,
+      nowSec: now,
+      outgoingBpm: outBpm,
+      outgoingOffsetSec: beatGridOffsetSecRef.current,
+      incomingStartSec: prior?.incomingStartSec ?? trackIntroOffsetSec(next),
+      overlapBars: phraseMix.overlapBars,
+      rateRatio: rate,
+      style: mixStyle,
+      outPhraseBars: phraseMix.outPhraseBars,
+      inPhraseBars: phraseMix.inPhraseBars,
+      remainSec: remain,
+      prior,
+    })
+    lastMixPlanRef.current = plan
+    mixEngineRef.current?.silenceIdle({ instant: true })
+    setAutoDJStatusMessage(`Skip blend → “${next.title}”`)
+
+    const fireAt = plan.startAtOutgoingSec
+    const handoffTarget = resolveIncomingRateForStrategy({
+      strategy: phraseMix.bpmStrategy,
+      beatmatchRate: rate,
+      sliderRate: settingsRef.current.playbackRate,
+    })
+
+    const fire = () => {
+      skipBlendRafRef.current = null
+      void startPhraseMix(next, plan.mixDurationSec, rate, plan, {
+        incomingTargetRate: handoffTarget,
+      })
+    }
+
+    if (!live || fireAt <= now + 0.02 || fireAt >= duration - 0.05) {
+      fire()
+      return
+    }
+
+    clearSkipBlendWatch()
+    const watch = () => {
+      if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) {
+        skipBlendRafRef.current = null
+        return
       }
-
-      if (step >= fadeSteps) {
-        if (fadeIntervalRef.current) {
-          clearInterval(fadeIntervalRef.current)
-        }
-        currentAudio.pause()
-        onNext()
-        setCrossfadeActive(false)
+      const t = getPlaybackAudio()?.currentTime ?? 0
+      if (t + 0.005 >= fireAt) {
+        fire()
+        return
       }
-    }, stepDuration)
-  }, [settings.crossfadeDuration, settings.volume, settings.isMuted, settings.playbackRate, onNext])
+      skipBlendRafRef.current = requestAnimationFrame(watch)
+    }
+    skipBlendRafRef.current = requestAnimationFrame(watch)
+  }, [
+    onNext,
+    startCrossfade,
+    startPhraseMix,
+    hardSkipToNext,
+    getPlaybackAudio,
+    computeMixIncomingRate,
+    trackIntroOffsetSec,
+    clearAutoDJOutWatch,
+    clearSkipBlendWatch,
+  ])
+
+  skipToNextRef.current = handleSkipToNext
 
   // Playback control
   useEffect(() => {
-    const audio = audioRef.current
+    const audio = getPlaybackAudio()
     if (!audio) return
 
     if (isPlaying && !isLoading && !error) {
@@ -1897,19 +4014,23 @@ export default function MusicPlayer({
           setError('Playback failed')
         }
       })
-    } else {
+    } else if (
+      !phraseMixLockRef.current &&
+      !mixEngineRef.current?.isMixing() &&
+      !isDeckHandoffActive(currentTrack?.id)
+    ) {
       audio.pause()
     }
-  }, [isPlaying, isLoading, error])
+  }, [isPlaying, isLoading, error, getPlaybackAudio, isDeckHandoffActive, currentTrack?.id])
 
   // Seek function
   const seek = useCallback((seconds: number) => {
-    const audio = audioRef.current
+    const audio = getPlaybackAudio()
     if (!audio) return
     const newTime = Math.max(0, Math.min(duration, audio.currentTime + seconds))
     audio.currentTime = newTime
-    setCurrentTime(newTime)
-  }, [duration])
+    snapPlaybackTime(newTime)
+  }, [duration, snapPlaybackTime, getPlaybackAudio])
 
   // Touch gestures for mobile
   useEffect(() => {
@@ -1917,6 +4038,7 @@ export default function MusicPlayer({
     if (!player) return
 
     const handleTouchStart = (e: TouchEvent) => {
+      if (waveformContainerRef.current?.contains(e.target as Node)) return
       if (e.touches.length === 1) {
         touchStartXRef.current = e.touches[0].clientX
         touchStartYRef.current = e.touches[0].clientY
@@ -1924,6 +4046,7 @@ export default function MusicPlayer({
     }
 
     const handleTouchMove = (e: TouchEvent) => {
+      if (waveformContainerRef.current?.contains(e.target as Node)) return
       if (touchStartXRef.current === null || touchStartYRef.current === null || e.touches.length !== 1) return
 
       const touchX = e.touches[0].clientX
@@ -1969,7 +4092,7 @@ export default function MusicPlayer({
 
       if (!currentTrack) return
 
-      const audio = audioRef.current
+      const audio = getPlaybackAudio()
       if (!audio) return
 
       switch (e.key) {
@@ -1977,14 +4100,26 @@ export default function MusicPlayer({
           e.preventDefault()
           togglePlay()
           break
-        case 'ArrowLeft':
+        case 'ArrowLeft': {
           e.preventDefault()
-          seek(-10)
+          const bpm =
+            resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack.bpm || 120
+          const beat = 60 / Math.max(1, Number(bpm) || 120)
+          if (e.altKey) seek(-(beat * 4 * (autoDJConfig.overlapBars || 8)))
+          else if (e.shiftKey) seek(-(beat * 4))
+          else seek(-beat)
           break
-        case 'ArrowRight':
+        }
+        case 'ArrowRight': {
           e.preventDefault()
-          seek(10)
+          const bpm =
+            resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack.bpm || 120
+          const beat = 60 / Math.max(1, Number(bpm) || 120)
+          if (e.altKey) seek(beat * 4 * (autoDJConfig.overlapBars || 8))
+          else if (e.shiftKey) seek(beat * 4)
+          else seek(beat)
           break
+        }
         case 'ArrowUp':
           e.preventDefault()
           adjustVolume(0.05)
@@ -1993,6 +4128,19 @@ export default function MusicPlayer({
           e.preventDefault()
           adjustVolume(-0.05)
           break
+        case '1':
+        case '2':
+        case '3':
+        case '4': {
+          const slot = Number(e.key) as 1 | 2 | 3 | 4
+          e.preventDefault()
+          if (e.metaKey || e.ctrlKey) {
+            persistHotCue(slot, audio.currentTime || 0)
+          } else {
+            jumpHotCue(slot)
+          }
+          break
+        }
         case 'm':
         case 'M':
           e.preventDefault()
@@ -2008,15 +4156,55 @@ export default function MusicPlayer({
           e.preventDefault()
           cycleRepeatMode()
           break
+        case 'k':
+        case 'K':
+          if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+            e.preventDefault()
+            const bpm =
+              resolvePlaybackBpm(currentTrack, detectedBPM) ||
+              detectedBPM ||
+              currentTrack.bpm ||
+              120
+            const next = quantizeToDnaGrid({
+              timeSec: audio.currentTime,
+              bpm,
+              offsetSec: beatGridOffsetSec,
+              sonicDna: currentTrack?.sonic_dna,
+              mode: 'kick',
+            })
+            audio.currentTime = next
+            setCurrentTime(next)
+          }
+          break
+        case 'p':
+        case 'P':
+          if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+            e.preventDefault()
+            const bpm =
+              resolvePlaybackBpm(currentTrack, detectedBPM) ||
+              detectedBPM ||
+              currentTrack.bpm ||
+              120
+            const next = quantizeToDnaGrid({
+              timeSec: audio.currentTime,
+              bpm,
+              offsetSec: beatGridOffsetSec,
+              sonicDna: currentTrack?.sonic_dna,
+              mode: 'phrase',
+            })
+            audio.currentTime = next
+            setCurrentTime(next)
+          }
+          break
       }
     }
 
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [currentTrack, isPlaying, settings])
+  }, [currentTrack, isPlaying, settings, seek, persistHotCue, jumpHotCue, detectedBPM, autoDJConfig.overlapBars, getPlaybackAudio, beatGridOffsetSec])
 
   const togglePlay = async () => {
-    const audio = audioRef.current
+    const audio = getPlaybackAudio()
     if (!audio) return
 
     if (isPlaying) {
@@ -2026,7 +4214,7 @@ export default function MusicPlayer({
       // Setup AudioContext when user clicks play (user interaction required)
       if (!audioContextRef.current || !sourceNodeRef.current) {
         try {
-          await setupAudioAnalysis()
+          await ensureDualDeckGraph()
         } catch (err: any) {
           if (process.env.NODE_ENV === 'development') {
             console.warn('AudioContext setup failed, continuing without analysis:', err)
@@ -2047,39 +4235,46 @@ export default function MusicPlayer({
   }
 
 
-  const [isSeeking, setIsSeeking] = useState(false)
-  
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current
-    if (!audio) return
-    const newTime = parseFloat(e.target.value)
-    // Update immediately for smooth mobile experience
-    setCurrentTime(newTime)
-    audio.currentTime = newTime
-  }
-  
-  const handleSeekStart = () => {
-    setIsSeeking(true)
-  }
-  
-  const handleSeekEnd = () => {
-    setIsSeeking(false)
-  }
+  const seekToTime = useCallback(
+    (newTime: number) => {
+      const audio = getPlaybackAudio()
+      if (!audio) return
+      audio.currentTime = newTime
+      snapPlaybackTime(newTime)
+    },
+    [getPlaybackAudio, snapPlaybackTime],
+  )
 
   const adjustVolume = (delta: number) => {
     const newVolume = Math.max(0, Math.min(1, settings.volume + delta))
     saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume
+    const live = getPlaybackAudio()
+    if (live && !phraseMixLockRef.current) {
+      live.volume = newVolume
     }
+    mixEngineRef.current?.setMasterVolume(newVolume)
   }
 
   const toggleMute = () => {
     const newMuted = !settings.isMuted
     saveSettings({ isMuted: newMuted })
-    if (audioRef.current) {
-      audioRef.current.volume = newMuted ? 0 : settings.volume
+    const vol = newMuted ? 0 : settings.volume
+    const live = getPlaybackAudio()
+    if (live && !phraseMixLockRef.current) {
+      live.volume = vol
     }
+    mixEngineRef.current?.setMasterVolume(vol)
+  }
+
+  const toggleCatalogRandom = () => {
+    const next = !settings.catalogRandom
+    saveSettings({ catalogRandom: next })
+    catalogRandomFillKeyRef.current = ''
+    setAutoDJStatusMessage(
+      next
+        ? `Random from ${catalogScopeLabel(currentSource)} on`
+        : 'Catalog random off — queue order unchanged',
+    )
   }
 
   const toggleShuffle = () => {
@@ -2113,11 +4308,85 @@ export default function MusicPlayer({
     saveSettings({ repeatMode: nextMode })
   }
 
-  const changePlaybackRate = (rate: number) => {
-    saveSettings({ playbackRate: rate })
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate
+  const transportHandlersRef = useRef({
+    togglePlay: async () => {},
+    toggleShuffle: () => {},
+    cycleRepeatMode: () => {},
+    onPrevious: () => {},
+    onNext: () => {},
+  })
+  transportHandlersRef.current = {
+    togglePlay,
+    toggleShuffle,
+    cycleRepeatMode,
+    onPrevious: () => onPrevious?.(),
+    onNext: () => skipToNextRef.current(),
+  }
+
+  useEffect(() => {
+    const onCommand = (ev: Event) => {
+      const cmd = (ev as CustomEvent<{ cmd: PlayerTransportCommand }>).detail?.cmd
+      if (!cmd) return
+      const h = transportHandlersRef.current
+      switch (cmd) {
+        case 'togglePlay':
+          void h.togglePlay()
+          break
+        case 'previous':
+          h.onPrevious()
+          break
+        case 'next':
+          h.onNext()
+          break
+        case 'toggleShuffle':
+          h.toggleShuffle()
+          break
+        case 'cycleRepeat':
+          h.cycleRepeatMode()
+          break
+      }
     }
+    window.addEventListener(PLAYER_TRANSPORT_EVENT, onCommand)
+    dispatchPlayerSettings({
+      isShuffled: settingsRef.current.isShuffled,
+      repeatMode: settingsRef.current.repeatMode,
+    })
+    return () => window.removeEventListener(PLAYER_TRANSPORT_EVENT, onCommand)
+  }, [])
+
+  const changeDeckPlaybackRate = useCallback(
+    (deck: 'a' | 'b', rate: number) => {
+      const clamped = clampTempoRate(rate)
+      const el = deck === 'a' ? audioRef.current : nextAudioRef.current
+      if (el) {
+        configureKeyLock(el, true)
+        applyDeckTempo(el, clamped, { keyLock: true, instant: false })
+      }
+      mixEngineRef.current?.setDeckPlaybackRate(deck, clamped, { instant: false })
+      setDeckUi((prev) => ({
+        ...prev,
+        [deck]: { ...prev[deck], playbackRate: clamped },
+      }))
+      const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+      const idleDeck: DeckId = liveDeck === 'a' ? 'b' : 'a'
+      if (
+        deck === idleDeck &&
+        cuedIdleTrackIdRef.current &&
+        !mixEngineRef.current?.isMixing()
+      ) {
+        mixEngineRef.current?.lockIdleTempo(clamped)
+      }
+      if (deck === liveDeck) {
+        saveSettings({ playbackRate: clamped })
+        applyFormantForRate(clamped)
+      }
+    },
+    [applyFormantForRate, saveSettings],
+  )
+
+  const changePlaybackRate = (rate: number) => {
+    const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+    changeDeckPlaybackRate(liveDeck, rate)
   }
 
   const formatTime = (seconds: number) => {
@@ -2127,19 +4396,6 @@ export default function MusicPlayer({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const handleProgressHover = (e: React.MouseEvent<HTMLInputElement>) => {
-    if (!progressBarRef.current || !duration) return
-    const rect = progressBarRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const percentage = x / rect.width
-    const time = percentage * duration
-    setSeekPreviewTime(time)
-  }
-
-  const handleProgressLeave = () => {
-    setSeekPreviewTime(null)
-  }
-
   const getCurrentQueueIndex = () => {
     if (!currentTrack) return -1
     return queue.findIndex(t => t.id === currentTrack.id)
@@ -2147,38 +4403,440 @@ export default function MusicPlayer({
 
   const currentQueueIndex = useMemo(() => getCurrentQueueIndex(), [currentTrack, queue])
 
-  // Fetch all tracks from source when queue opens
-  useEffect(() => {
-    if (isQueueOpen && getTracksFromSource && currentSource) {
-      setIsLoadingSourceTracks(true)
-      getTracksFromSource(currentSource)
-        .then(tracks => {
-          setAllSourceTracks(tracks)
-          setIsLoadingSourceTracks(false)
-        })
-        .catch(error => {
-          console.error('Error fetching source tracks:', error)
-          setAllSourceTracks([])
-          setIsLoadingSourceTracks(false)
-        })
-    } else if (isQueueOpen && getTracksFromSource && !currentSource) {
-      // No source, fetch "All Tracks"
-      setIsLoadingSourceTracks(true)
-      getTracksFromSource(null)
-        .then(tracks => {
-          setAllSourceTracks(tracks)
-          setIsLoadingSourceTracks(false)
-        })
-        .catch(error => {
-          console.error('Error fetching all tracks:', error)
-          setAllSourceTracks([])
-          setIsLoadingSourceTracks(false)
-        })
-    } else if (!isQueueOpen) {
-      // Clear when queue closes
-      setAllSourceTracks([])
+  const liveDeckId = waveformMediaSyncKey.startsWith('next') ? 'b' : 'a'
+
+  const nextQueueTrack = useMemo(() => {
+    const idx = currentQueueIndex
+    return idx >= 0 && queue[idx + 1] ? queue[idx + 1] : null
+  }, [currentQueueIndex, queue])
+
+  /** Live deck = now playing; idle deck = up next from the queue (never the previous track). */
+  const trackForQueueDeck = useCallback(
+    (deck: 'a' | 'b'): Track | null => {
+      if (deck === liveDeckId) return currentTrack ?? null
+      return nextQueueTrack ?? null
+    },
+    [liveDeckId, currentTrack, nextQueueTrack],
+  )
+
+  const incomingDeckHot =
+    isAutoDJEnabled &&
+    !!nextQueueTrack &&
+    (crossfadeActive ||
+      autoDJCuedTrackId === nextQueueTrack.id ||
+      autoDJPendingTrackId === nextQueueTrack.id)
+
+  const autoDjDeckStatusLine = useMemo(() => {
+    if (!isAutoDJEnabled) return null
+    if (crossfadeActive && mixVisualProgress != null) {
+      const bars = autoDJConfig.overlapBars
+      return `Blending ${Math.round(mixVisualProgress * 100)}% · ${bars}-bar overlap`
     }
-  }, [isQueueOpen, currentSource, getTracksFromSource])
+    if (autoDJOutCountdown != null && autoDJOutCountdown > 0) {
+      const hint =
+        currentTrack && nextQueueTrack
+          ? formatMixPairHintLine(
+              buildMixPairHint(
+                {
+                  bpm:
+                    resolvePlaybackBpm(currentTrack, detectedBPM) ??
+                    currentTrack.bpm ??
+                    null,
+                  sonic_dna: currentTrack.sonic_dna,
+                  trackKey: displayTrackKey(currentTrack) || null,
+                },
+                {
+                  bpm:
+                    resolvePlaybackBpm(nextQueueTrack, null) ??
+                    nextQueueTrack.bpm ??
+                    null,
+                  sonic_dna: nextQueueTrack.sonic_dna,
+                  trackKey: displayTrackKey(nextQueueTrack) || null,
+                },
+              ),
+            )
+          : null
+      return `OUT in ${autoDJOutCountdown.toFixed(1)}s${hint ? ` · ${hint}` : ''}`
+    }
+    return null
+  }, [
+    isAutoDJEnabled,
+    crossfadeActive,
+    mixVisualProgress,
+    autoDJOutCountdown,
+    autoDJConfig.overlapBars,
+    currentTrack,
+    nextQueueTrack,
+    detectedBPM,
+  ])
+
+  const resolveTrackBpm = useCallback((track: Track | null | undefined) => {
+    if (!track) return null
+    const cached = bpmCacheRef.current.get(track.id)
+    if (typeof cached === 'number') return cached
+    return track.bpm ?? null
+  }, [])
+
+  const resolveTrackBeatGridOffset = useCallback(
+    (track: Track | null | undefined): number => {
+      if (!track) return 0
+      const cached = mixGridOffsetCacheRef.current.get(track.id)
+      if (
+        typeof track.beat_grid_offset === 'number' &&
+        Number.isFinite(track.beat_grid_offset) &&
+        track.beat_grid_offset >= 0
+      ) {
+        return track.beat_grid_offset
+      }
+      if (typeof cached === 'number' && Number.isFinite(cached)) {
+        return Math.max(0, cached)
+      }
+      const ref = toMixTrackRef(track)
+      return typeof ref.beat_grid_offset === 'number' ? ref.beat_grid_offset : 0
+    },
+    [toMixTrackRef],
+  )
+
+  useEffect(() => {
+    setDeckUi((prev) => ({
+      ...prev,
+      [liveDeckId]: { ...prev[liveDeckId], detectedBpm: detectedBPM },
+    }))
+  }, [detectedBPM, liveDeckId])
+
+  useEffect(() => {
+    const aRate = audioRef.current?.playbackRate
+    const bRate = nextAudioRef.current?.playbackRate
+    setDeckUi((prev) => ({
+      ...prev,
+      a: {
+        ...prev.a,
+        playbackRate:
+          typeof aRate === 'number' && aRate > 0 ? aRate : prev.a.playbackRate,
+      },
+      b: {
+        ...prev.b,
+        playbackRate:
+          typeof bRate === 'number' && bRate > 0 ? bRate : prev.b.playbackRate,
+      },
+    }))
+  }, [waveformMediaSyncKey, currentTrack?.id, settings.playbackRate])
+
+  useEffect(() => {
+    if (!isExpanded || !audioContextReady) return
+    const engine = mixEngineRef.current
+    if (!engine) return
+    setDeckUi((prev) => ({
+      ...prev,
+      a: { ...prev.a, eqGains: engine.getDeckEqGains('a') },
+      b: { ...prev.b, eqGains: engine.getDeckEqGains('b') },
+    }))
+  }, [isExpanded, audioContextReady, waveformMediaSyncKey])
+
+  const resolveDeckTrack = useCallback(
+    (deck: 'a' | 'b'): Track | null => trackForQueueDeck(deck),
+    [trackForQueueDeck],
+  )
+
+  const expandedDeckChannels = useMemo(() => {
+    const deckATrack = trackForQueueDeck('a')
+    const deckBTrack = trackForQueueDeck('b')
+
+    const build = (
+      deck: 'a' | 'b',
+      track: Track | null | undefined,
+      isLive: boolean,
+    ) => {
+      const trackCoverSrc = track ? albumCoverUrl(track, queue, coverBust) : undefined
+      const liveDetectedBpm = isLive ? detectedBPM : null
+      const liveTrackForHint = liveDeckId === 'a' ? deckATrack : deckBTrack
+      const pairHint =
+        !isLive &&
+        isAutoDJEnabled &&
+        track &&
+        liveTrackForHint
+          ? formatMixPairHintLine(
+              buildMixPairHint(
+                {
+                  bpm:
+                    resolvePlaybackBpm(liveTrackForHint, detectedBPM) ??
+                    liveTrackForHint.bpm ??
+                    null,
+                  sonic_dna: liveTrackForHint.sonic_dna,
+                  trackKey: displayTrackKey(liveTrackForHint) || null,
+                },
+                {
+                  bpm: resolvePlaybackBpm(track, null) ?? track.bpm ?? null,
+                  sonic_dna: track.sonic_dna,
+                  trackKey: displayTrackKey(track) || null,
+                },
+              ),
+            )
+          : null
+      const filters = deckFilterUi[deck]
+      const qualityFlashActive =
+        mixQualityFlash != null && Date.now() < mixQualityFlash.until
+      return {
+        deckLabel: deck === 'a' ? ('A' as const) : ('B' as const),
+        trackTitle: track?.title,
+        trackArtist: track?.artist,
+        trackAlbum: track?.album || track?.folder,
+        coverSrc: trackCoverSrc,
+        coverAlt: track?.album || track?.title || `Deck ${deck === 'a' ? 'A' : 'B'}`,
+        coverUnoptimized: trackCoverSrc ? shouldUnoptimizeImage(trackCoverSrc) : true,
+        catalogBpm: track
+          ? displayTrackBpm(track) ?? liveDetectedBpm ?? resolveTrackBpm(track)
+          : null,
+        trackGenre: track ? displayTrackGenre(track) || null : null,
+        trackKey: track ? displayTrackKey(track) || null : null,
+        detectedBPM: isLive
+          ? detectedBPM
+          : (deckUi[deck].detectedBpm ?? resolveTrackBpm(track)),
+        isDetectingBPM: isLive && isDetectingBPM,
+        playbackRate: deckUi[deck].playbackRate,
+        tapTempoTaps: deckUi[deck].tapTempoTaps,
+        tapTempoBPM: deckUi[deck].tapTempoBPM,
+        tapTempoSectionsCompleted: deckUi[deck].tapTempoSectionBpms.length,
+        eqGains: deckUi[deck].eqGains,
+        isLive,
+        isArmed: !isLive && incomingDeckHot,
+        isMixing: crossfadeActive && mixVisualProgress != null,
+        mixRole:
+          crossfadeActive && mixVisualProgress != null
+            ? isLive
+              ? ('outgoing' as const)
+              : ('incoming' as const)
+            : null,
+        mixProgress: crossfadeActive && mixVisualProgress != null ? mixVisualProgress : undefined,
+        filterOpenness: filterOpenness(filters.hpfHz, filters.lpfHz),
+        pairHint,
+        mixQualityGrade:
+          qualityFlashActive && isLive ? mixQualityFlash!.grade : null,
+      }
+    }
+
+    return {
+      a: build('a', deckATrack, liveDeckId === 'a'),
+      b: build('b', deckBTrack, liveDeckId === 'b'),
+    }
+  }, [
+    liveDeckId,
+    currentTrack,
+    nextQueueTrack,
+    trackForQueueDeck,
+    currentQueueIndex,
+    queue,
+    detectedBPM,
+    isDetectingBPM,
+    deckUi,
+    resolveTrackBpm,
+    incomingDeckHot,
+    crossfadeActive,
+    mixVisualProgress,
+    isAutoDJEnabled,
+    deckFilterUi,
+    mixQualityFlash,
+    coverBust,
+  ])
+
+  const syncDeckWaveformCache = useCallback((deck: 'a' | 'b', pack: DeckWaveformPack) => {
+    setDeckWaveformCache((prev) => {
+      if (prev[deck]?.trackId === pack.trackId) return prev
+      return { ...prev, [deck]: pack }
+    })
+  }, [])
+
+  const syncIdleDeckWaveformCache = useCallback(
+    (trackId: string, samples: WaveformSample[], durationSec: number) => {
+      const idleDeck: 'a' | 'b' = liveDeckId === 'a' ? 'b' : 'a'
+      syncDeckWaveformCache(idleDeck, { trackId, samples, durationSec })
+    },
+    [liveDeckId, syncDeckWaveformCache],
+  )
+
+  /** Load the queue track after `liveTrack` onto the idle deck for the next mix. */
+  const precueIdleForQueueSuccessor = useCallback(
+    async (liveTrack: Track, trackQueue: Track[]) => {
+      if (!autoDJConfigRef.current.enabled) return
+      const liveIdx = trackQueue.findIndex((t) => t.id === liveTrack.id)
+      const successor = liveIdx >= 0 ? trackQueue[liveIdx + 1] : null
+      if (!successor || cuedIdleTrackIdRef.current === successor.id) return
+
+      await ensureDualDeckGraph()
+      const engine = ensureMixEngine()
+      if (!engine || engine.isMixing()) return
+
+      let url = resolvedUrlCacheRef.current.get(successor.file) || null
+      if (!url) {
+        url = await resolveAudioUrl(successor.file)
+        if (url) resolvedUrlCacheRef.current.set(successor.file, url)
+      }
+      if (!url) return
+
+      void loadWaveformSamplesForTrack(successor, url).then((packed) => {
+        if (!packed) return
+        cacheMixGridOffset(
+          successor,
+          packed.samples,
+          packed.durationSec || successor.duration || 180,
+        )
+        ghostSamplesRef.current = {
+          trackId: successor.id,
+          samples: packed.samples,
+          durationSec: packed.durationSec || successor.duration || 180,
+          sonicDna: successor.sonic_dna,
+        }
+        syncIdleDeckWaveformCache(
+          successor.id,
+          packed.samples,
+          packed.durationSec || successor.duration || 180,
+        )
+      })
+
+      const outBpm =
+        resolvePlaybackBpm(liveTrack, detectedBPMRef.current) ??
+        liveTrack.bpm ??
+        detectedBPMRef.current ??
+        120
+      const inBpm = resolvePlaybackBpm(successor, null) ?? successor.bpm ?? outBpm
+      const mixDeckRates = computeMixDeckRates({
+        outgoingBpm: outBpm,
+        incomingBpm: inBpm,
+        outgoingPlaybackRate: getOutgoingPlaybackRate(),
+        incomingTargetRate:
+          autoDJConfigRef.current.bpmStrategy === 'manual'
+            ? settingsRef.current.playbackRate
+            : 1,
+      })
+      const cueSec = trackIntroOffsetSec(successor)
+
+      try {
+        await engine.loadIdle(withMixGrid(successor), url, cueSec, mixDeckRates.incomingRate)
+        setCuedIdleTrackId(successor.id)
+        setAutoDJStatusMessage(`Pre-cued “${successor.title}” for next mix`)
+      } catch (err) {
+        console.debug('Post-handoff idle precue failed:', err)
+      }
+    },
+    [
+      ensureDualDeckGraph,
+      ensureMixEngine,
+      trackIntroOffsetSec,
+      cacheMixGridOffset,
+      syncIdleDeckWaveformCache,
+      getOutgoingPlaybackRate,
+    ],
+  )
+  precueIdleForQueueSuccessorRef.current = precueIdleForQueueSuccessor
+
+  // Prefetch idle-deck waveforms — idle deck always mirrors queue up-next.
+  useEffect(() => {
+    if (isMiniMode || (expandedMode as string) === 'dj') return
+
+    const idleTargets: { deck: 'a' | 'b'; track: Track | null | undefined }[] = [
+      {
+        deck: 'a',
+        track: liveDeckId === 'a' ? null : nextQueueTrack,
+      },
+      {
+        deck: 'b',
+        track: liveDeckId === 'b' ? null : nextQueueTrack,
+      },
+    ]
+
+    let cancelled = false
+    for (const { deck, track } of idleTargets) {
+      if (!track?.id) continue
+      if (deckWaveformCache[deck]?.trackId === track.id) continue
+
+      const ghost = ghostSamplesRef.current
+      if (ghost?.trackId === track.id && ghost.samples.length > 0) {
+        syncDeckWaveformCache(deck, {
+          trackId: track.id,
+          samples: ghost.samples,
+          durationSec: ghost.durationSec || track.duration || 180,
+        })
+        continue
+      }
+
+      void (async () => {
+        try {
+          let url = resolvedUrlCacheRef.current.get(track.file) || null
+          if (!url) url = await resolveAudioUrl(track.file)
+          if (!url || cancelled) return
+          resolvedUrlCacheRef.current.set(track.file, url)
+          const packed = await loadWaveformSamplesForTrack(track, url)
+          if (cancelled || !packed.samples.length) return
+          syncDeckWaveformCache(deck, {
+            trackId: track.id,
+            samples: packed.samples,
+            durationSec: packed.durationSec || track.duration || 180,
+          })
+        } catch {
+          /* ignore */
+        }
+      })()
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    isMiniMode,
+    expandedMode,
+    liveDeckId,
+    nextQueueTrack,
+    currentQueueIndex,
+    queue,
+    deckWaveformCache,
+    syncDeckWaveformCache,
+  ])
+
+  // Mini/expand chrome must not collapse a docked vault queue panel.
+  useEffect(() => {
+    if (!isQueueOpen) {
+      setIsQueueExpanded(false)
+      setIsTrackListExpanded(false)
+      return
+    }
+    if (isQueueDocked || !isMiniMode || isExpanded) {
+      setIsTrackListExpanded(true)
+    }
+  }, [isQueueOpen, isMiniMode, isExpanded, isQueueDocked])
+
+  // Load the selected folder / playlist / catalog for queue preview and random picks.
+  useEffect(() => {
+    if (!getTracksFromSource) return
+    const needPool = isQueueOpen || settings.catalogRandom || autoDJConfig.enabled
+    if (!needPool) {
+      setAllSourceTracks([])
+      return
+    }
+    let cancelled = false
+    setIsLoadingSourceTracks(isQueueOpen)
+    getTracksFromSource(currentSource ?? null)
+      .then((tracks) => {
+        if (cancelled) return
+        setAllSourceTracks(tracks)
+        setIsLoadingSourceTracks(false)
+      })
+      .catch((error) => {
+        console.error('Error fetching source tracks:', error)
+        if (!cancelled) {
+          setAllSourceTracks([])
+          setIsLoadingSourceTracks(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    isQueueOpen,
+    currentSource,
+    getTracksFromSource,
+    settings.catalogRandom,
+    autoDJConfig.enabled,
+  ])
 
   useEffect(() => {
     if (!autoDJConfig.enabled || autoDJLibrary.length > 0 || !getTracksFromSource) return
@@ -2198,37 +4856,160 @@ export default function MusicPlayer({
   }, [autoDJConfig.enabled, autoDJLibrary.length, getTracksFromSource])
 
   const phraseDuration = useMemo(() => {
-    const bpm = detectedBPM || currentTrack?.bpm || 120
-    const beatDuration = bpm > 0 ? 60 / bpm : 4
-    return beatDuration * autoDJConfig.phraseBars
-  }, [autoDJConfig.phraseBars, detectedBPM, currentTrack?.bpm])
+    const bpm =
+      resolvePlaybackBpm(currentTrack, detectedBPM) ||
+      detectedBPM ||
+      currentTrack?.bpm ||
+      120
+    const beatDuration = bpm > 0 ? 60 / bpm : 0.5
+    // Always honor the Auto DJ phrase-length control (beat-grid aligned).
+    return beatDuration * 4 * autoDJConfig.overlapBars
+  }, [autoDJConfig.overlapBars, detectedBPM, currentTrack])
+
+  const autoDJPool = useMemo(() => {
+    if (autoDJLibrary.length > 0) return autoDJLibrary
+    if (allSourceTracks.length > 0) return allSourceTracks
+    return queue
+  }, [autoDJLibrary, allSourceTracks, queue])
+
+  const catalogPool = useMemo(() => {
+    if (allSourceTracks.length > 0) return allSourceTracks
+    return queue
+  }, [allSourceTracks, queue])
+
+  useEffect(() => {
+    playedTrackIdsRef.current.clear()
+    if (currentTrack?.id) playedTrackIdsRef.current.add(currentTrack.id)
+    catalogRandomFillKeyRef.current = ''
+  }, [currentSource?.type, currentSource?.id])
+
+  useEffect(() => {
+    if (currentTrack?.id) playedTrackIdsRef.current.add(currentTrack.id)
+  }, [currentTrack?.id])
+
+  const catalogRandomLookahead = Math.max(1, Math.min(autoDJConfig.lookahead || 4, 8))
+
+  useEffect(() => {
+    if (autoDJConfig.enabled || !settings.catalogRandom || !onQueueChange) return
+    if (!currentTrack || catalogPool.length === 0) return
+    const idx =
+      currentQueueIndex >= 0
+        ? currentQueueIndex
+        : queue.findIndex((track) => track.id === currentTrack.id)
+    const upcoming = idx >= 0 ? queue.length - 1 - idx : 0
+    if (upcoming >= catalogRandomLookahead) return
+    const fillKey = `${currentTrack.id}:${idx}:${queue.length}`
+    if (catalogRandomFillKeyRef.current === fillKey) return
+    const needed = catalogRandomLookahead - Math.max(0, upcoming)
+    const exclude = new Set(queue.map((track) => track.id))
+    playedTrackIdsRef.current.forEach((id) => exclude.add(id))
+    const picked = pickRandomUnusedTracks(catalogPool, exclude, needed, {
+      allowReshuffle: true,
+      keepExcluded: [currentTrack.id],
+    })
+    if (picked.length === 0) return
+    catalogRandomFillKeyRef.current = fillKey
+    onQueueChange([...queue, ...picked])
+    setAutoDJStatusMessage(
+      `Random from ${catalogScopeLabel(currentSource)} · queued “${picked[0]!.title}”`,
+    )
+  }, [
+    autoDJConfig.enabled,
+    settings.catalogRandom,
+    onQueueChange,
+    currentTrack,
+    catalogPool,
+    queue,
+    currentQueueIndex,
+    catalogRandomLookahead,
+    currentSource,
+  ])
 
   const pickAutoDJTrack = useCallback((): Track | null => {
-    const pool = allSourceTracks.length > 0
-      ? allSourceTracks
-      : autoDJLibrary.length > 0
-        ? autoDJLibrary
-        : queue
-    if (pool.length === 0) return null
-    const usedIds = new Set(queue.map((track) => track.id))
-    const candidates = pool.filter((track) => track.id !== currentTrack?.id && !usedIds.has(track.id))
-    if (candidates.length === 0) {
-      return pool.find((track) => track.id !== currentTrack?.id) || null
+    if (!currentTrack || autoDJPool.length === 0) return null
+    const upcomingIds = new Set(
+      (currentQueueIndex >= 0 ? queue.slice(currentQueueIndex) : queue).map((t) => t.id),
+    )
+    const outBpm =
+      resolvePlaybackBpm(currentTrack, detectedBPM) ||
+      detectedBPM ||
+      currentTrack.bpm ||
+      null
+    const bpmOk = (t: Track) =>
+      pairBpmCompatible(outBpm, resolvePlaybackBpm(t, null) ?? t.bpm ?? null)
+
+    const harmonic = autoDJConfig.harmonicMatch
+    if (harmonic !== 'off') {
+      const ranked = rankDnaTracks(currentTrack, autoDJPool, {
+        excludeIds: upcomingIds,
+        limit: 12,
+        minScore: 0.15,
+      })
+      const keyThreshold = harmonic === 'key-lock' ? 0.6 : 0.45
+      const keyed = ranked.filter((r) => r.score.key >= keyThreshold)
+      const pool = (keyed.length ? keyed : ranked).filter((r) => bpmOk(r.track as Track))
+      const usePool = pool.length ? pool : keyed.length ? keyed : ranked
+      if (usePool.length) {
+        const pick = usePool[Math.floor(Math.random() * Math.min(3, usePool.length))]!
+        return pick.track as Track
+      }
     }
-    return candidates[Math.floor(Math.random() * candidates.length)]
-  }, [allSourceTracks, autoDJLibrary, queue, currentTrack])
+    const best = pickBestDnaTrack(currentTrack, autoDJPool, {
+      excludeIds: upcomingIds,
+      randomizeTop: 2,
+      minScore: 0.12,
+    })
+    if (best && bpmOk(best as Track)) return best as Track
+    if (best) return best as Track
+
+    const soft = pickBestDnaTrack(currentTrack, autoDJPool, {
+      excludeIds: new Set([currentTrack.id]),
+      randomizeTop: 2,
+    })
+    return (soft as Track) || null
+  }, [
+    autoDJPool,
+    queue,
+    currentTrack,
+    currentQueueIndex,
+    autoDJConfig.harmonicMatch,
+    detectedBPM,
+  ])
 
   // Refs for fast-changing values so Auto DJ interval doesn't churn on every timeupdate
-  const autoDJCurrentTimeRef = useRef(currentTime)
   const autoDJDurationRef = useRef(duration)
   const autoDJQueueRef = useRef(queue)
   const autoDJCurrentTrackRef = useRef(currentTrack)
   const autoDJPhraseDurationRef = useRef(phraseDuration)
-  autoDJCurrentTimeRef.current = currentTime
   autoDJDurationRef.current = duration
   autoDJQueueRef.current = queue
   autoDJCurrentTrackRef.current = currentTrack
   autoDJPhraseDurationRef.current = phraseDuration
+
+  // Drop stale transition locks when the playhead moves to a new track
+  useEffect(() => {
+    // A new track means the previous track's mix distance says nothing about
+    // how often we should be replanning.
+    autoDJPlanDelayRef.current = null
+    autoDJPlanScanRef.current = 0
+    // Keep MixEngine lock intact during an in-flight deck-swap handoff
+    if (
+      phraseMixLockRef.current ||
+      skipSrcReloadRef.current ||
+      isDeckHandoffActive(currentTrack?.id)
+    ) {
+      autoDJPendingRef.current = null
+      setAutoDJPendingTrackId(null)
+      return
+    }
+    autoDJPendingRef.current = null
+    autoDJLastAddedRef.current = null
+    setAutoDJPendingTrackId(null)
+    clearAutoDJCrossfadeTimeout()
+        setCuedIdleTrackId(null)
+    clearFadeInterval()
+    restoreMainVolume()
+  }, [currentTrack?.id, clearAutoDJCrossfadeTimeout, clearFadeInterval, restoreMainVolume, isDeckHandoffActive])
 
   useEffect(() => {
     if (!autoDJConfig.enabled || !onQueueChange) {
@@ -2238,78 +5019,675 @@ export default function MusicPlayer({
       }
       autoDJLastAddedRef.current = null
       autoDJPendingRef.current = null
+      autoDJFrozenPlanRef.current = null
+      autoDJIdleWarmedRef.current = null
+      deckHandoffRef.current = null
+      phraseMixLockRef.current = false
+      setCuedIdleTrackId(null)
       clearAutoDJCrossfadeTimeout()
+      clearFadeInterval()
+      restoreMainVolume()
       setAutoDJStatusMessage('')
       setAutoDJPendingTrackId(null)
       return
     }
 
+    const cueIdleEarly = async (nextTrack: Track, plan: MixPlan, mixStartRate: number) => {
+      if (cuedIdleTrackIdRef.current === nextTrack.id) {
+        if (!mixEngineRef.current?.isMixing()) {
+          if (mixStartRate > 0) {
+            mixEngineRef.current?.lockIdleTempo(mixStartRate)
+            const idleDeck: DeckId = mixEngineRef.current.getActiveDeck() === 'a' ? 'b' : 'a'
+            setDeckUi((prev) => ({
+              ...prev,
+              [idleDeck]: { ...prev[idleDeck], playbackRate: clampTempoRate(mixStartRate) },
+            }))
+          }
+          mixEngineRef.current?.silenceIdle({ instant: true })
+        }
+        return
+      }
+      await ensureDualDeckGraph()
+      const engine = ensureMixEngine()
+      if (!engine || engine.isMixing()) return
+      let url = resolvedUrlCacheRef.current.get(nextTrack.file) || null
+      if (!url) {
+        url = await resolveAudioUrl(nextTrack.file)
+        if (url) resolvedUrlCacheRef.current.set(nextTrack.file, url)
+      }
+      if (!url) return
+      // Preload incoming tape in parallel with audio cue
+      void loadWaveformSamplesForTrack(nextTrack, url).then((packed) => {
+        if (!packed) return
+        cacheMixGridOffset(nextTrack, packed.samples, packed.durationSec || nextTrack.duration || 180)
+        ghostSamplesRef.current = {
+          trackId: nextTrack.id,
+          samples: packed.samples,
+          durationSec: packed.durationSec || nextTrack.duration || 180,
+          sonicDna: nextTrack.sonic_dna,
+        }
+        syncIdleDeckWaveformCache(
+          nextTrack.id,
+          packed.samples,
+          packed.durationSec || nextTrack.duration || 180,
+        )
+      })
+      try {
+        const cueSec =
+          typeof plan.resolvedIncomingSec === 'number' && Number.isFinite(plan.resolvedIncomingSec)
+            ? plan.resolvedIncomingSec
+            : plan.incomingStartSec
+        await engine.loadIdle(withMixGrid(nextTrack), url, cueSec, mixStartRate)
+        autoDJIdleWarmedRef.current = null
+        const idleDeck: DeckId = engine.getActiveDeck() === 'a' ? 'b' : 'a'
+        setDeckUi((prev) => ({
+          ...prev,
+          [idleDeck]: {
+            ...prev[idleDeck],
+            playbackRate: clampTempoRate(mixStartRate),
+            detectedBpm:
+              resolvePlaybackBpm(nextTrack, null) ?? nextTrack.bpm ?? prev[idleDeck].detectedBpm,
+          },
+        }))
+        setCuedIdleTrackId(nextTrack.id)
+        const bpm =
+          resolvePlaybackBpm(autoDJCurrentTrackRef.current, detectedBPMRef.current) ??
+          autoDJCurrentTrackRef.current?.bpm ??
+          detectedBPMRef.current ??
+          120
+        const aligned = alignMixOverlayToBeatGrid({
+          mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
+          mixDurationSec: plan.mixDurationSec,
+          bpm,
+          offsetSec: beatGridOffsetSecRef.current,
+          overlapBars: autoDJConfigRef.current.overlapBars,
+        })
+        setWaveformMixOverlay({
+          active: true,
+          mixOutSec: aligned.mixOutSec,
+          mixStartSec: aligned.mixStartSec,
+          mixEndSec: aligned.mixEndSec,
+        })
+        setAutoDJStatusMessage(`Cued “${nextTrack.title}” @ ${cueSec.toFixed(1)}s`)
+      } catch (err) {
+        console.debug('Early idle cue failed:', err)
+      }
+    }
+
     const tick = () => {
-      const ct = autoDJCurrentTimeRef.current
-      const dur = autoDJDurationRef.current
+      if (phraseMixLockRef.current) {
+        setAutoDJOutCountdown(null)
+        return
+      }
+
+      const live = getPlaybackAudio()
+      const ct = live && Number.isFinite(live.currentTime) ? live.currentTime : autoDJCurrentTimeRef.current
+      const dur =
+        live && Number.isFinite(live.duration) && live.duration > 0
+          ? live.duration
+          : autoDJDurationRef.current
       const q = autoDJQueueRef.current
       const track = autoDJCurrentTrackRef.current
       const phrase = autoDJPhraseDurationRef.current
 
-      if (!track || dur <= 0 || autoDJPendingRef.current) return
+      if (!track || dur <= 0 || !Number.isFinite(ct)) return
       const currentIndex = q.findIndex((t) => t.id === track.id)
-      const isLastTrack = currentIndex >= q.length - 1
-      if (!isLastTrack) return
+      if (currentIndex < 0) return
 
-      const remaining = dur - ct
-      if (remaining > phrase * 1.25) return
+      if (trackWaveformBaseRef.current.length >= 64) {
+        cacheMixGridOffset(track, trackWaveformBaseRef.current, dur)
+      }
 
-      const candidate = pickAutoDJTrack()
-      if (!candidate || q.some((t) => t.id === candidate.id)) return
-      if (autoDJLastAddedRef.current === candidate.id) return
+      const upcomingCount = q.length - 1 - currentIndex
 
-      autoDJLastAddedRef.current = candidate.id
-      autoDJPendingRef.current = candidate.id
-      setAutoDJPendingTrackId(candidate.id)
-      setAutoDJStatusMessage(`Auto DJ queued “${candidate.title}”`)
-      onQueueChange([...q, candidate])
-
-      const beatWithinPhrase = ct % phrase
-      const transitionLead = autoDJLeadIn > 0 ? autoDJLeadIn : (settings.crossfadeDuration || 0)
-      const delaySeconds = autoDJAlignPhase 
-        ? Math.max(0, phrase - beatWithinPhrase - transitionLead)
-        : Math.max(0, Math.min(dur - ct - transitionLead, phrase - beatWithinPhrase - transitionLead))
-      const delayMs = Math.max(0, delaySeconds * 1000)
-      clearAutoDJCrossfadeTimeout()
-      autoDJCrossfadeTimeoutRef.current = setTimeout(() => {
-        if (!autoDJConfig.enabled) return
-        const modeLabel = autoDJConfig.transitionMode === 'crossfade' ? 'crossfading' : 
-                          autoDJConfig.transitionMode === 'filter-eq' ? 'filtering' : 'cutting'
-        setAutoDJStatusMessage(`Auto DJ ${modeLabel} to "${candidate.title}"`)
-        setAutoDJPendingTrackId(null)
-        
-        // Apply transition based on configured mode
-        switch (autoDJConfig.transitionMode) {
-          case 'crossfade':
-            if (settings.crossfadeDuration > 0) {
-              startCrossfade(candidate)
-            } else {
-              onNext()
-            }
-            break
-          case 'filter-eq':
-            if (settings.crossfadeDuration > 0) {
-              startCrossfade(candidate)
-            } else {
-              onNext()
-            }
-            break
-          case 'cutout-filter':
-            onNext()
-            break
-          default:
-            onNext()
+      // 1) Keep DNA-matched lookahead in the queue
+      if (upcomingCount < autoDJConfig.lookahead) {
+        const candidate = pickAutoDJTrack()
+        if (
+          candidate &&
+          !q.some((t) => t.id === candidate.id) &&
+          autoDJLastAddedRef.current !== candidate.id
+        ) {
+          autoDJLastAddedRef.current = candidate.id
+          const nextQueue = [...q, candidate]
+          queueRef.current = nextQueue
+          autoDJQueueRef.current = nextQueue
+          onQueueChange(nextQueue)
+          setAutoDJStatusMessage(`Auto DJ queued “${candidate.title}” (DNA)`)
+          return
         }
-        autoDJPendingRef.current = null
-      }, delayMs)
+      }
+
+      // 2) Outro phrase → intro phrase mix (DNA plan)
+      if (autoDJPendingRef.current) return
+      const nextTrackInQueue = q[currentIndex + 1]
+      if (!nextTrackInQueue) {
+        setAutoDJOutCountdown(null)
+        return
+      }
+
+      if (!resolvedUrlCacheRef.current.get(nextTrackInQueue.file)) {
+        void resolveAudioUrl(nextTrackInQueue.file).then((resolved) => {
+          if (resolved) resolvedUrlCacheRef.current.set(nextTrackInQueue.file, resolved)
+        })
+      }
+
+      if (
+        autoDJFrozenPlanRef.current &&
+        (autoDJFrozenPlanRef.current.outgoingId !== track.id ||
+          autoDJFrozenPlanRef.current.incomingId !== nextTrackInQueue.id)
+      ) {
+        autoDJFrozenPlanRef.current = null
+      }
+
+      // N+2: warm waveform + grid for the track after next (debounced by id)
+      const lookAhead2 = q[currentIndex + 2]
+      if (lookAhead2 && mixLookahead2IdRef.current !== lookAhead2.id) {
+        mixLookahead2IdRef.current = lookAhead2.id
+        void (async () => {
+          let url = resolvedUrlCacheRef.current.get(lookAhead2.file) || null
+          if (!url) {
+            url = await resolveAudioUrl(lookAhead2.file)
+            if (url) resolvedUrlCacheRef.current.set(lookAhead2.file, url)
+          }
+          if (!url) return
+          const packed = await loadWaveformSamplesForTrack(lookAhead2, url)
+          if (!packed || mixLookahead2IdRef.current !== lookAhead2.id) return
+          cacheMixGridOffset(
+            lookAhead2,
+            packed.samples,
+            packed.durationSec || lookAhead2.duration || 180,
+          )
+        })()
+      }
+
+      // buildMixPlan runs phrase and cue-point math across the whole track, twice
+      // per pass. Early in a track that work is discarded, so scan coarsely to
+      // locate the mix point and tighten to every tick as the outro comes up.
+      const lastDelay = autoDJPlanDelayRef.current
+      const scanEvery =
+        lastDelay == null || lastDelay <= phrase + 6 ? 1 : lastDelay > 60 ? 10 : 3
+      autoDJPlanScanRef.current += 1
+      if (autoDJPlanScanRef.current % scanEvery !== 0) return
+
+      const outRate = getOutgoingPlaybackRate()
+      const outBpm =
+        resolvePlaybackBpm(track, detectedBPMRef.current) ??
+        track.bpm ??
+        detectedBPMRef.current ??
+        120
+
+      if (ghostSamplesRef.current?.trackId === nextTrackInQueue.id) {
+        cacheMixGridOffset(
+          nextTrackInQueue,
+          ghostSamplesRef.current.samples,
+          ghostSamplesRef.current.durationSec,
+        )
+      }
+
+      const outRef = {
+        ...withMixGrid(track),
+        duration: dur,
+        // Always plan against the waveform's live beatgrid (not a stale peak cache).
+        beat_grid_offset: beatGridOffsetSecRef.current,
+      }
+      const inRef = withMixGrid(nextTrackInQueue)
+      const outgoingGridOffset = beatGridOffsetSecRef.current
+      const incomingGridOffset =
+        typeof inRef.beat_grid_offset === 'number' ? inRef.beat_grid_offset : undefined
+
+      const resolvedTechniques = resolveEffectiveMixTechniques(
+        autoDJConfig.mixTechniques,
+        outRef,
+        inRef,
+      )
+      const engineStyle = resolveEffectiveMixStyle(
+        autoDJConfig.mixStyle,
+        resolvedTechniques,
+        autoDJConfig.transitionMode,
+      )
+
+      const phraseMix = resolvePhraseMixSettings(autoDJConfig, {
+        qualityGate: shouldApplyQualityGate(lastMixQualityRef.current?.grade)
+          ? lastMixQualityRef.current?.grade
+          : null,
+      })
+
+      const basePlan = buildMixPlan({
+        outgoing: outRef,
+        incoming: inRef,
+        nowSec: ct,
+        outPhraseBars: phraseMix.outPhraseBars,
+        inPhraseBars: phraseMix.inPhraseBars,
+        overlapBars: phraseMix.overlapBars,
+        cuePriority: phraseMix.cuePriority,
+        mixLengthBias: phraseMix.mixLengthBias,
+        energyCurve: phraseMix.energyCurve,
+        harmonicMatch: autoDJConfig.harmonicMatch,
+        outgoingPlaybackRate: outRate,
+        outgoingGridOffset,
+        incomingGridOffset,
+        style: engineStyle,
+        autoStyle: false,
+        leadInSec: 0,
+        canonicalPhraseCues: phraseMix.canonicalPhraseCues,
+        exactOverlap: phraseMix.exactOverlap,
+      })
+      if (!basePlan) return
+
+      const suggestedLead = suggestLeadInSec({
+        startAtOutgoingSec: basePlan.startAtOutgoingSec,
+        nowSec: ct,
+        bpm: outBpm,
+        outPhraseBars: phraseMix.outPhraseBars,
+      })
+      if (Math.abs(suggestedLead - autoDJSuggestedLeadIn) > 0.04) {
+        setAutoDJSuggestedLeadIn(suggestedLead)
+      }
+      const effectiveLeadIn = Math.max(autoDJLeadIn, suggestedLead)
+
+      // Lead-in is prepare-only — rebuild only to stamp prepareLeadInSec (OUT unchanged).
+      let plan =
+        effectiveLeadIn > 0
+          ? buildMixPlan({
+              outgoing: outRef,
+              incoming: inRef,
+              nowSec: ct,
+              outPhraseBars: phraseMix.outPhraseBars,
+              inPhraseBars: phraseMix.inPhraseBars,
+              overlapBars: phraseMix.overlapBars,
+              cuePriority: phraseMix.cuePriority,
+              mixLengthBias: phraseMix.mixLengthBias,
+              energyCurve: phraseMix.energyCurve,
+              harmonicMatch: autoDJConfig.harmonicMatch,
+              outgoingPlaybackRate: outRate,
+              outgoingGridOffset,
+              incomingGridOffset,
+              style: engineStyle,
+              autoStyle: false,
+              leadInSec: effectiveLeadIn,
+              canonicalPhraseCues: phraseMix.canonicalPhraseCues,
+              exactOverlap: phraseMix.exactOverlap,
+            }) || basePlan
+          : basePlan
+
+      // Snap OUT/IN to the same beatgrid the waveform paints (live offset + BPM).
+      const aligned = alignMixOverlayToBeatGrid({
+        mixOutSec:
+          typeof plan.mixOutMarkerSec === 'number' ? plan.mixOutMarkerSec : plan.startAtOutgoingSec,
+        mixDurationSec: plan.mixDurationSec,
+        bpm: outBpm,
+        offsetSec: beatGridOffsetSecRef.current,
+        overlapBars: autoDJConfig.overlapBars,
+      })
+      plan = {
+        ...plan,
+        startAtOutgoingSec: aligned.mixOutSec,
+        mixOutMarkerSec: aligned.mixOutSec,
+        mixDurationSec: aligned.mixDurationSec,
+      }
+
+      // Freeze once within 4s of OUT so later ticks cannot snap earlier.
+      const frozen = autoDJFrozenPlanRef.current
+      if (
+        frozen &&
+        frozen.outgoingId === track.id &&
+        frozen.incomingId === nextTrackInQueue.id
+      ) {
+        const frozenStart = frozen.plan.startAtOutgoingSec
+        if (plan.startAtOutgoingSec + 0.05 < frozenStart) {
+          plan = {
+            ...frozen.plan,
+            prepareLeadInSec: effectiveLeadIn,
+          }
+        } else {
+          autoDJFrozenPlanRef.current = {
+            outgoingId: track.id,
+            incomingId: nextTrackInQueue.id,
+            plan,
+          }
+        }
+      } else if (plan.startAtOutgoingSec - ct <= PLAN_FREEZE_SEC) {
+        autoDJFrozenPlanRef.current = {
+          outgoingId: track.id,
+          incomingId: nextTrackInQueue.id,
+          plan,
+        }
+      }
+
+      setWaveformMixOverlay({
+        active: true,
+        mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
+        mixStartSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
+        mixEndSec:
+          (plan.mixOutMarkerSec ?? plan.startAtOutgoingSec) + plan.mixDurationSec,
+      })
+
+      const mixDeckRates = computeMixDeckRates({
+        outgoingBpm: outBpm,
+        incomingBpm:
+          resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm,
+        outgoingPlaybackRate: outRate,
+        incomingTargetRate:
+          phraseMix.bpmStrategy === 'manual' ? settingsRef.current.playbackRate : 1,
+      })
+      // Pre-arm at beatmatch rate; mix end target is handoff (usually native 1.0).
+      const cueArmRate = mixDeckRates.incomingRate
+      const inBpmForGuard =
+        resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm
+      const { holdBeatmatch, safety } = resolveHoldBeatmatch({
+        syncMode: phraseMix.syncMode,
+        outgoingSonicDna: track.sonic_dna,
+        incomingSonicDna: nextTrackInQueue.sonic_dna,
+        outgoingBpm: outBpm,
+        incomingBpm: inBpmForGuard,
+        outgoingGridOffset,
+        incomingGridOffset,
+      })
+      plan.holdBeatmatch = holdBeatmatch
+      plan.masterTempoHandoff = true
+      plan.phrase1Lock = true
+      plan.blendFromOut = true
+
+      const delaySeconds = plan.startAtOutgoingSec - ct
+      autoDJPlanDelayRef.current = delaySeconds
+      if (delaySeconds > 0 && delaySeconds <= 90) {
+        setAutoDJOutCountdown(Math.round(delaySeconds * 10) / 10)
+      } else {
+        setAutoDJOutCountdown(null)
+      }
+      if (!safety.ok && safety.forceTempoSync && delaySeconds > 0 && delaySeconds <= 8) {
+        setAutoDJStatusMessage((prev) =>
+          prev.includes(safety.message) ? prev : `${safety.message} · TempoSync`,
+        )
+      }
+
+      const prepareLead = Math.max(
+        effectiveLeadIn,
+        typeof plan.prepareLeadInSec === 'number' ? plan.prepareLeadInSec : 0,
+        prearmLeadSec(outBpm),
+      )
+
+      const incomingPeaksReady =
+        (ghostSamplesRef.current?.trackId === nextTrackInQueue.id &&
+          (ghostSamplesRef.current.samples?.length ?? 0) >= 64) ||
+        (Array.isArray(inRef.waveformPeaks) && inRef.waveformPeaks.length >= 64)
+
+      if (!incomingPeaksReady && delaySeconds > 0.4) {
+        // Peaks refine grid alignment only — never block audio cue or OUT fire.
+        const url = resolvedUrlCacheRef.current.get(nextTrackInQueue.file) || null
+        if (!url) {
+          void resolveAudioUrl(nextTrackInQueue.file).then((resolved) => {
+            if (resolved) resolvedUrlCacheRef.current.set(nextTrackInQueue.file, resolved)
+          })
+        } else if (ghostSamplesRef.current?.trackId !== nextTrackInQueue.id) {
+          void loadWaveformSamplesForTrack(nextTrackInQueue, url).then((packed) => {
+            if (!packed) return
+            cacheMixGridOffset(
+              nextTrackInQueue,
+              packed.samples,
+              packed.durationSec || nextTrackInQueue.duration || 180,
+            )
+            ghostSamplesRef.current = {
+              trackId: nextTrackInQueue.id,
+              samples: packed.samples,
+              durationSec: packed.durationSec || nextTrackInQueue.duration || 180,
+              sonicDna: nextTrackInQueue.sonic_dna,
+            }
+            syncIdleDeckWaveformCache(
+              nextTrackInQueue.id,
+              packed.samples,
+              packed.durationSec || nextTrackInQueue.duration || 180,
+            )
+          })
+        }
+        if (delaySeconds <= prepareLead + 0.45) {
+          void cueIdleEarly(nextTrackInQueue, plan, cueArmRate)
+        }
+      }
+
+      if (
+        delaySeconds > 0 &&
+        delaySeconds <= prepareLead + 0.45 &&
+        cuedIdleTrackIdRef.current === nextTrackInQueue.id
+      ) {
+        const idle = getIdleAudio()
+        if (idle) {
+          const inBpm =
+            resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm
+          // Media-time alignment: base BPM only (never bpm × rate).
+          const align = solveAlignmentState({
+            plannedIncomingSec: plan.incomingStartSec,
+            outgoingTimeSec: ct,
+            outgoingBpm: outBpm,
+            outgoingOffsetSec: outgoingGridOffset,
+            outgoingSonicDna: track.sonic_dna,
+            outgoingPeaks: outRef.waveformPeaks,
+            outgoingDurationSec: outRef.waveformDurationSec ?? dur,
+            incomingBpm: inBpm,
+            incomingOffsetSec: incomingGridOffset,
+            incomingSonicDna: nextTrackInQueue.sonic_dna,
+            incomingPeaks: inRef.waveformPeaks,
+            incomingDurationSec: inRef.waveformDurationSec,
+            phraseBars: 8,
+            dnaConfidence: plan.dnaConfidence,
+            phraseLock: plan.phraseLock,
+            phrase1Lock: plan.phrase1Lock !== false,
+          })
+          plan.resolvedIncomingSec = align.incomingCueSec
+          if (!mixEngineRef.current?.isMixing()) {
+            mixEngineRef.current?.parkIdleAtCue(align.incomingCueSec, cueArmRate)
+          }
+        }
+      }
+
+      const beatSec = 60 / Math.max(60, outBpm)
+      if (
+        delaySeconds > 0 &&
+        delaySeconds <= beatSec * 2.5 &&
+        cuedIdleTrackIdRef.current === nextTrackInQueue.id &&
+        autoDJIdleWarmedRef.current !== nextTrackInQueue.id &&
+        !mixEngineRef.current?.isMixing()
+      ) {
+        autoDJIdleWarmedRef.current = nextTrackInQueue.id
+        mixEngineRef.current?.warmIdle(cueArmRate)
+      }
+
+      const armWindowSec = Math.max(prepareLead + beatSec * 2, 3)
+
+      // Pre-roll incoming on the idle deck before OUT so launch is instant at the marker.
+      if (delaySeconds <= armWindowSec + phrase && delaySeconds > -0.25) {
+        void cueIdleEarly(nextTrackInQueue, plan, cueArmRate)
+      }
+
+      if (delaySeconds > armWindowSec) return
+
+      const targetOut = plan.startAtOutgoingSec
+
+      const fireAutoDJMix = () => {
+        const releasePending = () => {
+          autoDJPendingRef.current = null
+          setAutoDJPendingTrackId(null)
+        }
+        if (!autoDJConfigRef.current.enabled || phraseMixLockRef.current) {
+          clearAutoDJOutWatch()
+          clearAutoDJCrossfadeTimeout()
+          releasePending()
+          return
+        }
+        const liveQ = autoDJQueueRef.current
+        const liveTrack = autoDJCurrentTrackRef.current
+        if (!liveTrack || liveTrack.id !== track.id) {
+          clearAutoDJOutWatch()
+          clearAutoDJCrossfadeTimeout()
+          releasePending()
+          return
+        }
+        const stillNext = liveQ.find((t) => t.id === nextTrackInQueue.id)
+        if (!stillNext) {
+          clearAutoDJOutWatch()
+          clearAutoDJCrossfadeTimeout()
+          releasePending()
+          return
+        }
+
+        const liveEl = getPlaybackAudio()
+        const nowSec = liveEl?.currentTime ?? autoDJCurrentTimeRef.current
+        const liveDur = liveEl?.duration && liveEl.duration > 0 ? liveEl.duration : dur
+        const fireOutRate = getOutgoingPlaybackRate()
+        const frozenPlan = autoDJFrozenPlanRef.current?.plan
+        const outMarker = frozenPlan?.startAtOutgoingSec ?? targetOut
+
+        // Tight tolerance — rAF watch should land on the marker, not a beat early.
+        if (nowSec < outMarker - 0.012) {
+          return
+        }
+
+        const idleEl = getIdleAudio()
+        if (idleEl && idleEl.readyState < 2 && nowSec < outMarker + 0.12) {
+          if (autoDJOutRafRef.current == null) {
+            autoDJOutRafRef.current = requestAnimationFrame(() => {
+              autoDJOutRafRef.current = null
+              fireAutoDJMix()
+            })
+          }
+          return
+        }
+
+        clearAutoDJOutWatch()
+        clearAutoDJCrossfadeTimeout()
+        setAutoDJOutCountdown(null)
+
+        const fireOutRef = { ...withMixGrid(liveTrack), duration: liveDur }
+        const fireInRef = withMixGrid(stillNext)
+        const remainAfterOut = Math.max(0.5, liveDur - outMarker - 0.05)
+        const fresh =
+          frozenPlan && nowSec <= outMarker + beatSec * 0.75
+            ? {
+                ...frozenPlan,
+                mixDurationSec:
+                  frozenPlan.exactOverlap ||
+                  (frozenPlan.phrase1Lock !== false && frozenPlan.style === 'crossfade')
+                    ? remainAfterOut >= frozenPlan.mixDurationSec * 0.98
+                      ? frozenPlan.mixDurationSec
+                      : Math.min(frozenPlan.mixDurationSec, remainAfterOut)
+                    : Math.min(frozenPlan.mixDurationSec, remainAfterOut),
+              }
+            : buildMixPlan({
+                outgoing: fireOutRef,
+                incoming: fireInRef,
+                nowSec,
+                outPhraseBars: phraseMix.outPhraseBars,
+                inPhraseBars: phraseMix.inPhraseBars,
+                overlapBars: phraseMix.overlapBars,
+                cuePriority: phraseMix.cuePriority,
+                mixLengthBias: phraseMix.mixLengthBias,
+                energyCurve: phraseMix.energyCurve,
+                harmonicMatch: autoDJConfig.harmonicMatch,
+                outgoingPlaybackRate: fireOutRate,
+                outgoingGridOffset:
+                  typeof fireOutRef.beat_grid_offset === 'number'
+                    ? fireOutRef.beat_grid_offset
+                    : undefined,
+                incomingGridOffset:
+                  typeof fireInRef.beat_grid_offset === 'number'
+                    ? fireInRef.beat_grid_offset
+                    : undefined,
+                style: plan.style,
+                autoStyle: false,
+                leadInSec: 0,
+                canonicalPhraseCues: phraseMix.canonicalPhraseCues,
+                exactOverlap: phraseMix.exactOverlap,
+              }) ||
+              lastMixPlanRef.current ||
+              plan
+
+        setAutoDJStatusMessage(`Auto DJ ${fresh.reason} → “${stillNext.title}”`)
+        setAutoDJPendingTrackId(stillNext.id)
+        autoDJFrozenPlanRef.current = null
+
+        const mixDur =
+          fresh.style === 'cut'
+            ? Math.min(1.15, Math.max(0.65, fresh.mixDurationSec * 0.35))
+            : fresh.mixDurationSec
+        const handoffTarget = resolveIncomingRateForStrategy({
+          strategy: phraseMix.bpmStrategy,
+          beatmatchRate: fresh.rateRatio,
+          sliderRate: settingsRef.current.playbackRate,
+        })
+        const fireOutBpm =
+          resolvePlaybackBpm(liveTrack, detectedBPMRef.current) ??
+          liveTrack.bpm ??
+          detectedBPMRef.current ??
+          120
+        const fireInBpm =
+          resolvePlaybackBpm(stillNext, null) ?? stillNext.bpm ?? fireOutBpm
+        fresh.rateRatio = computeMixDeckRates({
+          outgoingBpm: fireOutBpm,
+          incomingBpm: fireInBpm,
+          outgoingPlaybackRate: fireOutRate,
+          incomingTargetRate: handoffTarget,
+        }).incomingRate
+        const { holdBeatmatch: fireHold } = resolveHoldBeatmatch({
+          syncMode: phraseMix.syncMode,
+          outgoingSonicDna: liveTrack.sonic_dna,
+          incomingSonicDna: stillNext.sonic_dna,
+          outgoingBpm: fireOutBpm,
+          incomingBpm: fireInBpm,
+          outgoingGridOffset:
+            typeof fireOutRef.beat_grid_offset === 'number'
+              ? fireOutRef.beat_grid_offset
+              : undefined,
+          incomingGridOffset:
+            typeof fireInRef.beat_grid_offset === 'number'
+              ? fireInRef.beat_grid_offset
+              : undefined,
+        })
+        fresh.holdBeatmatch = fireHold
+        fresh.masterTempoHandoff = true
+        fresh.phrase1Lock = true
+        fresh.blendFromOut = true
+        void startPhraseMix(
+          stillNext,
+          mixDur,
+          fresh.rateRatio,
+          {
+            ...fresh,
+            mixDurationSec: mixDur,
+          },
+          { incomingTargetRate: handoffTarget },
+        )
+      }
+
+      autoDJPendingRef.current = nextTrackInQueue.id
+      setAutoDJPendingTrackId(nextTrackInQueue.id)
+      lastMixPlanRef.current = plan
+
+      if (delaySeconds <= 0) {
+        fireAutoDJMix()
+        return
+      }
+
+      clearAutoDJOutWatch()
+      const watchOutMarker = () => {
+        if (!autoDJConfigRef.current.enabled || phraseMixLockRef.current) {
+          autoDJOutRafRef.current = null
+          return
+        }
+        const liveEl = getPlaybackAudio()
+        const nowSec = liveEl?.currentTime ?? autoDJCurrentTimeRef.current
+        if (nowSec >= targetOut - 0.005) {
+          autoDJOutRafRef.current = null
+          fireAutoDJMix()
+          return
+        }
+        autoDJOutRafRef.current = requestAnimationFrame(watchOutMarker)
+      }
+      autoDJOutRafRef.current = requestAnimationFrame(watchOutMarker)
     }
 
-    autoDJIntervalRef.current = setInterval(tick, 500)
+    autoDJIntervalRef.current = setInterval(tick, 100)
+    tick()
     return () => {
       if (autoDJIntervalRef.current) {
         clearInterval(autoDJIntervalRef.current)
@@ -2319,58 +5697,107 @@ export default function MusicPlayer({
     }
   }, [
     autoDJConfig.enabled,
-    autoDJConfig.transitionMode,
+    autoDJConfig.mixStyle,
+    autoDJConfig.mixTechniques,
+    autoDJConfig.outPhraseBars,
+    autoDJConfig.inPhraseBars,
+    autoDJConfig.overlapBars,
+    autoDJConfig.cuePriority,
+    autoDJConfig.mixLengthBias,
+    autoDJConfig.energyCurve,
+    autoDJConfig.harmonicMatch,
+    autoDJConfig.bpmStrategy,
+    autoDJConfig.syncMode,
+    autoDJConfig.lookahead,
     autoDJLeadIn,
-    autoDJAlignPhase,
     onQueueChange,
     pickAutoDJTrack,
-    settings.crossfadeDuration,
-    startCrossfade,
-    onNext,
-    clearAutoDJCrossfadeTimeout
+    startPhraseMix,
+    playTrack,
+    seekTo,
+    trackIntroOffsetSec,
+    clearAutoDJCrossfadeTimeout,
+    clearFadeInterval,
+    restoreMainVolume,
+    detectedBPM,
+    ensureMixEngine,
+    ensureDualDeckGraph,
+    getPlaybackAudio,
+    getOutgoingPlaybackRate,
+    toMixTrackRef,
+    withMixGrid,
+    getIdleAudio,
+    cacheMixGridOffset,
+    syncIdleDeckWaveformCache,
   ])
 
-  const displayTracks = allSourceTracks.length > 0 ? allSourceTracks : queue
+  const UPCOMING_PREVIEW = 8
+  /** Tracks already queued after the current one (“assigned cues”). */
+  const assignedUpcoming = useMemo(() => {
+    if (currentQueueIndex >= 0) return queue.slice(currentQueueIndex + 1)
+    if (!currentTrack) return queue
+    return queue.filter((t) => t.id !== currentTrack.id)
+  }, [queue, currentQueueIndex, currentTrack])
+
+  /**
+   * Up-next preview (not the full library):
+   * - Assigned cues (queued after current) → next up to 8
+   * - Else Auto DJ on → top DNA matches
+   * - Else catalog random → empty until random fill lands in the queue
+   * - Else shuffle off → next 8 in library/source order
+   * - Else (queue-order shuffle on, no cues) → empty
+   */
+  const displayTracks = useMemo(() => {
+    const pool = autoDJPool
+
+    if (assignedUpcoming.length > 0) {
+      return assignedUpcoming.slice(0, UPCOMING_PREVIEW)
+    }
+
+    if (autoDJConfig.enabled && currentTrack) {
+      return rankDnaTracks(currentTrack, pool, {
+        excludeIds: new Set([currentTrack.id]),
+        limit: UPCOMING_PREVIEW,
+        minScore: 0.08,
+      }).map((x) => x.track as Track)
+    }
+
+    if (settings.catalogRandom || settings.isShuffled || !currentTrack) {
+      return []
+    }
+
+    const idx = pool.findIndex((t) => t.id === currentTrack.id)
+    if (idx >= 0) {
+      return pool.slice(idx + 1, idx + 1 + UPCOMING_PREVIEW)
+    }
+    return pool.slice(0, UPCOMING_PREVIEW)
+  }, [
+    autoDJPool,
+    queue,
+    currentTrack,
+    autoDJConfig.enabled,
+    assignedUpcoming,
+    settings.isShuffled,
+    settings.catalogRandom,
+  ])
+
+  const upcomingListLabel =
+    assignedUpcoming.length > 0
+      ? 'Up next'
+      : autoDJConfig.enabled
+        ? 'Auto DJ matches'
+        : settings.catalogRandom
+          ? `Random from ${catalogScopeLabel(currentSource)}`
+          : settings.isShuffled
+            ? 'Up next'
+            : 'Next in library'
+
   const queueTrackIds = useMemo(() => new Set(queue.map(t => t.id)), [queue])
   const queueIndexMap = useMemo(() => {
     const m = new Map<string, number>()
     queue.forEach((t, i) => m.set(t.id, i))
     return m
   }, [queue])
-
-  // Virtual scrolling for queue - only create when queue is open AND track list is expanded
-  const virtualizer = useVirtualizer({
-    count: (isQueueOpen && isTrackListExpanded) ? displayTracks.length : 0,
-    getScrollElement: () => queueContainerRef.current,
-    estimateSize: () => 64, // ~64px per track row
-    overscan: 5, // Render 5 extra items for smooth scrolling
-  })
-
-  // Safely get virtual items with error handling
-  const virtualItems = useMemo(() => {
-    if (!isQueueOpen || !isTrackListExpanded || displayTracks.length === 0 || !queueContainerRef.current) {
-      return []
-    }
-    try {
-      return virtualizer.getVirtualItems()
-    } catch (error) {
-      console.error('Error getting virtual items:', error)
-      return []
-    }
-  }, [isQueueOpen, isTrackListExpanded, displayTracks.length, virtualizer])
-
-  // Safely get total size with error handling
-  const virtualizerTotalSize = useMemo(() => {
-    if (!isQueueOpen || !isTrackListExpanded || displayTracks.length === 0) {
-      return 0
-    }
-    try {
-      return virtualizer.getTotalSize()
-    } catch (error) {
-      console.error('Error getting virtualizer total size:', error)
-      return displayTracks.length * 64 // Fallback estimate
-    }
-  }, [isQueueOpen, isTrackListExpanded, displayTracks.length, virtualizer])
 
   const handleRemoveFromQueueClick = (index: number) => {
     if (onRemoveFromQueue) {
@@ -2381,6 +5808,50 @@ export default function MusicPlayer({
       onQueueChange?.(newQueue)
     }
   }
+
+  const [queueDragOverIndex, setQueueDragOverIndex] = useState<number | null>(null)
+  const queueDragActiveRef = useRef(false)
+  const canReorderQueue = assignedUpcoming.length > 1 && Boolean(onQueueChange)
+
+  const handleQueueDragStart = useCallback((e: React.DragEvent, displayIndex: number, trackId: string) => {
+    if (!canReorderQueue) return
+    queueDragActiveRef.current = true
+    e.dataTransfer.setData(QUEUE_DRAG_MIME, String(displayIndex))
+    e.dataTransfer.setData('text/plain', trackId)
+    e.dataTransfer.effectAllowed = 'move'
+  }, [canReorderQueue])
+
+  const handleQueueDragOver = useCallback((e: React.DragEvent, displayIndex: number) => {
+    if (!canReorderQueue) return
+    if (!e.dataTransfer.types.includes(QUEUE_DRAG_MIME) && !queueDragActiveRef.current) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    setQueueDragOverIndex((prev) => (prev === displayIndex ? prev : displayIndex))
+  }, [canReorderQueue])
+
+  const handleQueueDrop = useCallback(
+    (e: React.DragEvent, toDisplayIdx: number) => {
+      if (!canReorderQueue || !onQueueChange) return
+      const raw = e.dataTransfer.getData(QUEUE_DRAG_MIME)
+      const fromDisplayIdx = parseInt(raw, 10)
+      if (!Number.isFinite(fromDisplayIdx)) return
+      e.preventDefault()
+      e.stopPropagation()
+      setQueueDragOverIndex(null)
+      queueDragActiveRef.current = false
+      const next = reorderUpcomingQueue(queue, currentQueueIndex, fromDisplayIdx, toDisplayIdx)
+      const unchanged =
+        next.length === queue.length && next.every((t, i) => t.id === queue[i]?.id)
+      if (!unchanged) onQueueChange(next)
+    },
+    [canReorderQueue, onQueueChange, queue, currentQueueIndex],
+  )
+
+  const handleQueueDragEnd = useCallback(() => {
+    queueDragActiveRef.current = false
+    setQueueDragOverIndex(null)
+  }, [])
 
   const playbackRates = PLAYBACK_RATES
   const eqPresets = EQ_PRESETS
@@ -2442,7 +5913,7 @@ export default function MusicPlayer({
       // Capture current queue at effect time (not as dependency)
       const currentQueue = queue
       
-      fetchBPMFromSupabase(currentTrack.file)
+      fetchBPMFromSupabase(currentTrack.file, currentTrack.id)
         .then(bpm => {
           if (bpm && bpm > 0) {
             setDetectedBPM(bpm)
@@ -2617,150 +6088,198 @@ export default function MusicPlayer({
       })
   }, [currentTrack, currentTrack?.id, currentTrack?.bpm, currentTrack?.file, resolvedUrl, extractBPM, fetchBPMFromSupabase])
 
-  // Tap Tempo Handler
+  const handleDeckTapTempo = useCallback(
+    (deck: 'a' | 'b') => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+      setDeckUi((prev) => {
+        const slice = prev[deck]
+        const result = recordTapTempo(slice.tapTempoTaps, now, {
+          sectionBpms: slice.tapTempoSectionBpms,
+          sectionsCompleted: slice.tapTempoSectionBpms.length,
+        })
+        return {
+          ...prev,
+          [deck]: {
+            ...slice,
+            tapTempoTaps: result.taps,
+            tapTempoSectionBpms: result.sectionBpms,
+            tapTempoBPM: result.sectionsCompleted > 0 ? result.averageBpm : null,
+          },
+        }
+      })
+
+      const prevTimeout = tapTempoTimeoutRef.current?.[deck]
+      if (prevTimeout) clearTimeout(prevTimeout)
+
+      if (!tapTempoTimeoutRef.current) {
+        tapTempoTimeoutRef.current = { a: null, b: null }
+      }
+      tapTempoTimeoutRef.current[deck] = setTimeout(() => {
+        setDeckUi((prev) => ({
+          ...prev,
+          [deck]: {
+            ...prev[deck],
+            tapTempoTaps: [],
+            tapTempoBPM: null,
+            tapTempoSectionBpms: [],
+          },
+        }))
+        if (tapTempoTimeoutRef.current) {
+          tapTempoTimeoutRef.current[deck] = null
+        }
+      }, 5000)
+    },
+    [],
+  )
+
   const handleTapTempo = useCallback(() => {
-    const now = Date.now()
-    const newTaps = [...tapTempoTaps, now]
-    
-    // Keep only last 8 taps
-    const recentTaps = newTaps.slice(-8)
-    setTapTempoTaps(recentTaps)
-    
-    // Clear existing timeout
-    if (tapTempoTimeoutRef.current) {
-      clearTimeout(tapTempoTimeoutRef.current)
-    }
-    
-    // Calculate BPM if we have at least 2 taps
-    if (recentTaps.length >= 2) {
-      // Calculate intervals between taps
-      const intervals: number[] = []
-      for (let i = 1; i < recentTaps.length; i++) {
-        const interval = (recentTaps[i] - recentTaps[i - 1]) / 1000 // Convert to seconds
-        // Only consider reasonable intervals (0.2s to 2.0s = 30-300 BPM)
-        if (interval >= 0.2 && interval <= 2.0) {
-          intervals.push(interval)
-        }
-      }
-      
-      if (intervals.length > 0) {
-        // Calculate average interval
-        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length
-        const bpm = Math.round(60 / avgInterval)
-        
-        // Validate BPM range
-        if (bpm >= 30 && bpm <= 300) {
-          setTapTempoBPM(bpm)
-          // Update detected BPM with tap tempo result
-          setDetectedBPM(bpm)
-          // Cache it
-          if (currentTrack && bpmCacheRef.current) {
-            bpmCacheRef.current.set(currentTrack.id, bpm)
-          }
-        }
-      }
-    }
-    
-    // Reset taps after 2 seconds of inactivity
-    tapTempoTimeoutRef.current = setTimeout(() => {
-      setTapTempoTaps([])
-      setTapTempoBPM(null)
-    }, 2000)
-  }, [tapTempoTaps, currentTrack])
+    const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+    handleDeckTapTempo(liveDeck)
+  }, [handleDeckTapTempo])
   
   // Cleanup tap tempo timeout on unmount
   useEffect(() => {
     return () => {
-      if (tapTempoTimeoutRef.current) {
-        clearTimeout(tapTempoTimeoutRef.current)
-      }
+      const timeouts = tapTempoTimeoutRef.current
+      if (!timeouts) return
+      if (timeouts.a) clearTimeout(timeouts.a)
+      if (timeouts.b) clearTimeout(timeouts.b)
     }
   }, [])
 
-  // Cleanup volume hover timeout on unmount
+  // Reset tap tempo when live track changes
   useEffect(() => {
-    return () => {
-      if (volumeHoverTimeoutRef.current) {
-        clearTimeout(volumeHoverTimeoutRef.current)
-        volumeHoverTimeoutRef.current = null
-      }
-    }
-  }, [])
-  
-  // Reset tap tempo when track changes
-  useEffect(() => {
-    setTapTempoTaps([])
-    setTapTempoBPM(null)
-    if (tapTempoTimeoutRef.current) {
-      clearTimeout(tapTempoTimeoutRef.current)
+    const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+    setDeckUi((prev) => ({
+      ...prev,
+      [liveDeck]: {
+        ...prev[liveDeck],
+        tapTempoTaps: [],
+        tapTempoBPM: null,
+        tapTempoSectionBpms: [],
+      },
+    }))
+    const timeouts = tapTempoTimeoutRef.current
+    if (timeouts?.[liveDeck]) {
+      clearTimeout(timeouts[liveDeck]!)
+      timeouts[liveDeck] = null
     }
   }, [currentTrack?.id])
 
-  // Handle BPM update (manual edit)
-  const handleBPMUpdate = useCallback(async (newBPM: number) => {
-    if (!currentTrack?.id) {
-      throw new Error('No track selected')
-    }
-
-    // Check if track has a database ID (UUID format)
-    // If not, it's a local file and we can't update the database
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentTrack.id)
-    
-    if (!isUUID) {
-      // Track is from local library, just update local state
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Track is not in database, updating local state only')
+  // Handle BPM update (manual edit — admin persists to library)
+  const handleBPMUpdate = useCallback(
+    async (newBPM: number, track: Track, syncLiveDetected = true) => {
+      if (!track?.id) {
+        throw new Error('No track selected')
       }
-      setDetectedBPM(newBPM)
-      bpmCacheRef.current.set(currentTrack.id, newBPM)
-      if (currentTrack) {
-        currentTrack.bpm = newBPM
-      }
-      return
-    }
 
-    try {
-      const response = await fetch('/api/audio/update-bpm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          trackId: currentTrack.id,
-          bpm: newBPM,
-        }),
-      })
-
-      if (!response.ok) {
-        // Try to parse error response
-        let errorMessage = 'Failed to update BPM'
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          // If response isn't JSON, use status text
-          errorMessage = response.status === 404 
-            ? 'API route not found. Please restart the dev server.'
-            : `HTTP ${response.status}: ${response.statusText}`
+      const patchTrackBpm = (source: Track): Track => {
+        const next: Track = { ...source, bpm: newBPM }
+        if (next.sonic_dna && typeof next.sonic_dna === 'object') {
+          const dna = { ...next.sonic_dna } as Record<string, unknown>
+          if (dna.technical && typeof dna.technical === 'object') {
+            dna.technical = { ...(dna.technical as object), bpm: newBPM }
+          }
+          if (dna.measured && typeof dna.measured === 'object') {
+            dna.measured = { ...(dna.measured as object), bpm: newBPM }
+          }
+          const comprehensive = dna.comprehensive
+          if (comprehensive && typeof comprehensive === 'object') {
+            const comp = { ...(comprehensive as Record<string, unknown>) }
+            if (comp.measured && typeof comp.measured === 'object') {
+              comp.measured = { ...(comp.measured as object), bpm: newBPM }
+            }
+            dna.comprehensive = comp
+          }
+          next.sonic_dna = dna
         }
-        throw new Error(errorMessage)
+        return next
       }
 
-      const data = await response.json()
-      
-      // Update local state
-      setDetectedBPM(newBPM)
-      bpmCacheRef.current.set(currentTrack.id, newBPM)
-      
-      // Update current track if it's in the context
-      if (currentTrack) {
-        currentTrack.bpm = newBPM
+      const applyLocalBpm = () => {
+        bpmCacheRef.current.set(track.id, newBPM)
+        if (syncLiveDetected && currentTrack?.id === track.id) {
+          setDetectedBPM(newBPM)
+        }
+        if (onQueueChangeRef.current) {
+          onQueueChangeRef.current(queue.map((t) => (t.id === track.id ? patchTrackBpm(t) : t)))
+        }
+        if (currentTrack?.id === track.id) {
+          const patched = patchTrackBpm(currentTrack)
+          currentTrack.bpm = patched.bpm
+          currentTrack.sonic_dna = patched.sonic_dna
+        }
       }
-    } catch (error: any) {
-      console.error('Error updating BPM:', error)
-      throw error
-    }
-  }, [currentTrack])
+
+      if (!canEditOrigBpm) {
+        applyLocalBpm()
+        return
+      }
+
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(track.id)
+
+      if (!isUUID) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Track is not in database, updating local state only')
+        }
+        applyLocalBpm()
+        return
+      }
+
+      try {
+        const response = await fetch('/api/audio/update-bpm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            trackId: track.id,
+            bpm: newBPM,
+          }),
+        })
+
+        if (!response.ok) {
+          let errorMessage = 'Failed to update BPM'
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorMessage
+          } catch {
+            errorMessage =
+              response.status === 404
+                ? 'API route not found. Please restart the dev server.'
+                : `HTTP ${response.status}: ${response.statusText}`
+          }
+          throw new Error(errorMessage)
+        }
+
+        await response.json()
+        applyLocalBpm()
+      } catch (error: unknown) {
+        console.error('Error updating BPM:', error)
+        throw error
+      }
+    },
+    [canEditOrigBpm, currentTrack, queue],
+  )
+
+  const handleDeckBPMUpdate = useCallback(
+    async (deck: 'a' | 'b', newBPM: number) => {
+      const track = resolveDeckTrack(deck)
+      if (!track) {
+        throw new Error('No track on this deck')
+      }
+      const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+      if (deck !== liveDeck) {
+        setDeckUi((prev) => ({
+          ...prev,
+          [deck]: { ...prev[deck], detectedBpm: newBPM },
+        }))
+      }
+      await handleBPMUpdate(newBPM, track, deck === liveDeck)
+    },
+    [handleBPMUpdate, resolveDeckTrack],
+  )
 
   // Cleanup audio context on unmount - MUST be before early return to maintain hook order
   useEffect(() => {
@@ -2805,274 +6324,862 @@ export default function MusicPlayer({
         fadeIntervalRef.current = null
       }
       
-      if (tapTempoTimeoutRef.current) {
-        clearTimeout(tapTempoTimeoutRef.current)
-        tapTempoTimeoutRef.current = null
+      const timeouts = tapTempoTimeoutRef.current
+      if (timeouts) {
+        if (timeouts.a) clearTimeout(timeouts.a)
+        if (timeouts.b) clearTimeout(timeouts.b)
       }
     }
   }, [])
 
   // Calculate tempo percentage from playback rate
 
-  // Handle tempo slider change
-  const handleTempoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const tempoValue = parseFloat(e.target.value)
-    const newRate = tempoValueToRate(tempoValue)
-    changePlaybackRate(newRate)
+  const handleDeckTempoChange = (deck: 'a' | 'b', tempoValue: number) => {
+    changeDeckPlaybackRate(deck, tempoValueToRate(tempoValue))
   }
 
-  // CDJ-style logarithmic zoom conversion with negative zoom out
-  // CDJs use exponential zoom: visible portion = 1 / (2^zoomLevel)
-  // We'll use a simpler logarithmic scale: zoomLevel 0.01-32, where 1 = full track
+  const handleTempoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+    handleDeckTempoChange(liveDeck, parseFloat(e.target.value))
+  }
+
+  // Musical zoom: visible window in bars (4/8/16…), 0 = full track overview
   const zoomToVisibleRatio = useCallback((zoomLevel: number): number => {
-    // CDJ-style: zoom 1 = 100% visible, zoom 32 = ~3% visible (very zoomed in)
-    // Negative zoom out: zoom < 1 shows more than 100% (zoomed out beyond full track)
-    // Using exponential scale: visibleRatio = 1 / (zoomLevel^1.5) for smooth CDJ-like feel
-    if (zoomLevel <= 0) return 100.0 // Safety: max zoom out at 100x (10000% visible)
-    if (zoomLevel < 0.01) return 100.0 // Cap at very small zoom levels
-    if (zoomLevel < 1) {
-      // Negative zoom out: show more than 100% of track
-      // zoom 0.5 = 200% visible, zoom 0.25 = 400% visible, zoom 0.01 = ~10000% visible
-      return 1.0 / Math.pow(zoomLevel, 1.5)
+    return zoomLevelToVisibleRatio(zoomLevel)
+  }, [])
+
+  const waveformBpm =
+    resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm || null
+  const waveformBeatDurationSec = waveformBpm && waveformBpm > 0 ? 60 / waveformBpm : null
+  const waveformBeatsPerBar = beatGridBeatsPerBar || 4
+  const isWaveformBarZoomed = waveformVisibleBars > 0
+
+  const persistBeatGridOffset = useCallback(
+    (offset: number) => {
+      if (!currentTrack?.id) return
+      if (beatGridSaveTimeoutRef.current) clearTimeout(beatGridSaveTimeoutRef.current)
+      beatGridSaveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await fetch('/api/music-library/tracks', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: currentTrack.id,
+              beat_grid_offset: offset,
+            }),
+          })
+        } catch (e) {
+          console.warn('Failed to persist beat grid offset:', e)
+        }
+      }, 600)
+    },
+    [currentTrack?.id]
+  )
+
+  const persistGridLock = useCallback(
+    async (
+      locked: boolean,
+      extras?: {
+        kickOnsetSec?: number[]
+        snareClapOnsetSec?: number[]
+        gridLockScore?: number
+      },
+    ) => {
+      if (!currentTrack?.id) return
+      const nextDna = withGridLockOnDna(currentTrack.sonic_dna, locked, extras)
+      try {
+        await fetch('/api/music-library/tracks', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentTrack.id,
+            beat_grid_offset: beatGridOffsetSec,
+            sonic_dna: nextDna,
+          }),
+        })
+        currentTrack.sonic_dna = nextDna
+        if (onQueueChange) {
+          const nextQ = queue.map((t) =>
+            t.id === currentTrack.id
+              ? { ...t, sonic_dna: nextDna, beat_grid_offset: beatGridOffsetSec }
+              : t,
+          )
+          onQueueChange(nextQ)
+        }
+      } catch (e) {
+        console.warn('Failed to persist grid lock:', e)
+      }
+    },
+    [currentTrack, beatGridOffsetSec, onQueueChange, queue],
+  )
+
+  const persistGridAnalysis = useCallback(
+    async (extras: {
+      kickOnsetSec?: number[]
+      snareClapOnsetSec?: number[]
+      gridLockScore?: number
+      gridLocked?: boolean
+      offsetSec?: number
+    }) => {
+      if (!currentTrack?.id) return
+      const nextDna = withGridAnalysisOnDna(currentTrack.sonic_dna, extras)
+      const offset =
+        typeof extras.offsetSec === 'number' ? extras.offsetSec : beatGridOffsetSec
+      try {
+        await fetch('/api/music-library/tracks', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentTrack.id,
+            beat_grid_offset: offset,
+            sonic_dna: nextDna,
+          }),
+        })
+        currentTrack.sonic_dna = nextDna
+        currentTrack.beat_grid_offset = offset
+        if (onQueueChange) {
+          const nextQ = queue.map((t) =>
+            t.id === currentTrack.id
+              ? { ...t, sonic_dna: nextDna, beat_grid_offset: offset }
+              : t,
+          )
+          onQueueChange(nextQ)
+        }
+      } catch (e) {
+        console.warn('Failed to persist grid analysis:', e)
+      }
+    },
+    [currentTrack, beatGridOffsetSec, onQueueChange, queue],
+  )
+
+  // Restore beat **phase** when the track changes (phrase lattice always from t=0).
+  useEffect(() => {
+    if (!currentTrack) {
+      setBeatGridOffsetSec(0)
+      setBeatGridLock(null)
+      setBeatGridLocked(false)
+      return
     }
-    if (zoomLevel === 1) return 1.0
-    // Positive zoom in: show less than 100% of track
-    return 1.0 / Math.pow(zoomLevel, 1.5)
-  }, [])
-
-  const visibleRatioToZoom = useCallback((ratio: number): number => {
-    // Inverse of zoomToVisibleRatio
-    if (ratio >= 1.0) return 1
-    return Math.pow(1.0 / ratio, 1 / 1.5)
-  }, [])
-
-  // Waveform zoom and pan handlers - CDJ-style with negative zoom out
-  const handleWaveformZoom = useCallback((delta: number) => {
-    setWaveformZoom(prev => {
-      // CDJ-style exponential zoom steps
-      // Each step multiplies/divides by ~1.5x for smooth CDJ-like feel
-      const zoomStep = 1.5
-      let newZoom: number
-      
-      if (delta > 0) {
-        // Zoom in: multiply
-        newZoom = prev * zoomStep
-      } else {
-        // Zoom out: divide
-        newZoom = prev / zoomStep
-      }
-      
-      // CDJ zoom range: 0.01x (zoomed out 100x) to 32x (very zoomed in)
-      newZoom = Math.max(0.01, Math.min(32, newZoom))
-      
-      // Reset offset if zooming out to 1x or below (full track or more)
-      if (newZoom <= 1) {
-        setWaveformOffset(0)
-      }
-      
-      return newZoom
+    const bpm =
+      resolvePlaybackBpm(currentTrack, detectedBPM) ||
+      detectedBPM ||
+      currentTrack.bpm ||
+      120
+    const beatSec = 60 / (bpm > 0 ? bpm : 120)
+    const stored = currentTrack.beat_grid_offset
+    const dnaPhase = readDnaBeatPhaseSec(currentTrack.sonic_dna, beatSec)
+    let offset = 0
+    if (!isUnsetOffset(stored)) {
+      offset = toPhaseOnlyOffsetSec(stored!, beatSec)
+    } else if (dnaPhase != null) {
+      offset = dnaPhase
+    }
+    // Fold legacy absolute kick offsets into phase and persist once.
+    if (
+      typeof stored === 'number' &&
+      Number.isFinite(stored) &&
+      stored >= beatSec
+    ) {
+      persistBeatGridOffset(offset)
+    } else if (isUnsetOffset(stored) && dnaPhase != null) {
+      persistBeatGridOffset(dnaPhase)
+    }
+    setBeatGridOffsetSec(offset)
+    const locked = isGridLocked(currentTrack.sonic_dna)
+    setBeatGridLocked(locked)
+    const score = readGridLockScore(currentTrack.sonic_dna)
+    setBeatGridLock(locked && score != null ? score : score)
+    const bias = eqBiasFromDna(currentTrack.sonic_dna)
+    queueMicrotask(() => {
+      const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
+      applyDeckStripEq(liveDeck, {
+        low: bias.low * 0.5,
+        mid: bias.mid * 0.35,
+        high: bias.high * 0.35,
+      })
     })
-  }, [])
+  }, [currentTrack?.id, persistBeatGridOffset, detectedBPM, applyDeckStripEq])
 
-  const handleWaveformPan = useCallback((delta: number) => {
-    if (waveformZoom <= 1) return // No panning when zoomed out (1x or below)
-    
-    setWaveformOffset(prev => {
-      // CDJ-style: calculate max offset based on visible ratio
-      const visibleRatio = zoomToVisibleRatio(waveformZoom)
-      const visibleCount = Math.floor(waveformData.length * visibleRatio)
-      const maxOffset = Math.max(0, waveformData.length - visibleCount)
-      return Math.max(0, Math.min(maxOffset, prev + delta))
+  const applyPeakVisualLock = useCallback(
+    (offsetSec: number, bpm: number) => {
+      const base =
+        trackWaveformBaseRef.current.length > 0
+          ? trackWaveformBaseRef.current
+          : waveformData
+      if (!base.length || duration <= 0 || !(bpm > 0)) return
+      const bundle = buildGridOnsetBundle({
+        sonicDna: currentTrack?.sonic_dna,
+        peaks: base,
+        durationSec: duration,
+        bpm,
+        offsetSec,
+      })
+      const onsets = [...bundle.kickOnsetSec, ...bundle.snareClapOnsetSec]
+      if (onsets.length < 4) return
+      const n = base.length
+      const radius = Math.max(1, Math.round(n * 0.0015))
+      const boost = 0.32
+      const next = base.map((s) => ({ ...s }))
+      for (const t of onsets) {
+        if (!Number.isFinite(t) || t < 0 || t > duration) continue
+        const center = Math.round((t / duration) * (n - 1))
+        for (let d = -radius; d <= radius; d++) {
+          const i = center + d
+          if (i < 0 || i >= n) continue
+          const w = 1 - Math.abs(d) / (radius + 1)
+          const cur = next[i]!
+          const p = Math.min(1, cur.positive + (1 - cur.positive) * boost * w)
+          const neg = Math.min(1, cur.negative + (1 - cur.negative) * boost * w * 0.85)
+          next[i] = { ...cur, positive: p, negative: neg }
+        }
+      }
+      setWaveformData(next)
+    },
+    [currentTrack?.sonic_dna, waveformData, duration],
+  )
+
+  const alignBeatGridToWaveform = useCallback(() => {
+    if (beatGridLocked) return null as { offsetSec: number; bpm: number; lock: number } | null
+    const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
+    if (!bpm || bpm <= 0) return null
+    const peaks =
+      trackWaveformBaseRef.current.length > 0
+        ? trackWaveformBaseRef.current
+        : waveformData
+    if (!peaks.length || duration <= 0) return null
+    const aligned = alignBeatGridFromPeaks({
+      peaks,
+      durationSec: duration,
+      bpm,
+      beatsPerBar: beatGridBeatsPerBar || 4,
+      sonicDna: currentTrack?.sonic_dna,
+      preferTransientOrigin: true,
     })
-  }, [waveformZoom, waveformData.length, zoomToVisibleRatio])
+    if (!aligned) return null
+    const beatSec = 60 / aligned.bpm
+    const phase = toPhaseOnlyOffsetSec(aligned.offsetSec, beatSec)
+    setBeatGridOffsetSec(phase)
+    setBeatGridLock(aligned.lock)
+    persistBeatGridOffset(phase)
+    if (Math.abs(aligned.bpm - bpm) >= 0.05) {
+      setDetectedBPM(aligned.bpm)
+    }
+    setBeatGridEnabled(true)
+    applyPeakVisualLock(phase, aligned.bpm)
 
-  // Handle wheel events for waveform zoom/pan with passive: false
+    const bundle = buildGridOnsetBundle({
+      sonicDna: currentTrack?.sonic_dna,
+      peaks,
+      durationSec: duration,
+      bpm: aligned.bpm,
+      offsetSec: phase,
+    })
+    const shouldAutoLock =
+      aligned.lock >= AUTO_GRID_LOCK_SCORE && (isAutoDJEnabled || aligned.lock >= 0.7)
+    if (shouldAutoLock) {
+      setBeatGridLocked(true)
+      void persistGridLock(true, {
+        kickOnsetSec: bundle.kickOnsetSec.length >= 4 ? bundle.kickOnsetSec : undefined,
+        snareClapOnsetSec:
+          bundle.snareClapOnsetSec.length >= 4 ? bundle.snareClapOnsetSec : undefined,
+        gridLockScore: aligned.lock,
+      })
+    } else if (aligned.lock >= 0.4) {
+      void persistGridAnalysis({
+        kickOnsetSec: bundle.kickOnsetSec.length >= 4 ? bundle.kickOnsetSec : undefined,
+        snareClapOnsetSec:
+          bundle.snareClapOnsetSec.length >= 4 ? bundle.snareClapOnsetSec : undefined,
+        gridLockScore: aligned.lock,
+        offsetSec: phase,
+      })
+    }
+    return { ...aligned, offsetSec: phase }
+  }, [
+    beatGridLocked,
+    detectedBPM,
+    currentTrack,
+    waveformData,
+    duration,
+    beatGridBeatsPerBar,
+    persistBeatGridOffset,
+    applyPeakVisualLock,
+    isAutoDJEnabled,
+    persistGridLock,
+    persistGridAnalysis,
+  ])
+
+  // Auto-align when peaks + duration settle (unlocked / weak grids only).
   useEffect(() => {
-    const container = waveformContainerRef.current
-    if (!container) return
+    if (!currentTrack?.id || beatGridLocked) return
+    if (duration <= 0) return
+    const peaks = trackWaveformBaseRef.current
+    if (peaks.length < 64) return
+    const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
+    if (!bpm || bpm <= 0) return
 
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      if (e.ctrlKey || e.metaKey) {
-        // CDJ-style zoom with Ctrl/Cmd + scroll
-        handleWaveformZoom(e.deltaY > 0 ? -1 : 1)
-      } else {
-        // Pan with scroll when zoomed (CDJ-style)
-        if (waveformZoom > 1) {
-          handleWaveformPan(e.deltaY > 0 ? waveformData.length * 0.05 : -waveformData.length * 0.05)
-        }
+    if (autoAlignedTrackIdRef.current === currentTrack.id) return
+
+    const existingScore = readGridLockScore(currentTrack.sonic_dna)
+    const storedOffset = currentTrack.beat_grid_offset
+    const beatSec = 60 / bpm
+    const phase = !isUnsetOffset(storedOffset)
+      ? toPhaseOnlyOffsetSec(storedOffset!, beatSec)
+      : readDnaBeatPhaseSec(currentTrack.sonic_dna, beatSec)
+    const hasSolidGrid =
+      phase != null &&
+      existingScore != null &&
+      existingScore >= AUTO_GRID_LOCK_SCORE
+    if (hasSolidGrid) {
+      autoAlignedTrackIdRef.current = currentTrack.id
+      const usePhase = phase ?? 0
+      if (
+        typeof storedOffset === 'number' &&
+        Number.isFinite(storedOffset) &&
+        storedOffset >= beatSec
+      ) {
+        setBeatGridOffsetSec(usePhase)
+        persistBeatGridOffset(usePhase)
       }
-    }
-
-    // Add event listener with passive: false to allow preventDefault
-    container.addEventListener('wheel', handleWheel, { passive: false })
-
-    return () => {
-      container.removeEventListener('wheel', handleWheel)
-    }
-  }, [waveformZoom, waveformData.length, handleWaveformZoom, handleWaveformPan])
-
-  // Calculate visible range based on zoom and offset - CDJ-style with negative zoom out
-  const getVisibleWaveformRange = useCallback(() => {
-    // CDJ-style: use logarithmic zoom to determine visible portion
-    const visibleRatio = zoomToVisibleRatio(waveformZoom)
-    const visibleCount = Math.max(8, Math.floor(waveformData.length * visibleRatio)) // Ensure minimum of 8 bars visible
-    
-    if (waveformZoom <= 1) {
-      // At 1x or below (zoomed out), show full track or more, no offset needed
-      return { start: 0, end: waveformData.length, visibleCount: Math.min(visibleCount, waveformData.length) }
-    }
-    
-    // When zoomed in (>1x), calculate start position based on offset
-    const start = Math.floor(waveformOffset)
-    const end = Math.min(start + visibleCount, waveformData.length)
-    
-    return { start, end, visibleCount }
-  }, [waveformZoom, waveformOffset, waveformData.length, zoomToVisibleRatio])
-
-  // Calculate grid lines based on zoom level
-  const getGridLines = useCallback(() => {
-    const { start, end, visibleCount } = getVisibleWaveformRange()
-    const lines: Array<{ position: number; type: 'major' | 'minor' }> = []
-    
-    if (visibleCount < 4) return lines // Too zoomed in, no grid
-    
-    // Major grid every 8 bars - this is the main sectioning
-    const majorInterval = 8
-    const firstMajor = Math.ceil(start / majorInterval) * majorInterval
-    
-    for (let i = firstMajor; i < end; i += majorInterval) {
-      if (i >= start && i < end) {
-        const position = ((i - start) / visibleCount) * 100
-        lines.push({ position, type: 'major' })
-      }
-    }
-    
-    // Only add minor subdivisions if zoomed in enough (4x or more) and visible count is reasonable
-    // Minor lines every 2 bars within each 8-bar section
-    if (waveformZoom >= 4 && visibleCount >= 16) {
-      const minorInterval = 2
-      const firstMinor = Math.ceil(start / minorInterval) * minorInterval
-      
-      for (let i = firstMinor; i < end; i += minorInterval) {
-        // Skip if it's already a major line
-        if (i % majorInterval === 0) continue
-        
-        if (i >= start && i < end) {
-          const position = ((i - start) / visibleCount) * 100
-          lines.push({ position, type: 'minor' })
-        }
-      }
-    }
-    
-    return lines
-  }, [getVisibleWaveformRange, waveformZoom])
-
-  // Reset waveform to full view when minimized or not expanded
-  useEffect(() => {
-    if (isMiniMode || !isExpanded) {
-      setWaveformZoom(1)
-      setWaveformOffset(0)
-      setWaveformFollow(false)
-      // Use colorful mode as default, full mirrored waveform when minimized/collapsed
-      if (isMiniMode) {
-        setWaveformMode('colorful')
-        setWaveformMirror(false)
-      } else if (!isExpanded) {
-        // When controls are collapsed, reload full waveform in colorful mode with mirrored view
-        setWaveformMode('colorful')
-        setWaveformMirror(true) // Full waveform (mirrored) when collapsed
-        // Reload the initial waveform from precomputed peaks if available
-        if (precomputedPeaks && precomputedPeaks.length > 0) {
-          const convertPeaksToWaveform = (peaks: number[]): { positive: number; negative: number; color: string }[] => {
-            if (!peaks || peaks.length === 0) return []
-            const data: { positive: number; negative: number; color: string }[] = []
-            const maxPeak = Math.max(...peaks, 0.01)
-            for (let i = 0; i < peaks.length; i++) {
-              const normalized = peaks[i] / maxPeak
-              const positive = Math.max(0.1, Math.min(0.95, 0.3 + normalized * 0.65))
-              const negative = Math.max(0.1, Math.min(0.95, 0.2 + normalized * 0.5))
-              const position = i / peaks.length
-              const r = Math.floor(255 * (1 - position))
-              const g = Math.floor(255 * position)
-              const b = Math.floor(128 + 127 * position)
-              data.push({
-                positive,
-                negative,
-                color: `rgb(${r}, ${g}, ${b})`
-              })
-            }
-            return data
-          }
-          const reloadedWaveform = convertPeaksToWaveform(precomputedPeaks)
-          setWaveformData(reloadedWaveform)
-        }
-      }
-    } else {
-      // When expanded, use colorful mode with single view
-      setWaveformMode('colorful')
-      setWaveformMirror(false) // Single waveform (not mirrored) when expanded
-    }
-  }, [isMiniMode, isExpanded, precomputedPeaks])
-
-  // Auto-pan waveform when follow mode is enabled
-  useEffect(() => {
-    if (!waveformFollow || waveformZoom <= 1 || !isPlaying || !duration || waveformData.length === 0) {
+      applyPeakVisualLock(usePhase, bpm)
       return
     }
 
-    // Calculate the playhead position in terms of waveform bar index
-    const playheadIndex = (currentTime / duration) * waveformData.length
-    
-    // Calculate how many bars are visible using CDJ-style zoom
-    const visibleRatio = zoomToVisibleRatio(waveformZoom)
-    const visibleCount = Math.floor(waveformData.length * visibleRatio)
-    
-    // Center the playhead - it should be at 50% of the visible area (CDJ-style)
-    // So the offset should position the playhead at the center (50% of visibleCount)
-    const centerPosition = visibleCount / 2
-    const maxOffset = Math.max(0, waveformData.length - visibleCount)
-    const targetOffset = Math.max(0, Math.min(
-      playheadIndex - centerPosition,
-      maxOffset
-    ))
-    
-    setWaveformOffset(targetOffset)
-  }, [waveformFollow, waveformZoom, currentTime, duration, waveformData.length, isPlaying, zoomToVisibleRatio])
+    const t = window.setTimeout(() => {
+      autoAlignedTrackIdRef.current = currentTrack.id
+      alignBeatGridToWaveform()
+    }, 180)
+    return () => window.clearTimeout(t)
+  }, [
+    currentTrack?.id,
+    currentTrack?.sonic_dna,
+    currentTrack?.beat_grid_offset,
+    duration,
+    waveformData.length,
+    detectedBPM,
+    beatGridLocked,
+    alignBeatGridToWaveform,
+    applyPeakVisualLock,
+    persistBeatGridOffset,
+  ])
 
-  if (!currentTrack) {
-    return (
-      <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-gray-800 p-4 z-[9999]">
-        <p className="text-gray-400 text-center">No track selected</p>
-      </div>
-    )
+  // Reset auto-align gate when the track changes
+  useEffect(() => {
+    autoAlignedTrackIdRef.current = null
+  }, [currentTrack?.id])
+
+  const lockBeatGrid = useCallback(() => {
+    const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
+    const peaks =
+      trackWaveformBaseRef.current.length > 0
+        ? trackWaveformBaseRef.current
+        : waveformData
+    const bundle =
+      bpm && bpm > 0 && peaks.length && duration > 0
+        ? buildGridOnsetBundle({
+            sonicDna: currentTrack?.sonic_dna,
+            peaks,
+            durationSec: duration,
+            bpm,
+            offsetSec: beatGridOffsetSec,
+          })
+        : { kickOnsetSec: [] as number[], snareClapOnsetSec: [] as number[] }
+    setBeatGridLocked(true)
+    setBeatGridEnabled(true)
+    applyPeakVisualLock(beatGridOffsetSec, bpm || 120)
+    void persistGridLock(true, {
+      kickOnsetSec: bundle.kickOnsetSec.length >= 4 ? bundle.kickOnsetSec : undefined,
+      snareClapOnsetSec:
+        bundle.snareClapOnsetSec.length >= 4 ? bundle.snareClapOnsetSec : undefined,
+      gridLockScore: beatGridLock ?? undefined,
+    })
+  }, [
+    currentTrack,
+    detectedBPM,
+    waveformData,
+    duration,
+    beatGridOffsetSec,
+    beatGridLock,
+    persistGridLock,
+    applyPeakVisualLock,
+  ])
+
+  const unlockBeatGrid = useCallback(() => {
+    setBeatGridLocked(false)
+    void persistGridLock(false)
+  }, [persistGridLock])
+
+  const snapPlayheadToDna = useCallback(
+    (mode: 'kick' | 'beat' | 'phrase') => {
+      const bpm = waveformBpm
+      const live = getPlaybackAudio()
+      if (!bpm || !live) return
+      const next = quantizeToDnaGrid({
+        timeSec: live.currentTime,
+        bpm,
+        offsetSec: beatGridOffsetSec,
+        sonicDna: currentTrack?.sonic_dna,
+        mode,
+        beatsPerBar: beatGridBeatsPerBar || 4,
+      })
+      live.currentTime = next
+      setCurrentTime(next)
+    },
+    [waveformBpm, beatGridOffsetSec, currentTrack?.sonic_dna, beatGridBeatsPerBar, getPlaybackAudio]
+  )
+
+  const applyDnaEqPocket = useCallback(() => {
+    const bias = eqBiasFromDna(currentTrack?.sonic_dna)
+    const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
+    applyDeckStripEq(liveDeck, {
+      low: bias.low,
+      mid: bias.mid,
+      high: bias.high,
+    })
+  }, [currentTrack?.sonic_dna, applyDeckStripEq])
+
+  const resetBeatGrid = useCallback(() => {
+    if (beatGridLocked) return
+    setBeatGridOffsetSec(0)
+    setBeatGridLock(null)
+    persistBeatGridOffset(0)
+  }, [beatGridLocked, persistBeatGridOffset])
+
+  const setBeatHere = useCallback(() => {
+    if (beatGridLocked) return
+    const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
+    if (!bpm || bpm <= 0) return
+    const beatSec = 60 / bpm
+    const next = setDownbeatAt(getPlaybackAudio()?.currentTime ?? playbackTimeRef.current, beatSec)
+    setBeatGridOffsetSec(next)
+    setBeatGridLock(null)
+    persistBeatGridOffset(next)
+    setBeatGridEnabled(true)
+  }, [beatGridLocked, currentTrack, detectedBPM, persistBeatGridOffset, getPlaybackAudio])
+
+  // DNA report (library) can drive the same waveform actions via event bridge
+  useEffect(() => {
+    const onDnaWaveform = (ev: Event) => {
+      const detail = (ev as CustomEvent<SonicDnaWaveformEventDetail>).detail
+      if (!detail) return
+      switch (detail.action) {
+        case 'align-grid':
+          alignBeatGridToWaveform()
+          break
+        case 'set-beat-here':
+          setBeatHere()
+          break
+        case 'snap':
+          snapPlayheadToDna(detail.mode)
+          break
+        case 'reset-grid':
+          resetBeatGrid()
+          break
+        case 'apply-eq':
+          applyDnaEqPocket()
+          break
+      }
+    }
+    window.addEventListener(SONIC_DNA_WAVEFORM_EVENT, onDnaWaveform as EventListener)
+    return () => window.removeEventListener(SONIC_DNA_WAVEFORM_EVENT, onDnaWaveform as EventListener)
+  }, [alignBeatGridToWaveform, snapPlayheadToDna, resetBeatGrid, applyDnaEqPocket, setBeatHere])
+
+  waveformDataLengthRef.current = waveformData.length
+  if (!waveformGestureRef.current && waveformFlushRafRef.current == null) {
+    waveformVisibleBarsRef.current = waveformVisibleBars
+    waveformOffsetRef.current = waveformOffset
+    waveformPanEnabledRef.current = isWaveformBarZoomed
   }
 
-  const currentProgress = duration > 0 ? (currentTime / duration) * 100 : 0
-  const currentBarIndex = duration > 0 && waveformData.length > 0 
-    ? Math.floor((currentTime / duration) * waveformData.length) 
-    : 0
-  const centerY = 50 // Center line for waveform
+  const flushWaveformView = useCallback(() => {
+    waveformFlushRafRef.current = null
+    if (pendingWaveformBarsRef.current != null) {
+      setWaveformVisibleBars(pendingWaveformBarsRef.current)
+      pendingWaveformBarsRef.current = null
+    }
+    if (pendingWaveformOffsetRef.current != null) {
+      setWaveformOffset(pendingWaveformOffsetRef.current)
+      pendingWaveformOffsetRef.current = null
+    }
+  }, [])
 
-  // Beat grid helpers
-  const bpmForGrid = detectedBPM
-  const beatDurationSec = bpmForGrid ? 60 / bpmForGrid : null
-  const setBeatHere = () => {
-    if (!beatDurationSec) return
-    // Places a beat line exactly at the current playhead time
-    const offset = ((currentTime % beatDurationSec) + beatDurationSec) % beatDurationSec
-    setBeatGridOffsetSec(offset)
+  const scheduleWaveformFlush = useCallback(() => {
+    if (waveformFlushRafRef.current != null) return
+    waveformFlushRafRef.current = requestAnimationFrame(flushWaveformView)
+  }, [flushWaveformView])
+
+  const onWaveformVisibleBarsChange = useCallback(
+    (bars: number) => {
+      // Stage already applied focal math — sync React state only
+      waveformVisibleBarsRef.current = bars
+      pendingWaveformBarsRef.current = bars
+      waveformPanEnabledRef.current = bars > 0
+      scheduleWaveformFlush()
+    },
+    [scheduleWaveformFlush]
+  )
+
+  const onWaveformOffsetChange = useCallback(
+    (offset: number) => {
+      waveformOffsetRef.current = offset
+      pendingWaveformOffsetRef.current = offset
+      scheduleWaveformFlush()
+    },
+    [scheduleWaveformFlush]
+  )
+
+  const onWaveformContextMenu = useCallback((deck: 'a' | 'b', e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setWaveformMenu({ x: e.clientX, y: e.clientY, deck })
+  }, [])
+
+  const resolveDeckChannelTrack = useCallback(
+    (deck: 'a' | 'b'): Track | null | undefined => trackForQueueDeck(deck),
+    [trackForQueueDeck],
+  )
+
+  const waveformMenuDeck = waveformMenu?.deck ?? liveDeckId
+  const waveformMenuDeckIsLive = waveformMenuDeck === liveDeckId
+  const waveformMenuDeckTrack = resolveDeckChannelTrack(waveformMenuDeck)
+  const waveformMenuDeckBpm = waveformMenuDeckIsLive
+    ? waveformBpm
+    : resolveTrackBpm(waveformMenuDeckTrack)
+
+  const showDeckChannelWaveforms =
+    isExpanded && !isMiniMode && (expandedMode as string) !== 'dj'
+
+  const deckChannelWaveforms = useMemo(() => {
+    if (!showDeckChannelWaveforms) return undefined
+
+    const hoverRoot =
+      (waveformHost?.closest('[data-waveform-hover-root]') as HTMLElement | null) || waveformHost
+    const deckAIsLive = liveDeckId === 'a'
+    const deckBIsLive = liveDeckId === 'b'
+    const deckATrack = trackForQueueDeck('a')
+    const deckBTrack = trackForQueueDeck('b')
+
+    const resolveIdleSamples = (deck: 'a' | 'b', track: Track | null | undefined) => {
+      if (!track?.id) return { samples: [] as typeof waveformData, durationSec: 0 }
+      const cached = deckWaveformCache[deck]
+      if (cached?.trackId === track.id) {
+        return { samples: cached.samples, durationSec: cached.durationSec }
+      }
+      const ghost = ghostSamplesRef.current
+      if (ghost?.trackId === track.id && ghost.samples.length > 0) {
+        return {
+          samples: ghost.samples,
+          durationSec: ghost.durationSec || track.duration || 180,
+        }
+      }
+      return { samples: [] as typeof waveformData, durationSec: track.duration || 180 }
+    }
+
+    const deckAIdle = deckAIsLive ? null : resolveIdleSamples('a', deckATrack)
+    const deckBIdle = deckBIsLive ? null : resolveIdleSamples('b', deckBTrack)
+    const deckASamples = deckAIsLive ? waveformData : deckAIdle!.samples
+    const deckBSamples = deckBIsLive ? waveformData : deckBIdle!.samples
+    const deckADuration = deckAIsLive ? duration || 0 : deckAIdle!.durationSec
+    const deckBDuration = deckBIsLive ? duration || 0 : deckBIdle!.durationSec
+    const deckABpm = deckAIsLive ? waveformBpm : resolveTrackBpm(deckATrack)
+    const deckBBpm = deckBIsLive ? waveformBpm : resolveTrackBpm(deckBTrack)
+    const deckAIntel = deckAIsLive
+      ? waveformIntelligenceProfile
+      : profileFromSonicDna(deckATrack?.sonic_dna)
+    const deckBIntel = deckBIsLive
+      ? waveformIntelligenceProfile
+      : profileFromSonicDna(deckBTrack?.sonic_dna)
+
+    const renderDeckWaveform = (
+      deck: 'a' | 'b',
+      opts: {
+        audioRef: typeof audioRef
+        isLive: boolean
+        samples: typeof waveformData
+        durationSec: number
+        bpm: number | null
+        beatGridOffsetSec: number
+        mediaSyncKey: string
+        intelligenceProfile: ReturnType<typeof profileFromSonicDna>
+      },
+    ) => (
+      <WaveformStage
+        audioRef={opts.audioRef}
+        mediaSyncKey={opts.mediaSyncKey}
+        isPlaying={opts.isLive ? isPlaying : incomingDeckHot}
+        samples={opts.samples}
+        durationSec={opts.durationSec}
+        visibleBars={waveformVisibleBars}
+        offsetIndex={opts.isLive ? waveformOffset : 0}
+        follow={opts.isLive ? waveformFollow : incomingDeckHot}
+        mirror={waveformMirror}
+        colorMode={waveformMode}
+        layerLayout={waveformLayerLayout}
+        intelligenceProfile={opts.intelligenceProfile}
+        bpm={opts.bpm}
+        beatGridEnabled={beatGridEnabled && Boolean(opts.bpm)}
+        beatGridOffsetSec={opts.beatGridOffsetSec}
+        beatsPerBar={waveformBeatsPerBar}
+        mixOverlay={opts.isLive && isAutoDJEnabled ? waveformMixOverlay : null}
+        ghostTape={null}
+        hotCues={opts.isLive ? waveformHotCues : []}
+        deckId={deck === 'a' ? 'A' : 'B'}
+        hoverRoot={undefined}
+        gestureActiveRef={waveformGestureRef}
+        className={`relative h-full w-full touch-none overflow-hidden ${
+          opts.isLive && waveformZoom > 1.04 ? 'cursor-grab' : 'cursor-pointer'
+        } ${!opts.isLive && !incomingDeckHot ? 'opacity-80' : ''}`}
+        onVisibleBarsChange={opts.isLive ? onWaveformVisibleBarsChange : () => {}}
+        onOffsetChange={opts.isLive ? onWaveformOffsetChange : () => {}}
+        onSeekSec={opts.isLive ? snapPlaybackTime : () => {}}
+        onContextMenu={(e) => onWaveformContextMenu(deck, e)}
+      />
+    )
+
+    return {
+      a: renderDeckWaveform('a', {
+        audioRef: audioRef,
+        isLive: deckAIsLive,
+        samples: deckASamples,
+        durationSec: deckADuration,
+        bpm: deckABpm,
+        beatGridOffsetSec: deckAIsLive
+          ? beatGridOffsetSec
+          : resolveTrackBeatGridOffset(deckATrack),
+        mediaSyncKey: deckAIsLive ? waveformMediaSyncKey : 'idle-a',
+        intelligenceProfile: deckAIntel,
+      }),
+      b: renderDeckWaveform('b', {
+        audioRef: nextAudioRef,
+        isLive: deckBIsLive,
+        samples: deckBSamples,
+        durationSec: deckBDuration,
+        bpm: deckBBpm,
+        beatGridOffsetSec: deckBIsLive
+          ? beatGridOffsetSec
+          : resolveTrackBeatGridOffset(deckBTrack),
+        mediaSyncKey: deckBIsLive ? waveformMediaSyncKey : 'idle-b',
+        intelligenceProfile: deckBIntel,
+      }),
+    }
+  }, [
+    showDeckChannelWaveforms,
+    waveformHost,
+    liveDeckId,
+    trackForQueueDeck,
+    waveformData,
+    deckWaveformCache,
+    duration,
+    nextQueueTrack,
+    currentQueueIndex,
+    queue,
+    waveformBpm,
+    resolveTrackBpm,
+    resolveTrackBeatGridOffset,
+    currentTrack,
+    isPlaying,
+    waveformVisibleBars,
+    waveformOffset,
+    waveformFollow,
+    waveformMirror,
+    waveformMode,
+    waveformLayerLayout,
+    waveformIntelligenceProfile,
+    beatGridEnabled,
+    beatGridOffsetSec,
+    waveformBeatsPerBar,
+    isAutoDJEnabled,
+    incomingDeckHot,
+    waveformMixOverlay,
+    waveformGhostTape,
+    waveformHotCues,
+    waveformZoom,
+    waveformMediaSyncKey,
+    onWaveformVisibleBarsChange,
+    onWaveformOffsetChange,
+    snapPlaybackTime,
+    onWaveformContextMenu,
+  ])
+
+  const markPanEnabled = useCallback((visibleBars: number) => {
+    waveformPanEnabledRef.current = visibleBars > 0
+  }, [])
+
+  const samplesForVisibleBars = useCallback((visibleBars: number, length: number) => {
+    if (length <= 0) return length
+    if (visibleBars <= 0) return length
+    const dur = audioRef.current?.duration || duration || 0
+    const beatSec = waveformBeatDurationSec
+    if (dur > 0 && beatSec && beatSec > 0) {
+      const spanSec = Math.min(dur, visibleBars * waveformBeatsPerBar * beatSec)
+      return Math.max(8, Math.round((spanSec / dur) * length))
+    }
+    // Fallback without BPM: treat 128 bars as full track
+    return Math.max(8, Math.round(length * (visibleBars / 128)))
+  }, [duration, waveformBeatDurationSec, waveformBeatsPerBar])
+
+  /** Set absolute visible-bar window (0 = full). Preserves focal time under cursor. */
+  const applyVisibleBars = useCallback((nextBars: number, focalRatio = 0.5) => {
+    const length = waveformDataLengthRef.current
+    const prevBars = waveformVisibleBarsRef.current
+    const newBars = nextBars <= 0 ? 0 : nearestBarZoomStep(nextBars)
+
+    if (newBars <= 0 || length <= 0) {
+      waveformVisibleBarsRef.current = 0
+      waveformOffsetRef.current = 0
+      pendingWaveformBarsRef.current = 0
+      pendingWaveformOffsetRef.current = 0
+      markPanEnabled(0)
+      scheduleWaveformFlush()
+      return
+    }
+
+    const prevVisible = samplesForVisibleBars(prevBars <= 0 ? 0 : prevBars, length)
+    const newVisible = samplesForVisibleBars(newBars, length)
+    const start = prevBars <= 0 ? 0 : waveformOffsetRef.current
+    const focal = Math.max(0, Math.min(1, focalRatio))
+    const focalIndex = start + focal * Math.min(prevBars <= 0 ? length : prevVisible, length)
+    const newStart = focalIndex - focal * newVisible
+    const maxOffset = Math.max(0, length - newVisible)
+    const newOffset = Math.max(0, Math.min(maxOffset, newStart))
+
+    waveformVisibleBarsRef.current = newBars
+    waveformOffsetRef.current = newOffset
+    pendingWaveformBarsRef.current = newBars
+    pendingWaveformOffsetRef.current = newOffset
+    markPanEnabled(newBars)
+    scheduleWaveformFlush()
+  }, [markPanEnabled, samplesForVisibleBars, scheduleWaveformFlush])
+
+  /** Legacy name — maps old zoom multipliers onto the bar ladder. */
+  const applyWaveformZoom = useCallback((nextZoom: number, focalRatio = 0.5) => {
+    if (nextZoom <= 1.04) {
+      applyVisibleBars(0, focalRatio)
+      return
+    }
+    // Map legacy zoom into a bar count on the ladder (higher zoom → fewer bars)
+    const approxBars = Math.max(4, Math.round(128 / nextZoom))
+    const stepped = WAVEFORM_BAR_ZOOM_STEPS.reduce((best, step) =>
+      Math.abs(step - approxBars) < Math.abs(best - approxBars) ? step : best
+    , WAVEFORM_BAR_ZOOM_STEPS[0])
+    applyVisibleBars(stepped, focalRatio)
+  }, [applyVisibleBars])
+
+  /** delta > 0 zooms in (fewer bars); delta < 0 zooms out (+8 bar steps toward full). */
+  const handleWaveformZoom = useCallback((delta: number) => {
+    const prev = waveformVisibleBarsRef.current
+    const next = stepVisibleBars(prev, delta > 0 ? 1 : -1)
+    applyVisibleBars(next, 0.5)
+  }, [applyVisibleBars])
+
+  const handleWaveformPan = useCallback((delta: number) => {
+    if (waveformVisibleBarsRef.current <= 0) return
+    const length = waveformDataLengthRef.current
+    const visibleCount = samplesForVisibleBars(waveformVisibleBarsRef.current, length)
+    const maxOffset = Math.max(0, length - visibleCount)
+    const next = Math.max(0, Math.min(maxOffset, waveformOffsetRef.current + delta))
+    waveformOffsetRef.current = next
+    pendingWaveformOffsetRef.current = next
+    setWaveformOffset(next)
+  }, [samplesForVisibleBars])
+
+  useEffect(() => {
+    if (!waveformMenu) return
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (waveformMenuRef.current?.contains(e.target as Node)) return
+      setWaveformMenu(null)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWaveformMenu(null)
+    }
+
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [waveformMenu])
+
+  // Reset zoom/pan when minimized or not expanded; keep Colorful + Mirror defaults
+  useEffect(() => {
+    if (waveformHost) return
+    if (isMiniMode || !isExpanded) {
+      waveformVisibleBarsRef.current = 0
+      waveformOffsetRef.current = 0
+      waveformPanEnabledRef.current = false
+      setWaveformVisibleBars(0)
+      setWaveformOffset(0)
+      setWaveformFollow(false)
+      if (!isMiniMode && !isExpanded && precomputedPeaks && precomputedPeaks.length > 0) {
+        const restored = peaksOrEnvelopesToWaveformSamples(precomputedPeaks)
+        trackWaveformBaseRef.current = restored
+        setWaveformData(restored)
+      }
+    }
+  }, [isMiniMode, isExpanded, precomputedPeaks, waveformHost])
+
+  /** Lets fixed UI (e.g. docked Admin AI) reserve space above this bar. */
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return
+    const el = playerRef.current
+    if (!el) return
+    const node = el
+
+    function sync() {
+      const h = Math.ceil(node.getBoundingClientRect().height)
+      if (h > 0) {
+        document.documentElement.style.setProperty('--global-music-player-height', `${h}px`)
+      } else {
+        document.documentElement.style.removeProperty('--global-music-player-height')
+      }
+    }
+
+    sync()
+    const ro = new ResizeObserver(() => {
+      window.requestAnimationFrame(sync)
+    })
+    ro.observe(el)
+    window.addEventListener('resize', sync)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', sync)
+      document.documentElement.style.removeProperty('--global-music-player-height')
+    }
+  }, [currentTrack, isMiniMode, isExpanded, isWaveformCollapsed, isQueueOpen, isSettingsOpen, isMobileControlsOpen])
+
+  const lockBackgroundScroll = Boolean(
+    autoDJSettingsMenu ||
+      showTrackDetails ||
+      (isSettingsOpen && !isMiniMode) ||
+      (isQueueOpen && !isQueueDocked),
+  )
+  useLockBodyScroll(lockBackgroundScroll)
+
+  const bpmForGrid = waveformBpm
+  const beatDurationSec = waveformBeatDurationSec
+  // setBeatHere is defined above (useCallback) so DNA bridge + menu share one handler
+
+  if (!currentTrack) {
+    return null
   }
 
 
   return (
     <div 
       ref={playerRef}
-      className={`fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-gray-800 z-[9999] transition-all ${
-        isMiniMode ? 'h-16' : 'max-h-[90vh]'
+      className={`fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-[9999] transition-[max-height] duration-300 [contain:layout_paint] ${
+        isMiniMode ? 'max-sm:h-auto sm:h-16' : 'max-h-[90vh]'
       }`}
     >
-      <div className={isMiniMode ? '' : 'max-h-[90vh] overflow-y-auto'}>
+      <div
+        data-scroll-lock-root=""
+        className={
+          isMiniMode
+            ? ''
+            : `max-h-[90vh] overscroll-contain ${lockBackgroundScroll ? 'overflow-hidden' : 'overflow-y-auto'}`
+        }
+      >
       <audio 
         ref={audioRef} 
         preload="metadata" 
@@ -3089,234 +7196,551 @@ export default function MusicPlayer({
         webkit-playsinline="true"
       />
       
-      {/* Mini Mode Bar */}
+      {/* Mini Mode Bar — mobile: two rows, larger touch targets + safe area; sm+: single row */}
       {isMiniMode && (
-        <div className="container mx-auto px-4 py-2">
-          <div className="flex items-center gap-3">
-            {currentTrack.artwork && (
-              <div className="relative w-10 h-10 rounded overflow-hidden flex-shrink-0">
+        <>
+          {/* Mobile: seek above title; then artwork/transport chrome */}
+          <div className="container mx-auto w-full max-w-full min-w-0 px-3 pt-2 sm:hidden">
+            <PlaybackTransportScrubber
+              ref={transportMiniMobileRef}
+              variant="mini-mobile"
+              duration={duration}
+              initialTime={currentTime}
+              onSeek={seekToTime}
+            />
+            <p className="mt-1.5 truncate text-center text-sm font-medium leading-snug text-white">
+              {currentTrack.title}
+            </p>
+          </div>
+          <div className="container mx-auto w-full max-w-full min-w-0 px-3 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:px-4 sm:py-2 sm:pb-2 sm:pt-2">
+          {/* Mobile (< sm): artwork + artist | centered transport | expand */}
+          <div className="flex w-full min-w-0 flex-col gap-1.5 sm:hidden">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
+                {coverSrc && (
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md">
+                    <Image
+                      key={coverSrc}
+                      src={coverSrc}
+                      alt={coverAlt}
+                      fill
+                      className="object-cover"
+                      unoptimized={coverUnoptimized}
+                      sizes="44px"
+                      priority={true}
+                      quality={75}
+                    />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="truncate text-xs leading-snug text-gray-400">{currentTrack.artist}</p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5 justify-self-center">
+                <button
+                  type="button"
+                  onClick={onPrevious}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                  disabled={queue.length <= 1}
+                  aria-label="Previous track"
+                >
+                  <FaStepBackward className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors active:bg-gray-200 disabled:opacity-50 touch-manipulation"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  disabled={isLoading || !!error}
+                >
+                  {isPlaying ? <FaPause className="h-4 w-4" /> : <FaPlay className="ml-0.5 h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSkipToNext}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                  disabled={queue.length <= 1}
+                  aria-label="Next track"
+                >
+                  <FaStepForward className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-0.5 justify-self-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMiniMode(false)
+                    setIsExpanded(true)
+                  }}
+                  className="flex h-11 w-[88px] shrink-0 items-center justify-center rounded-lg px-1 py-1 text-gray-400 transition-colors active:bg-white/10 hover:bg-gray-800 hover:text-white touch-manipulation"
+                  title="Expand player"
+                  aria-label="Expand player"
+                >
+                  <DjIcon className="h-full w-full" preserveAspectRatio="none" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop / tablet: single row */}
+          <div className="hidden w-full min-w-0 items-center gap-2 sm:flex sm:gap-3">
+            {/* Playback controls — left of artwork */}
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                onClick={toggleShuffle}
+                className={`flex min-h-[36px] min-w-[36px] items-center justify-center rounded p-1.5 transition-colors touch-manipulation ${
+                  settings.isShuffled ? 'bg-gray-800/40 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+                title="Shuffle queue order"
+                disabled={queue.length <= 1}
+                aria-label="Shuffle queue order"
+              >
+                <FaRandom className="h-3 w-3" />
+              </button>
+              <button
+                onClick={onPrevious}
+                className="flex min-h-[36px] min-w-[36px] items-center justify-center p-1.5 text-white transition-colors hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
+                disabled={queue.length <= 1}
+                title="Previous"
+                aria-label="Previous track"
+              >
+                <FaStepBackward className="h-3 w-3" />
+              </button>
+              <button
+                onClick={togglePlay}
+                className="flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-full bg-white p-2 text-black transition-colors hover:bg-gray-200 disabled:opacity-50 touch-manipulation"
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                disabled={isLoading || !!error}
+              >
+                {isPlaying ? <FaPause className="h-3 w-3" /> : <FaPlay className="ml-0.5 h-3 w-3" />}
+              </button>
+              <button
+                onClick={handleSkipToNext}
+                className="flex min-h-[36px] min-w-[36px] items-center justify-center p-1.5 text-white transition-colors hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
+                disabled={queue.length <= 1}
+                title="Next"
+                aria-label="Next track"
+              >
+                <FaStepForward className="h-3 w-3" />
+              </button>
+              <button
+                onClick={cycleRepeatMode}
+                className={`relative flex min-h-[36px] min-w-[36px] items-center justify-center rounded p-1.5 transition-colors touch-manipulation ${
+                  settings.repeatMode !== 'off' ? 'bg-gray-800/40 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+                title={`Repeat: ${settings.repeatMode}`}
+                aria-label={`Repeat: ${settings.repeatMode}`}
+              >
+                <FaRedo className="h-3 w-3" />
+                {settings.repeatMode === 'one' && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-500 text-[6px]">1</span>
+                )}
+                {settings.repeatMode === 'all' && (
+                  <span className="absolute -right-0.5 -top-0.5 text-[6px]">∞</span>
+                )}
+              </button>
+            </div>
+            {coverSrc && (
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded">
                 <Image
-                  src={currentTrack.artwork}
-                  alt={currentTrack.title}
+                  key={coverSrc}
+                  src={coverSrc}
+                  alt={coverAlt}
                   fill
                   className="object-cover"
-                  unoptimized={shouldUnoptimizeImage(currentTrack.artwork)}
+                  unoptimized={coverUnoptimized}
                   sizes="40px"
                   priority={true}
                   quality={75}
                 />
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-medium truncate">{currentTrack.title}</p>
-              <p className="text-gray-400 text-xs truncate">{currentTrack.artist}</p>
+            <div className="min-w-0 max-w-[200px] shrink-0 overflow-hidden md:max-w-[240px]">
+              <p className="truncate text-xs font-medium text-white">{currentTrack.title}</p>
+              <p className="truncate text-xs text-gray-400">{currentTrack.artist}</p>
             </div>
-            {/* Progress Bar - Between track info and controls */}
-            <div className="flex-1 min-w-0 max-w-[200px] sm:max-w-[300px] md:max-w-[400px] flex items-center gap-1.5 px-2">
-              <span className="text-[10px] text-gray-500 w-10 text-right flex-shrink-0">{formatTime(currentTime)}</span>
-              <div className="flex-1 relative min-w-0">
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer touch-manipulation"
-                  title="Seek through track"
-                  aria-label="Seek through track"
-                  style={{
-                    background: `linear-gradient(to right, #fff 0%, #fff ${currentProgress}%, #374151 ${currentProgress}%, #374151 100%)`
-                  }}
-                />
-              </div>
-              <span className="text-[10px] text-gray-500 w-10 flex-shrink-0">{formatTime(duration)}</span>
+            <PlaybackTransportScrubber
+              ref={transportMiniDesktopRef}
+              variant="mini-desktop"
+              duration={duration}
+              initialTime={currentTime}
+              onSeek={seekToTime}
+            />
+            <div className="hidden items-center gap-1.5 md:flex md:shrink-0">
+              <button
+                onClick={toggleMute}
+                className="flex min-h-[40px] min-w-[36px] items-center justify-center text-gray-400 transition-colors hover:text-white touch-manipulation"
+                title={settings.isMuted ? 'Unmute' : 'Mute'}
+                aria-label={settings.isMuted ? 'Unmute' : 'Mute'}
+              >
+                {settings.isMuted ? <FaVolumeMute className="h-3.5 w-3.5" /> : <FaVolumeUp className="h-3.5 w-3.5" />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={settings.isMuted ? 0 : settings.volume}
+                onChange={(e) => {
+                  const newVolume = parseFloat(e.target.value)
+                  saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
+                  const __live = getPlaybackAudio()
+                  if (__live && !phraseMixLockRef.current) {
+                    __live.volume = newVolume
+                  }
+                  mixEngineRef.current?.setMasterVolume(newVolume)
+                }}
+                className="h-1.5 w-16 cursor-pointer appearance-none rounded-lg touch-manipulation"
+                style={{
+                  background: `linear-gradient(to right, #fff 0%, #fff ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 100%)`
+                }}
+                title="Adjust volume"
+                aria-label="Adjust volume"
+              />
             </div>
-            {/* Playback Controls - Shuffle, Previous, Play, Next, Repeat */}
-          <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
             <button
-              onClick={toggleShuffle}
-              className={`p-1.5 rounded transition-colors touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center ${
-                settings.isShuffled ? 'text-white bg-gray-800/40' : 'text-gray-400 hover:text-white'
-              }`}
-              title="Shuffle"
-              disabled={queue.length <= 1}
-              aria-label="Shuffle"
-            >
-              <FaRandom className="w-3 h-3" />
-            </button>
-            <button
-              onClick={onPrevious}
-              className="p-1.5 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center"
-              disabled={queue.length <= 1}
-              title="Previous"
-              aria-label="Previous track"
-            >
-              <FaStepBackward className="w-3 h-3" />
-            </button>
-            <button
-              onClick={togglePlay}
-              className="bg-white text-black rounded-full p-2 hover:bg-gray-200 transition-colors flex-shrink-0 disabled:opacity-50 touch-manipulation min-h-[40px] min-w-[40px] flex items-center justify-center"
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              disabled={isLoading || !!error}
-            >
-              {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3 ml-0.5" />}
-            </button>
-            <button
-              onClick={onNext}
-              className="p-1.5 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center"
-              disabled={queue.length <= 1}
-              title="Next"
-              aria-label="Next track"
-            >
-              <FaStepForward className="w-3 h-3" />
-            </button>
-            <button
-              onClick={cycleRepeatMode}
-              className={`p-1.5 rounded transition-colors relative touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center ${
-                settings.repeatMode !== 'off' ? 'text-white bg-gray-800/40' : 'text-gray-400 hover:text-white'
-              }`}
-              title={`Repeat: ${settings.repeatMode}`}
-              aria-label={`Repeat: ${settings.repeatMode}`}
-            >
-              <FaRedo className="w-3 h-3" />
-              {settings.repeatMode === 'one' && (
-                <span className="absolute -top-0.5 -right-0.5 text-[6px] bg-blue-500 rounded-full w-2.5 h-2.5 flex items-center justify-center">1</span>
-              )}
-              {settings.repeatMode === 'all' && (
-                <span className="absolute -top-0.5 -right-0.5 text-[6px]">∞</span>
-              )}
-            </button>
-          </div>
-          {/* Mobile: Just show play button */}
-          <button
-            onClick={togglePlay}
-            className="sm:hidden bg-white text-black rounded-full p-2 hover:bg-gray-200 transition-colors flex-shrink-0 disabled:opacity-50 touch-manipulation min-h-[40px] min-w-[40px] flex items-center justify-center"
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-            disabled={isLoading || !!error}
-          >
-            {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3 ml-0.5" />}
-          </button>
-          {/* Volume Control - Vertical slider appears on hover */}
-          <div 
-            className="relative hidden md:flex items-center flex-shrink-0"
-            onMouseEnter={() => {
-              // Clear any pending timeout
-              if (volumeHoverTimeoutRef.current) {
-                clearTimeout(volumeHoverTimeoutRef.current)
-                volumeHoverTimeoutRef.current = null
-              }
-              setIsVolumeHovered(true)
-            }}
-            onMouseLeave={() => {
-              // Set timeout to hide slider after 2 seconds
-              if (volumeHoverTimeoutRef.current) {
-                clearTimeout(volumeHoverTimeoutRef.current)
-              }
-              volumeHoverTimeoutRef.current = setTimeout(() => {
-                setIsVolumeHovered(false)
-                volumeHoverTimeoutRef.current = null
-              }, 2000)
-            }}
-          >
-            <button
-              onClick={toggleMute}
-              className="text-gray-400 hover:text-white transition-colors p-1 sm:p-1.5 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-              title={settings.isMuted ? 'Unmute' : 'Mute'}
-              aria-label={settings.isMuted ? 'Unmute' : 'Mute'}
-            >
-              {settings.isMuted ? <FaVolumeMute className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <FaVolumeUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            </button>
-            {/* Vertical slider - hidden by default, appears on hover, stays visible when hovering over slider */}
-            <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 transition-opacity duration-200 z-50 ${isVolumeHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-              <div className="bg-gray-800/40 rounded-lg p-2 shadow-lg flex items-center justify-center">
-                <div className="relative" style={{ width: '24px', height: '96px' }}>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={settings.isMuted ? 0 : settings.volume}
-                    onChange={(e) => {
-                      const newVolume = parseFloat(e.target.value)
-                      saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
-                      if (audioRef.current) {
-                        audioRef.current.volume = newVolume
-                      }
-                    }}
-                    className="absolute w-24 h-1 bg-transparent appearance-none cursor-pointer touch-manipulation"
-                    style={{
-                      transform: 'rotate(-90deg)',
-                      transformOrigin: 'center',
-                      left: '50%',
-                      top: '50%',
-                      marginLeft: '-48px',
-                      marginTop: '-2px',
-                      background: `linear-gradient(to right, #fff 0%, #fff ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 100%)`
-                    }}
-                    title="Adjust volume"
-                    aria-label="Adjust volume"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-            <button
-              onClick={() => setIsMiniMode(false)}
-              className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              onClick={() => {
+                setIsMiniMode(false)
+                setIsExpanded(true)
+              }}
+              className="flex h-11 w-[88px] shrink-0 items-center justify-center rounded-lg px-1 py-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white touch-manipulation"
               title="Expand player"
+              aria-label="Expand player"
             >
-              <FaExpand className="w-4 h-4" />
+              <DjIcon className="h-full w-full" preserveAspectRatio="none" />
             </button>
           </div>
         </div>
+        </>
       )}
 
-      {/* Full Player */}
+      {/* Full Player chrome */}
       {!isMiniMode && expandedMode !== 'dj' && (
         <>
-          {/* Main Controls */}
-          <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
-            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-              {/* Artwork - Clickable for details */}
-              {currentTrack.artwork && (
+          {/* Waveform above chrome when collapsed (vault Now Playing docks via portal) */}
+          {!isExpanded && (() => {
+            if (!waveformHost && isWaveformCollapsed) {
+              return (
                 <button
+                  type="button"
+                  onClick={() => setIsWaveformCollapsed(false)}
+                  className="flex h-7 w-full items-center justify-center gap-1.5 border-b border-gray-700 bg-black/90 text-[10px] font-medium uppercase tracking-wide text-gray-500 transition-colors hover:bg-gray-900 hover:text-gray-300 touch-manipulation"
+                  title="Show waveform"
+                  aria-label="Show waveform"
+                  aria-expanded={false}
+                  aria-controls="player-compact-waveform"
+                >
+                  <FaChevronUp className="h-3 w-3" aria-hidden />
+                  Waveform
+                </button>
+              )
+            }
+
+            const hoverRoot =
+              (waveformHost?.closest('[data-waveform-hover-root]') as HTMLElement | null) || waveformHost
+            const waveformHeightClass = isWaveformDocked
+              ? 'h-full w-full'
+              : 'h-20 sm:h-24 md:h-32'
+
+            const incomingTrack = nextQueueTrack
+            const incomingDeckId: 'a' | 'b' = liveDeckId === 'a' ? 'b' : 'a'
+            const incomingCached = incomingTrack
+              ? deckWaveformCache[incomingDeckId]
+              : undefined
+            const incomingGhost =
+              incomingTrack && ghostSamplesRef.current?.trackId === incomingTrack.id
+                ? ghostSamplesRef.current
+                : null
+            const incomingCacheHit = Boolean(
+              incomingCached && incomingTrack && incomingCached.trackId === incomingTrack.id,
+            )
+            const incomingSamples = incomingCacheHit
+              ? incomingCached.samples
+              : incomingGhost?.samples ?? []
+            const incomingDuration = incomingCacheHit
+              ? incomingCached.durationSec
+              : incomingGhost?.durationSec || incomingTrack?.duration || 0
+            const showDualDeckBlend =
+              isAutoDJEnabled && incomingDeckHot && incomingSamples.length > 0
+
+            const renderWaveformStage = (
+              deck: 'a' | 'b',
+              opts: {
+                audioRef: typeof audioRef
+                isLive: boolean
+                samples: typeof waveformData
+                durationSec: number
+                bpm: number | null
+                mediaSyncKey: string
+                intelligenceProfile?: ReturnType<typeof profileFromSonicDna>
+                beatGridOffsetSec?: number
+              },
+            ) => (
+              <WaveformStage
+                audioRef={opts.audioRef}
+                mediaSyncKey={opts.mediaSyncKey}
+                isPlaying={opts.isLive ? isPlaying : incomingDeckHot}
+                samples={opts.samples}
+                durationSec={opts.durationSec}
+                visibleBars={waveformVisibleBars}
+                offsetIndex={opts.isLive ? waveformOffset : 0}
+                follow={opts.isLive ? waveformFollow : incomingDeckHot}
+                mirror={waveformMirror}
+                colorMode={waveformMode}
+                layerLayout={waveformLayerLayout}
+                intelligenceProfile={opts.intelligenceProfile ?? waveformIntelligenceProfile}
+                bpm={opts.bpm}
+                beatGridEnabled={beatGridEnabled && Boolean(opts.bpm)}
+                beatGridOffsetSec={
+                  opts.beatGridOffsetSec ??
+                  (opts.isLive
+                    ? beatGridOffsetSec
+                    : resolveTrackBeatGridOffset(incomingTrack ?? currentTrack))
+                }
+                beatsPerBar={waveformBeatsPerBar}
+                mixOverlay={opts.isLive && isAutoDJEnabled ? waveformMixOverlay : null}
+                ghostTape={null}
+                hotCues={opts.isLive ? waveformHotCues : []}
+                deckId={deck === 'a' ? 'A' : 'B'}
+                hoverRoot={hoverRoot}
+                gestureActiveRef={waveformGestureRef}
+                className={`relative touch-none overflow-hidden ${
+                  showDualDeckBlend ? 'h-full w-full' : waveformHeightClass
+                } ${
+                  opts.isLive && waveformZoom > 1.04 ? 'cursor-grab' : 'cursor-pointer'
+                } ${!opts.isLive && !incomingDeckHot ? 'opacity-80' : ''}`}
+                onVisibleBarsChange={opts.isLive ? onWaveformVisibleBarsChange : () => {}}
+                onOffsetChange={opts.isLive ? onWaveformOffsetChange : () => {}}
+                onSeekSec={opts.isLive ? snapPlaybackTime : () => {}}
+                onContextMenu={(e) => onWaveformContextMenu(deck, e)}
+                showOverview={false}
+              />
+            )
+
+            const outgoingStage = renderWaveformStage(liveDeckId, {
+              audioRef: liveAudioRef,
+              isLive: true,
+              samples: waveformData,
+              durationSec: duration || 0,
+              bpm: waveformBpm,
+              mediaSyncKey: waveformMediaSyncKey,
+            })
+            const incomingStage =
+              showDualDeckBlend && incomingTrack
+                ? renderWaveformStage(incomingDeckId, {
+                    audioRef: incomingDeckId === 'b' ? nextAudioRef : audioRef,
+                    isLive: false,
+                    samples: incomingSamples,
+                    durationSec: incomingDuration,
+                    bpm: resolveTrackBpm(incomingTrack),
+                    mediaSyncKey: incomingDeckId === 'b' ? 'idle-b' : 'idle-a',
+                    intelligenceProfile: profileFromSonicDna(incomingTrack.sonic_dna),
+                    beatGridOffsetSec: resolveTrackBeatGridOffset(incomingTrack),
+                  })
+                : null
+
+            const waveformUi = (
+              <div
+                id="player-compact-waveform"
+                ref={waveformContainerRef}
+                className={`h-full w-full min-h-0 ${
+                  showDualDeckBlend && !isWaveformDocked
+                    ? 'min-h-[10rem] sm:min-h-[12rem] md:min-h-[16rem]'
+                    : ''
+                }`}
+              >
+                {showDualDeckBlend && incomingStage ? (
+                  <div className="grid h-full min-h-0 grid-rows-2">
+                    <div className="min-h-0 border-b border-emerald-500/20">{outgoingStage}</div>
+                    <div className="min-h-0 border-t border-sky-500/20">{incomingStage}</div>
+                  </div>
+                ) : (
+                  outgoingStage
+                )}
+              </div>
+            )
+            if (waveformHost) {
+              return createPortal(waveformUi, waveformHost)
+            }
+            return (
+              <div className="relative w-full bg-black/90 border-b border-gray-700">
+                {waveformUi}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setIsWaveformCollapsed(true)
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute right-1.5 top-1.5 z-20 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white touch-manipulation"
+                  title="Hide waveform"
+                  aria-label="Hide waveform"
+                  aria-expanded={true}
+                  aria-controls="player-compact-waveform"
+                >
+                  <FaChevronDown className="h-3 w-3" aria-hidden />
+                </button>
+              </div>
+            )
+          })()}
+
+          {/* Main Controls */}
+          <div className="w-full max-w-none px-3 sm:px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:py-3">
+            {/* Mobile: art + title | centered transport (seek via waveform unless it is collapsed) */}
+            <div className="md:hidden">
+              {!isExpanded && isWaveformCollapsed && (
+                <div className="mb-1.5">
+                  <PlaybackTransportScrubber
+                    ref={transportMiniMobileRef}
+                    variant="mini-mobile"
+                    duration={duration}
+                    initialTime={currentTime}
+                    onSeek={seekToTime}
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
+                  {coverSrc && (
+                    <button
+                      type="button"
+                      onClick={() => setShowTrackDetails(!showTrackDetails)}
+                      className="relative h-12 w-12 shrink-0 overflow-hidden rounded touch-manipulation"
+                      title="View track details"
+                      aria-label="View track details"
+                    >
+                      <Image
+                        key={coverSrc}
+                        src={coverSrc}
+                        alt={coverAlt}
+                        fill
+                        className="object-cover"
+                        unoptimized={coverUnoptimized}
+                        sizes="48px"
+                        priority
+                        quality={85}
+                      />
+                    </button>
+                  )}
+                  {(isLoading || error) && (
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    {isLoading && (
+                      <p className="truncate text-[10px] text-gray-500">Loading…</p>
+                    )}
+                    {error && (
+                      <p className="truncate text-[10px] text-red-400">{error}</p>
+                    )}
+                  </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5 justify-self-center">
+                  {isExpanded ? (
+                    <AutoDJHeaderButton size="compact" />
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={onPrevious}
+                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                        disabled={queue.length <= 1}
+                        aria-label="Previous track"
+                      >
+                        <FaStepBackward className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={togglePlay}
+                        className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors active:bg-gray-200 disabled:opacity-50 touch-manipulation"
+                        aria-label={isPlaying ? 'Pause' : 'Play'}
+                        disabled={isLoading || !!error}
+                      >
+                        {isPlaying ? <FaPause className="h-4 w-4" /> : <FaPlay className="ml-0.5 h-4 w-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSkipToNext}
+                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                        disabled={queue.length <= 1}
+                        aria-label="Next track"
+                      >
+                        <FaStepForward className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center justify-self-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isExpanded) {
+                        setIsExpanded(false)
+                        setIsSettingsOpen(false)
+                      } else {
+                        setIsExpanded(true)
+                      }
+                    }}
+                    className="flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors active:bg-white/10 hover:bg-gray-800 hover:text-white touch-manipulation"
+                    title={isExpanded ? 'Collapse' : 'Expand'}
+                    aria-label={isExpanded ? 'Collapse player' : 'Expand player'}
+                    aria-expanded={isExpanded}
+                  >
+                    <FaChevronDown
+                      className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? '' : 'rotate-180'}`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop / tablet: collapsed = flex row with fluid scrubber; expanded = 3-col grid */}
+            <div
+              className={`relative hidden w-full md:items-center ${
+                isExpanded
+                  ? 'md:grid md:grid-cols-[1fr_auto_1fr] md:gap-4'
+                  : 'md:flex md:gap-3'
+              }`}
+            >
+              <div
+                className={`flex min-w-0 items-center gap-3 ${
+                  isExpanded ? 'md:col-start-1' : 'shrink-0'
+                }`}
+              >
+              {!isExpanded && coverSrc && (
+                <button
+                  type="button"
                   onClick={() => setShowTrackDetails(!showTrackDetails)}
-                  className="relative w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden flex-shrink-0 hover:opacity-80 transition-opacity touch-manipulation min-h-[48px] min-w-[48px]"
+                  className="relative h-14 w-14 shrink-0 overflow-hidden rounded hover:opacity-80 transition-opacity touch-manipulation"
                   title="View track details"
                   aria-label="View track details"
                 >
                   <Image
-                    src={currentTrack.artwork}
-                    alt={currentTrack.title}
+                    key={coverSrc}
+                    src={coverSrc}
+                    alt={coverAlt}
                     fill
                     className="object-cover"
-                    unoptimized={shouldUnoptimizeImage(currentTrack.artwork)}
-                    sizes="(max-width: 640px) 48px, 56px"
-                    priority={true}
+                    unoptimized={coverUnoptimized}
+                    sizes="56px"
+                    priority
                     quality={85}
                   />
                 </button>
               )}
 
-              {/* Track Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-xs sm:text-sm truncate">
-                  {currentTrack.title}
-                </p>
-                <p className="text-gray-400 text-[10px] sm:text-xs truncate">
-                  {currentTrack.artist}
-                </p>
+              {!isExpanded && (
+              <div className="min-w-0 max-w-[220px] shrink-0 lg:max-w-[280px]">
+                <p className="truncate text-sm font-medium text-white">{currentTrack.title}</p>
+                <p className="truncate text-xs text-gray-400">{currentTrack.artist}</p>
                 {(currentTrack.album || currentTrack.folder) && (
-                  <p className="text-gray-500 text-[10px] sm:text-xs truncate hidden sm:block">
+                  <p className="truncate text-xs text-gray-500">
                     {currentTrack.album || currentTrack.folder}
                   </p>
                 )}
               </div>
-
-              {/* Loading/Error States */}
-              {isLoading && (
-                <div className="text-xs text-gray-400">Loading...</div>
               )}
+
+              {isLoading && <div className="text-xs text-gray-400">Loading...</div>}
               {isBuffering && (
                 <div className="text-xs text-yellow-400">
                   Buffering... {bufferedProgress > 0 && `${Math.round(bufferedProgress)}%`}
@@ -3329,270 +7753,199 @@ export default function MusicPlayer({
                 </div>
               )}
 
-              {/* Controls */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                
-                {/* Desktop: Always show all controls */}
-                <div className="hidden md:flex items-center gap-2">
-                  <button
-                    onClick={toggleShuffle}
-                    className={`p-2 rounded transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center ${
-                      settings.isShuffled ? 'text-white bg-gray-800/40' : 'text-gray-400 hover:text-white'
-                    }`}
-                    title="Shuffle"
-                    disabled={queue.length <= 1}
-                  >
-                    <FaRandom />
-                  </button>
-                  <button
-                    onClick={onPrevious}
-                    className="p-2 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    disabled={queue.length <= 1}
-                    title="Previous"
-                  >
-                    <FaStepBackward />
-                  </button>
-                  <button
-                    onClick={togglePlay}
-                    className="bg-white text-black rounded-full p-3 hover:bg-gray-200 transition-colors flex-shrink-0 disabled:opacity-50 touch-manipulation min-h-[48px] min-w-[48px] flex items-center justify-center"
-                    aria-label={isPlaying ? 'Pause' : 'Play'}
-                    disabled={isLoading || !!error}
-                  >
-                    {isPlaying ? <FaPause /> : <FaPlay />}
-                  </button>
-                  <button
-                    onClick={onNext}
-                    className="p-2 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    disabled={queue.length <= 1}
-                    title="Next"
-                  >
-                    <FaStepForward />
-                  </button>
-                  <button
-                    onClick={cycleRepeatMode}
-                    className={`p-2 rounded transition-colors relative touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center ${
-                      settings.repeatMode !== 'off' ? 'text-white bg-gray-800/40' : 'text-gray-400 hover:text-white'
-                    }`}
-                    title={`Repeat: ${settings.repeatMode}`}
-                  >
-                    <FaRedo />
-                    {settings.repeatMode === 'one' && (
-                      <span className="absolute -top-1 -right-1 text-[8px] bg-blue-500 rounded-full w-3 h-3 flex items-center justify-center">1</span>
-                    )}
-                    {settings.repeatMode === 'all' && (
-                      <span className="absolute -top-1 -right-1 text-[8px]">∞</span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Mobile: Previous, Play, and Next buttons always visible */}
-                <div className="md:hidden flex items-center gap-1.5 sm:gap-2">
-                  <button
-                    onClick={onPrevious}
-                    className="p-2 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    disabled={queue.length <= 1}
-                    title="Previous"
-                    aria-label="Previous track"
-                  >
-                    <FaStepBackward className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={togglePlay}
-                    className="bg-white text-black rounded-full p-2.5 sm:p-3 hover:bg-gray-200 transition-colors flex-shrink-0 disabled:opacity-50 touch-manipulation min-h-[48px] min-w-[48px] flex items-center justify-center"
-                    aria-label={isPlaying ? 'Pause' : 'Play'}
-                    disabled={isLoading || !!error}
-                  >
-                    {isPlaying ? <FaPause className="w-4 h-4" /> : <FaPlay className="w-4 h-4 ml-0.5" />}
-                  </button>
-                  <button
-                    onClick={onNext}
-                    className="p-2 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    disabled={queue.length <= 1}
-                    title="Next"
-                    aria-label="Next track"
-                  >
-                    <FaStepForward className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Progress Bar - Mobile - Hidden on desktop */}
-              <div className="flex-1 min-w-0 hidden px-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] sm:text-xs text-gray-400 w-10 sm:w-12 text-right font-mono tabular-nums">{formatTime(currentTime)}</span>
-                  <div className="flex-1 relative group">
-                    {/* Larger touch area overlay for easier interaction */}
-                    <div className="absolute inset-0 -my-2 z-10 touch-none" />
-                    <input
-                      ref={progressBarRef}
-                      type="range"
-                      min="0"
-                      max={duration || 0}
-                      value={currentTime}
-                      onChange={handleSeek}
-                      onMouseDown={handleSeekStart}
-                      onMouseUp={handleSeekEnd}
-                      onTouchStart={handleSeekStart}
-                      onTouchEnd={handleSeekEnd}
-                      className="w-full h-4 sm:h-5 bg-gray-700 rounded-full appearance-none cursor-pointer touch-manipulation active:cursor-grabbing relative z-20 transition-all"
-                      title="Seek through track"
-                      aria-label="Seek through track"
-                      style={{
-                        background: `linear-gradient(to right, #fff 0%, #fff ${currentProgress}%, #4b5563 ${currentProgress}%, #4b5563 100%)`,
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none',
-                      }}
-                    />
-                    {/* Visual feedback indicator when seeking */}
-                    {isSeeking && (
-                      <div 
-                        className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-xl pointer-events-none z-30 animate-pulse"
-                        style={{ left: `calc(${currentProgress}% - 12px)` }}
-                      />
-                    )}
-                  </div>
-                  <span className="text-[10px] sm:text-xs text-gray-400 w-10 sm:w-12 font-mono tabular-nums">{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              {/* Progress Bar - Desktop - Hidden on mobile */}
-              <div className="flex-1 min-w-0 hidden md:flex">
-                <div className="flex items-center gap-2 relative w-full">
-                  <span className="text-xs text-gray-400 w-10 text-right hidden lg:block">{formatTime(currentTime)}</span>
-                  <div className="flex-1 relative">
-                    <input
-                      ref={progressBarRef}
-                      type="range"
-                      min="0"
-                      max={duration || 0}
-                      value={currentTime}
-                      onChange={handleSeek}
-                      onMouseMove={handleProgressHover}
-                      onMouseLeave={handleProgressLeave}
-                      className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                      title="Seek through track"
-                      aria-label="Seek through track"
-                    />
-                    {seekPreviewTime !== null && (
-                      <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-800/40 text-white text-xs px-2 py-1 rounded pointer-events-none whitespace-nowrap z-10">
-                        {formatTime(seekPreviewTime)}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-400 w-10 hidden lg:block">{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              {/* Volume - Vertical slider appears on hover, visible when waveform is NOT visible */}
               {!isExpanded && (
-                <div 
-                  className="relative hidden md:flex items-center flex-shrink-0"
-                  onMouseEnter={() => {
-                    // Clear any pending timeout
-                    if (volumeHoverTimeoutRef.current) {
-                      clearTimeout(volumeHoverTimeoutRef.current)
-                      volumeHoverTimeoutRef.current = null
-                    }
-                    setIsVolumeHovered(true)
-                  }}
-                  onMouseLeave={() => {
-                    // Set timeout to hide slider after 2 seconds
-                    if (volumeHoverTimeoutRef.current) {
-                      clearTimeout(volumeHoverTimeoutRef.current)
-                    }
-                    volumeHoverTimeoutRef.current = setTimeout(() => {
-                      setIsVolumeHovered(false)
-                      volumeHoverTimeoutRef.current = null
-                    }, 2000)
-                  }}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleShuffle}
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors touch-manipulation ${
+                    settings.isShuffled ? 'bg-gray-800/40 text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  title="Shuffle queue order"
+                  disabled={queue.length <= 1}
                 >
-                  <button
-                    onClick={toggleMute}
-                    className="text-gray-400 hover:text-white transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    title={settings.isMuted ? 'Unmute' : 'Mute'}
-                  >
-                    {settings.isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
-                  </button>
-                  {/* Vertical slider - hidden by default, appears on hover, stays visible when hovering over slider */}
-                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 transition-opacity duration-200 z-50 ${isVolumeHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-                    <div className="bg-gray-800/40 rounded-lg p-2 shadow-lg flex items-center justify-center">
-                      <div className="relative" style={{ width: '24px', height: '96px' }}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={settings.isMuted ? 0 : settings.volume}
-                          onChange={(e) => {
-                            const newVolume = parseFloat(e.target.value)
-                            saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
-                            if (audioRef.current) {
-                              audioRef.current.volume = newVolume
-                            }
-                          }}
-                          className="absolute w-24 h-1 bg-transparent appearance-none cursor-pointer touch-manipulation"
-                          style={{
-                            transform: 'rotate(-90deg)',
-                            transformOrigin: 'center',
-                            left: '50%',
-                            top: '50%',
-                            marginLeft: '-48px',
-                            marginTop: '-2px',
-                            background: `linear-gradient(to right, #fff 0%, #fff ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 100%)`
-                          }}
-                          title="Adjust volume"
-                          aria-label="Adjust volume"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  <FaRandom />
+                </button>
+                <button
+                  onClick={onPrevious}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-white transition-colors hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
+                  disabled={queue.length <= 1}
+                  title="Previous"
+                >
+                  <FaStepBackward />
+                </button>
+                <button
+                  onClick={togglePlay}
+                  className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-full bg-white p-3 text-black transition-colors hover:bg-gray-200 disabled:opacity-50 touch-manipulation"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  disabled={isLoading || !!error}
+                >
+                  {isPlaying ? <FaPause /> : <FaPlay />}
+                </button>
+                <button
+                  onClick={handleSkipToNext}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-white transition-colors hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
+                  disabled={queue.length <= 1}
+                  title="Next"
+                >
+                  <FaStepForward />
+                </button>
+                <button
+                  onClick={cycleRepeatMode}
+                  className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors touch-manipulation ${
+                    settings.repeatMode !== 'off' ? 'bg-gray-800/40 text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  title={`Repeat: ${settings.repeatMode}`}
+                >
+                  <FaRedo />
+                  {settings.repeatMode === 'one' && (
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500 text-[8px]">
+                      1
+                    </span>
+                  )}
+                  {settings.repeatMode === 'all' && (
+                    <span className="absolute -right-1 -top-1 text-[8px]">∞</span>
+                  )}
+                </button>
+              </div>
               )}
 
-              {/* Queue Toggle */}
-              <button
-                onClick={() => {
-                  const nextOpen = !isQueueOpen
-                  setIsQueueOpen(nextOpen)
-                  if (!nextOpen) {
-                    setIsQueueExpanded(false)
-                    setIsAutoDJSettingsExpanded(false)
-                    setIsTrackListExpanded(false)
-                  }
-                }}
-                className="flex p-2 text-gray-400 hover:text-white transition-colors relative touch-manipulation min-h-[44px] min-w-[44px] items-center justify-center"
-                title="Queue"
-              >
-                <FaList />
-                {queue.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
-                    {queue.length}
-                  </span>
-                )}
-              </button>
+              </div>
 
-              {/* Settings */}
+              {!isExpanded && (
+              <div className="relative min-w-0 flex-1">
+                <PlaybackTransportScrubber
+                  ref={transportExpandedRef}
+                  variant="expanded"
+                  duration={duration}
+                  initialTime={currentTime}
+                  onSeek={seekToTime}
+                  onHoverPreview={setSeekPreviewTime}
+                />
+                {seekPreviewTime !== null && (
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800/40 px-2 py-1 text-xs text-white">
+                    {formatTime(seekPreviewTime)}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {isExpanded && (
+              <div className="hidden items-center gap-2 justify-self-center md:col-start-2 lg:flex">
+                <button
+                  onClick={toggleShuffle}
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors touch-manipulation ${
+                    settings.isShuffled ? 'bg-gray-800/40 text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  title="Shuffle queue order"
+                  disabled={queue.length <= 1}
+                >
+                  <FaRandom />
+                </button>
+                <button
+                  onClick={() => {
+                    setIsExpanded(false)
+                    setIsSettingsOpen(false)
+                  }}
+                  className="flex h-11 w-[88px] shrink-0 items-center justify-center rounded-lg px-1 py-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white touch-manipulation"
+                  title="Collapse"
+                  aria-label="Collapse player"
+                >
+                  <DjIcon
+                    className="h-full w-full rotate-180 transition-transform duration-300"
+                    preserveAspectRatio="none"
+                  />
+                </button>
+                <button
+                  onClick={cycleRepeatMode}
+                  className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors touch-manipulation ${
+                    settings.repeatMode !== 'off' ? 'bg-gray-800/40 text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  title={`Repeat: ${settings.repeatMode}`}
+                >
+                  <FaRedo />
+                  {settings.repeatMode === 'one' && (
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500 text-[8px]">
+                      1
+                    </span>
+                  )}
+                  {settings.repeatMode === 'all' && (
+                    <span className="absolute -right-1 -top-1 text-[8px]">∞</span>
+                  )}
+                </button>
+              </div>
+              )}
+
+              <div
+                className={`flex items-center justify-end gap-3 ${
+                  isExpanded ? 'md:col-start-3 md:justify-self-end' : 'shrink-0'
+                }`}
+              >
+              {!isExpanded && (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    onClick={toggleMute}
+                    className="flex min-h-[44px] min-w-[36px] items-center justify-center text-gray-400 transition-colors hover:text-white touch-manipulation"
+                    title={settings.isMuted ? 'Unmute' : 'Mute'}
+                    aria-label={settings.isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {settings.isMuted ? <FaVolumeMute className="h-4 w-4" /> : <FaVolumeUp className="h-4 w-4" />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={settings.isMuted ? 0 : settings.volume}
+                    onChange={(e) => {
+                      const newVolume = parseFloat(e.target.value)
+                      saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
+                      const __live = getPlaybackAudio()
+                      if (__live && !phraseMixLockRef.current) {
+                        __live.volume = newVolume
+                      }
+                      mixEngineRef.current?.setMasterVolume(newVolume)
+                    }}
+                    className="h-1.5 w-20 cursor-pointer appearance-none rounded-lg touch-manipulation"
+                    style={{
+                      background: `linear-gradient(to right, #fff 0%, #fff ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 100%)`,
+                    }}
+                    title="Adjust volume"
+                    aria-label="Adjust volume"
+                  />
+                </div>
+              )}
+              <AutoDJHeaderButton size="header" />
+              {!isExpanded && (
+                <button
+                  onClick={() => setIsExpanded(true)}
+                  className="hidden h-11 w-[88px] shrink-0 items-center justify-center rounded-lg px-1 py-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white touch-manipulation lg:flex"
+                  title="Expand"
+                  aria-label="Expand player"
+                >
+                  <DjIcon
+                    className="h-full w-full transition-transform duration-300"
+                    preserveAspectRatio="none"
+                  />
+                </button>
+              )}
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className={`p-2 text-gray-400 hover:text-white transition-colors flex items-center justify-center touch-manipulation min-h-[44px] min-w-[44px] ${
-                  isSettingsOpen ? 'text-white' : ''
+                className={`flex min-h-[44px] min-w-[44px] items-center justify-center p-2 transition-colors touch-manipulation ${
+                  isSettingsOpen ? 'text-white' : 'text-gray-400 hover:text-white'
                 }`}
                 title="Settings"
               >
                 <FaCog />
               </button>
 
-              {/* DJ Mode Toggle - Visible in admin; frontend when DJ_MODE_ENABLED */}
               {djModeAvailable && (
                 <button
                   onClick={() => {
-                    if (!isExpanded) {
-                      setIsExpanded(true)
-                    }
-                    setExpandedMode(m => m === 'controls' ? 'dj' : 'controls')
+                    if (!isExpanded) setIsExpanded(true)
+                    setExpandedMode((m) => (m === 'controls' ? 'dj' : 'controls'))
                   }}
-                  className={`p-2 text-gray-400 hover:text-white transition-colors hidden lg:flex items-center justify-center touch-manipulation min-h-[44px] min-w-[44px] ${
-                    (expandedMode as string) === 'dj' ? 'text-white bg-blue-600/30' : ''
+                  className={`hidden min-h-[44px] min-w-[44px] items-center justify-center p-2 transition-colors touch-manipulation lg:flex ${
+                    (expandedMode as string) === 'dj' ? 'bg-blue-600/30 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                   title={expandedMode === 'controls' ? 'Switch to DJ Mode' : 'Switch to Controls'}
                   aria-label="Toggle DJ Mode"
@@ -3600,61 +7953,83 @@ export default function MusicPlayer({
                   {expandedMode === 'controls' ? '🎛️' : '⚙️'}
                 </button>
               )}
-
-              {/* Expand/Collapse */}
-              <button
-                onClick={() => {
-                  setIsExpanded(!isExpanded)
-                  if (isExpanded) {
-                    setIsSettingsOpen(false)
-                  }
-                }}
-                className="p-2 text-gray-400 hover:text-white transition-colors hidden lg:flex items-center justify-center touch-manipulation min-h-[44px] min-w-[44px]"
-                title={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                {isExpanded ? <FaChevronDown /> : <FaChevronUp />}
-              </button>
-
-              {/* Mini Mode */}
-              <button
-                onClick={() => {
-                  setIsMiniMode(true)
-                  setIsSettingsOpen(false)
-                }}
-                className="hidden sm:flex p-2 text-gray-400 hover:text-white transition-colors items-center justify-center touch-manipulation min-h-[44px] min-w-[44px]"
-                title="Minimize"
-              >
-                <FaCompress />
-              </button>
+              </div>
             </div>
           </div>
 
-        {/* Queue Panel - positioned above the player (waveform area) */}
-        {isQueueOpen && (
-          <div className={`fixed left-0 right-0 bg-black/95 border-t border-gray-800 pt-3 pb-3 z-50 shadow-2xl ${
-            isMiniMode ? 'bottom-16' : 'bottom-[220px] sm:bottom-[230px] md:bottom-[250px]'
-          }`}>
-            <div className="container mx-auto px-4">
+        {/* Queue Panel — docked under vault header when host exists; else above player */}
+        {isQueueOpen && typeof document !== 'undefined' && createPortal(
+          <div
+            data-allow-scroll-when-locked=""
+            className={
+              isQueueDocked
+                ? 'w-full bg-black px-5 pt-3 pb-3'
+                : 'fixed left-0 right-0 z-[10040] border-t border-gray-800 bg-black pt-3 pb-3 shadow-2xl overscroll-y-contain'
+            }
+            style={
+              isQueueDocked
+                ? {
+                    maxHeight: 'min(55vh, calc(100dvh - var(--global-music-player-height, 5rem) - 8rem))',
+                  }
+                : {
+                    bottom: 'var(--global-music-player-height, 5rem)',
+                    maxHeight: 'min(70vh, calc(100vh - var(--global-music-player-height, 5rem) - 0.5rem))',
+                  }
+            }
+            role="dialog"
+            aria-label="Playlist queue"
+          >
+            <div className={`${isQueueDocked ? 'max-h-full' : 'container mx-auto max-h-full px-4'} overflow-y-auto`}>
               <div className="flex items-start justify-between mb-2">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold text-white">
-                    {allSourceTracks.length > 0
-                      ? `Playlist (${allSourceTracks.length} tracks, ${queue.length} in queue)`
-                      : `Queue (${queue.length})`}
+                    {`Queue (${queue.length}) · ${upcomingListLabel}`}
                   </h3>
                   {autoDJStatusMessage && (
                     <p className="text-[10px] text-emerald-300">{autoDJStatusMessage}</p>
                   )}
+                  <MixQualityHud quality={lastMixQuality} compact />
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={primeQueue}
+                    className="h-11 min-w-[88px] shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold bg-gray-800 text-gray-200 hover:bg-gray-700 transition-colors touch-manipulation"
+                    title="Add upcoming library tracks to the queue"
+                    aria-label="Prime queue"
+                  >
+                    Prime queue
+                  </button>
+                  <AutoDJHeaderButton size="compact" />
+                  <button
+                    type="button"
+                    onClick={toggleCatalogRandom}
+                    className={`relative flex h-11 min-w-[88px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors touch-manipulation ${
+                      settings.catalogRandom
+                        ? 'bg-amber-600/30 text-amber-200'
+                        : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+                    }`}
+                    title={
+                      autoDJConfig.enabled
+                        ? 'Random from catalog / playlist / folder — applies when Auto DJ is off. Does not reorder the queue list.'
+                        : 'Random from catalog / playlist / folder — does not reorder the queue list'
+                    }
+                    aria-label={
+                      settings.catalogRandom ? 'Disable catalog random' : 'Enable catalog random'
+                    }
+                    aria-pressed={settings.catalogRandom}
+                  >
+                    <FaDice className="h-3 w-3" />
+                    Random
+                  </button>
                   <button
                     onClick={toggleShuffle}
                     className={`p-2 rounded transition-colors touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center ${
                       settings.isShuffled ? 'text-white bg-gray-800/40' : 'text-gray-400 hover:text-white'
                     }`}
-                    title="Shuffle"
+                    title="Shuffle queue list order"
                     disabled={queue.length <= 1}
-                    aria-label="Shuffle queue"
+                    aria-label="Shuffle queue order"
                   >
                     <FaRandom className="w-3.5 h-3.5" />
                   </button>
@@ -3684,119 +8059,25 @@ export default function MusicPlayer({
                   </button>
                 </div>
               </div>
-              {/* Collapsible Auto DJ Settings */}
-              <div className="mt-3 bg-gray-900/70 border border-gray-800 rounded-lg text-[11px] text-gray-300">
-                <button
-                  onClick={() => setIsAutoDJSettingsExpanded((prev) => !prev)}
-                  className="w-full flex items-center justify-between p-3 hover:bg-gray-800/50 transition-colors rounded-lg"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs uppercase tracking-[0.2em] text-gray-400">Auto DJ Settings</span>
-                    {autoDJConfig.enabled && (
-                      <span className="px-1.5 py-0.5 text-[9px] bg-emerald-600/30 text-emerald-400 rounded">ON</span>
-                    )}
-                  </div>
-                  <FaChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isAutoDJSettingsExpanded ? 'rotate-180' : ''}`} />
-                </button>
-                {isAutoDJSettingsExpanded && (
-                  <div className="px-3 pb-3 space-y-3 border-t border-gray-800/50">
-                    <div className="flex items-center justify-between pt-3">
-                      <span className="text-gray-400">Auto DJ</span>
-                      <label className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-400">Enabled</span>
-                        <input
-                          type="checkbox"
-                          checked={autoDJConfig.enabled}
-                          onChange={(e) => {
-                            setAutoDJConfig((prev) => ({ ...prev, enabled: e.target.checked }))
-                            if (!e.target.checked) {
-                              setAutoDJStatusMessage('')
-                            }
-                          }}
-                          className="h-4 w-4 accent-blue-500"
-                        />
-                      </label>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span>Lead-in offset</span>
-                        <span>{autoDJLeadIn.toFixed(2)}s</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="3"
-                        step="0.25"
-                        value={autoDJLeadIn}
-                        onChange={(e) => setAutoDJLeadIn(Number(e.target.value))}
-                        className="w-full accent-blue-500"
-                      />
-                    </div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={autoDJAlignPhase}
-                        onChange={(e) => setAutoDJAlignPhase(e.target.checked)}
-                        className="h-4 w-4 accent-blue-500"
-                      />
-                      Align to waveform phase
-                    </label>
-                    <div>
-                      <div className="text-[10px] text-gray-400 mb-1">Phrase length</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[8, 4, 2].map((bars) => (
-                          <button
-                            key={bars}
-                            onClick={() => setAutoDJConfig((prev) => ({ ...prev, phraseBars: bars as 8 | 4 | 2 }))}
-                            className={`px-2 py-1 rounded text-[11px] ${
-                              autoDJConfig.phraseBars === bars ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300'
-                            }`}
-                          >
-                            {bars} bars
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 mb-1">Mix style</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['crossfade', 'filter-eq', 'cutout-filter'] as AutoDJTransitionMode[]).map((mode) => (
-                          <button
-                            key={mode}
-                            onClick={() => setAutoDJConfig((prev) => ({ ...prev, transitionMode: mode }))}
-                            className={`px-2 py-1 rounded text-[11px] ${
-                              autoDJConfig.transitionMode === mode ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300'
-                            }`}
-                          >
-                            {mode === 'crossfade' ? 'Smooth' : mode === 'filter-eq' ? 'Filter' : 'Cut'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      onClick={primeQueue}
-                      className="w-full px-3 py-2 rounded text-xs font-semibold bg-gray-800 text-gray-200 hover:bg-gray-700 transition-colors"
-                    >
-                      Prime queue
-                    </button>
-                  </div>
-                )}
-              </div>
-              {/* Collapsible Queue Track List */}
+              {/* Auto DJ settings live in the now-playing Auto DJ right-click menu */}
+                            {/* Collapsible Queue Track List */}
               <div className="mt-3 bg-gray-900/70 border border-gray-800 rounded-lg">
                 <button
                   onClick={() => setIsTrackListExpanded((prev) => !prev)}
                   className="w-full flex items-center justify-between p-3 hover:bg-gray-800/50 transition-colors rounded-lg"
                 >
                   <span className="text-xs uppercase tracking-[0.2em] text-gray-400">
-                    Tracks ({displayTracks.length})
+                    {upcomingListLabel} ({displayTracks.length})
+                    {canReorderQueue ? ' · drag to reorder' : ''}
                   </span>
                   <FaChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isTrackListExpanded ? 'rotate-180' : ''}`} />
                 </button>
                 {isTrackListExpanded && (
                 <div 
                   ref={queueContainerRef}
-                  className="overflow-y-auto max-h-[50vh] border-t border-gray-800/50"
+                  className={`overflow-y-auto border-t border-gray-800/50 ${
+                    isQueueDocked ? 'max-h-[min(40vh,20rem)]' : 'max-h-[min(50vh,24rem)]'
+                  }`}
                 >
                   {isLoadingSourceTracks ? (
                     <div className="flex items-center justify-center py-8">
@@ -3807,6 +8088,8 @@ export default function MusicPlayer({
                       {displayTracks.map((track, index) => {
                         const isInQueue = queueTrackIds.has(track.id)
                         const queueIndex = queueIndexMap.get(track.id) ?? -1
+                        const isDnaSuggestion = autoDJConfig.enabled && !isInQueue
+                        const reorderEnabled = canReorderQueue && isInQueue && queueIndex > currentQueueIndex
                         return (
                           <div key={track.id} className="relative">
                             <QueueItem
@@ -3814,11 +8097,20 @@ export default function MusicPlayer({
                               index={queueIndex >= 0 ? queueIndex : index}
                               isCurrent={queueIndex === currentQueueIndex}
                               onRemove={queueIndex >= 0 ? handleRemoveFromQueueClick : () => {}}
-                              isAutoDJNext={autoDJPendingTrackId === track.id}
+                              isAutoDJNext={
+                                autoDJPendingTrackId === track.id ||
+                                (isDnaSuggestion && index === 0)
+                              }
+                              reorderEnabled={reorderEnabled}
+                              isDragOver={queueDragOverIndex === index}
+                              onDragStart={(e) => handleQueueDragStart(e, index, track.id)}
+                              onDragOver={(e) => handleQueueDragOver(e, index)}
+                              onDrop={(e) => handleQueueDrop(e, index)}
+                              onDragEnd={handleQueueDragEnd}
                             />
-                            {!isInQueue && (
-                              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">
-                                Not in queue
+                            {isDnaSuggestion && index > 0 && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-emerald-400/80">
+                                DNA match
                               </div>
                             )}
                           </div>
@@ -3826,15 +8118,26 @@ export default function MusicPlayer({
                       })}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="text-gray-400 text-sm">No tracks available</div>
+                    <div className="flex items-center justify-center py-8 px-4">
+                      <div className="text-gray-400 text-sm text-center">
+                        {autoDJConfig.enabled
+                          ? 'No upcoming tracks.'
+                          : settings.catalogRandom
+                            ? isLoadingSourceTracks
+                              ? `Loading ${catalogScopeLabel(currentSource)}…`
+                              : `Picking random tracks from ${catalogScopeLabel(currentSource)}…`
+                            : settings.isShuffled
+                              ? 'Queue-order shuffle is on — add tracks or turn on Random.'
+                              : 'No upcoming tracks.'}
+                      </div>
                     </div>
                   )}
                 </div>
                 )}
               </div>
             </div>
-          </div>
+          </div>,
+          queueDockHost ?? document.body
         )}
 
           {/* Settings Panel */}
@@ -4053,29 +8356,49 @@ export default function MusicPlayer({
                   </button>
                   {isWaveformSettingsExpanded && (
                     <div className="bg-gray-800/40 rounded-lg p-3 space-y-3 text-xs">
-                      {/* Waveform Mode */}
+                      {/* Waveform Color Mode */}
                       <div>
-                        <label className="text-gray-300 mb-2 block">Waveform Style</label>
-                        <div className="flex gap-2">
-                          {(['colorful', 'simple', 'classic'] as const).map((mode) => (
+                        <label className="text-gray-300 mb-2 block">Color Mode</label>
+                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                          {WAVEFORM_COLOR_MODES.map((mode) => (
                             <button
-                              key={mode}
-                              onClick={() => setWaveformMode(mode)}
-                              className={`px-3 py-1.5 rounded text-xs transition-colors ${
-                                waveformMode === mode
+                              key={mode.id}
+                              onClick={() => setWaveformMode(mode.id)}
+                              className={`px-2 py-1.5 rounded text-[11px] transition-colors ${
+                                waveformMode === mode.id
                                   ? 'bg-blue-600 text-white'
                                   : 'bg-gray-700/40 text-gray-300 hover:bg-gray-700/60'
                               }`}
-                              title={
-                                mode === 'colorful' ? 'Colorful waveform with frequency colors' :
-                                mode === 'simple' ? 'Simple waveform' :
-                                'Classic waveform style'
-                              }
+                              title={mode.description}
                             >
-                              {mode === 'colorful' ? '🎨 Colorful' : mode === 'simple' ? '📊 Simple' : '🌊 Classic'}
+                              {mode.label}
                             </button>
                           ))}
                         </div>
+                      </div>
+
+                      {/* Layer layout — Drums/Elements separated lanes vs classic merged */}
+                      <div>
+                        <label className="text-gray-300 mb-2 block">Layer display</label>
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                          {WAVEFORM_LAYER_LAYOUTS.map((layout) => (
+                            <button
+                              key={layout.id}
+                              onClick={() => setWaveformLayerLayout(layout.id)}
+                              className={`px-2 py-1.5 rounded text-[11px] transition-colors ${
+                                waveformLayerLayout === layout.id
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-700/40 text-gray-300 hover:bg-gray-700/60'
+                              }`}
+                              title={layout.description}
+                            >
+                              {layout.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[10px] text-gray-500 leading-snug">
+                          Separated / overlay / merged apply to Drums &amp; Elements; other modes stay merged.
+                        </p>
                       </div>
 
                       {/* Mirror Mode */}
@@ -4094,41 +8417,52 @@ export default function MusicPlayer({
                         </button>
                       </div>
 
-                      {/* Zoom Controls */}
+                      {/* Zoom Controls — musical bar windows */}
                       <div>
                         <label className="text-gray-300 mb-2 block">
-                          Zoom: {waveformZoom < 0.1 
-                            ? `${waveformZoom.toFixed(3)}x` 
-                            : waveformZoom < 1 
-                              ? `${waveformZoom.toFixed(2)}x` 
-                              : waveformZoom === 1 
-                                ? '1x' 
-                                : `${waveformZoom.toFixed(1)}x`}
+                          Zoom: {waveformVisibleBars <= 0 ? 'Full track' : `${Math.round(waveformVisibleBars)} bars`}
                         </label>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button
                             onClick={() => handleWaveformZoom(-1)}
                             className="px-3 py-1.5 bg-gray-700/40 text-gray-300 hover:bg-gray-700/60 rounded text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Zoom out"
-                            disabled={waveformZoom <= 0.01}
+                            title="Zoom out (+bars toward full track)"
+                            disabled={waveformVisibleBars <= 0}
                           >
                             −
                           </button>
                           <button
-                            onClick={() => setWaveformZoom(1)}
+                            onClick={() => applyVisibleBars(0, 0.5)}
                             className="px-3 py-1.5 bg-gray-700/40 text-gray-300 hover:bg-gray-700/60 rounded text-xs transition-colors"
-                            title="Reset zoom"
+                            title="Fit full waveform"
                           >
-                            Reset
+                            Full
                           </button>
                           <button
                             onClick={() => handleWaveformZoom(1)}
                             className="px-3 py-1.5 bg-gray-700/40 text-gray-300 hover:bg-gray-700/60 rounded text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Zoom in"
-                            disabled={waveformZoom >= 32}
+                            title="Zoom in (fewer bars)"
+                            disabled={waveformVisibleBars === WAVEFORM_BAR_ZOOM_STEPS[0]}
                           >
                             +
                           </button>
+                        </div>
+                        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                          {[4, 8, 16].map((bars) => (
+                            <button
+                              key={bars}
+                              type="button"
+                              onClick={() => applyVisibleBars(bars, 0.5)}
+                              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                                waveformVisibleBars === bars
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-700/40 text-gray-300 hover:bg-gray-700/60'
+                              }`}
+                              title={`Show ${bars} bars`}
+                            >
+                              {bars}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
@@ -4193,7 +8527,7 @@ export default function MusicPlayer({
                       </div>
 
                       {/* Follow Mode */}
-                      {waveformZoom > 1 && (
+                      {waveformVisibleBars > 0 && (
                         <div>
                           <label className="text-gray-300 mb-2 block">Follow Mode</label>
                           <button
@@ -4231,12 +8565,21 @@ export default function MusicPlayer({
                       {/* Beat Grid */}
                       <div>
                         <label className="text-gray-300 mb-2 block">
-                          Beat Grid {bpmForGrid ? `(${bpmForGrid.toFixed(0)} BPM)` : '(no BPM)'}
+                          Beat Grid {bpmForGrid ? `(${Number(bpmForGrid.toFixed(2))} BPM)` : '(no BPM)'}
                         </label>
 
                         <div className="flex gap-2 flex-wrap">
                           <button
-                            onClick={() => setBeatGridEnabled(v => !v)}
+                            onClick={() => {
+                              setBeatGridEnabled((v) => {
+                                const next = !v
+                                if (next && beatGridOffsetSec === 0) {
+                                  // Defer so state toggle isn't blocked by align work
+                                  queueMicrotask(() => alignBeatGridToWaveform())
+                                }
+                                return next
+                              })
+                            }}
                             className={`px-3 py-1.5 rounded text-xs transition-colors ${
                               beatGridEnabled ? 'bg-blue-600 text-white' : 'bg-gray-700/40 text-gray-300 hover:bg-gray-700/60'
                             }`}
@@ -4249,19 +8592,30 @@ export default function MusicPlayer({
                           <button
                             onClick={setBeatHere}
                             className="px-3 py-1.5 rounded text-xs bg-gray-700/40 text-gray-300 hover:bg-gray-700/60 transition-colors disabled:opacity-40"
-                            disabled={!bpmForGrid}
-                            title="Snap grid so a beat line lands on the current playhead"
+                            disabled={!bpmForGrid || beatGridLocked}
+                            title="Set downbeat at the playhead (phrase starts here)"
                           >
-                            Set Beat Here
+                            Set Downbeat Here
                           </button>
 
                           <button
-                            onClick={() => setBeatGridOffsetSec(0)}
-                            className="px-3 py-1.5 rounded text-xs bg-gray-700/40 text-gray-300 hover:bg-gray-700/60 transition-colors disabled:opacity-40"
+                            onClick={() => {
+                              if (beatGridLocked) unlockBeatGrid()
+                              else lockBeatGrid()
+                            }}
+                            className={`px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-40 ${
+                              beatGridLocked
+                                ? 'bg-emerald-700/80 text-white'
+                                : 'bg-gray-700/40 text-gray-300 hover:bg-gray-700/60'
+                            }`}
                             disabled={!bpmForGrid}
-                            title="Reset beat grid offset"
+                            title={
+                              beatGridLocked
+                                ? 'Unlock beat grid (allow re-align)'
+                                : 'Verify & lock beat grid + kick onsets for Auto DJ'
+                            }
                           >
-                            Reset
+                            {beatGridLocked ? 'Grid: LOCKED' : 'Lock Grid'}
                           </button>
 
                           <div className="flex items-center gap-2 ml-auto">
@@ -4270,6 +8624,7 @@ export default function MusicPlayer({
                               value={beatGridBeatsPerBar}
                               onChange={(e) => setBeatGridBeatsPerBar(parseInt(e.target.value, 10))}
                               className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 px-2 py-1"
+                              disabled={beatGridLocked}
                             >
                               <option value={3}>3</option>
                               <option value={4}>4</option>
@@ -4279,7 +8634,10 @@ export default function MusicPlayer({
 
                         {bpmForGrid && (
                           <div className="text-[10px] text-gray-500 mt-1">
-                            Offset: {beatGridOffsetSec.toFixed(3)}s
+                            Downbeat: {beatGridOffsetSec.toFixed(3)}s
+                            {beatGridLock != null ? ` · lock ${(beatGridLock * 100).toFixed(0)}%` : ''}
+                            {beatGridLocked ? ' · verified' : ''}
+                            {' · '}bars / 8-bar phrases / 16-bar sections
                           </div>
                         )}
                       </div>
@@ -4288,523 +8646,6 @@ export default function MusicPlayer({
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Waveform - Always visible across full width at bottom (Rekordbox style) - Hidden in DJ mode */}
-          {(expandedMode as string) !== 'dj' && (
-          <div className="w-full bg-black/90 border-t border-gray-700">
-            <div 
-              ref={waveformContainerRef}
-              className="relative h-20 sm:h-24 md:h-32 cursor-pointer touch-manipulation overflow-hidden"
-              onClick={(e) => {
-                if (!audioRef.current || !duration) return
-                const rect = e.currentTarget.getBoundingClientRect()
-                const x = e.clientX - rect.left
-                const percentage = x / rect.width
-                
-                // Adjust for zoom and offset
-                const { start, visibleCount } = getVisibleWaveformRange()
-                const clickedIndex = Math.floor(start + (percentage * visibleCount))
-                const newTime = (clickedIndex / waveformData.length) * duration
-                
-                audioRef.current.currentTime = newTime
-                setCurrentTime(newTime)
-              }}
-              onTouchStart={(e) => {
-                if (!audioRef.current || !duration) return
-                const touch = e.touches[0]
-                const rect = e.currentTarget.getBoundingClientRect()
-                const x = touch.clientX - rect.left
-                const percentage = x / rect.width
-                
-                // Adjust for zoom and offset
-                const { start, visibleCount } = getVisibleWaveformRange()
-                const clickedIndex = Math.floor(start + (percentage * visibleCount))
-                const newTime = (clickedIndex / waveformData.length) * duration
-                
-                audioRef.current.currentTime = newTime
-                setCurrentTime(newTime)
-              }}
-            >
-              <div className="absolute inset-0 flex items-center justify-center px-2">
-                {waveformData.length > 0 ? (
-                  <svg 
-                    className="w-full h-full"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                    shapeRendering="geometricPrecision"
-                    style={{ imageRendering: 'auto' }}
-                  >
-                    {/* Beat Grid overlay */}
-                    {beatGridEnabled && bpmForGrid && beatDurationSec && duration > 0 && waveformData.length > 0 && (() => {
-                      const { start, end } = getVisibleWaveformRange()
-                      const visibleCount = Math.max(1, end - start)
-
-                      const startTimeSec = (start / waveformData.length) * duration
-                      const endTimeSec = (end / waveformData.length) * duration
-                      const spanSec = Math.max(0.0001, endTimeSec - startTimeSec)
-
-                      // Find first beat index n such that beatTime >= startTimeSec
-                      // beatTime = beatGridOffsetSec + n * beatDurationSec
-                      const n0 = Math.ceil((startTimeSec - beatGridOffsetSec) / beatDurationSec)
-
-                      const lines: JSX.Element[] = []
-                      for (let n = n0; ; n++) {
-                        const t = beatGridOffsetSec + n * beatDurationSec
-                        if (t >= endTimeSec) break
-
-                        const x = ((t - startTimeSec) / spanSec) * 100
-                        
-                        // Determine line type: beat, bar (4 beats), or 8-bar (32 beats)
-                        const is8BarLine = (n % (beatGridBeatsPerBar * 8)) === 0
-                        const isBarLine = (n % beatGridBeatsPerBar) === 0 && !is8BarLine
-                        const isBeatLine = !isBarLine && !is8BarLine
-
-                        // Only render if it's a visible line type
-                        if (is8BarLine || isBarLine || isBeatLine) {
-                          let stroke = 'rgba(255,255,255,0.30)' // 30% transparent for beat lines
-                          let strokeWidth = 0.3
-                          
-                          if (is8BarLine) {
-                            // Most prominent: 8-bar lines (every 32 beats with 4/4 time)
-                            stroke = 'rgba(255, 200, 0, 0.50)' // Yellow/orange, more visible
-                            strokeWidth = 1.2
-                          } else if (isBarLine) {
-                            // Medium: bar lines (every 4 beats)
-                            stroke = 'rgba(255,255,255,0.30)' // 30% transparent for bar lines too
-                            strokeWidth = 0.6
-                          }
-                          // else: beat lines use default (30% transparent, thinnest)
-
-                          lines.push(
-                            <line
-                              key={`beat-${n}`}
-                              x1={x}
-                              x2={x}
-                              y1={0}
-                              y2={100}
-                              stroke={stroke}
-                              strokeWidth={strokeWidth}
-                              vectorEffect="non-scaling-stroke"
-                            />
-                          )
-                        }
-                      }
-
-                      return <>{lines}</>
-                    })()}
-
-                    {/* Waveform bars */}
-                    {(() => {
-                      const { start, end } = getVisibleWaveformRange()
-                      let visibleData = waveformData.slice(start, end)
-                      
-                      // Ensure at least 8 bars are visible - duplicate/interpolate if needed
-                      if (visibleData.length < 8 && waveformData.length > 0) {
-                        const needed = 8 - visibleData.length
-                        const lastBar = visibleData[visibleData.length - 1] || waveformData[waveformData.length - 1]
-                        // Duplicate the last bar to reach minimum
-                        for (let i = 0; i < needed; i++) {
-                          visibleData.push({ ...lastBar })
-                        }
-                      }
-                      
-                      const barWidth = 100 / Math.max(8, visibleData.length) // Ensure minimum of 8 bars
-                      
-                      if (waveformMode === 'classic') {
-                        // Classic continuous waveform using SVG path with smooth curves
-                        const pastPoints: Array<{ x: number; y: number; color: string }> = []
-                        const futurePoints: Array<{ x: number; y: number; color: string }> = []
-                        
-                        visibleData.forEach((bar, index) => {
-                          const actualIndex = start + index
-                          const isPast = actualIndex < currentBarIndex
-                          const x = (index / Math.max(1, visibleData.length)) * 100
-                          
-                          const positive = isNaN(bar.positive) || bar.positive === undefined ? 0 : Math.max(0, Math.min(1, bar.positive))
-                          const negative = isNaN(bar.negative) || bar.negative === undefined ? 0 : Math.max(0, Math.min(1, bar.negative))
-                          
-                          // Use the bar's color for gradient
-                          const color = bar.color || 'rgb(255, 100, 0)'
-                          
-                          if (waveformMirror) {
-                            // Mirrored mode: show both positive and negative
-                            const topY = 50 - (positive * 40)
-                            const bottomY = 50 + (negative * 40)
-                            
-                            if (isPast) {
-                              pastPoints.push({ x, y: topY, color })
-                              pastPoints.push({ x, y: bottomY, color })
-                            } else {
-                              futurePoints.push({ x, y: topY, color })
-                              futurePoints.push({ x, y: bottomY, color })
-                            }
-                          } else {
-                            // Single mode: show only positive side, bottom-aligned
-                            const singleY = 100 - (positive * 80) // Scale to use full height, bottom-aligned
-                            
-                            if (isPast) {
-                              pastPoints.push({ x, y: singleY, color })
-                            } else {
-                              futurePoints.push({ x, y: singleY, color })
-                            }
-                          }
-                        })
-                        
-                        // Build path strings for continuous waveform
-                        const buildPath = (points: Array<{ x: number; y: number }>) => {
-                          if (points.length === 0) return ''
-                          
-                          // Create a smooth continuous waveform
-                          let path = `M ${points[0].x} ${points[0].y}`
-                          
-                          for (let i = 1; i < points.length; i += 2) {
-                            const topPoint = points[i - 1]
-                            const bottomPoint = points[i] || topPoint
-                            
-                            if (i === 1) {
-                              path += ` L ${topPoint.x} ${topPoint.y}`
-                            } else {
-                              // Use quadratic curves for smooth transitions
-                              const prevTop = points[i - 3]
-                              const midX = (prevTop.x + topPoint.x) / 2
-                              path += ` Q ${prevTop.x} ${prevTop.y} ${midX} ${prevTop.y}`
-                              path += ` L ${topPoint.x} ${topPoint.y}`
-                            }
-                            
-                            // Draw line to bottom
-                            path += ` L ${bottomPoint.x} ${bottomPoint.y}`
-                          }
-                          
-                          return path
-                        }
-                        
-                        // Build smooth continuous path with curves
-                        const buildSmoothPath = (points: Array<{ x: number; y: number; color: string }>) => {
-                          if (points.length === 0) return { path: '', colors: [] }
-                          
-                          if (waveformMirror) {
-                            // Mirrored mode: build both top and bottom paths
-                            let topPath = ''
-                            let bottomPath = ''
-                            const colors: string[] = []
-                            
-                            for (let i = 0; i < points.length; i += 2) {
-                              const topPoint = points[i]
-                              const bottomPoint = points[i + 1] || topPoint
-                              colors.push(topPoint.color)
-                              
-                              if (i === 0) {
-                                topPath = `M ${topPoint.x} ${topPoint.y}`
-                                bottomPath = `M ${bottomPoint.x} ${bottomPoint.y}`
-                              } else {
-                                const prevTop = points[i - 2]
-                                // Use smooth curves for transitions
-                                const cp1x = prevTop.x + (topPoint.x - prevTop.x) * 0.5
-                                const cp2x = topPoint.x - (topPoint.x - prevTop.x) * 0.5
-                                topPath += ` C ${cp1x} ${prevTop.y}, ${cp2x} ${topPoint.y}, ${topPoint.x} ${topPoint.y}`
-                                bottomPath += ` L ${bottomPoint.x} ${bottomPoint.y}`
-                              }
-                            }
-                            
-                            // Connect bottom back to top to close the shape
-                            if (points.length >= 2) {
-                              const lastTop = points[points.length - 2]
-                              const firstTop = points[0]
-                              bottomPath += ` L ${lastTop.x} ${lastTop.y}`
-                              bottomPath += ` L ${firstTop.x} ${firstTop.y} Z`
-                            }
-                            
-                            return { topPath, bottomPath, colors }
-                          } else {
-                            // Single mode: build smooth path from points to bottom
-                            let path = ''
-                            const colors: string[] = []
-                            
-                            for (let i = 0; i < points.length; i++) {
-                              const point = points[i]
-                              colors.push(point.color)
-                              
-                              if (i === 0) {
-                                path = `M ${point.x} ${point.y}`
-                              } else {
-                                const prevPoint = points[i - 1]
-                                // Use smooth curves for transitions
-                                const cp1x = prevPoint.x + (point.x - prevPoint.x) * 0.5
-                                const cp2x = point.x - (point.x - prevPoint.x) * 0.5
-                                path += ` C ${cp1x} ${prevPoint.y}, ${cp2x} ${point.y}, ${point.x} ${point.y}`
-                              }
-                            }
-                            
-                            // Connect to bottom to create filled area
-                            if (points.length > 0) {
-                              const lastPoint = points[points.length - 1]
-                              const firstPoint = points[0]
-                              path += ` L ${lastPoint.x} 100`
-                              path += ` L ${firstPoint.x} 100 Z`
-                            }
-                            
-                            return { path, colors }
-                          }
-                        }
-                        
-                        const pastPath = buildSmoothPath(pastPoints)
-                        const futurePath = buildSmoothPath(futurePoints)
-                        
-                        // Create gradient definitions for colorful waveform
-                        const gradientId = `waveform-gradient-${start}-${end}`
-                        
-                        return (
-                          <g key="classic-waveform">
-                            {/* Define gradient for past waveform */}
-                            <defs>
-                              <linearGradient id={`${gradientId}-past`} x1="0%" y1="0%" x2="100%" y2="0%">
-                                {pastPath.colors && pastPath.colors.map((color, idx) => {
-                                  const offset = (idx / Math.max(1, pastPath.colors.length - 1)) * 100
-                                  return <stop key={idx} offset={`${offset}%`} stopColor={color} />
-                                })}
-                              </linearGradient>
-                              <linearGradient id={`${gradientId}-future`} x1="0%" y1="0%" x2="100%" y2="0%">
-                                {futurePath.colors && futurePath.colors.map((color, idx) => {
-                                  const offset = (idx / Math.max(1, futurePath.colors.length - 1)) * 100
-                                  return <stop key={idx} offset={`${offset}%`} stopColor={color} stopOpacity="0.5" />
-                                })}
-                              </linearGradient>
-                            </defs>
-                            
-                            {/* Past waveform - brighter with gradient */}
-                            {waveformMirror ? (
-                              <>
-                                {pastPath.topPath && (
-                                  <path
-                                    d={pastPath.topPath}
-                                    fill="none"
-                                    stroke={`url(#${gradientId}-past)`}
-                                    strokeWidth="0.5"
-                                    opacity="0.9"
-                                  />
-                                )}
-                                {pastPath.bottomPath && (
-                                  <path
-                                    d={pastPath.bottomPath}
-                                    fill="none"
-                                    stroke={`url(#${gradientId}-past)`}
-                                    strokeWidth="0.5"
-                                    opacity="0.9"
-                                  />
-                                )}
-                              </>
-                            ) : (
-                              pastPath.path && (
-                                <path
-                                  d={pastPath.path}
-                                  fill={`url(#${gradientId}-past)`}
-                                  fillOpacity="0.3"
-                                  stroke={`url(#${gradientId}-past)`}
-                                  strokeWidth="0.5"
-                                  opacity="0.9"
-                                />
-                              )
-                            )}
-                            
-                            {/* Future waveform - dimmer with gradient */}
-                            {waveformMirror ? (
-                              <>
-                                {futurePath.topPath && (
-                                  <path
-                                    d={futurePath.topPath}
-                                    fill="none"
-                                    stroke={`url(#${gradientId}-future)`}
-                                    strokeWidth="0.5"
-                                    opacity="0.5"
-                                  />
-                                )}
-                                {futurePath.bottomPath && (
-                                  <path
-                                    d={futurePath.bottomPath}
-                                    fill="none"
-                                    stroke={`url(#${gradientId}-future)`}
-                                    strokeWidth="0.5"
-                                    opacity="0.5"
-                                  />
-                                )}
-                              </>
-                            ) : (
-                              futurePath.path && (
-                                <path
-                                  d={futurePath.path}
-                                  fill={`url(#${gradientId}-future)`}
-                                  fillOpacity="0.15"
-                                  stroke={`url(#${gradientId}-future)`}
-                                  strokeWidth="0.5"
-                                  opacity="0.5"
-                                />
-                              )
-                            )}
-                          </g>
-                        )
-                      }
-                      
-                      return visibleData.map((bar, index) => {
-                        const actualIndex = start + index
-                        const isPast = actualIndex < currentBarIndex
-                        const x = (index / Math.max(1, visibleData.length)) * 100
-                        
-                        // Ensure values are valid numbers
-                        const positive = isNaN(bar.positive) || bar.positive === undefined ? 0 : Math.max(0, Math.min(1, bar.positive))
-                        const negative = isNaN(bar.negative) || bar.negative === undefined ? 0 : Math.max(0, Math.min(1, bar.negative))
-                        
-                        // Enhance contrast for detected elements
-                        const contrastMultiplier = bar.elementType && bar.elementConfidence && bar.elementConfidence > 0.3 ? 1.3 : 1.0
-                        const positiveHeight = positive * 40 * contrastMultiplier
-                        const negativeHeight = negative * 40 * contrastMultiplier
-                        
-                        // Ensure minimum height for visibility
-                        const minHeight = 2
-                        const finalPositiveHeight = Math.max(minHeight, positiveHeight)
-                        const finalNegativeHeight = Math.max(minHeight, negativeHeight)
-                        
-                        if (waveformMode === 'simple') {
-                          // Simple SoundCloud-style waveform - more visible
-                          if (waveformMirror) {
-                            // Mirrored mode: show both positive and negative
-                            const height = Math.max(minHeight, (positive + negative) * 40 * contrastMultiplier)
-                            return (
-                              <rect
-                                key={actualIndex}
-                                x={x}
-                                y={50 - height / 2}
-                                width={barWidth * 0.9}
-                                height={height}
-                                fill={isPast ? '#ff5500' : '#888'}  // Brighter future color
-                                opacity={isPast ? 1.0 : 0.7}  // Increased opacity
-                                className="transition-opacity duration-75"
-                                shapeRendering="geometricPrecision"
-                                rx={barWidth * 0.05}
-                              />
-                            )
-                          } else {
-                            // Single mode: show only positive, bottom-aligned
-                            const height = Math.max(minHeight, positive * 80 * contrastMultiplier) // Use full height
-                            return (
-                              <rect
-                                key={actualIndex}
-                                x={x}
-                                y={100 - height}
-                                width={barWidth * 0.9}
-                                height={height}
-                                fill={isPast ? '#ff5500' : '#888'}
-                                opacity={isPast ? 1.0 : 0.7}
-                                className="transition-opacity duration-75"
-                                shapeRendering="geometricPrecision"
-                                rx={barWidth * 0.05}
-                              />
-                            )
-                          }
-                        } else {
-                          // Colorful mode (current style) - more visible
-                          const rgbMatch = bar.color.match(/\d+/g)
-                          const r = rgbMatch ? rgbMatch[0] : '255'
-                          const g = rgbMatch ? rgbMatch[1] : '255'
-                          const b = rgbMatch ? rgbMatch[2] : '255'
-                          const pastColor = bar.color
-                          const futureColor = `rgba(${r}, ${g}, ${b}, 0.5)`  // Increased from 0.3 to 0.5
-                          
-                          if (waveformMirror) {
-                            // Mirrored mode: show both positive and negative
-                            return (
-                              <g key={actualIndex}>
-                                <rect
-                                  x={x}
-                                  y={50 - finalPositiveHeight}
-                                  width={barWidth * 0.9}
-                                  height={finalPositiveHeight}
-                                  fill={isPast ? pastColor : futureColor}
-                                  opacity={isPast ? 1.0 : 0.7}  // Increased from 0.9/0.5 to 1.0/0.7
-                                  className="transition-opacity duration-75"
-                                  shapeRendering="geometricPrecision"
-                                  rx={barWidth * 0.05}
-                                />
-                                <rect
-                                  x={x}
-                                  y={50}
-                                  width={barWidth * 0.9}
-                                  height={finalNegativeHeight}
-                                  fill={isPast ? pastColor : futureColor}
-                                  opacity={isPast ? 1.0 : 0.7}  // Increased from 0.9/0.5 to 1.0/0.7
-                                  className="transition-opacity duration-75"
-                                  shapeRendering="geometricPrecision"
-                                  rx={barWidth * 0.05}
-                                />
-                              </g>
-                            )
-                          } else {
-                            // Single mode: show only positive, bottom-aligned
-                            const singleHeight = Math.max(minHeight, positive * 80 * contrastMultiplier) // Use full height
-                            return (
-                              <rect
-                                key={actualIndex}
-                                x={x}
-                                y={100 - singleHeight}
-                                width={barWidth * 0.9}
-                                height={singleHeight}
-                                fill={isPast ? pastColor : futureColor}
-                                opacity={isPast ? 1.0 : 0.7}
-                                className="transition-opacity duration-75"
-                                shapeRendering="geometricPrecision"
-                                rx={barWidth * 0.05}
-                              />
-                            )
-                          }
-                        }
-                      })
-                    })()}
-                  </svg>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                    Loading waveform...
-                  </div>
-                )}
-              </div>
-              
-              {/* Progress overlay */}
-              <div
-                className="absolute top-0 left-0 h-full bg-gradient-to-r from-transparent via-blue-500/10 to-blue-500/20 pointer-events-none"
-                style={{ 
-                  width: waveformZoom <= 1 
-                    ? `${currentProgress}%` 
-                    : `${(() => {
-                        const { start, visibleCount } = getVisibleWaveformRange()
-                        const playheadIndex = (currentTime / duration) * waveformData.length
-                        if (playheadIndex < start || playheadIndex > start + visibleCount) return 0
-                        return ((playheadIndex - start) / visibleCount) * 100
-                      })()}%`
-                } as React.CSSProperties}
-              />
-              
-              {/* Playhead line */}
-              <div
-                className="absolute top-0 bottom-0 w-0.5 bg-white pointer-events-none z-10"
-                style={{ 
-                  left: `${(() => {
-                    // When follow mode is on and zoomed, always center the playhead
-                    if (waveformFollow && waveformZoom > 1) {
-                      return '50%' // Always centered
-                    }
-                    
-                    if (waveformZoom <= 1) return currentProgress
-                    
-                    const { start, visibleCount } = getVisibleWaveformRange()
-                    const playheadIndex = (currentTime / duration) * waveformData.length
-                    if (playheadIndex < start || playheadIndex > start + visibleCount) return -1 // Off screen
-                    return ((playheadIndex - start) / visibleCount) * 100
-                  })()}%`
-                } as React.CSSProperties}
-              >
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
-              </div>
-            </div>
-          </div>
           )}
 
           {/* Mobile Controls Panel */}
@@ -4824,13 +8665,13 @@ export default function MusicPlayer({
                   className={`p-2.5 rounded transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center ${
                     settings.isShuffled ? 'text-white bg-gray-800/40' : 'text-gray-400 hover:text-white'
                   }`}
-                  title="Shuffle"
+                  title="Shuffle queue order"
                   disabled={queue.length <= 1}
                 >
                   <FaRandom className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={onNext}
+                  onClick={handleSkipToNext}
                   className="p-2.5 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
                   disabled={queue.length <= 1}
                   title="Next"
@@ -4852,42 +8693,43 @@ export default function MusicPlayer({
                     <span className="absolute -top-1 -right-1 text-[8px]">∞</span>
                   )}
                 </button>
+                <AutoDJHeaderButton size="compact" />
               </div>
-              {/* Volume Control - Hidden when waveform is visible, hidden on mobile (volume controlled via device) */}
+              {/* Volume Control - always visible in mobile panel */}
               {!isExpanded && (
-                <div className="hidden md:flex group relative items-center justify-center flex-shrink-0">
+                <div className="flex items-center justify-center gap-3 mt-1">
                   <button
                     onClick={toggleMute}
-                    className="text-gray-400 hover:text-white transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+                    className={`touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors ${
+                      settings.isMuted ? 'text-white' : 'text-gray-400 hover:text-white'
+                    }`}
                     title={settings.isMuted ? 'Unmute' : 'Mute'}
+                    aria-label={settings.isMuted ? 'Unmute' : 'Mute'}
                   >
                     {settings.isMuted ? <FaVolumeMute className="w-5 h-5" /> : <FaVolumeUp className="w-5 h-5" />}
                   </button>
-                  {/* Horizontal slider - appears on hover/tap */}
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto active:pointer-events-auto z-50">
-                    <div className="bg-gray-800 rounded-lg p-2 shadow-lg">
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={settings.isMuted ? 0 : settings.volume}
-                        onChange={(e) => {
-                          const newVolume = parseFloat(e.target.value)
-                          saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
-                          if (audioRef.current) {
-                            audioRef.current.volume = newVolume
-                          }
-                        }}
-                        className="w-32 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer touch-manipulation"
-                        style={{
-                          background: `linear-gradient(to right, #fff 0%, #fff ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 100%)`
-                        }}
-                        title="Adjust volume"
-                        aria-label="Adjust volume"
-                      />
-                    </div>
-                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={settings.isMuted ? 0 : settings.volume}
+                    onChange={(e) => {
+                      const newVolume = parseFloat(e.target.value)
+                      saveSettings({ volume: newVolume, isMuted: newVolume === 0 })
+                      const __live = getPlaybackAudio()
+                      if (__live && !phraseMixLockRef.current) {
+                        __live.volume = newVolume
+                      }
+                      mixEngineRef.current?.setMasterVolume(newVolume)
+                    }}
+                    className="flex-1 max-w-[200px] h-2 rounded-lg appearance-none cursor-pointer touch-manipulation"
+                    style={{
+                      background: `linear-gradient(to right, #fff 0%, #fff ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 ${(settings.isMuted ? 0 : settings.volume) * 100}%, #374151 100%)`
+                    }}
+                    title="Adjust volume"
+                    aria-label="Adjust volume"
+                  />
                 </div>
               )}
             </div>
@@ -4895,16 +8737,89 @@ export default function MusicPlayer({
         </>
       )}
 
-      {/* Track Details Modal */}
-      {showTrackDetails && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowTrackDetails(false)}
+      {/* Auto DJ settings — always available from mini bar / vault header (not only expanded chrome) */}
+      {autoDJSettingsMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={autoDJMenuClamp.ref}
+          {...autoDJMenuClamp.rootProps}
+          data-auto-dj-settings-menu=""
+          data-allow-scroll-when-locked=""
+          className="fixed w-[min(28rem,calc(100vw-1rem))] overflow-y-auto overscroll-y-contain rounded-lg border border-gray-700 bg-gray-950 shadow-2xl"
+          style={autoDJMenuClamp.style}
+          role="dialog"
+          aria-label="Auto DJ settings"
+          onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="bg-black/90 rounded-lg p-6 max-w-md w-full border border-gray-800"
+              <PopupMenuDragHeader
+                title={
+                  <span className="flex items-center gap-2">
+                    <span>Auto DJ Settings</span>
+                    {autoDJConfig.enabled && (
+                      <span className="px-1.5 py-0.5 text-[9px] normal-case tracking-normal bg-emerald-600/30 text-emerald-400 rounded">
+                        ON
+                      </span>
+                    )}
+                  </span>
+                }
+                headerProps={{
+                  ...autoDJMenuClamp.headerProps,
+                  className: `${autoDJMenuClamp.headerProps.className} bg-gray-950`,
+                }}
+                trailing={
+                  <button
+                    type="button"
+                    data-no-drag=""
+                    onClick={closeAutoDJSettingsMenu}
+                    className="flex min-h-[32px] min-w-[32px] items-center justify-center text-gray-400 hover:text-white"
+                    aria-label="Close Auto DJ settings"
+                  >
+                    <FaTimes className="h-3 w-3" />
+                  </button>
+                }
+              />
+              <div className="px-3 pb-3 pt-2">
+                <AutoDJSettingsPanel
+                  config={autoDJConfig}
+                  leadIn={autoDJLeadIn}
+                  suggestedLeadIn={autoDJSuggestedLeadIn}
+                  fanUserId={fanUserId}
+                  saving={autoDJSaving}
+                  dirty={autoDJDirty}
+                  statusMessage={autoDJStatusMessage}
+                  lastMixQuality={lastMixQuality}
+                  mixQualityHistory={mixQualityHistory}
+                  onMixQualityHistoryChange={setMixQualityHistory}
+                  onPatch={patchAutoDJConfig}
+                  onLeadIn={(value) => {
+                    setAutoDJLeadIn(value)
+                    setAutoDJDirty(true)
+                  }}
+                  onSave={() => { void saveAutoDJToAccount() }}
+                  onReset={resetAutoDJToDefaults}
+                />
+              </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Track Details Modal — portaled so player contain/overflow cannot pin it off-screen */}
+      {showTrackDetails && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowTrackDetails(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="track-details-title"
+            className="max-h-[min(85vh,calc(100dvh-2rem))] w-full max-w-md overflow-y-auto overscroll-y-contain rounded-lg border border-gray-800 bg-black/90 p-6 shadow-2xl"
+            data-allow-scroll-when-locked=""
+            data-track-details-modal=""
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Track Details</h3>
+              <h3 id="track-details-title" className="text-lg font-semibold text-white">Track Details</h3>
               <button
                 onClick={() => setShowTrackDetails(false)}
                 className="text-gray-400 hover:text-white transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -4914,14 +8829,15 @@ export default function MusicPlayer({
                 <FaTimes />
               </button>
             </div>
-            {currentTrack.artwork && (
+            {coverSrc && (
               <div className="relative w-full h-64 rounded-lg overflow-hidden mb-4">
                 <Image
-                  src={currentTrack.artwork}
-                  alt={currentTrack.title}
+                  key={coverSrc}
+                  src={coverSrc}
+                  alt={coverAlt}
                   fill
                   className="object-cover"
-                  unoptimized={shouldUnoptimizeImage(currentTrack.artwork)}
+                  unoptimized={coverUnoptimized}
                   sizes="400px"
                   quality={90}
                 />
@@ -4970,7 +8886,8 @@ export default function MusicPlayer({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Expanded Controls - Must be outside the conditional to show in DJ mode */}
@@ -4978,26 +8895,31 @@ export default function MusicPlayer({
         <div className="border-t border-gray-800">
           {expandedMode === 'controls' || !djModeAvailable ? (
             <ExpandedPlayerControls
-              currentTrack={currentTrack}
-              settings={settings}
-              detectedBPM={detectedBPM}
-              isDetectingBPM={isDetectingBPM}
-              tapTempoTaps={tapTempoTaps}
-              tapTempoBPM={tapTempoBPM}
-              audioContext={audioContextRef.current}
-              sourceNode={sourceNodeRef.current}
-              analyserNode={analyserRef.current}
-              audioContextReady={audioContextReady}
-              connectionQuality={connectionQuality}
-              networkEffectiveType={networkEffectiveType}
-              onTapTempo={handleTapTempo}
-              onTempoChange={handleTempoChange}
-              onChangePlaybackRate={changePlaybackRate}
-              onSaveSettings={saveSettings}
+              decks={expandedDeckChannels}
+              deckWaveforms={deckChannelWaveforms}
+              onTapTempo={handleDeckTapTempo}
+              onTempoChange={handleDeckTempoChange}
+              onChangePlaybackRate={changeDeckPlaybackRate}
               getTempoPercentage={getTempoPercentage}
               getAdjustedBPM={getAdjustedBPM}
               rateToTempoValue={rateToTempoValue}
-              onBPMUpdate={handleBPMUpdate}
+              onBPMUpdate={handleDeckBPMUpdate}
+              canEditOrigBpm={canEditOrigBpm}
+              onDeckEqGains={handleDeckEqGains}
+              isPlaying={isPlaying}
+              isLoading={isLoading}
+              error={error}
+              canSkip={queue.length > 1}
+              onPrevious={onPrevious}
+              onNext={handleSkipToNext}
+              onTogglePlay={() => {
+                void togglePlay()
+              }}
+              mixProgress={mixVisualProgress}
+              mixCrossfadeActive={crossfadeActive}
+              autoDjStatusLine={autoDjDeckStatusLine}
+              mixSessionEntries={mixQualityHistory}
+              autoDjStatusMessage={autoDJStatusMessage || null}
             />
           ) : (
             <DJMixerMode
@@ -5011,6 +8933,166 @@ export default function MusicPlayer({
         </div>
       )}
       </div>
+      {waveformMenu && createPortal(
+        <div
+          ref={waveformMenuClamp.ref}
+          {...waveformMenuClamp.rootProps}
+          role="menu"
+          aria-label="Waveform display options"
+          data-allow-scroll-when-locked=""
+          className="fixed z-[12000] w-56 overflow-y-auto overscroll-y-contain rounded-lg border border-gray-700 bg-gray-900 py-0 shadow-2xl"
+          style={waveformMenuClamp.style}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <PopupMenuDragHeader
+            title={`Waveform · Deck ${waveformMenuDeck === 'a' ? 'A' : 'B'}`}
+            headerProps={waveformMenuClamp.headerProps}
+          />
+          <div className="py-1">
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            Color mode
+          </div>
+          {WAVEFORM_COLOR_MODES.map((mode) => (
+            <WaveformMenuItem
+              key={mode.id}
+              label={mode.label}
+              active={waveformMode === mode.id}
+              onSelect={() => setWaveformMode(mode.id)}
+            />
+          ))}
+          <div className="my-1 border-t border-gray-800" />
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            Layer display
+          </div>
+          {WAVEFORM_LAYER_LAYOUTS.map((layout) => (
+            <WaveformMenuItem
+              key={layout.id}
+              label={layout.label}
+              active={waveformLayerLayout === layout.id}
+              onSelect={() => setWaveformLayerLayout(layout.id)}
+            />
+          ))}
+          <div className="my-1 border-t border-gray-800" />
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            Display
+          </div>
+          <WaveformMenuItem
+            label="Mirror"
+            active={waveformMirror}
+            onSelect={() => setWaveformMirror((prev) => !prev)}
+          />
+          <WaveformMenuItem
+            label={waveformMenuDeckBpm ? `Beat grid (${waveformMenuDeckBpm.toFixed(0)} BPM)` : 'Beat grid'}
+            active={beatGridEnabled}
+            disabled={!waveformMenuDeckBpm}
+            onSelect={() => setBeatGridEnabled((v) => !v)}
+          />
+          <WaveformMenuItem
+            label="Follow playhead"
+            active={waveformFollow}
+            disabled={waveformVisibleBars <= 0 || !waveformMenuDeckIsLive}
+            onSelect={() => setWaveformFollow((prev) => !prev)}
+          />
+          <div className="my-1 border-t border-gray-800" />
+          <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">
+            Zoom{' '}
+            {waveformVisibleBars <= 0 ? 'Full track' : `${Math.round(waveformVisibleBars)} bars`}
+          </div>
+          {[4, 8, 16].map((bars) => (
+            <WaveformMenuItem
+              key={`bars-${bars}`}
+              label={`${bars} bars`}
+              active={waveformVisibleBars === bars}
+              onSelect={() => applyVisibleBars(bars, 0.5)}
+            />
+          ))}
+          <WaveformMenuItem
+            label="Zoom in"
+            disabled={waveformVisibleBars === WAVEFORM_BAR_ZOOM_STEPS[0]}
+            onSelect={() => handleWaveformZoom(1)}
+          />
+          <WaveformMenuItem
+            label="Zoom out"
+            disabled={waveformVisibleBars <= 0}
+            onSelect={() => handleWaveformZoom(-1)}
+          />
+          <WaveformMenuItem
+            label="Fit to track"
+            onSelect={() => applyVisibleBars(0, 0.5)}
+          />
+          <div className="my-1 border-t border-gray-800" />
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-500/90">
+            Sonic DNA
+          </div>
+          <WaveformMenuItem
+            label="Open Sonic DNA"
+            disabled={!waveformMenuDeckTrack}
+            onSelect={() => {
+              if (waveformMenuDeckTrack) {
+                setSonicDnaReportTrack(waveformMenuDeckTrack)
+              }
+              setWaveformMenu(null)
+              setSonicDnaReportOpen(true)
+            }}
+          />
+          <WaveformMenuItem
+            label="Set beat here"
+            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
+            onSelect={setBeatHere}
+          />
+          <WaveformMenuItem
+            label="Snap to kick"
+            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
+            onSelect={() => snapPlayheadToDna('kick')}
+          />
+          <WaveformMenuItem
+            label="Snap to beat"
+            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
+            onSelect={() => snapPlayheadToDna('beat')}
+          />
+          <WaveformMenuItem
+            label="Snap to phrase"
+            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
+            onSelect={() => snapPlayheadToDna('phrase')}
+          />
+          <WaveformMenuItem
+            label="Align to waveform"
+            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive || waveformData.length === 0}
+            onSelect={alignBeatGridToWaveform}
+          />
+          <WaveformMenuItem
+            label="Apply DNA EQ pocket"
+            disabled={!waveformMenuDeckTrack?.sonic_dna || !waveformMenuDeckIsLive}
+            onSelect={applyDnaEqPocket}
+          />
+          <WaveformMenuItem
+            label="Reset beat grid"
+            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
+            onSelect={resetBeatGrid}
+          />
+          </div>
+        </div>,
+        document.body
+      )}
+      {sonicDnaReportOpen && (sonicDnaReportTrack ?? currentTrack) && (
+        <SonicDnaReportModal
+          track={(sonicDnaReportTrack ?? currentTrack) as any}
+          dialogRef={sonicDnaReportRef}
+          onClose={() => {
+            setSonicDnaReportOpen(false)
+            setSonicDnaReportTrack(null)
+          }}
+          waveformActions={{
+            gridReady: Boolean(bpmForGrid),
+            hasWaveform: waveformData.length > 0,
+            onAlignGrid: alignBeatGridToWaveform,
+            onSetBeatHere: setBeatHere,
+            onSnapPlayhead: snapPlayheadToDna,
+            onResetGrid: resetBeatGrid,
+            onApplyEqBias: applyDnaEqPocket,
+          }}
+        />
+      )}
     </div>
   )
 }

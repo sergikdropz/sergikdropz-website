@@ -26,6 +26,9 @@ export { GenreSpecialistAgent } from './genreSpecialist' // Enhanced with extend
 export { MusicologistAgent } from './musicologist'
 export { CulturalAnalystAgent } from './culturalAnalyst'
 export { EmotionalPsychologistAgent } from './emotionalPsychologist'
+export { PsychologyAnalystAgent } from './psychologyAnalyst'
+export { PsychoacousticsAnalystAgent } from './psychoacousticsAnalyst'
+export { BassPocketAnalystAgent } from './bassPocketAnalyst'
 
 // Re-export enhanced analysis utilities for convenience
 export { analyzeAdvancedDrumPattern, DRUM_PATTERN_SIGNATURES } from '../advancedDrumAnalyzer'

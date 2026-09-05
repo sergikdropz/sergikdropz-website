@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { persistVaultUnlockAsFan } from '@/lib/fan-crm'
 import { checkRateLimit, clientKeyFromRequest } from '@/lib/rate-limit'
 import {
   FAN_VAULT_UNLOCK_COOKIE,
+  cookieSecureFromRequest,
+  fanVaultUnlockCookieDomain,
+  hostnameFromRequest,
   sealFanVaultUnlock,
 } from '@/lib/fan-vault-unlock-cookie'
 
@@ -39,49 +43,34 @@ export async function POST(request: NextRequest) {
     const source = typeof body.source === 'string' ? body.source.trim().slice(0, 64) || null : null
     const campaign = typeof body.campaign === 'string' ? body.campaign.trim().slice(0, 64) || null : null
 
-    const supabase = createSupabaseServerClient()
-    const now = new Date().toISOString()
-
-    const { data: existing } = await supabase
-      .from('fan_leads')
-      .select('id,first_unlock_at')
-      .eq('email', email)
-      .maybeSingle()
-
-    if (existing?.id) {
-      const patch: Record<string, string | null> = {
-        last_unlock_at: now,
-        updated_at: now,
-      }
-      if (displayName !== null) patch.display_name = displayName
-      if (source !== null) patch.source = source
-      if (campaign !== null) patch.campaign = campaign
-      await supabase.from('fan_leads').update(patch).eq('id', existing.id)
-    } else {
-      const { error: insErr } = await supabase.from('fan_leads').insert({
+    // CRM is best-effort: write `fans` (FansAdmin) + `fan_leads` (unlock timestamps).
+    // The httpOnly unlock cookie is what grants vault listen access.
+    try {
+      await persistVaultUnlockAsFan(createSupabaseServerClient(), {
         email,
-        display_name: displayName,
+        displayName,
         source,
         campaign,
-        first_unlock_at: now,
-        last_unlock_at: now,
-        created_at: now,
-        updated_at: now,
       })
-      if (insErr) {
-        console.error('fan_leads insert:', insErr)
-        return NextResponse.json({ error: 'Could not save your email. Try again later.' }, { status: 500 })
-      }
+    } catch (e) {
+      console.warn('vault unlock fan persist skipped:', e)
     }
 
     const { token, maxAgeSec } = sealFanVaultUnlock(email)
+    const host = hostnameFromRequest(request)
+    const cookieDomain = fanVaultUnlockCookieDomain(host)
+    const secure =
+      cookieSecureFromRequest(request) ||
+      (process.env.NODE_ENV === 'production' && process.env.VERCEL === '1')
+
     const res = NextResponse.json({ ok: true })
     res.cookies.set(FAN_VAULT_UNLOCK_COOKIE, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure,
       sameSite: 'lax',
       maxAge: maxAgeSec,
       path: '/',
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     })
     return res
   } catch (e) {

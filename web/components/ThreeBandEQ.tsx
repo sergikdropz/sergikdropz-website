@@ -1,22 +1,47 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 
 interface ThreeBandEQProps {
   audioContext: AudioContext | null
   sourceNode: MediaElementAudioSourceNode | null
   analyserNode: AnalyserNode | null
+  /** Optional master gain (MixEngine fades); defaults to audioContext.destination */
+  outputGain?: GainNode | null
   audioContextReady?: boolean
   onEQChange?: (eq: { low: number; mid: number; high: number }) => void
 }
 
-export default function ThreeBandEQ({ 
-  audioContext, 
-  sourceNode, 
-  analyserNode,
-  audioContextReady,
-  onEQChange 
-}: ThreeBandEQProps) {
+export type ThreeBandEQHandle = {
+  setGains: (
+    gains: { low?: number; mid?: number; high?: number },
+    opts?: { instant?: boolean },
+  ) => void
+  getGains: () => { low: number; mid: number; high: number }
+  reset: () => void
+  /**
+   * Reconnect audible path: source → EQ → sink (default mix output / destination).
+   * Also taps source → analyser for visualization (analyser is not in the output path).
+   */
+  rewireAudibleChain: (sink?: AudioNode | null) => boolean
+}
+
+/** Below this, a gain change is inaudible and not worth scheduling. */
+const EQ_GAIN_EPSILON_DB = 0.05
+/** ~one animation frame, so per-frame mix targets interpolate smoothly. */
+const EQ_GLIDE_TAU_SEC = 0.02
+
+const ThreeBandEQ = forwardRef<ThreeBandEQHandle, ThreeBandEQProps>(function ThreeBandEQ(
+  {
+    audioContext,
+    sourceNode,
+    analyserNode,
+    outputGain = null,
+    audioContextReady,
+    onEQChange,
+  },
+  ref
+) {
   const [lowGain, setLowGain] = useState(0) // -40dB to +12dB (DJ mixer style - kills band at minimum)
   const [midGain, setMidGain] = useState(0)
   const [highGain, setHighGain] = useState(0)
@@ -24,10 +49,23 @@ export default function ThreeBandEQ({
   const lowFilterRef = useRef<BiquadFilterNode | null>(null)
   const midFilterRef = useRef<BiquadFilterNode | null>(null)
   const highFilterRef = useRef<BiquadFilterNode | null>(null)
-  const isDraggingRef = useRef<string | null>(null)
+  const isDraggingRef = useRef<'low' | 'mid' | 'high' | null>(null)
   const dragStartYRef = useRef<number>(0)
   const dragStartValueRef = useRef<number>(0)
   const lastLogTimeRef = useRef<{ [key: string]: number }>({})
+
+  /**
+   * Authoritative live gains. React state drives the knob visuals, but the mix
+   * engine pushes gains once per animation frame — far faster than React can
+   * commit — so the filters are written from here and state follows behind.
+   */
+  const gainsRef = useRef({ low: 0, mid: 0, high: 0 })
+  const stateSyncRafRef = useRef<number | null>(null)
+  const onEQChangeRef = useRef(onEQChange)
+
+  useEffect(() => {
+    onEQChangeRef.current = onEQChange
+  }, [onEQChange])
 
   // Throttled logging function - only log once per second per band
   const logGainChange = useCallback((band: string, gain: number) => {
@@ -41,6 +79,55 @@ export default function ThreeBandEQ({
       lastLogTimeRef.current[band] = now
     }
   }, [])
+
+  /**
+   * Write a band straight to its BiquadFilter. Glides rather than assigning
+   * `.value` so per-frame targets are interpolated on the audio thread instead
+   * of stepping the coefficients (audible as zipper noise during mix sweeps).
+   */
+  const applyBandToFilter = useCallback(
+    (band: 'low' | 'mid' | 'high', value: number, instant = false) => {
+      const clamped = Math.max(-40, Math.min(12, value))
+      gainsRef.current[band] = clamped
+      const filter =
+        band === 'low'
+          ? lowFilterRef.current
+          : band === 'mid'
+            ? midFilterRef.current
+            : highFilterRef.current
+      if (!filter) return clamped
+      const param = filter.gain
+      if (Math.abs(param.value - clamped) < EQ_GAIN_EPSILON_DB) return clamped
+      if (instant || !audioContext) {
+        param.cancelScheduledValues(audioContext?.currentTime ?? 0)
+        param.value = clamped
+      } else {
+        param.setTargetAtTime(clamped, audioContext.currentTime, EQ_GLIDE_TAU_SEC)
+      }
+      return clamped
+    },
+    [audioContext],
+  )
+
+  /** Coalesce knob-visual updates to one commit per frame. */
+  const scheduleStateSync = useCallback(() => {
+    if (stateSyncRafRef.current !== null) return
+    if (typeof requestAnimationFrame !== 'function') return
+    stateSyncRafRef.current = requestAnimationFrame(() => {
+      stateSyncRafRef.current = null
+      const { low, mid, high } = gainsRef.current
+      setLowGain((prev) => (Math.abs(prev - low) < EQ_GAIN_EPSILON_DB ? prev : low))
+      setMidGain((prev) => (Math.abs(prev - mid) < EQ_GAIN_EPSILON_DB ? prev : mid))
+      setHighGain((prev) => (Math.abs(prev - high) < EQ_GAIN_EPSILON_DB ? prev : high))
+    })
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (stateSyncRafRef.current !== null) cancelAnimationFrame(stateSyncRafRef.current)
+    },
+    [],
+  )
 
   // Setup EQ filters - wait for audio context to be ready
   useEffect(() => {
@@ -81,7 +168,7 @@ export default function ThreeBandEQ({
         const lowFilter = audioContext.createBiquadFilter()
         lowFilter.type = 'lowshelf'
         lowFilter.frequency.value = 100 // Pioneer DJM-900: 100Hz
-        lowFilter.gain.value = lowGain
+        lowFilter.gain.value = gainsRef.current.low
         lowFilterRef.current = lowFilter
         if (process.env.NODE_ENV === 'development') {
           console.log('EQ: Low filter created, ref set:', !!lowFilterRef.current)
@@ -91,7 +178,7 @@ export default function ThreeBandEQ({
         midFilter.type = 'peaking'
         midFilter.frequency.value = 1000 // Pioneer DJM-900: 1kHz
         midFilter.Q.value = 1
-        midFilter.gain.value = midGain
+        midFilter.gain.value = gainsRef.current.mid
         midFilterRef.current = midFilter
         if (process.env.NODE_ENV === 'development') {
           console.log('EQ: Mid filter created, ref set:', !!midFilterRef.current)
@@ -100,7 +187,7 @@ export default function ThreeBandEQ({
         const highFilter = audioContext.createBiquadFilter()
         highFilter.type = 'highshelf'
         highFilter.frequency.value = 10000 // Pioneer DJM-900: 10kHz
-        highFilter.gain.value = highGain
+        highFilter.gain.value = gainsRef.current.high
         highFilterRef.current = highFilter
         if (process.env.NODE_ENV === 'development') {
           console.log('EQ: High filter created, ref set:', !!highFilterRef.current)
@@ -133,10 +220,11 @@ export default function ThreeBandEQ({
           sourceNode.connect(lowFilter)
           lowFilter.connect(midFilter)
           midFilter.connect(highFilter)
-          highFilter.connect(audioContext.destination)
+          const sink = outputGain || audioContext.destination
+          highFilter.connect(sink)
           
           if (process.env.NODE_ENV === 'development') {
-            console.log('EQ: Connected - source -> EQ -> destination (audio output), source -> analyser (visualization only)')
+            console.log('EQ: Connected - source -> EQ -> sink (audio output), source -> analyser (visualization only)')
             console.log('EQ: Filter gains:', {
               low: lowFilter.gain.value,
               mid: midFilter.gain.value,
@@ -173,77 +261,42 @@ export default function ThreeBandEQ({
         // Ignore cleanup errors
       }
       
-      // Reconnect sourceNode directly to analyser and destination when EQ is removed
+      // Reconnect sourceNode through analyser → mix gain when EQ is removed
       try {
         if (sourceNode && analyserNode) {
           sourceNode.disconnect()
           sourceNode.connect(analyserNode)
-          analyserNode.connect(audioContext.destination)
+          const sink = outputGain || audioContext.destination
+          analyserNode.connect(sink)
         }
       } catch (e) {
         // Ignore reconnect errors
       }
     }
-  }, [audioContext, sourceNode, analyserNode, audioContextReady])
+  }, [audioContext, sourceNode, analyserNode, outputGain, audioContextReady])
 
   // Update filter gains when values change
   // BiquadFilterNode gain is in decibels
   // At -40dB, the filter effectively kills that frequency band (DJ mixer style)
   useEffect(() => {
-    if (!lowFilterRef.current) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('EQ: Low filter not ready, gain:', lowGain)
-      }
-      return
-    }
-    
-    const clampedGain = Math.max(-40, Math.min(12, lowGain))
-    lowFilterRef.current.gain.value = clampedGain
-    logGainChange('Low', clampedGain)
-    // Verify the gain was set
-    if (Math.abs(lowFilterRef.current.gain.value - clampedGain) > 0.1 && process.env.NODE_ENV === 'development') {
-      console.warn('EQ: Low filter gain mismatch! Set:', clampedGain, 'Actual:', lowFilterRef.current.gain.value)
-    }
-  }, [lowGain, logGainChange])
+    applyBandToFilter('low', lowGain)
+    logGainChange('Low', lowGain)
+  }, [lowGain, applyBandToFilter, logGainChange])
 
   useEffect(() => {
-    if (!midFilterRef.current) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('EQ: Mid filter not ready, gain:', midGain)
-      }
-      return
-    }
-    
-    const clampedGain = Math.max(-40, Math.min(12, midGain))
-    midFilterRef.current.gain.value = clampedGain
-    logGainChange('Mid', clampedGain)
-    // Verify the gain was set
-    if (Math.abs(midFilterRef.current.gain.value - clampedGain) > 0.1 && process.env.NODE_ENV === 'development') {
-      console.warn('EQ: Mid filter gain mismatch! Set:', clampedGain, 'Actual:', midFilterRef.current.gain.value)
-    }
-  }, [midGain, logGainChange])
+    applyBandToFilter('mid', midGain)
+    logGainChange('Mid', midGain)
+  }, [midGain, applyBandToFilter, logGainChange])
 
   useEffect(() => {
-    if (!highFilterRef.current) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('EQ: High filter not ready, gain:', highGain)
-      }
-      return
-    }
-    
-    const clampedGain = Math.max(-40, Math.min(12, highGain))
-    highFilterRef.current.gain.value = clampedGain
-    logGainChange('High', clampedGain)
-    // Verify the gain was set
-    if (Math.abs(highFilterRef.current.gain.value - clampedGain) > 0.1 && process.env.NODE_ENV === 'development') {
-      console.warn('EQ: High filter gain mismatch! Set:', clampedGain, 'Actual:', highFilterRef.current.gain.value)
-    }
-  }, [highGain, logGainChange])
+    applyBandToFilter('high', highGain)
+    logGainChange('High', highGain)
+  }, [highGain, applyBandToFilter, logGainChange])
 
-  // Notify parent of changes
+  // Notify parent of changes (ref avoids re-firing when parent passes a new callback)
   useEffect(() => {
-    onEQChange?.({ low: lowGain, mid: midGain, high: highGain })
-  }, [lowGain, midGain, highGain, onEQChange])
+    onEQChangeRef.current?.({ low: lowGain, mid: midGain, high: highGain })
+  }, [lowGain, midGain, highGain])
 
   const updateGain = useCallback((band: 'low' | 'mid' | 'high', delta: number) => {
     // Pioneer-style: smooth continuous adjustment (no stepping)
@@ -260,59 +313,136 @@ export default function ThreeBandEQ({
     }
   }, [])
 
-  const handleMouseDown = (e: React.MouseEvent, band: 'low' | 'mid' | 'high') => {
-    e.preventDefault()
-    isDraggingRef.current = band
-    dragStartYRef.current = e.clientY
-    if (band === 'low') {
-      dragStartValueRef.current = lowGain
-    } else if (band === 'mid') {
-      dragStartValueRef.current = midGain
-    } else {
-      dragStartValueRef.current = highGain
-    }
-  }
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDraggingRef.current) return
-    
-    const band = isDraggingRef.current
-    if (band !== 'low' && band !== 'mid' && band !== 'high') return
-    
-    const deltaY = dragStartYRef.current - e.clientY
-    // Smoother sensitivity: 0.3dB per pixel (Pioneer-style smooth operation)
-    // This gives fine control like a real DJ mixer
-    const deltaValue = deltaY * 0.3
-    updateGain(band, deltaValue)
-    dragStartYRef.current = e.clientY
-  }, [updateGain])
-
-  const handleMouseUp = useCallback(() => {
-    isDraggingRef.current = null
+  const setBandGain = useCallback((band: 'low' | 'mid' | 'high', value: number) => {
+    const clamped = Math.max(-40, Math.min(12, value))
+    if (band === 'low') setLowGain(clamped)
+    else if (band === 'mid') setMidGain(clamped)
+    else setHighGain(clamped)
   }, [])
 
-  useEffect(() => {
-    if (isDraggingRef.current) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove)
-        window.removeEventListener('mouseup', handleMouseUp)
-      }
-    }
-  }, [isDraggingRef.current, handleMouseMove, handleMouseUp])
-
-  const handleWheel = (e: React.WheelEvent, band: 'low' | 'mid' | 'high') => {
-    e.preventDefault()
-    // Smoother wheel scrolling: 0.5dB per wheel step (Pioneer-style precision)
-    const delta = e.deltaY > 0 ? -0.5 : 0.5
-    updateGain(band, delta)
-  }
-
-  const resetEQ = () => {
+  const resetEQ = useCallback(() => {
     setLowGain(0)
     setMidGain(0)
     setHighGain(0)
+  }, [])
+
+  const rewireAudibleChain = useCallback(
+    (sink?: AudioNode | null) => {
+      if (!audioContext || !sourceNode) return false
+      const low = lowFilterRef.current
+      const mid = midFilterRef.current
+      const high = highFilterRef.current
+      if (!low || !mid || !high) return false
+
+      const dest = sink ?? outputGain ?? audioContext.destination
+
+      try {
+        sourceNode.disconnect()
+      } catch {
+        /* ignore */
+      }
+      try {
+        low.disconnect()
+      } catch {
+        /* ignore */
+      }
+      try {
+        mid.disconnect()
+      } catch {
+        /* ignore */
+      }
+      try {
+        high.disconnect()
+      } catch {
+        /* ignore */
+      }
+      if (analyserNode) {
+        try {
+          analyserNode.disconnect()
+        } catch {
+          /* ignore */
+        }
+      }
+
+      try {
+        // Visualization tap — not in the audible output path
+        if (analyserNode) {
+          sourceNode.connect(analyserNode)
+        }
+        sourceNode.connect(low)
+        low.connect(mid)
+        mid.connect(high)
+        high.connect(dest)
+        return true
+      } catch (e) {
+        console.error('EQ: rewireAudibleChain failed', e)
+        return false
+      }
+    },
+    [audioContext, sourceNode, analyserNode, outputGain],
+  )
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      // Filters first, knob visuals second. The mix engine calls this once per
+      // frame, so routing it through setState would queue ~60 renders/sec and
+      // apply each gain a frame or more late.
+      setGains: (gains, opts) => {
+        const instant = Boolean(opts?.instant)
+        if (typeof gains.low === 'number') applyBandToFilter('low', gains.low, instant)
+        if (typeof gains.mid === 'number') applyBandToFilter('mid', gains.mid, instant)
+        if (typeof gains.high === 'number') applyBandToFilter('high', gains.high, instant)
+        scheduleStateSync()
+      },
+      // Reads the live value, not last-committed state, so callers doing
+      // read-modify-write on the EQ don't accumulate drift against stale renders.
+      getGains: () => ({ ...gainsRef.current }),
+      reset: resetEQ,
+      rewireAudibleChain,
+    }),
+    [applyBandToFilter, scheduleStateSync, resetEQ, rewireAudibleChain]
+  )
+
+  const [draggingBand, setDraggingBand] = useState<'low' | 'mid' | 'high' | null>(null)
+
+  const handlePointerDown = (e: React.PointerEvent, band: 'low' | 'mid' | 'high') => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    isDraggingRef.current = band
+    setDraggingBand(band)
+    dragStartYRef.current = e.clientY
+    if (band === 'low') dragStartValueRef.current = lowGain
+    else if (band === 'mid') dragStartValueRef.current = midGain
+    else dragStartValueRef.current = highGain
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const band = isDraggingRef.current
+    if (!band) return
+    // Drag up = boost, drag down = cut (vertical fader feel on a rotary)
+    const deltaY = dragStartYRef.current - e.clientY
+    // ~0.25 dB per pixel across the -40…+12 range
+    setBandGain(band, dragStartValueRef.current + deltaY * 0.25)
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDraggingRef.current) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        /* already released */
+      }
+    }
+    isDraggingRef.current = null
+    setDraggingBand(null)
+  }
+
+  const handleWheel = (e: React.WheelEvent, band: 'low' | 'mid' | 'high') => {
+    e.preventDefault()
+    // Scroll up = boost, scroll down = cut
+    const delta = e.deltaY > 0 ? -0.5 : 0.5
+    updateGain(band, delta)
   }
 
   const formatGain = (gain: number) => {
@@ -348,162 +478,79 @@ export default function ThreeBandEQ({
     return 'HIGH'
   }
 
-  const getBandFrequency = (band: 'low' | 'mid' | 'high') => {
-    if (band === 'low') return '100Hz'
-    if (band === 'mid') return '1kHz'
-    return '10kHz'
+  const getGainColor = (band: 'low' | 'mid' | 'high', gain: number) => {
+    if (gain <= -39.5) return 'text-red-500'
+    if (gain === 0) return 'text-gray-500'
+    if (band === 'low') return gain > 0 ? 'text-orange-400' : 'text-red-400'
+    if (band === 'mid') return gain > 0 ? 'text-yellow-400' : 'text-amber-400'
+    return gain > 0 ? 'text-blue-400' : 'text-cyan-400'
   }
 
+  const bands: Array<{ id: 'low' | 'mid' | 'high'; gain: number }> = [
+    { id: 'low', gain: lowGain },
+    { id: 'mid', gain: midGain },
+    { id: 'high', gain: highGain },
+  ]
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-1">
-        <label className="text-xs text-gray-400">3-Band EQ</label>
+    <div className="flex items-center gap-2.5">
+      <div className="mr-0.5 flex flex-col items-start gap-0.5">
+        <span className="text-[10px] uppercase tracking-wide text-gray-500">EQ</span>
         <button
+          type="button"
           onClick={resetEQ}
-          className="text-[9px] text-gray-500 hover:text-gray-300 transition-colors px-1.5 py-0.5"
+          className="px-1 py-0.5 text-[10px] text-gray-500 transition-colors hover:text-gray-300"
           title="Reset EQ"
         >
           Reset
         </button>
       </div>
-      
-      <div className="flex flex-col gap-2">
-        {/* High Band - Top */}
-        <div className="flex items-center gap-2">
-          <div
-            className="relative w-10 h-10 cursor-pointer select-none flex-shrink-0"
-            onMouseDown={(e) => handleMouseDown(e, 'high')}
-            onWheel={(e) => handleWheel(e, 'high')}
-            title="High EQ: Drag or scroll to adjust"
-          >
-            <div className="absolute inset-0 rounded-full bg-gray-800 border-2 border-gray-700 shadow-inner">
-              <div 
-                className={`absolute inset-1 rounded-full bg-gradient-to-br ${getKnobColor('high')} shadow-lg`}
-                style={{
-                  transform: `rotate(${getKnobRotation(highGain)}deg)`,
-                  transition: isDraggingRef.current === 'high' ? 'none' : 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <div className="absolute top-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-white rounded-full shadow-sm" />
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-0.5 h-2 bg-white/80 rounded-full" />
-              </div>
-              <div className="absolute inset-0">
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-0.5 h-1.5 bg-gray-400" />
-                <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-500"
-                  style={{ top: '2px', height: '8px', transform: 'translateX(-50%) rotate(-150deg)', transformOrigin: '50% 100%' }}
-                />
-                <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-500"
-                  style={{ top: '2px', height: '8px', transform: 'translateX(-50%) rotate(150deg)', transformOrigin: '50% 100%' }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col justify-center min-w-0">
-            <div className="text-[9px] text-gray-500">{getBandLabel('high')}</div>
-            <div className="text-[8px] text-gray-600">{getBandFrequency('high')}</div>
-            <div className={`text-[9px] font-mono ${
-              highGain <= -39.5 ? 'text-red-500' : 
-              highGain === 0 ? 'text-gray-500' : 
-              highGain > 0 ? 'text-blue-400' : 'text-cyan-400'
-            }`}>
-              {formatGain(highGain)}{highGain > -39.5 ? 'dB' : ''}
-            </div>
-          </div>
-        </div>
 
-        {/* Mid Band - Middle */}
-        <div className="flex items-center gap-2">
-          <div
-            className="relative w-10 h-10 cursor-pointer select-none flex-shrink-0"
-            onMouseDown={(e) => handleMouseDown(e, 'mid')}
-            onWheel={(e) => handleWheel(e, 'mid')}
-            title="Mid EQ: Drag or scroll to adjust"
-          >
-            <div className="absolute inset-0 rounded-full bg-gray-800 border-2 border-gray-700 shadow-inner">
-              <div 
-                className={`absolute inset-1 rounded-full bg-gradient-to-br ${getKnobColor('mid')} shadow-lg`}
-                style={{
-                  transform: `rotate(${getKnobRotation(midGain)}deg)`,
-                  transition: isDraggingRef.current === 'mid' ? 'none' : 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <div className="absolute top-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-white rounded-full shadow-sm" />
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-0.5 h-2 bg-white/80 rounded-full" />
-              </div>
-              <div className="absolute inset-0">
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-0.5 h-1.5 bg-gray-400" />
-                <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-500"
-                  style={{ top: '2px', height: '8px', transform: 'translateX(-50%) rotate(-150deg)', transformOrigin: '50% 100%' }}
-                />
-                <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-500"
-                  style={{ top: '2px', height: '8px', transform: 'translateX(-50%) rotate(150deg)', transformOrigin: '50% 100%' }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col justify-center min-w-0">
-            <div className="text-[9px] text-gray-500">{getBandLabel('mid')}</div>
-            <div className="text-[8px] text-gray-600">{getBandFrequency('mid')}</div>
-            <div className={`text-[9px] font-mono ${
-              midGain <= -39.5 ? 'text-red-500' : 
-              midGain === 0 ? 'text-gray-500' : 
-              midGain > 0 ? 'text-yellow-400' : 'text-amber-400'
-            }`}>
-              {formatGain(midGain)}{midGain > -39.5 ? 'dB' : ''}
-            </div>
-          </div>
-        </div>
-
-        {/* Low Band - Bottom */}
-        <div className="flex items-center gap-2">
-          <div
-            className="relative w-10 h-10 cursor-pointer select-none flex-shrink-0"
-            onMouseDown={(e) => handleMouseDown(e, 'low')}
-            onWheel={(e) => handleWheel(e, 'low')}
-            title="Low EQ: Drag or scroll to adjust"
-          >
-            <div className="absolute inset-0 rounded-full bg-gray-800 border-2 border-gray-700 shadow-inner">
-              <div 
-                className={`absolute inset-1 rounded-full bg-gradient-to-br ${getKnobColor('low')} shadow-lg`}
-                style={{
-                  transform: `rotate(${getKnobRotation(lowGain)}deg)`,
-                  transition: isDraggingRef.current === 'low' ? 'none' : 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <div className="absolute top-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-white rounded-full shadow-sm" />
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-0.5 h-2 bg-white/80 rounded-full" />
-              </div>
-              <div className="absolute inset-0">
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-0.5 h-1.5 bg-gray-400" />
-                <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-500"
-                  style={{ top: '2px', height: '8px', transform: 'translateX(-50%) rotate(-150deg)', transformOrigin: '50% 100%' }}
-                />
-                <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-500"
-                  style={{ top: '2px', height: '8px', transform: 'translateX(-50%) rotate(150deg)', transformOrigin: '50% 100%' }}
-                />
+      <div className="flex items-center gap-3">
+        {bands.map(({ id, gain }) => (
+          <div key={id} className="flex flex-col items-center gap-0.5">
+            <div
+              className="relative h-11 w-11 flex-shrink-0 cursor-ns-resize select-none touch-none"
+              onPointerDown={(e) => handlePointerDown(e, id)}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              onWheel={(e) => handleWheel(e, id)}
+              title={`${getBandLabel(id)} EQ: Drag up/down to adjust`}
+              role="slider"
+              aria-label={`${getBandLabel(id)} EQ`}
+              aria-valuemin={-40}
+              aria-valuemax={12}
+              aria-valuenow={Math.round(gain * 10) / 10}
+              aria-valuetext={`${formatGain(gain)}${gain > -39.5 ? ' dB' : ''}`}
+            >
+              <div className="absolute inset-0 rounded-full border-2 border-gray-700 bg-gray-800 shadow-inner">
+                <div
+                  className={`absolute inset-1 rounded-full bg-gradient-to-br ${getKnobColor(id)} shadow-lg`}
+                  style={{
+                    transform: `rotate(${getKnobRotation(gain)}deg)`,
+                    transition: draggingBand === id ? 'none' : 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                >
+                  <div className="absolute left-1/2 top-1.5 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white shadow-sm" />
+                  <div className="absolute left-1/2 top-0 h-2.5 w-0.5 -translate-x-1/2 rounded-full bg-white/80" />
+                </div>
+                <div className="absolute inset-0">
+                  <div className="absolute left-1/2 top-0 h-1.5 w-0.5 -translate-x-1/2 bg-gray-400" />
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col justify-center min-w-0">
-            <div className="text-[9px] text-gray-500">{getBandLabel('low')}</div>
-            <div className="text-[8px] text-gray-600">{getBandFrequency('low')}</div>
-            <div className={`text-[9px] font-mono ${
-              lowGain <= -39.5 ? 'text-red-500' : 
-              lowGain === 0 ? 'text-gray-500' : 
-              lowGain > 0 ? 'text-orange-400' : 'text-red-400'
-            }`}>
-              {formatGain(lowGain)}{lowGain > -39.5 ? 'dB' : ''}
+            <div className="text-[9px] font-medium text-gray-400">{getBandLabel(id)}</div>
+            <div className={`font-mono text-[9px] ${getGainColor(id, gain)}`}>
+              {formatGain(gain)}
+              {gain > -39.5 ? 'dB' : ''}
             </div>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   )
-}
+})
+
+export default ThreeBandEQ
 

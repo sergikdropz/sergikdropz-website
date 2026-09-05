@@ -34,6 +34,11 @@ export const adminNavItems: AdminNavItem[] = [
   { type: 'link', label: 'Analytics', href: '/admin/analytics' },
   {
     type: 'group',
+    label: 'Tools',
+    items: [{ type: 'link', label: 'Fan journey simulator', href: '/admin/tools/fan-journey' }],
+  },
+  {
+    type: 'group',
     label: 'Nurturing',
     items: [
       { type: 'link', label: 'Smart Links', href: '/admin/nurturing/smart-links' },

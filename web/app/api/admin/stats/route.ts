@@ -137,9 +137,10 @@ export async function GET(request: NextRequest) {
     // Music Library Tracks Stats (comprehensive) - DEDUPLICATED by audio_file_id
     try {
       // Fetch all tracks with minimal data for deduplication
+      // Lean select — stats use metadata flags + scalar columns, not TOAST blobs (sonic_dna/waveform).
       const { data: allTracks } = await supabase
         .from('music_library_tracks')
-        .select('id, audio_file_id, bpm, key_signature, sonic_dna, waveform, artist, metadata')
+        .select('id, audio_file_id, bpm, key_signature, artist, metadata')
         .or('is_archived.is.null,is_archived.eq.false')
 
       // Deduplicate by audio_file_id (same track can appear in multiple playlists)
@@ -168,10 +169,11 @@ export async function GET(request: NextRequest) {
         const meta = track.metadata || {}
         
         // Use indexed flags if available, otherwise check direct fields
-        if (meta.has_sonic_dna !== undefined ? meta.has_sonic_dna : track.sonic_dna) withSonicDna++
-        if (meta.has_bpm !== undefined ? meta.has_bpm : track.bpm) withBpm++
+        if (meta.has_sonic_dna) withSonicDna++
+        else if (meta.has_sonic_dna === undefined && track.bpm) withSonicDna++
+        if (meta.has_bpm !== undefined ? meta.has_bpm : Boolean(track.bpm)) withBpm++
         if (meta.has_key !== undefined ? meta.has_key : (track.key_signature && track.key_signature !== 'Unknown')) withKey++
-        if (meta.has_waveform !== undefined ? meta.has_waveform : track.waveform) withWaveform++
+        if (meta.has_waveform) withWaveform++
         
         if (track.artist) artistSet.add(track.artist.toLowerCase())
       }

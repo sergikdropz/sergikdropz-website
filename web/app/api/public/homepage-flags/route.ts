@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { HOMEPAGE_INSTAGRAM_FEED_ENABLED_KEY } from '@/lib/site-settings-keys'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 function parseDbBoolean(value: unknown): boolean | null {
   if (value === true || value === 'true') return true
@@ -18,7 +18,7 @@ function parseDbBoolean(value: unknown): boolean | null {
 /**
  * Public read for homepage — no auth. Uses service role server-side only.
  * Resolution: NEXT_PUBLIC_SHOW_INSTAGRAM_FEED force-off/on, then DB setting,
- * then default (off in production, on in development when unset).
+ * then default on when unset (artist site expects the feed visible unless opted out).
  */
 export async function GET() {
   const env = process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED
@@ -68,10 +68,9 @@ export async function GET() {
     console.error('homepage-flags: settings read failed', e)
   }
 
-  const fallbackDev = process.env.NODE_ENV !== 'production'
   return NextResponse.json(
     {
-      homepageInstagramFeedEnabled: fallbackDev,
+      homepageInstagramFeedEnabled: true,
       source: 'default' as const,
     },
     {

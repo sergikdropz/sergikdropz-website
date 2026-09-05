@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { resolveCrowelogicEnv } from '@/lib/ai/crowelogic-env'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,6 +77,7 @@ export async function GET() {
     }
 
     // Get environment variables (masked)
+    const crowe = resolveCrowelogicEnv()
     status.envVars = {
       NEXT_PUBLIC_SUPABASE_URL: supabaseUrl ? '✅ Set' : '❌ Missing',
       NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey ? '✅ Set (masked)' : '❌ Missing',
@@ -84,6 +86,19 @@ export async function GET() {
       STRIPE_SECRET_KEY: stripeSecretKey ? '✅ Set (masked)' : '❌ Missing',
       NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ? '✅ Set' : '❌ Missing',
       ADMIN_EMAILS: process.env.ADMIN_EMAILS ? '✅ Set' : '❌ Missing',
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? '✅ Set (masked)' : '❌ Missing',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✅ Set (masked)' : '❌ Missing',
+      ADMIN_AI_CHAT_PROVIDER: process.env.ADMIN_AI_CHAT_PROVIDER?.trim()
+        ? `✅ ${process.env.ADMIN_AI_CHAT_PROVIDER.trim()}`
+        : '❌ Missing',
+      ANTHROPIC_CHAT_MODEL: process.env.ANTHROPIC_CHAT_MODEL?.trim()
+        ? `✅ ${process.env.ANTHROPIC_CHAT_MODEL.trim()}`
+        : '❌ Missing',
+      OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim()
+        ? `✅ ${process.env.OLLAMA_BASE_URL.trim()}`
+        : '❌ Missing (default 127.0.0.1:11434)',
+      CROWELOGIC_API_KEY: crowe.configured ? `✅ Set (${crowe.keySource})` : '❌ Missing (try CROWE_API_KEY)',
+      CROWELOGIC_BASE_URL: crowe.baseUrl,
     }
 
     return NextResponse.json(status)

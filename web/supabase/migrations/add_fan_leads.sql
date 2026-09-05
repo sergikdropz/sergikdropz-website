@@ -15,3 +15,5 @@ CREATE TABLE IF NOT EXISTS fan_leads (
 
 CREATE INDEX IF NOT EXISTS idx_fan_leads_created_at ON fan_leads(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fan_leads_linked_user ON fan_leads(linked_user_id);
+
+ALTER TABLE fan_leads ENABLE ROW LEVEL SECURITY;

@@ -12,7 +12,7 @@ interface Product {
   price: number
   artwork?: string
   category?: string
-  productType: string
+  productType?: string
   licensingEnabled?: boolean
   status?: string
 }

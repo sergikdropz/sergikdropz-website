@@ -5,12 +5,52 @@ import { join } from 'path'
 import { getServerSession } from '@/lib/auth'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
+import { bumpMusicLibraryPublishVersion } from '@/lib/music-library-publish'
+import { persistSystemicCover } from '@/lib/catalog-sync/persist-systemic-cover'
 
 const logPath = join(process.cwd(), '.cursor', 'debug.log')
 const log = async (obj: any) => { try { await appendFile(logPath, JSON.stringify({...obj,timestamp:Date.now(),sessionId:'debug-session',runId:'run1'})+'\n'); } catch {} }
 
-// Cache folders for 5 minutes
-export const revalidate = 300
+function asJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
+function folderAlbumArtist(row: any): string | null {
+  const fromColumn = typeof row?.album_artist === 'string' ? row.album_artist : null
+  const meta = asJsonObject(row?.metadata)
+  const fromMeta =
+    typeof meta.album_artist === 'string'
+      ? meta.album_artist
+      : typeof meta.albumArtist === 'string'
+        ? meta.albumArtist
+        : null
+  return fromColumn || fromMeta || null
+}
+
+function mapFolderRow(row: any) {
+  if (!row) return row
+  const albumArtist = folderAlbumArtist(row)
+  return {
+    ...row,
+    album_artist: albumArtist,
+    albumArtist,
+    artwork: row.artwork || row.artwork_url || undefined,
+  }
+}
+
+function isMissingFolderColumn(error: { message?: string; code?: string; details?: string }, column: string) {
+  const blob = `${error.message || ''} ${error.details || ''} ${error.code || ''}`
+  return (
+    (error.code === 'PGRST204' && blob.includes(column)) ||
+    (blob.includes('schema cache') && blob.includes(column)) ||
+    blob.includes(`'${column}' column`)
+  )
+}
+
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/music-library/folders
@@ -26,8 +66,14 @@ export async function GET(request: NextRequest) {
     try {
       supabase = createSupabaseServerClient()
     } catch (e: any) {
-      // Graceful degradation when Supabase is unavailable
-      return NextResponse.json({ folders: [] })
+      return NextResponse.json(
+        {
+          error: 'Music library catalog unavailable',
+          code: 'CATALOG_UNAVAILABLE',
+          details: { reason: 'supabase_client', message: e?.message || null },
+        },
+        { status: 503 },
+      )
     }
     const { searchParams } = new URL(request.url)
     const includeHidden = searchParams.get('includeHidden') === 'true'
@@ -44,12 +90,12 @@ export async function GET(request: NextRequest) {
     // #endregion
     let query = supabase
       .from('music_library_folders')
-      .select('id,name,type,parent_id,hidden,is_archived,archived_at,artwork_url,year,display_order,created_at,updated_at')
+      .select('id,name,type,parent_id,hidden,is_archived,archived_at,artwork_url,year,display_order,metadata,created_at,updated_at')
       .order('display_order', { ascending: true })
       .order('name', { ascending: true })
 
     if (!includeHidden) {
-      query = query.eq('hidden', false)
+      query = query.or('hidden.is.null,hidden.eq.false')
     }
     if (!includeArchived) {
       query = query.or('is_archived.is.null,is_archived.eq.false')
@@ -69,25 +115,35 @@ export async function GET(request: NextRequest) {
       await log({location:'folders/route.ts:31',message:'Folders query error',data:{error:error?.message,code:error?.code,details:error?.details},hypothesisId:'B'})
       // #endregion
       console.error('Error fetching folders:', error)
-      // Degrade gracefully so the UI can still load
-      return NextResponse.json({ folders: [] })
+      return NextResponse.json(
+        {
+          error: 'Music library catalog unavailable',
+          code: 'CATALOG_UNAVAILABLE',
+          details: { message: error?.message?.substring(0, 200) || null },
+        },
+        { status: 503 },
+      )
     }
 
     // #region agent log
     await log({location:'folders/route.ts:38',message:'GET /api/music-library/folders success',data:{foldersCount:data?.length||0},hypothesisId:'A'})
     // #endregion
-    const headers: Record<string, string> = includeHidden || includeArchived
-      ? { 'Cache-Control': 'no-store' }
-      : { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' }
+    const headers: Record<string, string> = { 'Cache-Control': 'private, no-store, max-age=0, must-revalidate' }
 
-    return NextResponse.json({ folders: data || [] }, { headers })
+    return NextResponse.json({ folders: (data || []).map(mapFolderRow) }, { headers })
   } catch (error: any) {
     // #region agent log
     await log({location:'folders/route.ts:42',message:'GET /api/music-library/folders error',data:{errorMessage:error?.message,errorStack:error?.stack},hypothesisId:'C'})
     // #endregion
     console.error('Error in GET /api/music-library/folders:', error)
-    // Degrade gracefully so the UI can still load
-    return NextResponse.json({ folders: [] })
+    return NextResponse.json(
+      {
+        error: 'Music library catalog unavailable',
+        code: 'CATALOG_UNAVAILABLE',
+        details: { message: error?.message || null },
+      },
+      { status: 503 },
+    )
   }
 }
 
@@ -142,7 +198,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ folder: data }, { status: 201 })
+    let publishVersion: number | null = null
+    try {
+      publishVersion = await bumpMusicLibraryPublishVersion(session.user?.id)
+    } catch {
+      /* non-fatal */
+    }
+
+    return NextResponse.json({ folder: mapFolderRow(data), publishVersion }, { status: 201 })
   } catch (error: any) {
     console.error('Error in POST /api/music-library/folders:', error)
     return NextResponse.json(
@@ -176,24 +239,55 @@ export async function PUT(request: NextRequest) {
     }
 
     // Map frontend field names to database field names
-    const dbUpdates: any = {}
+    const dbUpdates: Record<string, unknown> = {}
     if (updates.name !== undefined) dbUpdates.name = updates.name
     if (updates.type !== undefined) dbUpdates.type = updates.type
     if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId
     if (updates.hidden !== undefined) dbUpdates.hidden = updates.hidden
-    if (updates.artwork !== undefined) dbUpdates.artwork_url = updates.artwork
+    if (updates.artwork !== undefined) dbUpdates.artwork_url = updates.artwork || null
     if (updates.year !== undefined) dbUpdates.year = updates.year
+    const albumArtist =
+      updates.albumArtist !== undefined ? updates.albumArtist : updates.album_artist
     if (updates.displayOrder !== undefined) dbUpdates.display_order = updates.displayOrder
     if (updates.metadata !== undefined) dbUpdates.metadata = updates.metadata
     if (updates.is_archived !== undefined) dbUpdates.is_archived = updates.is_archived
     if (updates.archived_at !== undefined) dbUpdates.archived_at = updates.archived_at
 
-    const { data, error } = await supabase
+    if (albumArtist !== undefined) {
+      dbUpdates.album_artist = albumArtist
+      const { data: existing } = await supabase
+        .from('music_library_folders')
+        .select('metadata')
+        .eq('id', id)
+        .single()
+      dbUpdates.metadata = {
+        ...asJsonObject(existing?.metadata),
+        ...asJsonObject(updates.metadata),
+        album_artist: albumArtist,
+      }
+    }
+
+    let { data, error } = await supabase
       .from('music_library_folders')
       .update(dbUpdates)
       .eq('id', id)
       .select()
       .single()
+
+    // Production schema never received add_itunes_style_columns.sql, so album_artist
+    // is missing from PostgREST. Retry without that column; metadata already holds it.
+    if (error && albumArtist !== undefined && isMissingFolderColumn(error, 'album_artist')) {
+      const withoutColumn = { ...dbUpdates }
+      delete withoutColumn.album_artist
+      const retry = await supabase
+        .from('music_library_folders')
+        .update(withoutColumn)
+        .eq('id', id)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) {
       console.error('Error updating folder:', error)
@@ -203,7 +297,35 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ folder: data })
+    let tracksUpdated = 0
+    let audioFilesUpdated = 0
+    if (updates.artwork !== undefined) {
+      try {
+        const propagated = await persistSystemicCover(
+          supabase,
+          id,
+          (updates.artwork as string) || null,
+        )
+        tracksUpdated = propagated.tracksUpdated
+        audioFilesUpdated = propagated.audioFilesUpdated
+      } catch (propagateError) {
+        console.error('Error propagating folder artwork to tracks:', propagateError)
+      }
+    }
+
+    let publishVersion: number | null = null
+    try {
+      publishVersion = await bumpMusicLibraryPublishVersion(session.user?.id)
+    } catch {
+      /* non-fatal */
+    }
+
+    return NextResponse.json({
+      folder: mapFolderRow(data),
+      publishVersion,
+      tracksUpdated,
+      audioFilesUpdated,
+    })
   } catch (error: any) {
     console.error('Error in PUT /api/music-library/folders:', error)
     return NextResponse.json(
@@ -248,7 +370,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ success: true })
+    let publishVersion: number | null = null
+    try {
+      publishVersion = await bumpMusicLibraryPublishVersion(session.user?.id)
+    } catch {
+      /* non-fatal */
+    }
+
+    return NextResponse.json({ success: true, publishVersion })
   } catch (error: any) {
     console.error('Error in DELETE /api/music-library/folders:', error)
     return NextResponse.json(

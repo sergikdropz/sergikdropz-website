@@ -1,18 +1,30 @@
 import { NextResponse } from 'next/server'
+import { readFileSync } from 'fs'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { INSTAGRAM_MANUAL_POSTS_KEY } from '@/lib/site-settings-keys'
 
-// Helper function to extract post ID from Instagram URL
+/** Must satisfy `instagram_media.media_url` NOT NULL before process-posts runs. */
+const PENDING_MEDIA_PLACEHOLDER = '/images/gallery/logo.png'
+
 function extractPostId(url: string): string | null {
-  const match = url.match(/instagram\.com\/(?:p|reel)\/([^\/\?]+)/)
+  const match = url.match(/instagram\.com\/(?:p|reel)\/([^/?]+)/)
   return match ? match[1] : null
 }
 
-// Helper function to extract username from Instagram URL
 function extractUsername(url: string): string | null {
-  const match = url.match(/instagram\.com\/([^\/]+)/)
+  const match = url.match(/instagram\.com\/([^/]+)/)
   return match && !['p', 'reel', 'tv'].includes(match[1]) ? match[1] : null
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)
+    ),
+  ])
 }
 
 export async function POST(request: Request) {
@@ -26,119 +38,144 @@ export async function POST(request: Request) {
       )
     }
 
-    // Helper function to validate Instagram URLs (posts and reels)
     const isValidInstagramUrl = (url: string): boolean => {
       if (!url || typeof url !== 'string' || url.trim() === '') return false
       return url.includes('instagram.com/p/') || url.includes('instagram.com/reel/')
     }
 
-    // Filter out invalid posts
-    const validPosts = posts.filter((post: string) => isValidInstagramUrl(post))
-
-    // Allow empty array to clear all posts
-    // (validPosts.length === 0 is allowed)
-
-    // Read current file to preserve username
-    const filePath = join(process.cwd(), 'data', 'instagram-posts.json')
-    const fs = require('fs')
-    let currentData = { username: 'sergikdropz', posts: [] }
-    
-    try {
-      const fileContent = fs.readFileSync(filePath, 'utf-8')
-      currentData = JSON.parse(fileContent)
-    } catch (error) {
-      // File doesn't exist or is invalid, use defaults
+    const validPostsRaw = posts.filter((post: string) => isValidInstagramUrl(post))
+    const seen = new Set<string>()
+    const validPosts: string[] = []
+    for (const p of validPostsRaw) {
+      const key = p.split('?')[0].trim().toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      validPosts.push(p)
     }
 
-    // Update posts
+    const filePath = join(process.cwd(), 'data', 'instagram-posts.json')
+    let currentData = { username: 'sergikdropz', posts: [] as string[] }
+
+    try {
+      const fileContent = readFileSync(filePath, 'utf-8')
+      currentData = JSON.parse(fileContent)
+    } catch {
+      // File missing or invalid
+    }
+
     const updatedData = {
       username: currentData.username || 'sergikdropz',
       posts: validPosts,
-      note: (currentData as any).note || 'Instagram posts for homepage display'
+      note: (currentData as { note?: string }).note || 'Instagram posts for homepage display',
     }
 
-    // Write to file
-    await writeFile(filePath, JSON.stringify(updatedData, null, 2) + '\n', 'utf-8')
+    let fileSaved = false
+    let fileError: string | null = null
+    try {
+      await withTimeout(
+        writeFile(filePath, JSON.stringify(updatedData, null, 2) + '\n', 'utf-8'),
+        12_000
+      )
+      fileSaved = true
+    } catch (e) {
+      fileError = e instanceof Error ? e.message : 'File write failed'
+      console.error('instagram save-posts: data/instagram-posts.json not written:', e)
+    }
 
-    // Also save to database if Supabase is configured
     let dbSaved = 0
+    let settingsSaved = false
     try {
       const supabase = createSupabaseServerClient()
+
+      const { error: settingsError } = await supabase.from('settings').upsert(
+        {
+          key: INSTAGRAM_MANUAL_POSTS_KEY,
+          value: {
+            posts: validPosts,
+            username: updatedData.username,
+            updated_at: new Date().toISOString(),
+          },
+          description: 'Manual Instagram post URLs from Instagram Helper',
+        },
+        { onConflict: 'key' }
+      )
+
+      if (!settingsError) {
+        settingsSaved = true
+      } else {
+        console.error('instagram save-posts: settings upsert failed:', settingsError)
+      }
+
       if (validPosts.length > 0) {
-        for (const postUrl of validPosts) {
+        const rows = validPosts.map((postUrl: string) => {
           const cleanUrl = postUrl.split('?')[0].trim()
           const isVideo = cleanUrl.includes('/reel/')
           const postId = extractPostId(cleanUrl)
-          const username = extractUsername(cleanUrl) || currentData.username || 'sergikdropz'
-          
-          // Save basic metadata to database (will be updated by process-posts)
-          const { error } = await supabase
-            .from('instagram_media')
-            .upsert({
-              post_url: cleanUrl,
-              permalink: cleanUrl,
-              media_type: isVideo ? 'video' : 'image',
-              media_url: null, // Will be populated by process-posts
-              thumbnail_url: null, // Will be populated by process-posts
-              video_url: null, // Will be populated by process-posts
-              caption: null,
-              username: username,
-              post_id: postId,
-              width: null,
-              height: null,
-              duration_seconds: null,
-              metadata: {},
-              is_active: true,
-              error_message: 'Processing...', // Will be cleared by process-posts
-              updated_at: new Date().toISOString(),
-            }, {
-              onConflict: 'post_url',
-            })
-          
-          if (!error) {
-            dbSaved++
+          const username =
+            extractUsername(cleanUrl) || currentData.username || 'sergikdropz'
+
+          return {
+            post_url: cleanUrl,
+            permalink: cleanUrl,
+            media_type: isVideo ? ('video' as const) : ('image' as const),
+            media_url: PENDING_MEDIA_PLACEHOLDER,
+            thumbnail_url: null as string | null,
+            video_url: null as string | null,
+            caption: null as string | null,
+            username,
+            post_id: postId,
+            width: null as number | null,
+            height: null as number | null,
+            duration_seconds: null as number | null,
+            metadata: {} as Record<string, unknown>,
+            is_active: true,
+            error_message: null as string | null,
+            updated_at: new Date().toISOString(),
           }
+        })
+
+        const { error: batchError } = await supabase
+          .from('instagram_media')
+          .upsert(rows, { onConflict: 'post_url' })
+
+        if (!batchError) {
+          dbSaved = validPosts.length
+        } else {
+          console.error('instagram save-posts: instagram_media batch upsert failed:', batchError)
         }
       }
     } catch (dbError) {
-      console.error('Error saving to database:', dbError)
-      // Continue even if database save fails
+      console.error('Error saving to database / settings:', dbError)
     }
 
-    // Automatically process posts: scrape, download videos, upload to Supabase
-    // This runs in the background - don't wait for it to complete
-    if (validPosts.length > 0) {
-      // Process posts asynchronously (don't block the response)
-      // Use internal API call - construct URL from request
-      const url = new URL(request.url)
-      const baseUrl = `${url.protocol}//${url.host}`
-      
-      // Call process-posts endpoint in background (fire and forget)
-      fetch(`${baseUrl}/api/instagram/process-posts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    if (!fileSaved && !settingsSaved) {
+      return NextResponse.json(
+        {
+          error: 'Could not persist posts',
+          details:
+            fileError ||
+            'Write to data/instagram-posts.json failed and Supabase settings save failed. Check server logs and env (SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_URL).',
         },
-        body: JSON.stringify({ postUrls: validPosts }),
-      }).catch((error) => {
-        console.error('Error processing posts (background):', error)
-        // Don't fail the save operation if processing fails
-      })
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({
       success: true,
-      message: `Successfully saved ${validPosts.length} post(s)${dbSaved > 0 ? ` (${dbSaved} saved to database)` : ''}. Processing videos in background...`,
+      message: `Saved ${validPosts.length} post(s)${dbSaved > 0 ? ` (${dbSaved} rows in instagram_media)` : ''}${settingsSaved ? '; list stored in site settings' : ''}${!fileSaved && fileError ? ` (file: ${fileError})` : ''}. Use "Process videos" if you need downloads to storage.`,
       posts: validPosts,
       dbSaved,
-      processing: 'in_progress', // Processing happens in background
+      fileSaved,
+      settingsSaved,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving Instagram posts:', error)
     return NextResponse.json(
-      { error: 'Failed to save posts', details: error.message },
+      {
+        error: 'Failed to save posts',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }
 }
-

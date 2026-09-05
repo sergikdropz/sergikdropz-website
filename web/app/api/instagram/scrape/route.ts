@@ -66,7 +66,7 @@ async function scrapePostMetadata(postUrl: string): Promise<ScrapedMedia | null>
     let width: number | undefined
     let height: number | undefined
     let durationSeconds: number | undefined
-    let metadata: any = {}
+    const metadata: any = {}
     
     // Method 1: Try window._sharedData (most reliable)
     const sharedDataMatch = html.match(/window\._sharedData\s*=\s*({[\s\S]+?});/)

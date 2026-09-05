@@ -1,0 +1,70 @@
+name: Release Checklist
+description: Standard checklist for production deployment readiness
+title: "Release: "
+labels:
+  - release
+body:
+  - type: input
+    id: target_version
+    attributes:
+      label: Target version / commit
+      placeholder: "e.g. main@<sha> or v1.2.3"
+    validations:
+      required: true
+
+  - type: input
+    id: target_environment
+    attributes:
+      label: Target environment
+      placeholder: "production (Vercel)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Change summary
+      description: Briefly describe what is shipping.
+      placeholder: "1-3 bullets of key user-impacting changes"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: quality_checks
+    attributes:
+      label: Pre-deploy quality checks
+      options:
+        - label: "`web`: `npm run lint:gate` passed"
+        - label: "`web`: `npm run typecheck` passed"
+        - label: "`web`: `npm run vercel:build` passed"
+        - label: "`Web CI` workflow is green on the release commit"
+        - label: "Playwright guest tests are green"
+
+  - type: checkboxes
+    id: env_and_integrations
+    attributes:
+      label: Production env / integrations
+      options:
+        - label: "Required Vercel env vars are set (Supabase/Stripe/site URL/fan vault secret)"
+        - label: "Supabase migrations are applied (including `add_stripe_webhook_events.sql`)"
+        - label: "Stripe live webhook endpoint and signing secret are verified"
+        - label: "If used, `PRODUCTION_HEALTHCHECK_URL` repository variable is set"
+
+  - type: checkboxes
+    id: post_deploy
+    attributes:
+      label: Post-deploy validation
+      options:
+        - label: "Ran `Post-Deploy Smoke` workflow with production base URL"
+        - label: "`/api/health/deps` returns `status: ok`"
+        - label: "Checked `/`, `/shop`, `/music-library`, and one admin path"
+        - label: "Checked one real checkout initialization path"
+
+  - type: textarea
+    id: rollback_plan
+    attributes:
+      label: Rollback plan
+      description: What is the immediate rollback action if this release degrades production?
+      placeholder: "Re-deploy previous known-good commit in Vercel and verify /api/health/deps"
+    validations:
+      required: true

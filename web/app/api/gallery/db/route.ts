@@ -14,6 +14,10 @@ export const revalidate = 600
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!(await supabaseIsReachable())) {
+      return supabaseUnavailableResponse('Gallery database is temporarily unavailable')
+    }
+
     const supabase = createSupabaseServerClient()
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')

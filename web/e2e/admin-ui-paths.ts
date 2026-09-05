@@ -2,6 +2,8 @@
 // Omits auth-only login/setup and dynamic segments such as [id].
 export const ADMIN_UI_CRAWL_PATHS: readonly string[] = [
   '/admin',
+  '/admin/ai-assistant/window',
+  '/admin/ai-runs',
   '/admin/analytics',
   '/admin/artist',
   '/admin/bundles',
@@ -31,6 +33,7 @@ export const ADMIN_UI_CRAWL_PATHS: readonly string[] = [
   '/admin/sonic-dna',
   '/admin/splits',
   '/admin/subscribers',
+  '/admin/tools/fan-journey',
   '/admin/users',
   '/admin/videos',
   '/admin/videos-manager',

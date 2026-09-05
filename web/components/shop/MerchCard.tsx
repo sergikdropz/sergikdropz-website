@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface MerchCardProps {
   product: {
@@ -19,6 +21,7 @@ interface MerchCardProps {
 
 export default function MerchCard({ product }: MerchCardProps) {
   const minPrice = Math.min(...product.variants.map((v) => v.retail_price))
+  const thumbnail = product.thumbnail ? resolveImageUrl(product.thumbnail) : ''
 
   const formattedPrice = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -29,11 +32,12 @@ export default function MerchCard({ product }: MerchCardProps) {
     <Link href={`/shop/merch/${product.slug}`} className="group block">
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden transition-all duration-300 hover:border-gray-600">
         <div className="relative aspect-square overflow-hidden bg-gray-800">
-          {product.thumbnail && (
+          {isSafeNextImageSrc(thumbnail) && (
             <Image
-              src={product.thumbnail}
+              src={thumbnail}
               alt={product.name}
               fill
+              unoptimized={shouldUnoptimizeImage(thumbnail)}
               className="object-cover transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />

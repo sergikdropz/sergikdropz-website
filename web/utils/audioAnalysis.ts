@@ -3,43 +3,49 @@
  * for accurate waveform visualization
  */
 
+import {
+  envelopesToLegacyPeaks,
+  extractDspEnvelopesFromPcm,
+  type DspEnvelopeBucket,
+} from '@/lib/audio/waveform-dsp-envelope'
+
 export interface PeakData {
   data: number[]
   length: number
   sampleRate: number
+  /** Peak + RMS + Low/Mid/High filterbank envelopes (professional tape DSP). */
+  envelopes?: DspEnvelopeBucket[]
 }
 
 /**
- * Generate peak data from audio file using Web Audio API
+ * Generate peak + DSP band envelopes from audio file using Web Audio API.
  */
 export async function generatePeakData(audioFile: string, samples: number = 2000): Promise<PeakData> {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
   try {
-    const response = await fetch(audioFile)
+    const response = await fetch(audioFile, {
+      headers: { 'ngrok-skip-browser-warning': '1' },
+    })
     if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`)
     const arrayBuffer = await response.arrayBuffer()
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
 
-    const rawData = audioBuffer.getChannelData(0)
-    const blockSize = Math.floor(rawData.length / samples)
-    const filteredData: number[] = new Array(samples)
+    const left = audioBuffer.getChannelData(0)
+    const right = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null
+    const envelopes = extractDspEnvelopesFromPcm({
+      left,
+      right,
+      sampleRate: audioBuffer.sampleRate,
+      buckets: samples,
+    })
+    const data = envelopesToLegacyPeaks(envelopes)
 
-    for (let i = 0; i < samples; i++) {
-      const blockStart = blockSize * i
-      let sum = 0
-      let max = 0
-
-      for (let j = 0; j < blockSize; j++) {
-        const sample = Math.abs(rawData[blockStart + j])
-        sum += sample
-        max = Math.max(max, sample)
-      }
-
-      const rms = Math.sqrt(sum / blockSize)
-      filteredData[i] = rms * 0.7 + max * 0.3
+    return {
+      data,
+      envelopes,
+      length: data.length,
+      sampleRate: audioBuffer.sampleRate,
     }
-
-    return { data: filteredData, length: samples, sampleRate: audioBuffer.sampleRate }
   } finally {
     await audioContext.close().catch(() => {})
   }

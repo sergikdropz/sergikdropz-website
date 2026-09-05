@@ -11,6 +11,7 @@
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { extractInstrumentTypes, inferInstrumentUsageFromMeasured } from '@/lib/audio/instrument-usage'
 import { 
   classifySubgenres, 
   getSubgenresForParent, 
@@ -19,6 +20,7 @@ import {
   SUBGENRE_PROFILES
 } from '../extendedSubgenreClassifier'
 import { detectTimingFeel, analyzeBassline } from '../advancedDrumAnalyzer'
+import { formatBlackboardPrompt } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
 
 export class GenreSpecialistAgent extends BaseAgent {
   type = AgentType.GENRE_SPECIALIST
@@ -35,34 +37,56 @@ export class GenreSpecialistAgent extends BaseAgent {
 
     try {
       const { comprehensiveAnalysis, musicbrainzData, audioFeatures } = context
+      const measured = context.blackboard?.measured
+      const hasGrooveCore = Boolean(
+        measured?.bpm &&
+          measured?.drumFamily &&
+          String(measured.drumFamily) !== 'unknown',
+      )
 
       const genres = comprehensiveAnalysis?.genres
       const drums = comprehensiveAnalysis?.drums
-      const bpm = audioFeatures?.bpm || comprehensiveAnalysis?.technical?.bpm || null
+      const bpm = measured?.bpm || audioFeatures?.bpm || comprehensiveAnalysis?.technical?.bpm || null
       const energy = audioFeatures?.energyLevel || null
 
-      // Collect all genre hints
-      const genreHints = this.collectGenreHints(context)
+      // Collect genre hints — DSP-first: no title/folder keyword leakage once groove core exists
+      const genreHints = this.collectGenreHints(context, { allowTitleKeywords: !hasGrooveCore })
       
-      // Get MusicBrainz tags
-      const musicbrainzTags = [
-        ...(musicbrainzData?.artistInfo?.tags || []),
-        ...(musicbrainzData?.artistInfo?.genres || [])
-      ]
+      // Get MusicBrainz tags (secondary only when groove is already measured)
+      const musicbrainzTags = hasGrooveCore
+        ? []
+        : [
+            ...(musicbrainzData?.artistInfo?.tags || []),
+            ...(musicbrainzData?.artistInfo?.genres || []),
+          ]
 
       // Detect timing feel using available data
       const timing = this.detectTimingFromContext(context, bpm)
 
-      // Perform extended subgenre classification (with title-based detection)
+      // Prefer blackboard measured audio class when present
+      const measuredPrimary = measured?.genre?.audioPrimary || measured?.genre?.primary
+      const measuredSub = measured?.genre?.audioSubgenre || measured?.genre?.subgenre
+
+      // Perform extended subgenre classification (title keywords only before DSP)
       const subgenreResult = classifySubgenres(
         bpm,
         timing,
         null, // drum analysis will be handled by drum pattern expert
         energy,
         musicbrainzTags,
-        genreHints,
-        context.trackTitle // Pass track title for title-based genre detection
+        measuredPrimary ? [String(measuredPrimary), ...(measuredSub ? [String(measuredSub)] : []), ...genreHints] : genreHints,
+        hasGrooveCore ? '' : context.trackTitle,
+        extractInstrumentTypes(inferInstrumentUsageFromMeasured(measured || {})),
       )
+
+      if (hasGrooveCore && measuredPrimary) {
+        subgenreResult.primarySubgenre = {
+          ...subgenreResult.primarySubgenre,
+          name: String(measuredSub || measuredPrimary),
+          parent: String(measuredPrimary),
+          confidence: Math.max(subgenreResult.primarySubgenre.confidence || 0, measured?.genre?.confidence || 0.75),
+        }
+      }
 
       // Build comprehensive genre data
       const genreData = {
@@ -134,8 +158,12 @@ export class GenreSpecialistAgent extends BaseAgent {
   /**
    * Collect genre hints from all available sources
    */
-  private collectGenreHints(context: AgentContext): string[] {
+  private collectGenreHints(
+    context: AgentContext,
+    opts?: { allowTitleKeywords?: boolean },
+  ): string[] {
     const hints: string[] = []
+    const allowTitleKeywords = opts?.allowTitleKeywords !== false
     
     // From comprehensive analysis
     const genres = context.comprehensiveAnalysis?.genres
@@ -151,17 +179,25 @@ export class GenreSpecialistAgent extends BaseAgent {
       if (drums.genreStyles.primary) hints.push(...drums.genreStyles.primary)
       if (drums.genreStyles.secondary) hints.push(...drums.genreStyles.secondary)
     }
+
+    // Measured audio class from unified genre engine / DSP
+    const measuredGenre = context.blackboard?.measured?.genre
+    if (measuredGenre?.audioPrimary) hints.push(String(measuredGenre.audioPrimary))
+    if (measuredGenre?.primary) hints.push(String(measuredGenre.primary))
+    if (measuredGenre?.subgenre) hints.push(String(measuredGenre.subgenre))
     
-    // From MusicBrainz
-    if (context.musicbrainzData?.artistInfo) {
+    // From MusicBrainz (only when title keywords allowed — pre-DSP)
+    if (allowTitleKeywords && context.musicbrainzData?.artistInfo) {
       const mb = context.musicbrainzData.artistInfo
       if (mb.genres) hints.push(...mb.genres)
       if (mb.tags) hints.push(...mb.tags)
     }
     
-    // Extract from title keywords
-    const titleKeywords = this.extractGenreKeywords(context.trackTitle || '')
-    hints.push(...titleKeywords)
+    // Extract from title keywords — disabled once groove core exists
+    if (allowTitleKeywords) {
+      const titleKeywords = this.extractGenreKeywords(context.trackTitle || '')
+      hints.push(...titleKeywords)
+    }
     
     // Remove duplicates and return
     return Array.from(new Set(hints.filter(h => h && h.length > 0)))
@@ -341,7 +377,9 @@ export class GenreSpecialistAgent extends BaseAgent {
       ? `Secondary influences: ${subgenreResult.secondarySubgenres.map((s: any) => `${s.name} (${Math.round(s.confidence * 100)}%)`).join(', ')}`
       : 'No strong secondary influences'
 
-    const prompt = `You are an expert genre specialist with deep knowledge of electronic music, hip-hop, and contemporary music production. Provide COMPREHENSIVE, MUSICALLY-INFORMED analysis.
+    const prompt = `You are an expert genre specialist grounded in the shared Sonic DNA encyclopedia blackboard.
+
+${formatBlackboardPrompt(context.blackboard)}
 
 TRACK: "${context.trackTitle}" by ${context.artistName}
 BPM: ${bpm}
@@ -362,11 +400,11 @@ SUBGENRE PROFILE: ${subgenreDesc || 'No detailed profile available'}
 GENRE TAGS: ${genreData.genreTags.slice(0, 10).join(', ') || 'None'}
 
 ANALYSIS GUIDELINES:
-1. Consider the timing feel (half-time vs full-time) in your genre assessment
-2. Reference specific subgenre characteristics that match this track
-3. Identify production techniques typical of the classified subgenre
-4. Consider era and regional influences
-5. Note any genre fusion or hybrid elements
+1. Prefer measured drums/BPM + encyclopedia primary over playlist/folder/title leakage
+2. Consider the timing feel (half-time vs full-time) in your genre assessment
+3. Reference specific subgenre characteristics that match this track
+4. Identify production techniques typical of the classified subgenre
+5. Note any genre fusion or hybrid elements — adjacent traditions are context, not extra crate labels
 
 Provide DETAILED genre analysis in JSON. Be specific and musically informed:
 {

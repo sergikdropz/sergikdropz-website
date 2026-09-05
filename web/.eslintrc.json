@@ -2,6 +2,37 @@
   "extends": [
     "next/core-web-vitals",
     "next/typescript"
+  ],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "ignoreRestSiblings": true,
+        "destructuredArrayIgnorePattern": "^_"
+      }
+    ],
+    "react/no-unescaped-entities": "warn",
+    "prefer-const": "error",
+    "@typescript-eslint/ban-ts-comment": "error",
+    "@typescript-eslint/no-require-imports": "error",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn"
+  },
+  "overrides": [
+    {
+      "files": [
+        "middleware.ts",
+        "instrumentation.ts",
+        "lib/auth/**/*.ts",
+        "lib/fan-vault-unlock-cookie.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
+        "@typescript-eslint/no-unused-vars": "error"
+      }
+    }
   ]
 }
-

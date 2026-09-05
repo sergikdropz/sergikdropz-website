@@ -3,11 +3,14 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { extractMetadataFromBuffer } from '@/utils/extractMetadataFromBuffer'
 import { generateWaveformFromBuffer } from '@/utils/generateWaveformFromBuffer'
 import { processUploadOptimized } from '@/utils/processUploadOptimized'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 const MAX_SIZE_MB = 100
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const formData = await request.formData()
     const file = formData.get('file') as File
     const audioFileId = formData.get('audioFileId') as string | null

@@ -1,5 +1,7 @@
 import { getSupabaseClient, createSupabaseServerClient } from './supabase'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
+import { MW_SB_ACCESS_HEADER } from '@/lib/auth/middleware-bridge'
+import { isJwtExpired, refreshSupabaseSession } from '@/lib/auth/token'
 import { createClient } from '@supabase/supabase-js'
 import type { User } from '@supabase/supabase-js'
 import { cache } from 'react'
@@ -68,10 +70,21 @@ export const getServerSession = cache(async function getServerSession(): Promise
       // Cookies might not be available in some contexts
       return null
     }
-    
-    // Get auth token from cookies
-    const authToken = cookieStore.get('sb-auth-token')?.value
-    
+
+    const headersList = await headers()
+    const mwAccessToken = headersList.get(MW_SB_ACCESS_HEADER)
+    let authToken = mwAccessToken || cookieStore.get('sb-auth-token')?.value
+
+    if ((!authToken || isJwtExpired(authToken)) && !mwAccessToken) {
+      const refreshToken = cookieStore.get('sb-refresh-token')?.value
+      if (refreshToken) {
+        const refreshed = await refreshSupabaseSession(refreshToken)
+        if (refreshed?.access_token) {
+          authToken = refreshed.access_token
+        }
+      }
+    }
+
     if (!authToken) {
       return null
     }

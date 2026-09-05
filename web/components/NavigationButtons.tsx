@@ -20,21 +20,17 @@ export default function NavigationButtons({ embedded = false }: NavigationButton
       {!isMusicLibraryPage && !isMusicPage && (
         <Link
           href="/music-library"
-          className="w-full px-6 sm:px-8 py-4 sm:py-5 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold rounded-lg hover:from-yellow-500 hover:to-yellow-700 transition-all shadow-2xl shadow-yellow-500/70 flex items-center justify-center gap-2 text-base sm:text-lg md:text-xl min-h-[56px] sm:min-h-[64px] touch-manipulation relative z-10 transform hover:scale-105"
+          className="inline-flex w-full min-h-[44px] origin-center items-center justify-center gap-2 rounded border border-yellow-400 px-4 py-2 text-center font-six-caps text-3xl font-semibold text-yellow-400 transition-colors hover:bg-yellow-400/10 hover:text-yellow-300 touch-manipulation sm:px-5 sm:py-2.5 sm:text-4xl md:text-5xl"
+          style={{
+            letterSpacing: '0.22em',
+            transform: 'scaleX(1.12)',
+            textShadow: '0.4px 0 0 currentColor, -0.4px 0 0 currentColor',
+          }}
         >
-          <span>Exclusive ID MusicBank</span>
-          <span>→</span>
+          Exclusive ID MusicBank
         </Link>
       )}
-      {isMusicPage ? (
-        <Link
-          href="/music-library"
-          className="w-full px-6 sm:px-8 py-4 sm:py-5 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold rounded-lg hover:from-yellow-500 hover:to-yellow-700 transition-all shadow-2xl shadow-yellow-500/70 flex items-center justify-center gap-2 text-base sm:text-lg md:text-xl min-h-[56px] sm:min-h-[64px] touch-manipulation relative z-10 transform hover:scale-105"
-        >
-          <span>Exclusive ID MusicBank</span>
-          <span>→</span>
-        </Link>
-      ) : (
+      {!isMusicPage && (
         <Link
           href="/music"
           className="px-6 py-3 bg-gray-900/40 text-white font-bold rounded-lg hover:bg-gray-800/40 transition-all text-center text-base sm:text-lg shadow-lg border-2 border-gray-700 opacity-100 relative z-10 min-h-[44px] touch-manipulation"
@@ -45,7 +41,7 @@ export default function NavigationButtons({ embedded = false }: NavigationButton
       {!isGalleryPage && (
         <Link
           href="/gallery"
-          className="px-6 py-3 bg-gray-900/40 text-white font-bold rounded-lg hover:bg-gray-800/40 transition-all text-center text-base sm:text-lg shadow-lg border-2 border-gray-700 opacity-100 relative z-10 min-h-[44px] touch-manipulation"
+          className="px-6 py-3 bg-gray-900/40 text-white font-bold rounded-lg hover:bg-gray-800/40 transition-all text-center text-base sm:text-lg shadow-lg opacity-100 relative z-10 min-h-[44px] touch-manipulation"
         >
           Gallery
         </Link>
@@ -53,7 +49,7 @@ export default function NavigationButtons({ embedded = false }: NavigationButton
       {!isVideosPage && (
         <Link
           href="/videos"
-          className="px-6 py-3 bg-gray-900/40 text-white font-bold rounded-lg hover:bg-gray-800/40 transition-all text-center text-base sm:text-lg shadow-lg border-2 border-gray-700 opacity-100 relative z-10 min-h-[44px] touch-manipulation"
+          className="px-6 py-3 bg-gray-900/40 text-white font-bold rounded-lg hover:bg-gray-800/40 transition-all text-center text-base sm:text-lg shadow-lg opacity-100 relative z-10 min-h-[44px] touch-manipulation"
         >
           Videos
         </Link>

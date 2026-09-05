@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
+import { applyCatalogLock, catalogLockFromTrack, omitLockedCatalogColumns } from '@/lib/catalog-lock'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { buildTrackMetadata } from '@/utils/trackIndexUtils'
 
@@ -18,13 +20,16 @@ export const maxDuration = 300
  * 4. Ensures consistency between tables
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
 
     // Get all tracks with their linked audio files
     const { data: tracks, error: tracksError } = await supabase
       .from('music_library_tracks')
-      .select('id, title, audio_file_id, bpm, key_signature, energy_level, danceability, sonic_dna, metadata')
+      .select('id, title, audio_file_id, bpm, key_signature, genre, subgenre, energy_level, danceability, sonic_dna, metadata')
       .not('audio_file_id', 'is', null)
 
     if (tracksError) {
@@ -85,18 +90,17 @@ export async function POST(request: NextRequest) {
         continue
       }
 
+      const lock = catalogLockFromTrack(track)
       const updates: any = {}
       let needsUpdate = false
 
       // Sync sonic_dna
       if (audioFile.sonic_dna && Object.keys(audioFile.sonic_dna).length > 3) {
-        const trackDnaKeys = track.sonic_dna ? Object.keys(track.sonic_dna) : []
         const audioDnaKeys = Object.keys(audioFile.sonic_dna)
         const hasMoreData = audioDnaKeys.some(k => !['status', 'hasData', 'analyzedAt', '_metadata'].includes(k))
         
         if (hasMoreData) {
-          // Merge sonic_dna, preferring audio_file data
-          updates.sonic_dna = {
+          const merged = {
             ...track.sonic_dna,
             ...audioFile.sonic_dna,
             _metadata: {
@@ -104,12 +108,16 @@ export async function POST(request: NextRequest) {
               synced_at: new Date().toISOString()
             }
           }
+          updates.sonic_dna = applyCatalogLock(lock, merged, {
+            bpm: track.bpm,
+            key_signature: track.key_signature,
+          }).sonicDNA
           needsUpdate = true
           stats.fieldsUpdated.sonic_dna++
         }
       }
 
-      // Sync BPM
+      // Sync BPM / key from analysis only when the catalog column is empty.
       if (audioFile.bpm && audioFile.bpm !== track.bpm) {
         updates.bpm = audioFile.bpm
         needsUpdate = true
@@ -156,6 +164,17 @@ export async function POST(request: NextRequest) {
         needsUpdate = true
         stats.fieldsUpdated.waveform++
       }
+
+      const lockedUpdates = omitLockedCatalogColumns(lock, updates)
+      if (updates.bpm !== undefined && lockedUpdates.bpm === undefined && stats.fieldsUpdated.bpm > 0) {
+        stats.fieldsUpdated.bpm--
+      }
+      if (updates.key_signature !== undefined && lockedUpdates.key_signature === undefined && stats.fieldsUpdated.key_signature > 0) {
+        stats.fieldsUpdated.key_signature--
+      }
+      Object.keys(updates).forEach((key) => delete updates[key])
+      Object.assign(updates, lockedUpdates)
+      needsUpdate = Object.keys(updates).length > 0
 
       // Update metadata with full index rebuild
       if (needsUpdate) {

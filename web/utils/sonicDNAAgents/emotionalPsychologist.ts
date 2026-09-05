@@ -1,10 +1,11 @@
 /**
  * Emotional Psychologist Agent
- * Specializes in: Emotional intelligence, psychological profiles, mood analysis
+ * Specializes in: Emotional intelligence grounded in measured groove + encyclopedia.
  */
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { formatBlackboardPrompt } from '@/lib/audio/sonic-dna-v2/agent-blackboard'
 
 export class EmotionalPsychologistAgent extends BaseAgent {
   type = AgentType.EMOTIONAL_PSYCHOLOGIST
@@ -12,44 +13,43 @@ export class EmotionalPsychologistAgent extends BaseAgent {
     canProcessInParallel: true,
     requiresAudioFile: false,
     requiresMusicBrainz: false,
-    estimatedProcessingTime: 5000, // AI call
-    priority: 4
+    estimatedProcessingTime: 5000,
+    priority: 4,
   }
 
   async process(context: AgentContext): Promise<AgentResult> {
     const startTime = Date.now()
 
     try {
-      const { trackTitle, artistName, audioFeatures, comprehensiveAnalysis, previousAgentResults } = context
+      const { trackTitle, artistName, audioFeatures, comprehensiveAnalysis, blackboard } = context
+      const emotions = blackboard?.kb?.emotions?.join(', ') || ''
 
-      const prompt = `You are an expert music psychologist. Provide CONTEXT-AWARE emotional and psychological analysis based on the actual track:
+      const prompt = `You are an expert music psychologist writing on a shared Sonic DNA blackboard.
+
+${formatBlackboardPrompt(blackboard)}
 
 Track: "${trackTitle}" by ${artistName}
-BPM: ${audioFeatures?.bpm || 'Unknown'}
+BPM: ${(blackboard?.measured?.bpm ?? audioFeatures?.bpm) || 'Unknown'}
 Energy: ${audioFeatures?.energyLevel || 'Unknown'}
-${comprehensiveAnalysis?.genres?.primary ? `Genres: ${comprehensiveAnalysis.genres.primary.join(', ')}` : ''}
-${comprehensiveAnalysis?.harmony?.keySignature ? `Key: ${comprehensiveAnalysis.harmony.keySignature}` : ''}
-${comprehensiveAnalysis?.harmony?.scale ? `Scale: ${comprehensiveAnalysis.harmony.scale}` : ''}
+${comprehensiveAnalysis?.harmony?.keySignature || blackboard?.measured?.key ? `Key: ${blackboard?.measured?.key || comprehensiveAnalysis?.harmony?.keySignature}` : ''}
+Suggested affect cluster from encyclopedia: ${emotions || 'unmarked'}
 
-Provide CONCISE, CONTEXT-AWARE analysis. Maximum 100 words per field. Be specific to this track:
+Focus on AFFECT only (emotions + journey). Dedicated psychology / psychoacoustics agents handle deeper profiles.
+Prefer measured pulse/drums + encyclopedia affect cluster over title guesses. Maximum 100 words per field:
 
 {
   "primaryEmotions": ["emotion1", "emotion2", "emotion3", "emotion4", "emotion5"],
-  "emotionalJourney": "CONCISE description of the emotional arc and evolution (80-100 words). Describe how emotions develop throughout the track, key emotional moments, and the overall emotional narrative. Be specific to this track's BPM, energy level, and genre.",
-  
-  "psychologicalProfile": "CONCISE psychological impact analysis (80-100 words). Describe how this specific track affects the mind: cognitive responses, mood regulation, therapeutic potential, and psychological states evoked. Be context-aware based on the track's characteristics."
-}
-
-Be thorough but concise. Ensure BOTH fields are filled.`
+  "emotionalJourney": "CONCISE emotional arc (80-100 words) bound to BPM/feel/drums.",
+  "psychologicalProfile": "OPTIONAL short bridge (40-60 words) if affect implies a clear tendency; otherwise omit — psychology_analyst owns the full profile."
+}`
 
       const emotional = await this.callAI(this.withUserDirective(prompt, context), 2000)
       const processingTime = Date.now() - startTime
 
       if (emotional) {
         return this.createSuccess(emotional, 0.85, processingTime)
-      } else {
-        return this.createFailure('AI analysis failed', processingTime)
       }
+      return this.createFailure('AI analysis failed', processingTime)
     } catch (error: any) {
       return this.createFailure(error.message, Date.now() - startTime)
     }

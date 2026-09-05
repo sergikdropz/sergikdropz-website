@@ -1,41 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createAdminUser } from '@/lib/admin/createAdminUser'
-import { checkRateLimit, clientKeyFromRequest } from '@/lib/rate-limit'
+import { gateAdminPublicSetup, resolveSetupSupabaseCredentials } from '@/lib/auth/admin-setup-gate'
 
 export const dynamic = 'force-dynamic'
 
-const SETUP_WINDOW_MS = 60 * 60 * 1000
-const SETUP_MAX_PER_HOUR = 40
-
 export async function POST(request: NextRequest) {
   try {
-    if (process.env.ADMIN_PUBLIC_SETUP_DISABLED === '1') {
-      return NextResponse.json({ error: 'Admin setup is disabled.' }, { status: 403 })
-    }
+    const gate = gateAdminPublicSetup(request)
+    if (!gate.ok) return gate.response
 
-    const rl = checkRateLimit(
-      `admin-setup:${clientKeyFromRequest(request)}`,
-      SETUP_MAX_PER_HOUR,
-      SETUP_WINDOW_MS
-    )
-    if (!rl.ok) {
-      return NextResponse.json(
-        { error: 'Too many setup requests. Try again later.' },
-        {
-          status: 429,
-          headers: { 'Retry-After': String(rl.retryAfterSec) },
-        }
-      )
-    }
+    const body = await request.json()
+    const { email, password } = body
 
-    const { email, password, supabaseUrl, supabaseAnonKey, supabaseServiceKey } = await request.json()
-
-    if (!email || !password || !supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: 'All fields are required' },
-        { status: 400 }
-      )
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
     if (password.length < 8) {
@@ -45,8 +24,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create service client (has admin privileges)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const creds = resolveSetupSupabaseCredentials(body)
+    if (!creds.ok) {
+      return NextResponse.json({ error: creds.error }, { status: 400 })
+    }
+
+    const supabase = createClient(creds.url, creds.serviceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

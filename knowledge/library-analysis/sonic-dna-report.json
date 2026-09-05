@@ -1,0 +1,492 @@
+{
+  "generatedAt": "2026-09-05T20:06:15.596Z",
+  "method": "dsp-audit-v1",
+  "pipeline": [
+    "16-step kick/snare/hat fold from audio",
+    "BPM octave vs title BPM when present",
+    "bass lock vs kick grid",
+    "chroma root/key/Camelot",
+    "band-energy instrument roles",
+    "hat/snare/kick rhythm styles",
+    "templated description from those fields only"
+  ],
+  "caveats": [
+    "Instrument labels are spectral roles, not named plugins or vocalist IDs.",
+    "Playlist/folder names are crates, never genre.",
+    "Gold-set tracks still need ear confirmation."
+  ],
+  "counts": {
+    "measuredFiles": 390,
+    "catalogTracks": 379,
+    "libraryTracks": 243,
+    "withAuditedDescription": 390,
+    "unpitched": 36,
+    "goldSet": 7
+  },
+  "genres": [
+    {
+      "label": "Funky House",
+      "value": 98
+    },
+    {
+      "label": "Reggae",
+      "value": 95
+    },
+    {
+      "label": "Experimental Bass",
+      "value": 83
+    },
+    {
+      "label": "Hip-Hop",
+      "value": 49
+    },
+    {
+      "label": "Tech House",
+      "value": 30
+    },
+    {
+      "label": "Trap",
+      "value": 17
+    },
+    {
+      "label": "Disco",
+      "value": 8
+    },
+    {
+      "label": "Deep House",
+      "value": 4
+    },
+    {
+      "label": "Slow House",
+      "value": 4
+    },
+    {
+      "label": "House",
+      "value": 1
+    },
+    {
+      "label": "Drum & Bass",
+      "value": 1
+    }
+  ],
+  "drumFamilies": [
+    {
+      "label": "four-on-the-floor",
+      "value": 209
+    },
+    {
+      "label": "breakbeat",
+      "value": 85
+    },
+    {
+      "label": "half-time",
+      "value": 75
+    },
+    {
+      "label": "one-drop",
+      "value": 19
+    },
+    {
+      "label": "boom-bap",
+      "value": 2
+    }
+  ],
+  "hatGrids": [
+    {
+      "label": "eighths",
+      "value": 206
+    },
+    {
+      "label": "sparse-accents",
+      "value": 117
+    },
+    {
+      "label": "offbeat-hats",
+      "value": 67
+    }
+  ],
+  "bassLocks": [
+    {
+      "label": "offbeat-syncopated",
+      "value": 383
+    },
+    {
+      "label": "pedal-root",
+      "value": 4
+    },
+    {
+      "label": "follows-kick",
+      "value": 3
+    }
+  ],
+  "keys": [
+    {
+      "label": "A minor",
+      "value": 99
+    },
+    {
+      "label": "unpitched",
+      "value": 36
+    },
+    {
+      "label": "G minor",
+      "value": 34
+    },
+    {
+      "label": "D minor",
+      "value": 32
+    },
+    {
+      "label": "A major",
+      "value": 23
+    },
+    {
+      "label": "C major",
+      "value": 18
+    },
+    {
+      "label": "C minor",
+      "value": 18
+    },
+    {
+      "label": "G# major",
+      "value": 15
+    },
+    {
+      "label": "D# major",
+      "value": 13
+    },
+    {
+      "label": "E minor",
+      "value": 12
+    },
+    {
+      "label": "F major",
+      "value": 12
+    },
+    {
+      "label": "G# minor",
+      "value": 11
+    },
+    {
+      "label": "F minor",
+      "value": 10
+    },
+    {
+      "label": "E major",
+      "value": 9
+    },
+    {
+      "label": "G major",
+      "value": 8
+    },
+    {
+      "label": "D major",
+      "value": 7
+    }
+  ],
+  "instruments": [
+    {
+      "label": "Kick drum",
+      "value": 390
+    },
+    {
+      "label": "Sub / 808 bass",
+      "value": 388
+    },
+    {
+      "label": "Bass",
+      "value": 2
+    },
+    {
+      "label": "Sustained harmonic (keys/pad)",
+      "value": 2
+    }
+  ],
+  "bpmBuckets": [
+    {
+      "label": "120–124",
+      "value": 196
+    },
+    {
+      "label": "125–129",
+      "value": 65
+    },
+    {
+      "label": "135–139",
+      "value": 37
+    },
+    {
+      "label": "140–144",
+      "value": 24
+    },
+    {
+      "label": "80–84",
+      "value": 22
+    },
+    {
+      "label": "115–119",
+      "value": 11
+    },
+    {
+      "label": "90–94",
+      "value": 11
+    },
+    {
+      "label": "85–89",
+      "value": 8
+    },
+    {
+      "label": "150–154",
+      "value": 5
+    },
+    {
+      "label": "130–134",
+      "value": 2
+    },
+    {
+      "label": "100–104",
+      "value": 2
+    },
+    {
+      "label": "95–99",
+      "value": 2
+    },
+    {
+      "label": "105–109",
+      "value": 2
+    },
+    {
+      "label": "175–179",
+      "value": 1
+    },
+    {
+      "label": "110–114",
+      "value": 1
+    },
+    {
+      "label": "160–164",
+      "value": 1
+    }
+  ],
+  "goldSet": [
+    {
+      "id": "873f95ed-e22c-4334-abc7-7091dcdd142a",
+      "title": "ANDINO x SERGIK - Bird Talk",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "G# major",
+      "camelot": "4B",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "No title BPM. Catalog previously listed 126. Detector: 123, 4/4, offbeat bass."
+    },
+    {
+      "id": "4e27fd2b-24db-40e0-b89f-2cda2b49f90f",
+      "title": "Andino x Sergik x Janis - Tradicion",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "G minor",
+      "camelot": "6A",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "No title BPM. Detector: 123 house-tempo 4/4."
+    },
+    {
+      "id": "20957f2d-bdcc-4966-a625-2cc5a2f06e9f",
+      "title": "Barrio Bros - Bloops",
+      "bpm": 126,
+      "titleBpm": null,
+      "key": "C minor",
+      "camelot": "5A",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "Half-time octave (63) rejected in favor of 126."
+    },
+    {
+      "id": "edde5ead-d197-4989-8b16-efdc00cb1b5a",
+      "title": "Ceemoar x Sergik - No Body",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": null,
+      "camelot": null,
+      "unpitched": true,
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "Key gated as unpitched (low chroma correlation). Confirm by ear."
+    },
+    {
+      "id": "1e0ff658-2b69-4685-aef9-337a82dea765",
+      "title": "SERGIK - Going Gone 122bpm",
+      "bpm": 122,
+      "titleBpm": 122,
+      "key": "A minor",
+      "camelot": "8A",
+      "drumFamily": "four-on-the-floor",
+      "bassLock": "offbeat-syncopated",
+      "primaryGenre": "Funky House",
+      "notes": "Title BPM 122 matched. Ear-check: house 4/4 with bass off the kick (not folder Deep House)."
+    },
+    {
+      "id": "12fcc05e-2eef-4cf2-af20-0b003fa69d1d",
+      "title": "SERGIK x Bone - Cosmic Cadillac",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "A major",
+      "camelot": "11B",
+      "drumFamily": "half-time",
+      "timingFeel": "half-time",
+      "bassLock": "offbeat-syncopated",
+      "family": "Hip-Hop",
+      "primaryGenre": "Hip-Hop",
+      "subgenre": "Trap",
+      "notes": "Ear: hip-hop/trap kick-snare with house-like hats. Not house or tech house. Detector previously forced 4/4 from downbeat kicks at 123 BPM."
+    },
+    {
+      "id": "3d26f0f2-a583-47ae-9c8e-e30c74028691",
+      "title": "SERGIK - Cosmic Cadillac",
+      "bpm": 123,
+      "titleBpm": null,
+      "key": "A major",
+      "camelot": "11B",
+      "drumFamily": "half-time",
+      "timingFeel": "half-time",
+      "bassLock": "offbeat-syncopated",
+      "family": "Hip-Hop",
+      "primaryGenre": "Hip-Hop",
+      "subgenre": "Trap",
+      "notes": "Same WAV as Cosmic Cadillac (library duplicate). Ear: hip-hop/trap kick-snare, house-like hats."
+    }
+  ],
+  "examples": [
+    {
+      "id": "02511e6e-a2bc-4c61-868d-f5c57db19ad8",
+      "title": "SERGIK x Breauxx - You Can't 1",
+      "bpm": 123.05,
+      "key": "A minor",
+      "genre": "Funky House",
+      "drums": "four-on-the-floor",
+      "hats": "eighths",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass",
+        "Snare / clap"
+      ],
+      "description": "Groove class Funky House / Deep n Funky from measured usage, not from a crate name. Kick is used as a steady four-on-the-floor pulse. Snare is used in a syncopated/dembow cadence. Hats are used as an eighth-note ride that keeps house/tech time. Bass is used off the kick (funky/syncopated), which in a house pocket makes funky house; with sparse hats and sub it can still be reggae/bass. Hats/cymbals are used as a ride over 4/4, so the low-end label is a house/disco sub, not a trap 808 by itself. House is disco's afterlife after the 1979 'Disco Sucks' backlash and the warehouse continuum in Chicago (Knuckles at the Warehouse) and New York (Levan at the Garage). Funky / disco house keeps the offbeat hi-hat and syncopated bass of disco rather than techno's kick-locked ostinato. Nu-disco and French house later re-sampled that language with compression and filters. The science of the style is groove: kick as heartbeat, hats as lift, bass as conversation with the kick. This file's clock is 123 BPM (full-time; 123 BPM). Kick is used as four-on-the-floor; snare as dembow-or-syncopated-snare; hats as eighths. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Sensorimotor synchronization (Large & Snyder; Repp) explains why a stable pulse recruits movement. Club musics around 118–128 BPM sit near preferred tapping rates and walking cadence, which is why four-on-the-floor feels bodily rather than merely metric. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. House floors were historically Black, Latino, and queer sanctuary spaces. The offbeat hat is a social cue — it invites the body to fill the space between kicks. Cross-cultural traffic includes disco strings, gospel piano, Afro-Cuban percussion, and later UK garage shuffle. Related traditions on the map (not extra labels for this file): Chicago House, Disco, Boogie, Nu-Disco, French House, UK Garage, Soulful House, Deep House. Predictable 4/4 plus moderate syncopation supports trance-like motor coupling without the dissociative density of 16th-hat trance. Warm minor/major soul harmony plus swing reads as affiliation and play rather than aggression. Listeners often report 'lift' on the offbeat hat — a small prediction error that resolves every beat. Named center A minor. In many Western listeners, minor collections trend toward lower valence (Juslin/Gabrielsson-type findings) — a tendency, not a universal. Rhythm and bass weight can override that coloring. Estimated arousal 8/10 and dance affordance 9/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "030de574-a45d-4f8c-a2e3-24cffcfd2cc8",
+      "title": "SERGIK - Gone Floating",
+      "bpm": 117.45,
+      "key": "A major",
+      "genre": "Disco",
+      "drums": "four-on-the-floor",
+      "hats": "sparse-accents",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass"
+      ],
+      "description": "Groove class Disco / Nu-Disco from measured usage, not from a crate name. Kick is used as a steady four-on-the-floor pulse. Snare/clap is used as a 2-and-4 backbeat (house, hip-hop, steppers). Hats are used as space and accents, leaving room for bass (dub/trap/experimental). Bass is used off the kick (funky/syncopated), which in a house pocket makes funky house; with sparse hats and sub it can still be reggae/bass. Low end is used as sub/808 weight without a pad bed — bass-music, dub, or trap arrangement. Disco synthesized soul, funk, Latin percussion, and European production into a 4/4 social music. The 1979 backlash pushed the culture underground, where it became house. Nu-disco is the 21st-century electronic restatement. This file's clock is 117 BPM (full-time; 117 BPM). Kick is used as four-on-the-floor; snare as backbeat-2-and-4; hats as sparse-accents. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Sensorimotor synchronization (Large & Snyder; Repp) explains why a stable pulse recruits movement. Club musics around 118–128 BPM sit near preferred tapping rates and walking cadence, which is why four-on-the-floor feels bodily rather than merely metric. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. Queer, Black, and immigrant club cultures; fashion and spectacle as political presence. Related traditions on the map (not extra labels for this file): Boogie, Nu-Disco, Philadelphia soul, Hi-NRG, Italo Disco, Funky House, Dub, UK Steppers, Sound-system culture. Slightly slower than peak house can feel more 'body-roll' than 'stomp'. Offbeat hats create the classic disco bounce. Named center A major. Major collections often trend brighter in Western pop/club hearing, again as a statistical tendency rather than a law. Estimated arousal 7/10 and dance affordance 6/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "037a15c5-9a82-495b-8f80-3ca0795b0fbe",
+      "title": "Sergik - Its On till Dawn",
+      "bpm": 123.05,
+      "key": null,
+      "genre": "Reggae",
+      "drums": "four-on-the-floor",
+      "hats": "sparse-accents",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass"
+      ],
+      "description": "Groove class Reggae / Steppers from measured usage, not from a crate name. Kick is used as a steady four-on-the-floor pulse. Snare/clap is used as a 2-and-4 backbeat (house, hip-hop, steppers). Hats are used as space and accents, leaving room for bass (dub/trap/experimental). Bass is used off the kick (funky/syncopated), which in a house pocket makes funky house; with sparse hats and sub it can still be reggae/bass. Low end is used as sub/808 weight without a pad bed — bass-music, dub, or trap arrangement. Reggae and dub are among the most influential production cultures of the 20th century. One-drop withholds the kick on beat 1; steppers restores a marching 4/4 under still-heavy bass. Dub invented remix culture: the mix as composition, delay as instrument. UK steppers and digital dancehall (Sleng Teng, 1985) electrified the grid. A 140–152 clock with snare on 3 is the doubled reading of a ~70–76 skank — the same pocket as much dancehall and dub, not trance. This file's clock is 123 BPM (full-time; 123 BPM). Kick is used as four-on-the-floor; snare as backbeat-2-and-4; hats as sparse-accents. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Sensorimotor synchronization (Large & Snyder; Repp) explains why a stable pulse recruits movement. Club musics around 118–128 BPM sit near preferred tapping rates and walking cadence, which is why four-on-the-floor feels bodily rather than merely metric. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. Dub mixing (King Tubby, Lee Perry) treats delay and spring reverb as compositional instruments. Spatially repeating snare/hat is a psychological 'hallucinated architecture' — the room becomes a second drummer. Rastafari, sound-system democracy, migrant Britain, bass as social weight. The 'space' in the drum kit is political: room for the voice of bass and for the crowd. Related traditions on the map (not extra labels for this file): Dub, Roots Reggae, Rocksteady, Dancehall, UK Steppers, Lovers Rock, Sound-system culture. Sub-bass plus half-time snare slows perceived locomotion and can induce a grounded, almost trance-meditative motor pattern distinct from house's bounce. Dub delay creates expectation and echoic memory loops — a mild, pleasurable prediction game. Pitch center is too weak to name. Without a stable tonic, Western major/minor valence maps do not apply; listeners will lean on rhythm and spectrum instead. Estimated arousal 7/10 and dance affordance 6/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "055c9013-ff19-4431-9ca7-30d589f0dbf4",
+      "title": "SERGIK x Slick Floyd - LDE",
+      "bpm": 123.05,
+      "key": "A minor",
+      "genre": "Hip-Hop",
+      "drums": "half-time",
+      "hats": "eighths",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass",
+        "Snare / clap",
+        "Snare"
+      ],
+      "description": "Groove class Hip-Hop / Trap from measured usage, not from a crate name. Kick is used syncopated/broken, not as a house pulse. Snare is used on beat 3 — half-time feel (trap, dub, dubstep), not four-on-the-floor trance. Hats are used as a house-like eighth-note ride over hip-hop/trap kick-snare (hats are color, not a house kick). Bass is used off the kick (syncopated pocket under hip-hop/trap drums). House-like hats sit on top of a hip-hop/trap kick-snare; kick and snare decide genre, not the hat ride. Hip-hop's drum language comes from funk breaks and Jamaican sound-system culture in the Bronx. Boom-bap is a snare-on-2-and-4 school; trap is a later Southern half-time school. Broken beat without 808 dominance still sits in this family. This file's clock is 123 BPM (half-time; effective pocket ~62 BPM). Kick is used as syncopated-or-broken-kick; snare as half-time-beat-3; hats as eighths. A snare on beat 3 at a high clock BPM is perceived closer to half that tempo (London, Hearing in Time). 152 with snare on 3 is a ~76 dub/dancehall pocket, not a 152 trance ride, unless hats are used as a 16th wash. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. MC/DJ/graffiti/dance as a four-element culture; sampling as archival politics. Related traditions on the map (not extra labels for this file): Boom Bap, East Coast, Jazz Rap, Instrumental Hip-Hop, Lo-Fi, Southern Rap, Broken Beat, Trap, Southern Hip-Hop, Atlanta Trap. Head-nod groove (70–95 or half-time 140) favors nodding and lyric encoding over continuous club stomp. Named center A minor. In many Western listeners, minor collections trend toward lower valence (Juslin/Gabrielsson-type findings) — a tendency, not a universal. Rhythm and bass weight can override that coloring. Estimated arousal 7/10 and dance affordance 6/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "05d84113-2e90-4781-a35a-d4ae397266cb",
+      "title": "SERGIK x Melfice - Buggn",
+      "bpm": 123.05,
+      "key": "D minor",
+      "genre": "Funky House",
+      "drums": "four-on-the-floor",
+      "hats": "eighths",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass"
+      ],
+      "description": "Groove class Funky House / Deep n Funky from measured usage, not from a crate name. Kick is used as a steady four-on-the-floor pulse. Snare/clap is used as a 2-and-4 backbeat (house, hip-hop, steppers). Hats are used as an eighth-note ride that keeps house/tech time. Bass is used off the kick (funky/syncopated), which in a house pocket makes funky house; with sparse hats and sub it can still be reggae/bass. Hats/cymbals are used as a ride over 4/4, so the low-end label is a house/disco sub, not a trap 808 by itself. House is disco's afterlife after the 1979 'Disco Sucks' backlash and the warehouse continuum in Chicago (Knuckles at the Warehouse) and New York (Levan at the Garage). Funky / disco house keeps the offbeat hi-hat and syncopated bass of disco rather than techno's kick-locked ostinato. Nu-disco and French house later re-sampled that language with compression and filters. The science of the style is groove: kick as heartbeat, hats as lift, bass as conversation with the kick. This file's clock is 123 BPM (full-time; 123 BPM). Kick is used as four-on-the-floor; snare as backbeat-2-and-4; hats as eighths. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Sensorimotor synchronization (Large & Snyder; Repp) explains why a stable pulse recruits movement. Club musics around 118–128 BPM sit near preferred tapping rates and walking cadence, which is why four-on-the-floor feels bodily rather than merely metric. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. House floors were historically Black, Latino, and queer sanctuary spaces. The offbeat hat is a social cue — it invites the body to fill the space between kicks. Cross-cultural traffic includes disco strings, gospel piano, Afro-Cuban percussion, and later UK garage shuffle. Related traditions on the map (not extra labels for this file): Chicago House, Disco, Boogie, Nu-Disco, French House, UK Garage, Soulful House, Deep House. Predictable 4/4 plus moderate syncopation supports trance-like motor coupling without the dissociative density of 16th-hat trance. Warm minor/major soul harmony plus swing reads as affiliation and play rather than aggression. Listeners often report 'lift' on the offbeat hat — a small prediction error that resolves every beat. Named center D minor. In many Western listeners, minor collections trend toward lower valence (Juslin/Gabrielsson-type findings) — a tendency, not a universal. Rhythm and bass weight can override that coloring. Estimated arousal 7/10 and dance affordance 9/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "0718627b-dfe6-41df-8a79-b027cd5aa945",
+      "title": "SERGIK - Whats the Reason",
+      "bpm": 123.05,
+      "key": "D# major",
+      "genre": "Experimental Bass",
+      "drums": "breakbeat",
+      "hats": "eighths",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass"
+      ],
+      "description": "Groove class Experimental Bass / Broken 808 from measured usage, not from a crate name. Kick is used syncopated/broken, not as a house pulse. Snare/clap is used as a 2-and-4 backbeat (house, hip-hop, steppers). Hats are used as a house-like eighth-note ride over hip-hop/trap kick-snare (hats are color, not a house kick). Bass is used off the kick (syncopated pocket under hip-hop/trap drums). House-like hats sit on top of a hip-hop/trap kick-snare; kick and snare decide genre, not the hat ride. After dubstep's 2011 pop peak, 'bass music' splintered into halftime, UK bass, experimental club. Broken drums plus sub without a house hat ride is that diaspora — not funky house even at 120–130. Footwork (Chicago) is a cousin: 160-ish with sliced kicks; wonky is off-grid 808. This file's clock is 123 BPM (full-time; 123 BPM). Kick is used as syncopated-or-broken-kick; snare as backbeat-2-and-4; hats as eighths. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. Internet-era scenes, pirate-radio UK, Black Atlantic bass as continuum (Gilroy) rather than isolated genres. Related traditions on the map (not extra labels for this file): UK Bass, Wonky, Footwork, Leftfield Bass, Halftime DnB, Dubstep, Grime, IDM, Spacebass, Wubs. Unstable kick maps raise prediction error (groove as problem-solving). Sub still affords bodily coupling, so the state is alert rather than lost. Named center D# major. Major collections often trend brighter in Western pop/club hearing, again as a statistical tendency rather than a law. Estimated arousal 7/10 and dance affordance 6/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "07282a58-cbc2-4fce-b63e-66840baef357",
+      "title": "SERGIK - Jahdelicah 1",
+      "bpm": 123.05,
+      "key": "E minor",
+      "genre": "Funky House",
+      "drums": "four-on-the-floor",
+      "hats": "eighths",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass",
+        "Snare"
+      ],
+      "description": "Groove class Funky House / Deep n Funky from measured usage, not from a crate name. Kick is used as a steady four-on-the-floor pulse. Snare/clap is used as a 2-and-4 backbeat (house, hip-hop, steppers). Hats are used as an eighth-note ride that keeps house/tech time. Bass is used off the kick (funky/syncopated), which in a house pocket makes funky house; with sparse hats and sub it can still be reggae/bass. Hats/cymbals are used as a ride over 4/4, so the low-end label is a house/disco sub, not a trap 808 by itself. House is disco's afterlife after the 1979 'Disco Sucks' backlash and the warehouse continuum in Chicago (Knuckles at the Warehouse) and New York (Levan at the Garage). Funky / disco house keeps the offbeat hi-hat and syncopated bass of disco rather than techno's kick-locked ostinato. Nu-disco and French house later re-sampled that language with compression and filters. The science of the style is groove: kick as heartbeat, hats as lift, bass as conversation with the kick. This file's clock is 123 BPM (full-time; 123 BPM). Kick is used as four-on-the-floor; snare as backbeat-2-and-4; hats as eighths. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Sensorimotor synchronization (Large & Snyder; Repp) explains why a stable pulse recruits movement. Club musics around 118–128 BPM sit near preferred tapping rates and walking cadence, which is why four-on-the-floor feels bodily rather than merely metric. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. House floors were historically Black, Latino, and queer sanctuary spaces. The offbeat hat is a social cue — it invites the body to fill the space between kicks. Cross-cultural traffic includes disco strings, gospel piano, Afro-Cuban percussion, and later UK garage shuffle. Related traditions on the map (not extra labels for this file): Chicago House, Disco, Boogie, Nu-Disco, French House, UK Garage, Soulful House, Deep House. Predictable 4/4 plus moderate syncopation supports trance-like motor coupling without the dissociative density of 16th-hat trance. Warm minor/major soul harmony plus swing reads as affiliation and play rather than aggression. Listeners often report 'lift' on the offbeat hat — a small prediction error that resolves every beat. Named center E minor. In many Western listeners, minor collections trend toward lower valence (Juslin/Gabrielsson-type findings) — a tendency, not a universal. Rhythm and bass weight can override that coloring. Estimated arousal 7/10 and dance affordance 9/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    },
+    {
+      "id": "09871762-b66e-403c-90e3-c7688b4a973a",
+      "title": "SERGIK - How Ya",
+      "bpm": 83.35,
+      "key": "A minor",
+      "genre": "Reggae",
+      "drums": "one-drop",
+      "hats": "eighths",
+      "bass": "offbeat-syncopated",
+      "instruments": [
+        "Kick drum",
+        "Sub / 808 bass",
+        "Snare / clap"
+      ],
+      "description": "Groove class Reggae / Dub from measured usage, not from a crate name. Kick is used syncopated/broken, not as a house pulse. Snare/clap is used as a 2-and-4 backbeat (house, hip-hop, steppers). Hats are used as an eighth-note ride that keeps house/tech time. Bass is used off the kick (funky/syncopated), which in a house pocket makes funky house; with sparse hats and sub it can still be reggae/bass. Low end is used as sub/808 weight without a pad bed — bass-music, dub, or trap arrangement. Reggae and dub are among the most influential production cultures of the 20th century. One-drop withholds the kick on beat 1; steppers restores a marching 4/4 under still-heavy bass. Dub invented remix culture: the mix as composition, delay as instrument. UK steppers and digital dancehall (Sleng Teng, 1985) electrified the grid. A 140–152 clock with snare on 3 is the doubled reading of a ~70–76 skank — the same pocket as much dancehall and dub, not trance. This file's clock is 83 BPM (full-time; 83 BPM). Kick is used as syncopated-or-broken-kick; snare as backbeat-2-and-4; hats as eighths. Witek et al. showed moderate syncopation maximizes groove pleasure; too little feels stiff, too much feels broken. Offbeat hats and bass-off-the-kick are the house/disco case of that curve. Energy below ~60 Hz is felt as vibration (vestibular/tactile) as well as heard. Sound-system culture (Jamaica, UK) and 808 music exploit that channel. A spectral 'sub' label is not automatically trap; house and disco also sit on sub. Dub mixing (King Tubby, Lee Perry) treats delay and spring reverb as compositional instruments. Spatially repeating snare/hat is a psychological 'hallucinated architecture' — the room becomes a second drummer. Rastafari, sound-system democracy, migrant Britain, bass as social weight. The 'space' in the drum kit is political: room for the voice of bass and for the crowd. Related traditions on the map (not extra labels for this file): Dub, Roots Reggae, Rocksteady, Dancehall, UK Steppers, Lovers Rock, Sound-system culture, UK Bass, Broken Beat, Funk breaks. Sub-bass plus half-time snare slows perceived locomotion and can induce a grounded, almost trance-meditative motor pattern distinct from house's bounce. Dub delay creates expectation and echoic memory loops — a mild, pleasurable prediction game. Named center A minor. In many Western listeners, minor collections trend toward lower valence (Juslin/Gabrielsson-type findings) — a tendency, not a universal. Rhythm and bass weight can override that coloring. Estimated arousal 7/10 and dance affordance 8/10 from spectrum, pulse, and hat usage — heuristic, not a lab score."
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/AdminAuthContext'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { FaPlus, FaSave, FaTimes, FaTrash } from 'react-icons/fa'
 

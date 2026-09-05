@@ -1,0 +1,23 @@
+[
+  {
+    "id": "release_calendar_overrides_sticky",
+    "message": "What is my release calendar for Q4?",
+    "skillId": null,
+    "stickySkillId": "product_strategy",
+    "expectedInferredSkillId": "admin_intel"
+  },
+  {
+    "id": "continuation_uses_sticky",
+    "message": "same thing",
+    "skillId": null,
+    "stickySkillId": "admin_intel",
+    "expectedInferredSkillId": "admin_intel"
+  },
+  {
+    "id": "locked_skill_wins",
+    "message": "yes",
+    "skillId": "product_strategy",
+    "stickySkillId": "admin_intel",
+    "expectedInferredSkillId": "product_strategy"
+  }
+]

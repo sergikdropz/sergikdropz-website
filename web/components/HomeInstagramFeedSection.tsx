@@ -1,54 +1,38 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import InstagramEmbed from '@/components/InstagramEmbed'
 
 interface HomeInstagramFeedSectionProps {
   username: string
+  /** Resolved on the server — avoids a client round-trip to /api/public/homepage-flags */
+  enabled?: boolean
 }
 
+const HOMEPAGE_INSTAGRAM_MAX_POSTS = 9
+
 /**
- * Homepage Instagram block — visibility from DB (admin toggle), with optional env override.
+ * Homepage Instagram block — visibility from server props, env, or admin toggle.
  */
-export default function HomeInstagramFeedSection({ username }: HomeInstagramFeedSectionProps) {
-  const envForce = process.env.NEXT_PUBLIC_SHOW_INSTAGRAM_FEED
-
-  const [enabled, setEnabled] = useState<boolean | null>(() => {
-    if (envForce === 'false') return false
-    if (envForce === 'true') return true
-    return null
-  })
-
-  useEffect(() => {
-    if (envForce === 'false' || envForce === 'true') return
-
-    let cancelled = false
-    fetch('/api/public/homepage-flags')
-      .then((r) => r.json())
-      .then((d: { homepageInstagramFeedEnabled?: boolean }) => {
-        if (!cancelled) setEnabled(Boolean(d.homepageInstagramFeedEnabled))
-      })
-      .catch(() => {
-        if (!cancelled) setEnabled(process.env.NODE_ENV !== 'production')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [envForce])
-
-  if (enabled === null || !enabled) return null
+export default function HomeInstagramFeedSection({
+  username,
+  enabled = true,
+}: HomeInstagramFeedSectionProps) {
+  if (!enabled) return null
 
   return (
     <section className="py-8 sm:py-12 md:py-16 lg:py-20 relative z-10 bg-gradient-to-b from-transparent via-black/30 to-transparent">
       <div className="container mx-auto px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="overflow-hidden rounded-lg">
-            <div
-              className="max-h-[600px] overflow-y-auto overflow-x-hidden"
-              style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #111827' }}
-            >
-              <InstagramEmbed username={username} className="w-full" />
-            </div>
+          <div
+            className="max-h-[min(70vh,52rem)] overflow-y-auto overscroll-contain rounded-lg border border-white/10 [scrollbar-gutter:stable]"
+            aria-label="Instagram feed"
+          >
+            <InstagramEmbed
+              username={username}
+              className="w-full"
+              maxPosts={HOMEPAGE_INSTAGRAM_MAX_POSTS}
+              gridClassName="grid-cols-2 sm:grid-cols-3"
+            />
           </div>
         </div>
       </div>

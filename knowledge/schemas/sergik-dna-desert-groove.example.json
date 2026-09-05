@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "1.0",
+
+  "track": {
+    "id": "desert-groove-001",
+    "title": "Heat Index",
+    "archetype": "desert_groove",
+    "zone": "house",
+    "key": "D major",
+    "camelot": "10B",
+    "bpm": 124,
+    "targetDurationSec": 420,
+    "emotionalCenter": "The patience of the desert before the groove finally declares itself — heat shimmer as harmonic intention.",
+    "collaborators": []
+  },
+
+  "composition": {
+    "harmonicThesis": "D major sustains across the first two sections without harmonic motion — the chord changes only when the groove has earned the right to move, making the pivot into the break feel inevitable rather than arbitrary.",
+    "emotionalArc": [
+      "desert_solitude",
+      "patient_expansion",
+      "groove_inevitability",
+      "earned_release",
+      "after_hours_truth"
+    ],
+    "hasChangedReturn": true,
+    "containsBreakSection": true,
+    "sections": [
+      {
+        "name": "heat",
+        "startSec": 0,
+        "endSec": 64,
+        "density": "minimal",
+        "dramaticRole": "establish_world",
+        "environmentAudible": true,
+        "grooveLayerCount": 1,
+        "notes": "Environment only — filtered drone, distant desert air. Kick enters at bar 8 alone."
+      },
+      {
+        "name": "shimmer",
+        "startSec": 64,
+        "endSec": 160,
+        "density": "sparse",
+        "dramaticRole": "introduce_groove",
+        "environmentAudible": true,
+        "grooveLayerCount": 3,
+        "notes": "Kick + bass enter together. Pad sustains D major. No melodic movement yet."
+      },
+      {
+        "name": "accumulation",
+        "startSec": 160,
+        "endSec": 270,
+        "density": "dense",
+        "dramaticRole": "escalation",
+        "environmentAudible": false,
+        "grooveLayerCount": 7,
+        "notes": "All groove layers active. Emotional spear enters at bar 64. Hats add swing definition."
+      },
+      {
+        "name": "peak",
+        "startSec": 270,
+        "endSec": 310,
+        "density": "wall_of_sound",
+        "dramaticRole": "groove_peak",
+        "environmentAudible": false,
+        "grooveLayerCount": 9,
+        "notes": "Maximum density. All voices present. Harmonic pivot from D to A (Camelot 10B → 11B)."
+      },
+      {
+        "name": "break",
+        "startSec": 310,
+        "endSec": 345,
+        "density": "sparse",
+        "dramaticRole": "break",
+        "environmentAudible": true,
+        "grooveLayerCount": 2,
+        "notes": "Filter sweep removes everything except kick and bass. Desert air returns briefly."
+      },
+      {
+        "name": "return",
+        "startSec": 345,
+        "endSec": 390,
+        "density": "dense",
+        "dramaticRole": "after_break_return",
+        "environmentAudible": false,
+        "grooveLayerCount": 8,
+        "notes": "Groove returns changed — hat pattern shifted, lead melody one octave higher."
+      },
+      {
+        "name": "dissolve",
+        "startSec": 390,
+        "endSec": 420,
+        "density": "minimal",
+        "dramaticRole": "dissolve",
+        "environmentAudible": true,
+        "grooveLayerCount": 1,
+        "notes": "All layers fall away. Desert drone closes. Last 8 bars: kick alone, then silence."
+      }
+    ]
+  },
+
+  "environment": {
+    "roomDefinition": "Phoenix in July — dry expansive air, heat shimmer over concrete, distance between things.",
+    "room": "desert_heat",
+    "layers": [
+      {
+        "role": "desert_drone",
+        "sourceKind": "synthesized_environment",
+        "subjectLink": "The drone is Phoenix geography — the way the heat makes space feel inhabited before anything moves.",
+        "audibleInIntro": true,
+        "audibleInOutro": true
+      },
+      {
+        "role": "sub_earth_pulse",
+        "sourceKind": "sub_drone",
+        "subjectLink": "The sub pulse is the desert floor — the geology underneath the groove.",
+        "audibleInIntro": true,
+        "audibleInOutro": false
+      }
+    ]
+  },
+
+  "arrangement": {
+    "harmonicBed": ["sustained D major pad", "filtered organ root note"],
+    "emotionalSpear": ["lead synth melody (enters at accumulation)", "wah guitar accent"],
+    "pulseAndGravity": ["four-on-the-floor kick", "sub bass (static root D)", "bass line (sparse movement)", "sub drone"],
+    "orchestralBloom": ["string swell (peak section only)", "additional percussion layer", "automated reverb sends"],
+    "conversationPairs": [
+      {
+        "left": "kick",
+        "right": "bass",
+        "relationship": "body and drive — kick marks time, bass carries the gravity"
+      },
+      {
+        "left": "lead_synth",
+        "right": "pad",
+        "relationship": "nerve and atmosphere — lead is the moving thought, pad is the feeling that holds it"
+      },
+      {
+        "left": "hats",
+        "right": "percussion",
+        "relationship": "grid and swing — hats define the tempo, percussion defines the personality"
+      }
+    ]
+  },
+
+  "render": {
+    "pipelineMode": "stem_first",
+    "stemOrder": [
+      "desert_drone",
+      "sub_earth_pulse",
+      "kick",
+      "bass",
+      "pad",
+      "hat",
+      "percussion",
+      "lead_synth",
+      "wah_guitar",
+      "string_swell",
+      "fx_tails"
+    ],
+    "stems": [
+      {
+        "role": "desert_drone",
+        "isolated": true,
+        "sourceType": "synthesized_environment",
+        "processing": ["lowpass", "volume", "automation"]
+      },
+      {
+        "role": "kick",
+        "isolated": true,
+        "sourceType": "demucs_separated",
+        "processing": ["highpass", "equalizer", "acompressor", "limiter"]
+      },
+      {
+        "role": "bass",
+        "isolated": true,
+        "sourceType": "midi_generated",
+        "processing": ["highpass", "equalizer", "acompressor", "sidechain", "volume"]
+      },
+      {
+        "role": "pad",
+        "isolated": true,
+        "sourceType": "midi_generated",
+        "processing": ["lowpass", "aecho", "afade", "volume"]
+      },
+      {
+        "role": "hat",
+        "isolated": true,
+        "sourceType": "demucs_separated",
+        "processing": ["highpass", "equalizer", "volume"]
+      },
+      {
+        "role": "percussion",
+        "isolated": true,
+        "sourceType": "demucs_separated",
+        "processing": ["equalizer", "aecho", "acompressor", "volume"]
+      },
+      {
+        "role": "lead_synth",
+        "isolated": true,
+        "sourceType": "midi_generated",
+        "processing": ["highpass", "equalizer", "aecho", "volume", "automation"]
+      },
+      {
+        "role": "string_swell",
+        "isolated": true,
+        "sourceType": "midi_generated",
+        "processing": ["lowpass", "aecho", "afade", "volume"]
+      }
+    ],
+    "masterBus": {
+      "targetLUFS": -12,
+      "truePeakDb": -1.0,
+      "minDynamicRange": 6,
+      "stereoCorrelationMin": 0.7
+    }
+  },
+
+  "decompositionSources": {
+    "sourceWavs": [
+      {
+        "title": "DesertTransmission_COMPLETE_ARRANGED_SUITE",
+        "filepath": "/Users/machd/Downloads/DesertTransmission_COMPLETE_ARRANGED_SUITE 1.mp3",
+        "role": "texture_source",
+        "notes": "Environmental reference for desert room texture and slow accumulation pacing"
+      },
+      {
+        "title": "DURO (no breakdown no vox)",
+        "filepath": "/Users/machd/Downloads/DURO - no breakdown no vox 11.30.22.mp3",
+        "role": "harmonic_source",
+        "notes": "Harmonic bed and groove architecture reference"
+      }
+    ],
+    "abletonProjects": [
+      "BAGGINS - GIVING IT (Silent Jay x Sergik Remix).als"
+    ]
+  },
+
+  "compliance": {
+    "sectionMapWritten": true,
+    "harmonicThesisPresent": true,
+    "environmentPresent": true,
+    "stemIsolationRetained": true,
+    "grooveEarnsResolution": true,
+    "outroHasEnvironment": true,
+    "masteringTargetsMet": false
+  }
+}

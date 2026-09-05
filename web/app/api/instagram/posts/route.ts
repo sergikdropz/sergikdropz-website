@@ -1,17 +1,23 @@
 import { NextResponse } from 'next/server'
 import instagramPostsData from '@/data/instagram-posts.json'
+import { loadManualPostsFromSettings } from '@/lib/instagram/manual-posts-settings'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const username = searchParams.get('username')
   const limit = parseInt(searchParams.get('limit') || '6', 10)
+  /** Instagram Helper form: only saved URLs (settings + JSON), never Graph API permalinks */
+  const manualOnly =
+    searchParams.get('manualOnly') === '1' ||
+    searchParams.get('manualOnly') === 'true' ||
+    searchParams.get('manual') === '1'
 
   try {
     // Try to fetch from Instagram API if credentials are available
     const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
     const userId = process.env.INSTAGRAM_USER_ID
 
-    if (accessToken && userId) {
+    if (!manualOnly && accessToken && userId) {
       try {
         // Fetch recent media from Instagram Graph API
         // Instagram Graph API uses graph.facebook.com, not graph.instagram.com
@@ -41,10 +47,10 @@ export async function GET(request: Request) {
       }
     }
 
-    // Fallback: Use posts from data file
-    const posts = instagramPostsData.posts || []
-    
-    // Filter out example posts
+    // Fallback: Site settings (Instagram Helper) then data file
+    const manual = await loadManualPostsFromSettings()
+    const posts = manual?.posts ?? instagramPostsData.posts ?? []
+
     const realPosts = posts.filter(
       (post: string) => !post.includes('EXAMPLE_POST')
     )

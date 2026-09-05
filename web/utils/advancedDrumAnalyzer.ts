@@ -135,7 +135,17 @@ export type GrooveType =
   | 'behind-the-beat' | 'on-top' | 'syncopated' | 'hypnotic'
 
 export interface TimingFeel {
-  type: 'full-time' | 'half-time' | 'double-time' | 'variable'
+  type:
+    | 'full-time'
+    | 'half-time'
+    | 'double-time'
+    | 'variable'
+    | 'broken'
+    | 'swing'
+    | 'off-grid'
+    | 'polymetric'
+    | 'garage'
+    | 'sparse'
   confidence: number  // 0-100%
   indicators: string[]
   effectiveBpm: number

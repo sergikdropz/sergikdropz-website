@@ -4,6 +4,7 @@ import { processUploadOptimized } from '@/utils/processUploadOptimized'
 import { extractMetadataFromBuffer } from '@/utils/extractMetadataFromBuffer'
 import { generateWaveformFromBuffer } from '@/utils/generateWaveformFromBuffer'
 import { getMusicBrainzArtistDetails } from '@/utils/musicbrainz'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 /**
  * API Route: Upload Audio File to Supabase Storage
@@ -16,6 +17,8 @@ import { getMusicBrainzArtistDetails } from '@/utils/musicbrainz'
  */
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     const formData = await request.formData()
     const file = formData.get('file') as File
     const folder = formData.get('folder') as string || ''

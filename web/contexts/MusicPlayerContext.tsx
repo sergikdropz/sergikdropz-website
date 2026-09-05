@@ -1,6 +1,17 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import {
+  subscribeCatalogSync,
+  normalizeArtworkPatch,
+  playerTrackMatchesCoverEvent,
+  catalogItemMatchesCoverEvent,
+  stampAllTrackArtwork,
+} from '@/lib/catalog-sync'
+import {
+  readAutoDJEnabledFromStorage,
+  writeAutoDJEnabledToStorage,
+} from '@/lib/audio/auto-dj-preferences'
 
 function fisherYatesShuffle<T>(array: T[]): T[] {
   const shuffled = [...array]
@@ -20,6 +31,8 @@ export interface Track {
   artwork?: string
   album?: string
   folder?: string
+  folderId?: string
+  audioFileId?: string
   // Audio analysis fields (from Supabase)
   bpm?: number
   key_signature?: string
@@ -33,20 +46,95 @@ export interface Track {
   musicbrainz_data?: any
 }
 
+export type PlayerSource = { type: 'folder' | 'playlist' | null; id: string | null } | null
+
+/** Compact transport bar is the default chrome after reload. */
+export type PlayerChromeState = {
+  isMiniMode: boolean
+  isExpanded: boolean
+  /** Hide the compact (non-expanded) player waveform strip. */
+  isWaveformCollapsed: boolean
+}
+
+export type PersistedMusicPlayerState = {
+  currentTrack: Track | null
+  queue: Track[]
+  currentIndex: number
+  currentTime?: number
+  currentSource?: PlayerSource
+  chrome?: PlayerChromeState
+}
+
+export const MUSIC_PLAYER_STATE_KEY = 'musicPlayerState'
+
+export const DEFAULT_PLAYER_CHROME: PlayerChromeState = {
+  isMiniMode: true,
+  isExpanded: false,
+  isWaveformCollapsed: false,
+}
+
+export function readMusicPlayerState(): PersistedMusicPlayerState | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(MUSIC_PLAYER_STATE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as PersistedMusicPlayerState
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+/** Merge-patch so track/queue writers and position/chrome writers do not clobber each other. */
+export function patchMusicPlayerState(patch: Partial<PersistedMusicPlayerState>): void {
+  if (typeof window === 'undefined') return
+  try {
+    const prev = readMusicPlayerState() || {
+      currentTrack: null,
+      queue: [],
+      currentIndex: 0,
+    }
+    const next: PersistedMusicPlayerState = {
+      ...prev,
+      ...patch,
+      chrome: {
+        ...DEFAULT_PLAYER_CHROME,
+        ...prev.chrome,
+        ...patch.chrome,
+      },
+    }
+    localStorage.setItem(MUSIC_PLAYER_STATE_KEY, JSON.stringify(next))
+  } catch {
+    // quota / private mode — ignore
+  }
+}
+
+export function hasPersistedMusicTrack(): boolean {
+  return Boolean(readMusicPlayerState()?.currentTrack)
+}
+
 interface MusicPlayerContextType {
   currentTrack: Track | null
   queue: Track[]
   isPlaying: boolean
   currentIndex: number
-  currentSource: { type: 'folder' | 'playlist' | null; id: string | null } | null
+  currentSource: PlayerSource
   setCurrentTrack: (track: Track | null) => void
   setQueue: (queue: Track[]) => void
   setIsPlaying: (isPlaying: boolean) => void
   setCurrentIndex: (index: number) => void
-  setCurrentSource: (source: { type: 'folder' | 'playlist' | null; id: string | null } | null) => void
-  playTrack: (track: Track, queue?: Track[], source?: { type: 'folder' | 'playlist' | null; id: string | null }) => void
-  playQueue: (queue: Track[], startIndex?: number, source?: { type: 'folder' | 'playlist' | null; id: string | null }) => void
+  setCurrentSource: (source: PlayerSource) => void
+  playTrack: (track: Track, queue?: Track[], source?: PlayerSource) => void
+  /**
+   * Update current track/queue identity without resetting transport to 0.
+   * Used after a dual-deck mix handoff where the incoming element is already playing.
+   */
+  adoptPlayingTrack: (track: Track, queue: Track[]) => void
+  playQueue: (queue: Track[], startIndex?: number, source?: PlayerSource) => void
   addToQueue: (track: Track) => void
+  /** Insert track(s) to play immediately after the current track (iTunes “Play Next”). */
+  playNext: (tracks: Track | Track[]) => void
   removeFromQueue: (index: number) => void
   clearQueue: () => void
   nextTrack: () => void
@@ -54,6 +142,35 @@ interface MusicPlayerContextType {
   shuffleQueue: () => void
   handleShuffle: (shuffledQueue: Track[]) => void
   handleQueueChange: (newQueue: Track[]) => void
+  waveformHost: HTMLElement | null
+  setWaveformHost: (host: HTMLElement | null) => void
+  /** Vault main column host for the queue panel (under SergBrowser sticky header). */
+  queuePanelHost: HTMLElement | null
+  setQueuePanelHost: (host: HTMLElement | null) => void
+  seekTo: (seconds: number) => void
+  seekTargetSec: number | null
+  seekNonce: number
+  reportPlaybackPosition: (seconds: number) => void
+  /** Global queue / playlist panel (MusicPlayer portal; toggled from vault header). */
+  isQueuePanelOpen: boolean
+  setIsQueuePanelOpen: (open: boolean) => void
+  toggleQueuePanel: () => void
+  /** Auto DJ enable — toggled from the now-playing Auto DJ button. */
+  isAutoDJEnabled: boolean
+  setIsAutoDJEnabled: (enabled: boolean) => void
+  toggleAutoDJ: () => void
+  /** Right-click Auto DJ settings popup (MusicPlayer portal). */
+  autoDJSettingsMenu: { x: number; y: number } | null
+  openAutoDJSettingsMenu: (pos: { x: number; y: number }) => void
+  closeAutoDJSettingsMenu: () => void
+  /** Bottom player chrome — synced from MusicPlayer for layout decisions elsewhere. */
+  playerChrome: PlayerChromeState
+  setPlayerChrome: (patch: Partial<PlayerChromeState>) => void
+}
+
+/** Full expanded player UI (decks + waveforms), not the compact mini bar. */
+export function isPlayerFullyExpanded(chrome: PlayerChromeState): boolean {
+  return chrome.isExpanded && !chrome.isMiniMode
 }
 
 const MusicPlayerContext = createContext<MusicPlayerContextType | undefined>(undefined)
@@ -65,39 +182,176 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const [isPlaying, setIsPlaying] = useState(false)
   const [originalQueue, setOriginalQueue] = useState<Track[]>([])
   const [isShuffled, setIsShuffled] = useState(false)
-  const [currentSource, setCurrentSource] = useState<{ type: 'folder' | 'playlist' | null; id: string | null } | null>(null)
+  const [currentSource, setCurrentSource] = useState<PlayerSource>(null)
+  const currentSourceRef = useRef<PlayerSource>(null)
+  currentSourceRef.current = currentSource
+  const [waveformHost, setWaveformHost] = useState<HTMLElement | null>(null)
+  const [queuePanelHost, setQueuePanelHost] = useState<HTMLElement | null>(null)
+  const [seekTargetSec, setSeekTargetSec] = useState<number | null>(null)
+  const [seekNonce, setSeekNonce] = useState(0)
+  const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false)
+  const [isAutoDJEnabled, setIsAutoDJEnabledState] = useState(false)
+  const isAutoDJEnabledRef = useRef(false)
+  const [autoDJSettingsMenu, setAutoDJSettingsMenu] = useState<{ x: number; y: number } | null>(null)
+  const [playerChrome, setPlayerChromeState] = useState<PlayerChromeState>(DEFAULT_PLAYER_CHROME)
 
-  // Persist state to localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('musicPlayerState')
-      if (saved) {
-        try {
-          const state = JSON.parse(saved)
-          if (state.currentTrack) setCurrentTrack(state.currentTrack)
-          if (state.queue && state.queue.length > 0) {
-            setQueue(state.queue)
-            setCurrentIndex(state.currentIndex || 0)
-          }
-        } catch (e) {
-          console.error('Failed to load music player state:', e)
-        }
-      }
+    const saved = readMusicPlayerState()?.chrome
+    if (saved) {
+      setPlayerChromeState({ ...DEFAULT_PLAYER_CHROME, ...saved })
     }
   }, [])
 
-  // Save state to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined' && (currentTrack || queue.length > 0)) {
-      localStorage.setItem('musicPlayerState', JSON.stringify({
-        currentTrack,
-        queue,
-        currentIndex
-      }))
-    }
-  }, [currentTrack, queue, currentIndex])
+  const setPlayerChrome = useCallback((patch: Partial<PlayerChromeState>) => {
+    setPlayerChromeState((prev) => ({ ...prev, ...patch }))
+  }, [])
 
-  const playTrack = useCallback((track: Track, trackQueue?: Track[], source?: { type: 'folder' | 'playlist' | null; id: string | null }) => {
+  const toggleQueuePanel = useCallback(() => {
+    setIsQueuePanelOpen((prev) => !prev)
+  }, [])
+
+  const applyAutoDJEnabled = useCallback((enabled: boolean, persist: boolean) => {
+    isAutoDJEnabledRef.current = enabled
+    setIsAutoDJEnabledState(enabled)
+    if (persist) writeAutoDJEnabledToStorage(enabled)
+  }, [])
+
+  // Restored after mount rather than in useState so the server-rendered toggle
+  // markup matches the first client render.
+  useEffect(() => {
+    applyAutoDJEnabled(readAutoDJEnabledFromStorage(), false)
+  }, [applyAutoDJEnabled])
+
+  // Catalog hydration (tracks-optimized) pauses while playback needs bandwidth.
+  useEffect(() => {
+    try {
+      ;(window as any).__sergikVaultPlaybackBusy = Boolean(isPlaying && currentTrack)
+    } catch {
+      /* ignore */
+    }
+  }, [isPlaying, currentTrack])
+
+  const setIsAutoDJEnabled = useCallback(
+    (enabled: boolean) => applyAutoDJEnabled(enabled, true),
+    [applyAutoDJEnabled],
+  )
+
+  const toggleAutoDJ = useCallback(
+    () => applyAutoDJEnabled(!isAutoDJEnabledRef.current, true),
+    [applyAutoDJEnabled],
+  )
+
+  const openAutoDJSettingsMenu = useCallback((pos: { x: number; y: number }) => {
+    setAutoDJSettingsMenu(pos)
+  }, [])
+
+  const closeAutoDJSettingsMenu = useCallback(() => {
+    setAutoDJSettingsMenu(null)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const w = window as Window & {
+      __SERGIK_E2E__?: { openAutoDJSettings: () => void }
+    }
+    w.__SERGIK_E2E__ = {
+      openAutoDJSettings: () =>
+        setAutoDJSettingsMenu({
+          x: Math.min(420, window.innerWidth - 16),
+          y: 96,
+        }),
+    }
+    return () => {
+      delete w.__SERGIK_E2E__
+    }
+  }, [])
+
+  const seekTo = useCallback((seconds: number) => {
+    if (!Number.isFinite(seconds)) return
+    setSeekTargetSec(Math.max(0, seconds))
+    setSeekNonce((n) => n + 1)
+  }, [])
+
+  const reportPlaybackPosition = useCallback((seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds < 0) return
+    patchMusicPlayerState({ currentTime: seconds })
+  }, [])
+
+  // Folder/EP cover assignment stamps every track in the live queue.
+  useEffect(() => {
+    return subscribeCatalogSync((event) => {
+      if (!Object.prototype.hasOwnProperty.call(event.patch, 'artwork')) return
+      const folderId = event.folderId
+      const trackId = event.entity === 'track' ? event.entityId : undefined
+      if (!folderId && !trackId) return
+      const artwork = normalizeArtworkPatch(event.patch.artwork ?? null)
+      const source = currentSourceRef.current
+      const sourceFolderId = source?.type === 'folder' ? source.id : null
+      const stampEntireQueue = (list: Track[]) => {
+        const sourceMatch =
+          Boolean(folderId) &&
+          Boolean(sourceFolderId) &&
+          catalogItemMatchesCoverEvent({ id: sourceFolderId ?? undefined }, folderId ?? undefined)
+        const anyMatch = list.some((track) =>
+          playerTrackMatchesCoverEvent(
+            { ...track, artwork: track.artwork ?? undefined },
+            { folderId: folderId ?? undefined, trackId, sourceFolderId: sourceFolderId ?? undefined },
+          ),
+        )
+        if (sourceMatch || anyMatch) return stampAllTrackArtwork(list, artwork ?? undefined)
+        return list
+      }
+
+      setQueue((prev) => stampEntireQueue(prev))
+      setOriginalQueue((prev) => stampEntireQueue(prev))
+      setCurrentTrack((prev) => {
+        if (!prev) return prev
+        const [stamped] = stampEntireQueue([prev])
+        return stamped
+      })
+    })
+  }, [])
+
+  // Restore last session (paused — never autoplay on reload)
+  useEffect(() => {
+    const state = readMusicPlayerState()
+    if (!state?.currentTrack) return
+
+    setCurrentTrack(state.currentTrack)
+    if (state.queue && state.queue.length > 0) {
+      setQueue(state.queue)
+      setCurrentIndex(
+        typeof state.currentIndex === 'number' && state.currentIndex >= 0
+          ? state.currentIndex
+          : 0,
+      )
+    } else {
+      setQueue([state.currentTrack])
+      setCurrentIndex(0)
+    }
+    if (state.currentSource) setCurrentSource(state.currentSource)
+    setIsPlaying(false)
+
+    const t = state.currentTime
+    if (typeof t === 'number' && Number.isFinite(t) && t > 0) {
+      setSeekTargetSec(t)
+      setSeekNonce((n) => n + 1)
+    }
+  }, [])
+
+  // Persist queue / track identity (merge-patch keeps currentTime + chrome)
+  useEffect(() => {
+    if (!currentTrack && queue.length === 0) return
+    patchMusicPlayerState({
+      currentTrack,
+      queue,
+      currentIndex,
+      currentSource,
+    })
+  }, [currentTrack, queue, currentIndex, currentSource])
+
+  const playTrack = useCallback((track: Track, trackQueue?: Track[], source?: PlayerSource) => {
+    setSeekTargetSec(null)
     if (trackQueue && trackQueue.length > 0) {
       const index = trackQueue.findIndex(t => t.id === track.id)
       setQueue(trackQueue)
@@ -110,6 +364,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     }
     setCurrentSource(source || null)
     setIsPlaying(true)
+    patchMusicPlayerState({ currentTime: 0 })
 
     // Fire-and-forget play tracking
     if (track.id) {
@@ -124,19 +379,47 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     }
   }, [])
 
-  const playQueue = useCallback((trackQueue: Track[], startIndex: number = 0, source?: { type: 'folder' | 'playlist' | null; id: string | null }) => {
+  /** Deck-swap handoff: keep playhead; do not force currentTime 0. */
+  const adoptPlayingTrack = useCallback((track: Track, trackQueue: Track[]) => {
+    const index = trackQueue.findIndex((t) => t.id === track.id)
+    setQueue(trackQueue)
+    setCurrentIndex(index >= 0 ? index : 0)
+    setCurrentTrack(index >= 0 ? trackQueue[index] : track)
+    setIsPlaying(true)
+  }, [])
+
+  const playQueue = useCallback((trackQueue: Track[], startIndex: number = 0, source?: PlayerSource) => {
     if (trackQueue.length > 0) {
+      setSeekTargetSec(null)
       setQueue(trackQueue)
       setCurrentIndex(startIndex)
       setCurrentTrack(trackQueue[startIndex])
       setCurrentSource(source || null)
       setIsPlaying(true)
+      patchMusicPlayerState({ currentTime: 0 })
     }
   }, [])
 
   const addToQueue = useCallback((track: Track) => {
     setQueue(prev => [...prev, track])
   }, [])
+
+  const playNext = useCallback((tracks: Track | Track[]) => {
+    const incoming = (Array.isArray(tracks) ? tracks : [tracks]).filter(Boolean)
+    if (!incoming.length) return
+    setQueue((prev) => {
+      if (!prev.length) {
+        setCurrentTrack(incoming[0])
+        setCurrentIndex(0)
+        setIsPlaying(true)
+        setSeekTargetSec(null)
+        patchMusicPlayerState({ currentTime: 0 })
+        return incoming
+      }
+      const insertAt = Math.min(currentIndex + 1, prev.length)
+      return [...prev.slice(0, insertAt), ...incoming, ...prev.slice(insertAt)]
+    })
+  }, [currentIndex])
 
   const removeFromQueue = useCallback((index: number) => {
     setQueue(prev => {
@@ -174,9 +457,18 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     setCurrentIndex(0)
     setCurrentSource(null)
     setIsPlaying(false)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(MUSIC_PLAYER_STATE_KEY)
+      } catch {
+        // ignore
+      }
+    }
   }, [])
 
   const nextTrack = useCallback(() => {
+    setSeekTargetSec(null)
+    patchMusicPlayerState({ currentTime: 0 })
     setQueue(prev => {
       if (prev.length === 0) return prev
       
@@ -194,6 +486,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   }, [currentIndex])
 
   const previousTrack = useCallback(() => {
+    setSeekTargetSec(null)
+    patchMusicPlayerState({ currentTime: 0 })
     setQueue(prev => {
       if (prev.length === 0) return prev
       
@@ -272,31 +566,89 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     }
   }, [currentTrack])
 
+  const contextValue = useMemo(
+    () => ({
+      currentTrack,
+      queue,
+      isPlaying,
+      currentIndex,
+      currentSource,
+      setCurrentTrack,
+      setQueue,
+      setIsPlaying,
+      setCurrentIndex,
+      setCurrentSource,
+      playTrack,
+      adoptPlayingTrack,
+      playQueue,
+      addToQueue,
+      playNext,
+      removeFromQueue,
+      clearQueue,
+      nextTrack,
+      previousTrack,
+      shuffleQueue,
+      handleShuffle,
+      handleQueueChange,
+      waveformHost,
+      setWaveformHost,
+      queuePanelHost,
+      setQueuePanelHost,
+      seekTo,
+      seekTargetSec,
+      seekNonce,
+      reportPlaybackPosition,
+      isQueuePanelOpen,
+      setIsQueuePanelOpen,
+      toggleQueuePanel,
+      isAutoDJEnabled,
+      setIsAutoDJEnabled,
+      toggleAutoDJ,
+      autoDJSettingsMenu,
+      openAutoDJSettingsMenu,
+      closeAutoDJSettingsMenu,
+      playerChrome,
+      setPlayerChrome,
+    }),
+    [
+      currentTrack,
+      queue,
+      isPlaying,
+      currentIndex,
+      currentSource,
+      playTrack,
+      adoptPlayingTrack,
+      playQueue,
+      addToQueue,
+      playNext,
+      removeFromQueue,
+      clearQueue,
+      nextTrack,
+      previousTrack,
+      shuffleQueue,
+      handleShuffle,
+      handleQueueChange,
+      waveformHost,
+      queuePanelHost,
+      seekTo,
+      seekTargetSec,
+      seekNonce,
+      reportPlaybackPosition,
+      isQueuePanelOpen,
+      toggleQueuePanel,
+      isAutoDJEnabled,
+      setIsAutoDJEnabled,
+      toggleAutoDJ,
+      autoDJSettingsMenu,
+      openAutoDJSettingsMenu,
+      closeAutoDJSettingsMenu,
+      playerChrome,
+      setPlayerChrome,
+    ],
+  )
+
   return (
-    <MusicPlayerContext.Provider
-      value={{
-        currentTrack,
-        queue,
-        isPlaying,
-        currentIndex,
-        currentSource,
-        setCurrentTrack,
-        setQueue,
-        setIsPlaying,
-        setCurrentIndex,
-        setCurrentSource,
-        playTrack,
-        playQueue,
-        addToQueue,
-        removeFromQueue,
-        clearQueue,
-        nextTrack,
-        previousTrack,
-        shuffleQueue,
-        handleShuffle,
-        handleQueueChange,
-      }}
-    >
+    <MusicPlayerContext.Provider value={contextValue}>
       {children}
     </MusicPlayerContext.Provider>
   )
@@ -321,8 +673,10 @@ export function useMusicPlayer() {
         setCurrentIndex: () => {},
         setCurrentSource: () => {},
         playTrack: () => {},
+        adoptPlayingTrack: () => {},
         playQueue: () => {},
         addToQueue: () => {},
+        playNext: () => {},
         removeFromQueue: () => {},
         clearQueue: () => {},
         nextTrack: () => {},
@@ -330,6 +684,25 @@ export function useMusicPlayer() {
         shuffleQueue: () => {},
         handleShuffle: () => {},
         handleQueueChange: () => {},
+        waveformHost: null,
+        setWaveformHost: () => {},
+        queuePanelHost: null,
+        setQueuePanelHost: () => {},
+        seekTo: () => {},
+        seekTargetSec: null,
+        seekNonce: 0,
+        reportPlaybackPosition: () => {},
+        isQueuePanelOpen: false,
+        setIsQueuePanelOpen: () => {},
+        toggleQueuePanel: () => {},
+        isAutoDJEnabled: false,
+        setIsAutoDJEnabled: () => {},
+        toggleAutoDJ: () => {},
+        autoDJSettingsMenu: null,
+        openAutoDJSettingsMenu: () => {},
+        closeAutoDJSettingsMenu: () => {},
+        playerChrome: DEFAULT_PLAYER_CHROME,
+        setPlayerChrome: () => {},
       }
     }
     throw new Error('useMusicPlayer must be used within a MusicPlayerProvider')

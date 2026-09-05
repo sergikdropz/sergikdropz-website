@@ -8,8 +8,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Atmospheric deep house explorations.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Are We Awake/are-we-awake-album-art.jpg",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Are%20We%20Awake/64804719-FCBB-4F62-B570-DC695D1DC699.PNG",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "are-we-awake",
       "status": "active"
     },
@@ -21,8 +24,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Dark, driving tech house with minimal undertones.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Vice & Virtues/500CD048-AAA0-47EA-8F4F-4ED2A5D18A1E.jpeg",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Vice%20%26%20Virtues/500CD048-AAA0-47EA-8F4F-4ED2A5D18A1E.jpeg",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "vice-and-virtues",
       "status": "active"
     },
@@ -34,8 +40,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Raw, street-level house grooves.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - In The Streets/1FF2EF20-92A7-4FF6-8850-6FA3987CAC74.png",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20In%20The%20Streets/1FF2EF20-92A7-4FF6-8850-6FA3987CAC74.png",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "in-the-streets",
       "status": "active"
     },
@@ -47,8 +56,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Uplifting soulful house journeys.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Inspire/720426BD-0BE7-4582-A072-2E014DB9E2BC.PNG",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Inspire/720426BD-0BE7-4582-A072-2E014DB9E2BC.PNG",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "inspire",
       "status": "active"
     },
@@ -60,8 +72,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Relentless groove-forward house tracks.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - The World Dont Stop/IMG_0289.JPG",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20The%20World%20Dont%20Stop/IMG_0289.JPG",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "the-world-dont-stop",
       "status": "active"
     },
@@ -73,8 +88,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Lush, expansive deep house soundscapes.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Utopia/IMG_2622.jpeg",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Utopia/IMG_2622.jpeg",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "utopia",
       "status": "active"
     },
@@ -86,8 +104,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Hypnotic minimal grooves for late-night floors.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "daze",
       "status": "active"
     },
@@ -99,8 +120,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Warm, feel-good house vibes.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Staying A Vibe/CD9B1141-992E-405C-B73D-CF3D2A6BF02E.jpeg",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK - Staying A Vibe/staying-a-vibe-cover.jpg",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "staying-a-vibe",
       "status": "active"
     },
@@ -112,8 +136,11 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Sweet, soulful deep house with funky grooves and feel-good energy.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - Soul Candy/57A67CAB-0A23-4AB6-AE83-C840B0E0D3E4.jpeg",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Soul%20Candy/57A67CAB-0A23-4AB6-AE83-C840B0E0D3E4.jpeg",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "soul-candy",
       "status": "active"
     },
@@ -125,17 +152,51 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Hard-hitting, high-energy tracks with raw intensity.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK - FTP/4A8196B2-EDF9-4BBF-A685-D754C455A2A0.jpeg",
-      "formats": ["WAV", "MP3"],
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20FTP/4A8196B2-EDF9-4BBF-A685-D754C455A2A0.jpeg",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
       "release_id": "ftp",
+      "status": "active"
+    },
+    {
+      "id": "ep-the-chan-suk-legend",
+      "title": "The Chan Suk Legend EP (Digital Download)",
+      "slug": "the-chan-suk-legend-ep",
+      "category": "ep-bundles",
+      "description": "Full EP download — all tracks in WAV + MP3 format. Six-track EP with Bone: Bonafide Husla, Motion, Momentum, Cosmic Cadillac, Realm Transfer, and Revelation.",
+      "price": 9.99,
+      "checkout_method": "stripe",
+      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20The%20Chan%20Suk%20Legend/the-chan-suk-legend.png",
+      "formats": [
+        "WAV",
+        "MP3"
+      ],
+      "release_id": "the-chan-suk-legend",
       "status": "active"
     }
   ],
   "categories": [
-    { "id": "sample-packs", "label": "Sample Packs" },
-    { "id": "templates", "label": "Ableton Templates" },
-    { "id": "m4l-devices", "label": "M4L Devices" },
-    { "id": "tracks", "label": "Individual Tracks" },
-    { "id": "ep-bundles", "label": "EP Downloads" }
+    {
+      "id": "sample-packs",
+      "label": "Sample Packs"
+    },
+    {
+      "id": "templates",
+      "label": "Ableton Templates"
+    },
+    {
+      "id": "m4l-devices",
+      "label": "M4L Devices"
+    },
+    {
+      "id": "tracks",
+      "label": "Individual Tracks"
+    },
+    {
+      "id": "ep-bundles",
+      "label": "EP Downloads"
+    }
   ]
 }

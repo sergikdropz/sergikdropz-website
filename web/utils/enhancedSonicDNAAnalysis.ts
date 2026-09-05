@@ -16,6 +16,7 @@
 import { 
   analyzeAdvancedDrumPattern,
   DrumAnalysisResult,
+  TimingFeel,
   detectTimingFeel,
   analyzeBassline,
   matchPatternSignature,
@@ -23,7 +24,6 @@ import {
   KickPattern,
   SnarePattern,
   HihatPattern,
-  TimingFeel,
   BasslineAnalysis
 } from './advancedDrumAnalyzer'
 
@@ -145,7 +145,7 @@ export interface EnhancedSonicDNAResult {
   
   // Timing intelligence
   timing: {
-    feel: 'full-time' | 'half-time' | 'double-time' | 'variable'
+    feel: TimingFeel['type']
     confidence: number
     indicators: string[]
     effectiveBpm: number

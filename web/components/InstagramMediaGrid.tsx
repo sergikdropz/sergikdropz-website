@@ -18,6 +18,8 @@ interface InstagramMediaGridProps {
   username: string
   maxPosts?: number
   className?: string
+  /** Tailwind grid column classes. Default responsive 2/3/4. */
+  gridClassName?: string
 }
 
 const PLACEHOLDER_PATHS = new Set(['/logo.svg', '/images/gallery/logo.png'])
@@ -39,6 +41,7 @@ export default function InstagramMediaGrid({
   username,
   maxPosts = 100, // Show all by default
   className = '',
+  gridClassName = 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
 }: InstagramMediaGridProps) {
   const [media, setMedia] = useState<InstagramMedia[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -57,9 +60,7 @@ export default function InstagramMediaGrid({
     }
     setError(null)
     try {
-      const response = await fetch(`/api/instagram/media?username=${cleanUsername}&limit=${maxPosts}`, {
-        cache: 'no-store',
-      })
+      const response = await fetch(`/api/instagram/media?username=${cleanUsername}&limit=${maxPosts}`)
       const data = await response.json()
 
       if (process.env.NODE_ENV === 'development' && data.instagramGraph) {
@@ -158,14 +159,16 @@ export default function InstagramMediaGrid({
   }, [expandedIndex])
 
   const displayMedia = useMemo(
-    () => media.filter(itemHasRenderableThumbnail),
-    [media]
+    () => media.filter(itemHasRenderableThumbnail).slice(0, maxPosts),
+    [media, maxPosts]
   )
+
+  const skeletonCount = Math.min(maxPosts, 12)
 
   if (isLoading) {
     return (
-      <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1 ${className}`}>
-        {[...Array(12)].map((_, i) => (
+      <div className={`grid ${gridClassName} gap-1 ${className}`}>
+        {[...Array(skeletonCount)].map((_, i) => (
           <div key={i} className="aspect-square bg-gray-900 rounded overflow-hidden animate-pulse">
             <div className="w-full h-full bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800"></div>
           </div>
@@ -271,7 +274,7 @@ export default function InstagramMediaGrid({
           onClick={() => setExpandedIndex(null)}
         />
       )}
-      <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-0.5 md:gap-1 ${expandedIndex !== null ? 'mb-4 relative z-50' : ''}`}>
+      <div className={`grid ${gridClassName} gap-0.5 md:gap-1 ${expandedIndex !== null ? 'mb-4 relative z-50' : ''}`}>
         {displayMedia.map((item, index) => {
           const hasFailed = failedImages.has(index)
           const isExpanded = expandedIndex === index
@@ -286,7 +289,7 @@ export default function InstagramMediaGrid({
           return (
             <div 
               key={index} 
-              className={isExpanded ? 'col-span-2 md:col-span-3 lg:col-span-4 relative z-50' : ''}
+              className={isExpanded ? 'col-span-full relative z-50' : ''}
               data-media-index={index}
             >
               {isExpanded ? (

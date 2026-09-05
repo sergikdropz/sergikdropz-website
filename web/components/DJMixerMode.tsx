@@ -7,6 +7,9 @@ import { generatePeakData } from '@/utils/audioWorkerClient'
 import { analyzeFrequencyBands } from '@/utils/audioAnalysis'
 import Image from 'next/image'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import { scoreDnaCompatibility } from '@/lib/audio/sonic-dna-mix'
+import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
+import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
 
 interface Track {
   id: string
@@ -23,6 +26,7 @@ interface Track {
   key_signature?: string
   energy_level?: number
   danceability?: number
+  sonic_dna?: unknown
 }
 
 interface DJMixerModeProps {
@@ -33,7 +37,10 @@ interface DJMixerModeProps {
     enabled: boolean
     mode: AutoDJMode
     transitionMode: AutoDJTransitionMode
-    phraseBars: AutoDJPhraseBars
+    outPhraseBars?: AutoDJPhraseBars
+    overlapBars?: AutoDJPhraseBars
+    /** @deprecated use overlapBars */
+    phraseBars?: AutoDJPhraseBars
     addToQueue: boolean
   }
   onExit?: () => void
@@ -60,7 +67,7 @@ interface DeckState {
 
 type AutoDJMode = 'queue' | 'curate'
 type AutoDJTransitionMode = 'crossfade' | 'filter-eq' | 'cutout-filter'
-type AutoDJPhraseBars = 8 | 4 | 2
+type AutoDJPhraseBars = 2 | 4 | 8 | 16 | 24 | 32
 
 export default function DJMixerMode({
   currentTrack,
@@ -236,11 +243,12 @@ export default function DJMixerMode({
     if (mode === 'crossfade') return
 
     if (fromDeck === 'A') {
-      setFilterA(0.75 * t)
-      setFilterB(-0.65 * (1 - t))
+      // Outgoing opens HPF (negative); incoming starts LPF-closed then clears
+      setFilterA(-0.85 * Math.min(1, t * 1.35))
+      setFilterB(0.7 * Math.max(0, 1 - t * 1.15))
     } else {
-      setFilterB(0.75 * t)
-      setFilterA(-0.65 * (1 - t))
+      setFilterB(-0.85 * Math.min(1, t * 1.35))
+      setFilterA(0.7 * Math.max(0, 1 - t * 1.15))
     }
 
     if (mode === 'cutout-filter') {
@@ -276,7 +284,11 @@ export default function DJMixerMode({
     if (autoDJTransitionMode !== autoDJConfig.transitionMode) {
       setAutoDJTransitionMode(autoDJConfig.transitionMode)
     }
-    if (autoDJPhraseBars !== autoDJConfig.phraseBars) setAutoDJPhraseBars(autoDJConfig.phraseBars)
+    if (autoDJConfig) {
+      const overlap =
+        autoDJConfig.overlapBars ?? autoDJConfig.phraseBars ?? 8
+      if (autoDJPhraseBars !== overlap) setAutoDJPhraseBars(overlap)
+    }
     if (autoDJAddToQueue !== autoDJConfig.addToQueue) setAutoDJAddToQueue(autoDJConfig.addToQueue)
   }, [
     autoDJConfig,
@@ -294,6 +306,11 @@ export default function DJMixerMode({
     y: number
     visible: boolean
   } | null>(null)
+  const contextMenuClamp = useClampedFixedMenuPosition(
+    !!(contextMenu?.visible && contextMenu.track),
+    contextMenu?.visible ? { x: contextMenu.x, y: contextMenu.y } : null,
+    { width: 200, height: 180 },
+  )
   const touchHoldTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // Track loading confirmation state
@@ -1390,13 +1407,15 @@ export default function DJMixerMode({
 
   const fetchAutoDJLibrary = useCallback(async () => {
     try {
-      const response = await fetch('/api/music-library/tracks')
-      const data = await response.json()
-      const tracks = (data.tracks || []).map((t: any) => ({
-        ...t,
-        beat_grid_offset: t.beat_grid_offset ?? 0,
-      }))
-      setAutoDJLibraryTracks(tracks)
+      // Paginated lean summaries — never unbounded GET /tracks
+      const { fetchAllTracksSummaryForHydration } = await import('@/utils/musicLibraryApi')
+      const tracks = await fetchAllTracksSummaryForHydration({ includeArchived: false })
+      setAutoDJLibraryTracks(
+        tracks.map((t: any) => ({
+          ...t,
+          beat_grid_offset: t.beat_grid_offset ?? 0,
+        })),
+      )
     } catch (error) {
       console.error('Failed to fetch Auto DJ library tracks:', error)
       setAutoDJLibraryTracks([])
@@ -1608,7 +1627,7 @@ export default function DJMixerMode({
     }
     
     // Otherwise, show all tracks from queue
-    let filtered = queue
+    const filtered = queue
     
     // Find current track index in the full queue
     const currentIndex = currentTrack ? queue.findIndex(t => t.id === currentTrack.id) : -1
@@ -1957,27 +1976,7 @@ export default function DJMixerMode({
   }
 
   const scoreCandidateTrack = (current: Track, candidate: Track) => {
-    let score = 0
-    if (current.bpm && candidate.bpm) {
-      const bpmDiff = Math.abs(current.bpm - candidate.bpm)
-      score += Math.max(0, 1 - bpmDiff / 15) * 0.5
-    }
-    if (typeof current.energy_level === 'number' && typeof candidate.energy_level === 'number') {
-      const energyDiff = Math.abs(current.energy_level - candidate.energy_level)
-      score += Math.max(0, 1 - energyDiff / 0.4) * 0.25
-    }
-    if (current.key_signature && candidate.key_signature) {
-      if (current.key_signature === candidate.key_signature) {
-        score += 0.2
-      } else if (current.key_signature.includes(candidate.key_signature) || candidate.key_signature.includes(current.key_signature)) {
-        score += 0.1
-      }
-    }
-    if (typeof current.danceability === 'number' && typeof candidate.danceability === 'number') {
-      const danceDiff = Math.abs(current.danceability - candidate.danceability)
-      score += Math.max(0, 1 - danceDiff / 0.35) * 0.05
-    }
-    return score
+    return scoreDnaCompatibility(current, candidate).total
   }
 
   const pickNextTrackFromQueue = (currentId: string) => {
@@ -2316,16 +2315,14 @@ export default function DJMixerMode({
       {/* Context Menu */}
       {contextMenu?.visible && contextMenu.track && (
         <div
-          className="context-menu fixed z-[100] bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[180px]"
-          style={{
-            left: `${Math.min(contextMenu.x, window.innerWidth - 200)}px`,
-            top: `${Math.min(contextMenu.y, window.innerHeight - 150)}px`,
-          }}
+          ref={contextMenuClamp.ref}
+          {...contextMenuClamp.rootProps}
+          className="context-menu fixed overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[180px]"
+          style={contextMenuClamp.style}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-800">
-            {contextMenu.track.title}
-          </div>
+          <PopupMenuDragHeader title={contextMenu.track.title} headerProps={contextMenuClamp.headerProps} />
+          <div className="py-1">
           <button
             onClick={handleLoadToDeckA}
             className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center gap-2 touch-manipulation min-h-[44px]"
@@ -2340,6 +2337,7 @@ export default function DJMixerMode({
             <span className="text-green-400">▶</span>
             Load to Deck B
           </button>
+          </div>
         </div>
       )}
 

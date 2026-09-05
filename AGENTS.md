@@ -8,6 +8,16 @@
 - Core surfaces: artist brand, streaming embeds, events/booking, DJ software hub, and future merch.
 - Treat audio/video performance and UX as top priorities (no autoplay audio; user-initiated playback only).
 - When given a directive, favor production-ready changes with clear, minimal steps and safe defaults.
+- Site architecture grounding: `knowledge/CANON.md` → `knowledge/SITE_INDEX.md` → `knowledge/generated/site-knowledge.json` (auto-refreshed on build/dev/pre-commit; manual: `cd web && npm run knowledge:build`). Admin AI loads a query-scoped slice at chat time via `web/lib/ai/site-knowledge-context.ts`.
+
+## Local dev server (required for UI work)
+
+- **Automated:** `cd web && npm run dev:ensure` — starts a detached **dev daemon** if needed; hot-reloads on save. Also runs on workspace open via `.vscode/tasks.json` when automatic tasks are allowed.
+- Dev cache: `.next-dev-3001` with polling watchers (avoids macOS `EMFILE` / broken HMR).
+- **Before marking UI/code tasks done:** `npm run dev:ensure && npm run dev:verify`. Do not claim localhost works if either fails.
+- Stuck/broken: `npm run dev:recover` or `npm run dev:stop` then `npm run dev:ensure`.
+- Sonic DNA auto-sync: the dev daemon also runs `sonic-dna:watch` (reclassify + apply + compile on classifier/encyclopedia edits). Logs: `web/.dev/daemon.log`.
+- See `.cursor/rules/dev-server.mdc`.
 
 ## Future Enhancements (Planned Direction)
 - Expand Supabase usage for content workflows, scheduling, and storage-backed media assets.

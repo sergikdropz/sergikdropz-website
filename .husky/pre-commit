@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -e
+cd web
+npm run knowledge:build
+# Keep generated inventory in the commit when routes changed during the session.
+git add ../knowledge/generated/site-knowledge.json lib/generated/site-knowledge.json 2>/dev/null || true
+npm run lint:gate
+npm run typecheck

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 import { createSupabaseServerClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,9 @@ export const dynamic = 'force-dynamic'
  * Set a star rating (0-5) for a track
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = createSupabaseServerClient()
     const { trackId, rating } = await request.json()

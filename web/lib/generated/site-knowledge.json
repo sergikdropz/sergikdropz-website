@@ -1,0 +1,1624 @@
+{
+  "meta": {
+    "generatedAt": "2026-09-05T19:14:08.642Z",
+    "siteLabel": "sergikdropz.com",
+    "repoPaths": {
+      "webRoot": "web/",
+      "appDir": "web/app/",
+      "knowledgeOut": "knowledge/generated/site-knowledge.json"
+    },
+    "package": {
+      "name": "sergik-web",
+      "version": "0.1.0",
+      "next": "^14.2.0",
+      "dependencyCount": 28,
+      "devDependencyCount": 18
+    },
+    "counts": {
+      "appRouterPages": 80,
+      "appRouterRouteHandlers": 230,
+      "componentsTsx": 139,
+      "libTs": 330
+    },
+    "pagesByCategory": {
+      "fan": 5,
+      "music_library": 2,
+      "public": 13,
+      "debug": 1,
+      "tooling": 1,
+      "shop": 9,
+      "admin": 39,
+      "studio": 10
+    },
+    "contentHash": "41b678b24749e0de"
+  },
+  "middleware": {
+    "adminProtectedPrefixes": [
+      "/admin (except /admin/login, /admin/setup)",
+      "/studio"
+    ],
+    "adminApiPrefix": "/api/admin",
+    "sessionRefreshTargets": [
+      "/admin",
+      "/studio",
+      "/api/admin",
+      "/api/auth/session",
+      "/fan",
+      "/api/fan",
+      "/api/membership/status",
+      "/shop/membership/manage",
+      "/music-library",
+      "/api/music-library"
+    ],
+    "notes": "Matcher is narrower than all routes; see web/middleware.ts config.matcher and full logic."
+  },
+  "e2e": {
+    "playwrightConfig": "web/playwright.config.ts",
+    "adminCrawlListFile": "web/e2e/admin-ui-paths.ts",
+    "adminCrawlPathCount": 37,
+    "drift": {
+      "crawlPathsMissingMatchingAdminPage": [],
+      "adminPagesNotInCrawlList": []
+    },
+    "suites": {
+      "guest": "admin-guest, admin-api, admin-audit, admin-a11y, fan-public",
+      "authenticated": "admin-authenticated, admin-ui-crawl (requires E2E_ADMIN_EMAIL/PASSWORD)"
+    }
+  },
+  "tables": {
+    "appPages": [
+      {
+        "urlPath": "/fan/account",
+        "file": "web/app/(app)/fan/account/page.tsx",
+        "category": "fan"
+      },
+      {
+        "urlPath": "/fan/login",
+        "file": "web/app/(app)/fan/login/page.tsx",
+        "category": "fan"
+      },
+      {
+        "urlPath": "/fan",
+        "file": "web/app/(app)/fan/page.tsx",
+        "category": "fan"
+      },
+      {
+        "urlPath": "/fan/register",
+        "file": "web/app/(app)/fan/register/page.tsx",
+        "category": "fan"
+      },
+      {
+        "urlPath": "/fan/set-password",
+        "file": "web/app/(app)/fan/set-password/page.tsx",
+        "category": "fan"
+      },
+      {
+        "urlPath": "/music-library",
+        "file": "web/app/(app)/music-library/page.tsx",
+        "category": "music_library"
+      },
+      {
+        "urlPath": "/music-library/unlock",
+        "file": "web/app/(app)/music-library/unlock/page.tsx",
+        "category": "music_library"
+      },
+      {
+        "urlPath": "/about",
+        "file": "web/app/(marketing)/about/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/book",
+        "file": "web/app/(marketing)/book/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/contact",
+        "file": "web/app/(marketing)/contact/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/debug",
+        "file": "web/app/(marketing)/debug/page.tsx",
+        "category": "debug"
+      },
+      {
+        "urlPath": "/epk",
+        "file": "web/app/(marketing)/epk/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/follow",
+        "file": "web/app/(marketing)/follow/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/gallery",
+        "file": "web/app/(marketing)/gallery/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/instagram-helper",
+        "file": "web/app/(marketing)/instagram-helper/page.tsx",
+        "category": "tooling"
+      },
+      {
+        "urlPath": "/music/[slug]",
+        "file": "web/app/(marketing)/music/[slug]/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/music",
+        "file": "web/app/(marketing)/music/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/music/search",
+        "file": "web/app/(marketing)/music/search/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/notes",
+        "file": "web/app/(marketing)/notes/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/",
+        "file": "web/app/(marketing)/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/performances",
+        "file": "web/app/(marketing)/performances/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/shop/[slug]",
+        "file": "web/app/(marketing)/shop/[slug]/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/free",
+        "file": "web/app/(marketing)/shop/free/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/membership/manage",
+        "file": "web/app/(marketing)/shop/membership/manage/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/membership",
+        "file": "web/app/(marketing)/shop/membership/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/merch/[slug]",
+        "file": "web/app/(marketing)/shop/merch/[slug]/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/merch",
+        "file": "web/app/(marketing)/shop/merch/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop",
+        "file": "web/app/(marketing)/shop/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/success",
+        "file": "web/app/(marketing)/shop/success/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/tip",
+        "file": "web/app/(marketing)/shop/tip/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/videos",
+        "file": "web/app/(marketing)/videos/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/admin/login",
+        "file": "web/app/admin/(auth)/login/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/setup",
+        "file": "web/app/admin/(auth)/setup/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/ai-assistant/window",
+        "file": "web/app/admin/(protected)/ai-assistant/window/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/ai-runs",
+        "file": "web/app/admin/(protected)/ai-runs/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/analytics",
+        "file": "web/app/admin/(protected)/analytics/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/artist",
+        "file": "web/app/admin/(protected)/artist/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/bundles",
+        "file": "web/app/admin/(protected)/bundles/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/content",
+        "file": "web/app/admin/(protected)/content/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/database",
+        "file": "web/app/admin/(protected)/database/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/events",
+        "file": "web/app/admin/(protected)/events/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/gallery",
+        "file": "web/app/admin/(protected)/gallery/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/instagram",
+        "file": "web/app/admin/(protected)/instagram/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/licenses",
+        "file": "web/app/admin/(protected)/licenses/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/logs",
+        "file": "web/app/admin/(protected)/logs/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/memberships",
+        "file": "web/app/admin/(protected)/memberships/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/merch",
+        "file": "web/app/admin/(protected)/merch/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/music-library",
+        "file": "web/app/admin/(protected)/music-library/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/music-vault",
+        "file": "web/app/admin/(protected)/music-vault/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/music",
+        "file": "web/app/admin/(protected)/music/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/analytics",
+        "file": "web/app/admin/(protected)/nurturing/analytics/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/campaigns/[id]",
+        "file": "web/app/admin/(protected)/nurturing/campaigns/[id]/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/campaigns",
+        "file": "web/app/admin/(protected)/nurturing/campaigns/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/fans",
+        "file": "web/app/admin/(protected)/nurturing/fans/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing",
+        "file": "web/app/admin/(protected)/nurturing/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/segments",
+        "file": "web/app/admin/(protected)/nurturing/segments/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/smart-links",
+        "file": "web/app/admin/(protected)/nurturing/smart-links/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/nurturing/templates",
+        "file": "web/app/admin/(protected)/nurturing/templates/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin",
+        "file": "web/app/admin/(protected)/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/purchasable-tracks",
+        "file": "web/app/admin/(protected)/purchasable-tracks/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/purchases",
+        "file": "web/app/admin/(protected)/purchases/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/releases",
+        "file": "web/app/admin/(protected)/releases/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/settings",
+        "file": "web/app/admin/(protected)/settings/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/sonic-dna",
+        "file": "web/app/admin/(protected)/sonic-dna/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/splits",
+        "file": "web/app/admin/(protected)/splits/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/subscribers",
+        "file": "web/app/admin/(protected)/subscribers/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/tools/fan-journey",
+        "file": "web/app/admin/(protected)/tools/fan-journey/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/users",
+        "file": "web/app/admin/(protected)/users/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/videos-manager",
+        "file": "web/app/admin/(protected)/videos-manager/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/videos",
+        "file": "web/app/admin/(protected)/videos/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/studio/catalog/import",
+        "file": "web/app/studio/catalog/import/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio",
+        "file": "web/app/studio/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/releases/[id]",
+        "file": "web/app/studio/releases/[id]/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/releases/calendar",
+        "file": "web/app/studio/releases/calendar/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/releases/command-center",
+        "file": "web/app/studio/releases/command-center/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/releases/new",
+        "file": "web/app/studio/releases/new/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/releases",
+        "file": "web/app/studio/releases/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/releases/pipeline",
+        "file": "web/app/studio/releases/pipeline/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/soundexchange",
+        "file": "web/app/studio/soundexchange/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/tracks/new",
+        "file": "web/app/studio/tracks/new/page.tsx",
+        "category": "studio"
+      }
+    ],
+    "routeHandlers": [
+      {
+        "urlPath": "/music-library/unlock/complete",
+        "file": "web/app/(app)/music-library/unlock/complete/route.ts",
+        "category": "other_route_handler"
+      },
+      {
+        "urlPath": "/api/admin/ai/chat/providers",
+        "file": "web/app/api/admin/ai/chat/providers/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/chat",
+        "file": "web/app/api/admin/ai/chat/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/crowelogic",
+        "file": "web/app/api/admin/ai/crowelogic/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/digest",
+        "file": "web/app/api/admin/ai/digest/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/digest/send-test",
+        "file": "web/app/api/admin/ai/digest/send-test/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/digest/sends",
+        "file": "web/app/api/admin/ai/digest/sends/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/execute",
+        "file": "web/app/api/admin/ai/execute/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/health",
+        "file": "web/app/api/admin/ai/health/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/jobs",
+        "file": "web/app/api/admin/ai/jobs/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/models",
+        "file": "web/app/api/admin/ai/models/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/plan",
+        "file": "web/app/api/admin/ai/plan/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/router-preview",
+        "file": "web/app/api/admin/ai/router-preview/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/runs/[id]/retry-failed",
+        "file": "web/app/api/admin/ai/runs/[id]/retry-failed/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/runs/[id]/retry",
+        "file": "web/app/api/admin/ai/runs/[id]/retry/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/runs",
+        "file": "web/app/api/admin/ai/runs/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/settings",
+        "file": "web/app/api/admin/ai/settings/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/skills",
+        "file": "web/app/api/admin/ai/skills/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/ai/transcribe",
+        "file": "web/app/api/admin/ai/transcribe/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/artist",
+        "file": "web/app/api/admin/artist/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/bundles/[id]",
+        "file": "web/app/api/admin/bundles/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/bundles",
+        "file": "web/app/api/admin/bundles/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/database",
+        "file": "web/app/api/admin/database/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/events/[id]",
+        "file": "web/app/api/admin/events/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/events",
+        "file": "web/app/api/admin/events/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/fan-journey",
+        "file": "web/app/api/admin/fan-journey/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/health",
+        "file": "web/app/api/admin/health/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/license-tiers",
+        "file": "web/app/api/admin/license-tiers/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/licenses",
+        "file": "web/app/api/admin/licenses/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/licenses/stats",
+        "file": "web/app/api/admin/licenses/stats/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/logs",
+        "file": "web/app/api/admin/logs/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/membership-plans",
+        "file": "web/app/api/admin/membership-plans/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/memberships/[id]",
+        "file": "web/app/api/admin/memberships/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/memberships",
+        "file": "web/app/api/admin/memberships/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/orders/[id]",
+        "file": "web/app/api/admin/merch/orders/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/orders",
+        "file": "web/app/api/admin/merch/orders/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/sync",
+        "file": "web/app/api/admin/merch/sync/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/pending-tasks",
+        "file": "web/app/api/admin/pending-tasks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/purchasable-tracks/[id]",
+        "file": "web/app/api/admin/purchasable-tracks/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/purchasable-tracks",
+        "file": "web/app/api/admin/purchasable-tracks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/purchases",
+        "file": "web/app/api/admin/purchases/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/purchases/stats",
+        "file": "web/app/api/admin/purchases/stats/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/recent-activity",
+        "file": "web/app/api/admin/recent-activity/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/releases/[id]",
+        "file": "web/app/api/admin/releases/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/releases/[id]/sync-spotify",
+        "file": "web/app/api/admin/releases/[id]/sync-spotify/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/releases",
+        "file": "web/app/api/admin/releases/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/search",
+        "file": "web/app/api/admin/search/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/settings/[key]",
+        "file": "web/app/api/admin/settings/[key]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/settings",
+        "file": "web/app/api/admin/settings/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/settings/status",
+        "file": "web/app/api/admin/settings/status/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/setup/check-supabase",
+        "file": "web/app/api/admin/setup/check-supabase/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/setup/create-admin",
+        "file": "web/app/api/admin/setup/create-admin/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/setup/setup-database",
+        "file": "web/app/api/admin/setup/setup-database/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/sonic-dna/[id]",
+        "file": "web/app/api/admin/sonic-dna/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/sonic-dna/export-pdf",
+        "file": "web/app/api/admin/sonic-dna/export-pdf/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/splits",
+        "file": "web/app/api/admin/splits/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/stats",
+        "file": "web/app/api/admin/stats/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/storage-audio-audit",
+        "file": "web/app/api/admin/storage-audio-audit/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/subscribers/[id]",
+        "file": "web/app/api/admin/subscribers/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/subscribers",
+        "file": "web/app/api/admin/subscribers/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/sync-all-stats",
+        "file": "web/app/api/admin/sync-all-stats/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/sync-production",
+        "file": "web/app/api/admin/sync-production/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/tip-config",
+        "file": "web/app/api/admin/tip-config/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/users/[id]",
+        "file": "web/app/api/admin/users/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/users",
+        "file": "web/app/api/admin/users/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/venues/[id]",
+        "file": "web/app/api/admin/venues/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/venues",
+        "file": "web/app/api/admin/venues/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/videos/[id]",
+        "file": "web/app/api/admin/videos/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/videos",
+        "file": "web/app/api/admin/videos/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/analytics/events",
+        "file": "web/app/api/analytics/events/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/analytics/stats",
+        "file": "web/app/api/analytics/stats/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/analytics/track",
+        "file": "web/app/api/analytics/track/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/agent-status",
+        "file": "web/app/api/audio/agent-status/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/analyze-all-sonic-dna",
+        "file": "web/app/api/audio/analyze-all-sonic-dna/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/analyze-collection",
+        "file": "web/app/api/audio/analyze-collection/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/artifacts",
+        "file": "web/app/api/audio/artifacts/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/artwork",
+        "file": "web/app/api/audio/artwork/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/bpm",
+        "file": "web/app/api/audio/bpm/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/list",
+        "file": "web/app/api/audio/list/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/media/[...path]",
+        "file": "web/app/api/audio/media/[...path]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/regenerate-all-sonic-dna-agents",
+        "file": "web/app/api/audio/regenerate-all-sonic-dna-agents/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/regenerate-all-sonic-dna",
+        "file": "web/app/api/audio/regenerate-all-sonic-dna/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/replace",
+        "file": "web/app/api/audio/replace/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/reprocess-track",
+        "file": "web/app/api/audio/reprocess-track/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/resolve",
+        "file": "web/app/api/audio/resolve/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/sonic-dna-agents",
+        "file": "web/app/api/audio/sonic-dna-agents/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/sonic-dna-review",
+        "file": "web/app/api/audio/sonic-dna-review/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/sonic-dna",
+        "file": "web/app/api/audio/sonic-dna/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/update-all-enhanced",
+        "file": "web/app/api/audio/update-all-enhanced/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/update-bpm",
+        "file": "web/app/api/audio/update-bpm/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/upload-with-pipeline",
+        "file": "web/app/api/audio/upload-with-pipeline/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/upload",
+        "file": "web/app/api/audio/upload/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/waveform",
+        "file": "web/app/api/audio/waveform/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/auto-login",
+        "file": "web/app/api/auth/auto-login/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/fan/login",
+        "file": "web/app/api/auth/fan/login/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/fan/password-login",
+        "file": "web/app/api/auth/fan/password-login/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/fan/register",
+        "file": "web/app/api/auth/fan/register/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/fan/set-password",
+        "file": "web/app/api/auth/fan/set-password/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/fan/signup",
+        "file": "web/app/api/auth/fan/signup/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/login",
+        "file": "web/app/api/auth/login/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/logout",
+        "file": "web/app/api/auth/logout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/auth/session",
+        "file": "web/app/api/auth/session/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/cron/admin-ai-digest",
+        "file": "web/app/api/cron/admin-ai-digest/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/cron/campaigns-scheduler",
+        "file": "web/app/api/cron/campaigns-scheduler/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/cron/campaigns-sender",
+        "file": "web/app/api/cron/campaigns-sender/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/devtools",
+        "file": "web/app/api/devtools/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/download",
+        "file": "web/app/api/download/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/email/subscribe",
+        "file": "web/app/api/email/subscribe/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/email/unsubscribe",
+        "file": "web/app/api/email/unsubscribe/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/epk-download",
+        "file": "web/app/api/epk-download/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/auto-dj-settings",
+        "file": "web/app/api/fan/auto-dj-settings/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/library-collections",
+        "file": "web/app/api/fan/library-collections/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/membership",
+        "file": "web/app/api/fan/membership/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/playlists/[id]",
+        "file": "web/app/api/fan/playlists/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/playlists",
+        "file": "web/app/api/fan/playlists/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/purchases",
+        "file": "web/app/api/fan/purchases/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/vault-unlock",
+        "file": "web/app/api/fan/vault-unlock/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/fan/vault-unlock/status",
+        "file": "web/app/api/fan/vault-unlock/status/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/gallery/[filename]",
+        "file": "web/app/api/gallery/[filename]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/gallery/db",
+        "file": "web/app/api/gallery/db/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/gallery/list",
+        "file": "web/app/api/gallery/list/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/gallery/supabase-list",
+        "file": "web/app/api/gallery/supabase-list/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/gallery/upload-supabase",
+        "file": "web/app/api/gallery/upload-supabase/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/gallery/upload",
+        "file": "web/app/api/gallery/upload/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/go/[slug]",
+        "file": "web/app/api/go/[slug]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/health/deps",
+        "file": "web/app/api/health/deps/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/health",
+        "file": "web/app/api/health/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/callback",
+        "file": "web/app/api/instagram/callback/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/cron",
+        "file": "web/app/api/instagram/cron/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/media",
+        "file": "web/app/api/instagram/media/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/posts",
+        "file": "web/app/api/instagram/posts/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/preview",
+        "file": "web/app/api/instagram/preview/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/process-posts",
+        "file": "web/app/api/instagram/process-posts/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/proxy-image",
+        "file": "web/app/api/instagram/proxy-image/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/refresh",
+        "file": "web/app/api/instagram/refresh/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/save-posts",
+        "file": "web/app/api/instagram/save-posts/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/instagram/scrape",
+        "file": "web/app/api/instagram/scrape/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/membership/status",
+        "file": "web/app/api/membership/status/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/merch/products",
+        "file": "web/app/api/merch/products/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/merch/shipping-estimate",
+        "file": "web/app/api/merch/shipping-estimate/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/backfill-folder-artwork",
+        "file": "web/app/api/music-library/backfill-folder-artwork/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/bootstrap",
+        "file": "web/app/api/music-library/bootstrap/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/browse",
+        "file": "web/app/api/music-library/browse/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/build-sonic-dna-cache",
+        "file": "web/app/api/music-library/build-sonic-dna-cache/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/catalog-version",
+        "file": "web/app/api/music-library/catalog-version/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/catalog-version/stream",
+        "file": "web/app/api/music-library/catalog-version/stream/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/folders/move",
+        "file": "web/app/api/music-library/folders/move/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/folders",
+        "file": "web/app/api/music-library/folders/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/link-tracks",
+        "file": "web/app/api/music-library/link-tracks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/mosaic-covers",
+        "file": "web/app/api/music-library/mosaic-covers/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/organize",
+        "file": "web/app/api/music-library/organize/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/play",
+        "file": "web/app/api/music-library/play/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/playlists/link-files",
+        "file": "web/app/api/music-library/playlists/link-files/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/playlists",
+        "file": "web/app/api/music-library/playlists/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/rate",
+        "file": "web/app/api/music-library/rate/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/recover",
+        "file": "web/app/api/music-library/recover/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/restore-snapshot",
+        "file": "web/app/api/music-library/restore-snapshot/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/smart-playlists",
+        "file": "web/app/api/music-library/smart-playlists/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/snapshots",
+        "file": "web/app/api/music-library/snapshots/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/stats",
+        "file": "web/app/api/music-library/stats/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/sync-all-data",
+        "file": "web/app/api/music-library/sync-all-data/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/sync-artwork",
+        "file": "web/app/api/music-library/sync-artwork/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/sync-sonic-dna",
+        "file": "web/app/api/music-library/sync-sonic-dna/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/sync",
+        "file": "web/app/api/music-library/sync/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/tracks-optimized",
+        "file": "web/app/api/music-library/tracks-optimized/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/tracks/fill-original-dates",
+        "file": "web/app/api/music-library/tracks/fill-original-dates/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/tracks/pull-studio-release-dates",
+        "file": "web/app/api/music-library/tracks/pull-studio-release-dates/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music-library/tracks",
+        "file": "web/app/api/music-library/tracks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/music/search",
+        "file": "web/app/api/music/search/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/analytics",
+        "file": "web/app/api/nurturing/analytics/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/campaign-templates/[id]",
+        "file": "web/app/api/nurturing/campaign-templates/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/campaign-templates",
+        "file": "web/app/api/nurturing/campaign-templates/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/campaigns/[id]",
+        "file": "web/app/api/nurturing/campaigns/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/campaigns",
+        "file": "web/app/api/nurturing/campaigns/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/fans/[id]",
+        "file": "web/app/api/nurturing/fans/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/fans",
+        "file": "web/app/api/nurturing/fans/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/segments/[id]",
+        "file": "web/app/api/nurturing/segments/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/segments",
+        "file": "web/app/api/nurturing/segments/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/sequences",
+        "file": "web/app/api/nurturing/sequences/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/smart-links/[id]",
+        "file": "web/app/api/nurturing/smart-links/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/nurturing/smart-links",
+        "file": "web/app/api/nurturing/smart-links/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/printful/webhook",
+        "file": "web/app/api/printful/webhook/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/public/homepage-flags",
+        "file": "web/app/api/public/homepage-flags/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/purchases/verify",
+        "file": "web/app/api/purchases/verify/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/scan-library",
+        "file": "web/app/api/scan-library/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shop/bundles",
+        "file": "web/app/api/shop/bundles/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shop/membership-plans",
+        "file": "web/app/api/shop/membership-plans/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shop/products",
+        "file": "web/app/api/shop/products/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/spotify-artwork",
+        "file": "web/app/api/spotify-artwork/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/spotify-discography",
+        "file": "web/app/api/spotify-discography/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/spotify-search",
+        "file": "web/app/api/spotify-search/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/create-bundle-checkout",
+        "file": "web/app/api/stripe/create-bundle-checkout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/create-checkout",
+        "file": "web/app/api/stripe/create-checkout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/create-merch-checkout",
+        "file": "web/app/api/stripe/create-merch-checkout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/create-subscription-checkout",
+        "file": "web/app/api/stripe/create-subscription-checkout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/create-tip-checkout",
+        "file": "web/app/api/stripe/create-tip-checkout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/customer-portal",
+        "file": "web/app/api/stripe/customer-portal/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/stripe/webhook",
+        "file": "web/app/api/stripe/webhook/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/isrc/assign",
+        "file": "web/app/api/studio/isrc/assign/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/isrc/bulk-assign",
+        "file": "web/app/api/studio/isrc/bulk-assign/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/release-pipeline/campaign",
+        "file": "web/app/api/studio/release-pipeline/campaign/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/release-pipeline/launch",
+        "file": "web/app/api/studio/release-pipeline/launch/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/release-pipeline",
+        "file": "web/app/api/studio/release-pipeline/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/release-pipeline/smart-link",
+        "file": "web/app/api/studio/release-pipeline/smart-link/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/release-schedule",
+        "file": "web/app/api/studio/release-schedule/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/copyright",
+        "file": "web/app/api/studio/releases/[id]/copyright/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/distribute",
+        "file": "web/app/api/studio/releases/[id]/distribute/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/go-live",
+        "file": "web/app/api/studio/releases/[id]/go-live/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]",
+        "file": "web/app/api/studio/releases/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/status",
+        "file": "web/app/api/studio/releases/[id]/status/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/store-links",
+        "file": "web/app/api/studio/releases/[id]/store-links/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/tracks",
+        "file": "web/app/api/studio/releases/[id]/tracks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/command-center",
+        "file": "web/app/api/studio/releases/command-center/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/public",
+        "file": "web/app/api/studio/releases/public/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases",
+        "file": "web/app/api/studio/releases/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/soundexchange/batch-submit",
+        "file": "web/app/api/studio/soundexchange/batch-submit/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/soundexchange/lookup",
+        "file": "web/app/api/studio/soundexchange/lookup/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/soundexchange/submissions",
+        "file": "web/app/api/studio/soundexchange/submissions/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/soundexchange/submit",
+        "file": "web/app/api/studio/soundexchange/submit/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/tracks/[id]",
+        "file": "web/app/api/studio/tracks/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/tracks/bulk-splits",
+        "file": "web/app/api/studio/tracks/bulk-splits/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/tracks",
+        "file": "web/app/api/studio/tracks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/upload/artwork",
+        "file": "web/app/api/studio/upload/artwork/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/upload/wav",
+        "file": "web/app/api/studio/upload/wav/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/supabase-check",
+        "file": "web/app/api/supabase-check/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/videos/upload",
+        "file": "web/app/api/videos/upload/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/youtube-videos",
+        "file": "web/app/api/youtube-videos/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/auth/callback",
+        "file": "web/app/auth/callback/route.ts",
+        "category": "other_route_handler"
+      },
+      {
+        "urlPath": "/og",
+        "file": "web/app/og/route.tsx",
+        "category": "other_route_handler"
+      },
+      {
+        "urlPath": "/robots.txt",
+        "file": "web/app/robots.txt/route.ts",
+        "category": "other_route_handler"
+      }
+    ]
+  }
+}

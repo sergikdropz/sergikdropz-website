@@ -46,7 +46,7 @@ export async function GET(
                        'unknown'
 
     // Parse user agent for additional context (optional)
-    let country = 'unknown'
+    const country = 'unknown'
     try {
       const ua = new UAParser(user_agent || '')
       // You could add geolocation based on IP here (requires geoip service)

@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface ProductCardProps {
   id: string
@@ -11,7 +13,7 @@ interface ProductCardProps {
   price: number
   artwork?: string
   category?: string
-  productType: string
+  productType?: string
   licensingEnabled?: boolean
 }
 
@@ -33,15 +35,18 @@ export default function ProductCard({
     currency: 'USD',
   }).format(price)
 
+  const cover = artwork ? resolveImageUrl(artwork) : ''
+
   return (
     <Link href={href} className="group block">
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden transition-all duration-300 hover:border-gray-600 hover:bg-gray-900/70">
-        {artwork && (
+        {isSafeNextImageSrc(cover) && (
           <div className="relative aspect-square overflow-hidden">
             <Image
-              src={artwork}
+              src={cover}
               alt={title}
               fill
+              unoptimized={shouldUnoptimizeImage(cover)}
               className="object-cover transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { getServerSession } from '@/lib/auth'
 import { persistAudioFileArtifacts } from '@/utils/analysisArtifacts'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +17,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    if (!session?.isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
     if (!(await supabaseIsReachable())) return supabaseUnavailableResponse()
 
     const body = await request.json().catch(() => ({}))

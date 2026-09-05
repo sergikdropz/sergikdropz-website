@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { FaSync, FaUpload, FaPlus, FaFolder, FaMusic, FaBrain, FaChartBar, FaLink, FaCog, FaChevronDown, FaChevronUp, FaTrash, FaEdit, FaStar, FaTimes, FaSave, FaSpinner } from 'react-icons/fa'
+import { useState } from 'react'
+import { FaSync, FaPlus, FaFolder, FaBrain, FaLink, FaCog, FaChevronDown, FaChevronUp, FaTrash, FaEdit, FaTimes, FaSpinner, FaDatabase } from 'react-icons/fa'
 import {
   createFolder,
-  createTrack,
   syncToDatabase,
   invalidateMusicLibraryCache,
   type FolderItem,
@@ -28,11 +27,12 @@ export default function AdminMusicToolbar({
 }: AdminMusicToolbarProps) {
   const [expanded, setExpanded] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [jsonSyncing, setJsonSyncing] = useState(false)
   const [showCreateFolder, setShowCreateFolder] = useState(false)
-  const [showCreateTrack, setShowCreateTrack] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [artworkSyncing, setArtworkSyncing] = useState(false)
   const [buildingCache, setBuildingCache] = useState(false)
 
   const [newFolderName, setNewFolderName] = useState('')
@@ -49,16 +49,51 @@ export default function AdminMusicToolbar({
   }
 
   async function handleSync() {
+    if (
+      !confirm(
+        'Publish this catalog to the live music library? Genre, BPM, key, titles, and folders from the admin browser will show on the public site.',
+      )
+    ) {
+      return
+    }
     setSyncing(true)
     try {
-      await syncToDatabase()
+      const res = await fetch('/api/admin/sync-production', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Publish failed')
+      }
       invalidateMusicLibraryCache()
-      showStatus('Sync complete')
+      const folderLabel = data.visibleFolders != null ? `${data.visibleFolders} folders` : 'catalog'
+      const trackLabel = data.visibleTracks != null ? `, ${data.visibleTracks} tracks` : ''
+      const fieldLabel = data.published?.audioFiles != null ? `, ${data.published.audioFiles} display fields` : ''
+      showStatus(`Published to live site (${folderLabel}${trackLabel}${fieldLabel})`)
       onRefresh()
     } catch (e: any) {
       showStatus(`Sync failed: ${e.message}`)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleImportJson() {
+    if (
+      !confirm(
+        'Import music-library.json into the database? This updates admin data only and does not publish to the live site.',
+      )
+    ) {
+      return
+    }
+    setJsonSyncing(true)
+    try {
+      await syncToDatabase()
+      invalidateMusicLibraryCache()
+      showStatus('JSON imported to database')
+      onRefresh()
+    } catch (e: any) {
+      showStatus(`Import failed: ${e.message}`)
+    } finally {
+      setJsonSyncing(false)
     }
   }
 
@@ -77,6 +112,24 @@ export default function AdminMusicToolbar({
       showStatus('Scan failed')
     } finally {
       setScanning(false)
+    }
+  }
+
+  async function handleSyncArtwork() {
+    setArtworkSyncing(true)
+    try {
+      const res = await fetch('/api/music-library/sync-artwork', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Artwork sync failed')
+      invalidateMusicLibraryCache()
+      showStatus(
+        `Artwork saved: ${data.foldersWritten || 0} folders, ${data.tracksUpdated || 0} tracks`,
+      )
+      onRefresh()
+    } catch (e: any) {
+      showStatus(`Artwork sync failed: ${e.message}`)
+    } finally {
+      setArtworkSyncing(false)
     }
   }
 
@@ -145,6 +198,7 @@ export default function AdminMusicToolbar({
             <ToolbarButton
               icon={syncing ? FaSpinner : FaSync}
               label="Sync"
+              title="Publish admin catalog to the live site"
               onClick={handleSync}
               disabled={syncing}
               spinning={syncing}
@@ -212,10 +266,17 @@ export default function AdminMusicToolbar({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <ActionCard
               icon={FaSync}
-              label="Sync Library"
-              description="Re-sync JSON to database"
+              label="Publish to Site"
+              description="Push genre, BPM, key, and folders to the public library"
               onClick={handleSync}
               loading={syncing}
+            />
+            <ActionCard
+              icon={FaDatabase}
+              label="Import JSON"
+              description="Load music-library.json into the database"
+              onClick={handleImportJson}
+              loading={jsonSyncing}
             />
             <ActionCard
               icon={FaBrain}
@@ -223,6 +284,13 @@ export default function AdminMusicToolbar({
               description="Scan all data sources"
               onClick={handleScan}
               loading={scanning}
+            />
+            <ActionCard
+              icon={FaDatabase}
+              label="Sync artwork to DB"
+              description="Write every folder/EP cover onto all sibling tracks"
+              onClick={handleSyncArtwork}
+              loading={artworkSyncing}
             />
             <ActionCard
               icon={FaLink}
@@ -339,6 +407,7 @@ export default function AdminMusicToolbar({
 function ToolbarButton({
   icon: Icon,
   label,
+  title,
   onClick,
   disabled,
   spinning,
@@ -347,6 +416,7 @@ function ToolbarButton({
 }: {
   icon: any
   label: string
+  title?: string
   onClick: () => void
   disabled?: boolean
   spinning?: boolean
@@ -364,7 +434,7 @@ function ToolbarButton({
           ? 'bg-orange-600/20 text-orange-300'
           : 'text-gray-400 hover:text-white hover:bg-gray-800'
       } disabled:opacity-40`}
-      title={label}
+      title={title || label}
     >
       <Icon className={`w-3 h-3 ${spinning ? 'animate-spin' : ''}`} />
       <span className="hidden sm:inline">{label}</span>

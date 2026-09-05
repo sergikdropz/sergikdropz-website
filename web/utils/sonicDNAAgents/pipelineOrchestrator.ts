@@ -12,6 +12,9 @@ import { DrumPatternExpertAgent } from './drumPatternExpert'
 import { MusicologistAgent } from './musicologist'
 import { CulturalAnalystAgent } from './culturalAnalyst'
 import { EmotionalPsychologistAgent } from './emotionalPsychologist'
+import { PsychologyAnalystAgent } from './psychologyAnalyst'
+import { PsychoacousticsAnalystAgent } from './psychoacousticsAnalyst'
+import { BassPocketAnalystAgent } from './bassPocketAnalyst'
 import { GenreSpecialistAgent } from './genreSpecialist'
 import { HarmonyAnalystAgent } from './harmonyAnalyst'
 
@@ -27,10 +30,13 @@ export class PipelineOrchestrator {
       [AgentType.INTENTION_ANALYST, new IntentionAnalystAgent()],
       [AgentType.DESCRIPTION_WRITER, new DescriptionWriterAgent()],
       [AgentType.DRUM_PATTERN_EXPERT, new DrumPatternExpertAgent()],
+      [AgentType.BASS_POCKET_ANALYST, new BassPocketAnalystAgent()],
       [AgentType.GENRE_SPECIALIST, new GenreSpecialistAgent()],
       [AgentType.MUSICOLOGIST, new MusicologistAgent()],
       [AgentType.CULTURAL_ANALYST, new CulturalAnalystAgent()],
       [AgentType.EMOTIONAL_PSYCHOLOGIST, new EmotionalPsychologistAgent()],
+      [AgentType.PSYCHOLOGY_ANALYST, new PsychologyAnalystAgent()],
+      [AgentType.PSYCHOACOUSTICS_ANALYST, new PsychoacousticsAnalystAgent()],
     ])
   }
 
@@ -129,6 +135,8 @@ export class PipelineOrchestrator {
     const musicology = results.get(AgentType.MUSICOLOGIST)?.data
     const cultural = results.get(AgentType.CULTURAL_ANALYST)?.data
     const emotional = results.get(AgentType.EMOTIONAL_PSYCHOLOGIST)?.data
+    const psychology = results.get(AgentType.PSYCHOLOGY_ANALYST)?.data
+    const psychoacoustics = results.get(AgentType.PSYCHOACOUSTICS_ANALYST)?.data
 
     // Build comprehensive Sonic DNA
     return {
@@ -160,7 +168,13 @@ export class PipelineOrchestrator {
         ...comprehensiveAnalysis?.cultural,
         ...cultural
       } : comprehensiveAnalysis?.cultural,
-      emotional: emotional || {},
+      emotional: {
+        ...(emotional || {}),
+        psychologicalProfile:
+          psychology?.psychologicalProfile || emotional?.psychologicalProfile || '',
+      },
+      psychology: psychology || {},
+      psychoacoustics: psychoacoustics || {},
       comprehensive: comprehensiveAnalysis,
       musicbrainz: musicbrainzData ? {
         ...comprehensiveAnalysis?.musicbrainz,

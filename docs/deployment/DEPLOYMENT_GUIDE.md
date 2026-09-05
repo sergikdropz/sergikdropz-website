@@ -100,6 +100,20 @@ If you plan to use the fan nurturing engine:
 - Use `/api/health` for public health checks.
 - Use `/api/admin/health` for admin-only diagnostics.
 
+## GitHub Actions (CI, E2E, production probe)
+
+The **Web CI** workflow (`.github/workflows/web-ci.yml`) runs typecheck, unit tests, site knowledge verification, lint gate, Vercel-style build, and Playwright.
+
+| Setting | Where | Purpose |
+| --- | --- | --- |
+| `E2E_ADMIN_EMAIL` | Repository **Secrets** | Enables authenticated Playwright projects (`admin-authenticated`, `admin-ui-crawl`). |
+| `E2E_ADMIN_PASSWORD` | Repository **Secrets** | Same as above. |
+| `PRODUCTION_HEALTHCHECK_URL` | Repository **Variables** | e.g. `https://sergikdropz.com`. When set on `main`, runs `npm run health:probe` against `/api/health/deps` after CI passes. |
+
+**Post-Deploy Smoke** (`.github/workflows/post-deploy-smoke.yml`) is a manual workflow: provide the production base URL to run `health:probe` and HTTP checks on `/`, `/shop`, `/music-library`, and `/api/health`.
+
+Contributor commands: `web/CONTRIBUTING.md`.
+
 ## Troubleshooting:
 
 If deployment fails:

@@ -4,7 +4,7 @@
       "id": "bundle-all-eps",
       "name": "Complete EP Collection",
       "slug": "complete-ep-collection",
-      "description": "Get every SERGIK EP in one bundle. 10 EPs, all formats included.",
+      "description": "Get every SERGIK EP in one bundle. 11 EPs, all formats included.",
       "productIds": [
         "ep-are-we-awake",
         "ep-vice-and-virtues",
@@ -15,10 +15,11 @@
         "ep-daze",
         "ep-staying-a-vibe",
         "ep-soul-candy",
-        "ep-ftp"
+        "ep-ftp",
+        "ep-the-chan-suk-legend"
       ],
-      "originalPrice": 99.90,
-      "bundlePrice": 59.99,
+      "originalPrice": 109.89,
+      "bundlePrice": 65.99,
       "savingsPercent": 40,
       "artwork": "/images/gallery/logo.png",
       "status": "active"

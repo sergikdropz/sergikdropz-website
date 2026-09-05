@@ -11,6 +11,7 @@
 
 import { BaseAgent } from './baseAgent'
 import { AgentType, AgentContext, AgentResult, AgentCapabilities } from './agentTypes'
+import { extractInstrumentTypes, inferInstrumentUsageFromMeasured } from '@/lib/audio/instrument-usage'
 import {
   analyzeAdvancedDrumPattern,
   DrumAnalysisResult,
@@ -71,7 +72,10 @@ export class DrumPatternExpertAgent extends BaseAgent {
         energy,
         musicbrainzTags,
         genreHints,
-        context.trackTitle // Pass track title for title-based genre detection
+        context.trackTitle,
+        extractInstrumentTypes(
+          inferInstrumentUsageFromMeasured(context.blackboard?.measured || {}),
+        ),
       )
 
       // Build legacy pattern data for compatibility
