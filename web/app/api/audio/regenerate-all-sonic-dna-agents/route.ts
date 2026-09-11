@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { generateSonicDNAWithAgents, batchProcessTracks } from '@/utils/generateSonicDNAWithAgents'
 import { requireAdminApi } from '@/lib/auth/route-policy'
+import { resolveWaveformPeaks } from '@/lib/audio/waveform-peaks-source'
 
 export const dynamic = 'force-dynamic'
 
@@ -131,7 +132,7 @@ async function processTracksBatch(tracks: any[], supabase: any, batchSize: numbe
         // Load full per-track details only when needed (prevents TOAST-heavy scans).
         const { data: fresh, error: freshErr } = await supabase
           .from('audio_files')
-          .select('id, title, artist, file_url, file_path, bpm, key_signature, duration_seconds, energy_level, danceability, frequency_bands, waveform_data, waveform_samples, original_bpm')
+          .select('id, title, artist, file_url, file_path, bpm, key_signature, duration_seconds, energy_level, danceability, frequency_bands, waveform_json_url, waveform_data, waveform_samples, original_bpm')
           .eq('id', track.id)
           .maybeSingle()
 
@@ -144,6 +145,8 @@ async function processTracksBatch(tracks: any[], supabase: any, batchSize: numbe
           .from('audio_files')
           .update({ sonic_dna_status: 'processing' })
           .eq('id', track.id)
+
+        const existingPeaks = await resolveWaveformPeaks(fresh)
 
         // Generate using agent pipeline
         const sonicDNA = await generateSonicDNAWithAgents(
@@ -159,9 +162,7 @@ async function processTracksBatch(tracks: any[], supabase: any, batchSize: numbe
             audioFileUrl: fresh.file_url || fresh.file_path || null,
             filePath: fresh.file_path || null,
             // Pass existing waveform data if available (skip regeneration)
-            waveformData: fresh.waveform_data && Array.isArray(fresh.waveform_data) && fresh.waveform_data.length > 0
-              ? fresh.waveform_data
-              : undefined,
+            waveformData: existingPeaks?.length ? existingPeaks : undefined,
             waveformSamples: fresh.waveform_samples || undefined
           }
         )

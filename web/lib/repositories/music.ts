@@ -47,7 +47,7 @@ export async function getAudioFileById(id: string): Promise<RepositoryResult<Aud
     const { data, error } = await supabase
       .from('audio_files')
       .select(
-        'id, title, artist, file_name, file_path, file_url, format, duration_seconds, sonic_dna_status, sonic_dna, bpm, key_signature, energy_level, waveform_data, waveform_samples, metadata',
+        'id, title, artist, file_name, file_path, file_url, format, duration_seconds, sonic_dna_status, sonic_dna, bpm, key_signature, energy_level, waveform_json_url, waveform_data, waveform_samples, metadata',
       )
       .eq('id', id)
       .maybeSingle()

@@ -99,6 +99,36 @@ if (!dryRun && !serviceKey) {
 
 const UNKNOWN = new Set(['', 'unknown', 'n/a', 'none', 'null', 'unclassified'])
 
+// Timestamps that change on every run even when the analysis is identical.
+const VOLATILE_DNA_KEYS = new Set(['savedAt', 'analyzedAt', 'updatedAt', 'generatedAt'])
+
+function normalizeForCompare(value) {
+  if (Array.isArray(value)) return value.map(normalizeForCompare)
+  if (value && typeof value === 'object') {
+    const out = {}
+    for (const key of Object.keys(value).sort()) {
+      if (VOLATILE_DNA_KEYS.has(key)) continue
+      out[key] = normalizeForCompare(value[key])
+    }
+    return out
+  }
+  return value
+}
+
+function sameDna(a, b) {
+  return JSON.stringify(normalizeForCompare(a ?? {})) === JSON.stringify(normalizeForCompare(b ?? {}))
+}
+
+function sameScalar(a, b) {
+  if (a == null || b == null) return a == null && b == null
+  if (typeof a === 'number' || typeof b === 'number') return Number(a) === Number(b)
+  return String(a) === String(b)
+}
+
+function patchChangesRow(row, patch) {
+  return Object.entries(patch).some(([key, value]) => !sameScalar(row?.[key], value))
+}
+
 function isUsable(value) {
   if (value == null) return false
   if (typeof value === 'number') return Number.isFinite(value) && value > 0
@@ -208,7 +238,7 @@ async function loadLibraryLocks(audioFileId, libraryTrackId) {
     const rows = await rest(
       'GET',
       'music_library_tracks',
-      `?audio_file_id=eq.${audioFileId}&select=id,bpm,key_signature,genre,subgenre,metadata`,
+      `?audio_file_id=eq.${audioFileId}&select=id,bpm,key_signature,genre,subgenre,metadata,sonic_dna`,
     )
     return Array.isArray(rows) ? rows : []
   }
@@ -216,7 +246,7 @@ async function loadLibraryLocks(audioFileId, libraryTrackId) {
     const rows = await rest(
       'GET',
       'music_library_tracks',
-      `?id=eq.${libraryTrackId}&select=id,bpm,key_signature,genre,subgenre,metadata`,
+      `?id=eq.${libraryTrackId}&select=id,bpm,key_signature,genre,subgenre,metadata,sonic_dna`,
     )
     return Array.isArray(rows) ? rows : []
   }
@@ -232,10 +262,18 @@ function fillOnlyCatalog(lock, measuredPatch) {
   return next
 }
 
+const AUDIO_SELECT =
+  'id,sonic_dna,bpm,key_signature,sonic_dna_status,sonic_dna_error,analysis_status'
+
 async function resolveTargets(fileId) {
-  const audioRows = await rest('GET', 'audio_files', `?id=eq.${fileId}&select=id,sonic_dna,bpm,key_signature`)
+  const audioRows = await rest('GET', 'audio_files', `?id=eq.${fileId}&select=${AUDIO_SELECT}`)
   if (audioRows?.[0]?.id) {
-    return { audioFileId: audioRows[0].id, existing: audioRows[0].sonic_dna || {}, libraryTrackId: null }
+    return {
+      audioFileId: audioRows[0].id,
+      existing: audioRows[0].sonic_dna || {},
+      existingAudio: audioRows[0],
+      libraryTrackId: null,
+    }
   }
   const libRows = await rest(
     'GET',
@@ -247,28 +285,35 @@ async function resolveTargets(fileId) {
     const linked = await rest(
       'GET',
       'audio_files',
-      `?id=eq.${lib.audio_file_id}&select=id,sonic_dna,bpm,key_signature`,
+      `?id=eq.${lib.audio_file_id}&select=${AUDIO_SELECT}`,
     )
     return {
       audioFileId: lib.audio_file_id,
       existing: linked?.[0]?.sonic_dna || lib.sonic_dna || {},
+      existingAudio: linked?.[0] || {},
       libraryTrackId: lib.id,
     }
   }
   if (lib?.id) {
-    return { audioFileId: null, existing: lib.sonic_dna || {}, libraryTrackId: lib.id }
+    return {
+      audioFileId: null,
+      existing: lib.sonic_dna || {},
+      existingAudio: {},
+      libraryTrackId: lib.id,
+    }
   }
-  return { audioFileId: null, existing: {}, libraryTrackId: null }
+  return { audioFileId: null, existing: {}, existingAudio: {}, libraryTrackId: null }
 }
 
 console.log(`[apply-measured] target ${live ? 'live' : 'local'} (${queue.length} files)`)
 
-const stats = { ok: 0, fail: 0, completed: 0, partial: 0, missing: 0 }
+const stats = { ok: 0, fail: 0, completed: 0, partial: 0, missing: 0, unchanged: 0 }
 for (const name of queue) {
   const id = name.replace(/\.json$/, '')
   const measured = JSON.parse(fs.readFileSync(path.join(measuredDir, name), 'utf8'))
   try {
     let existing = {}
+    let existingAudio = {}
     let audioFileId = id
     let libraryTrackId = id
     if (!dryRun) {
@@ -276,6 +321,7 @@ for (const name of queue) {
       audioFileId = resolved.audioFileId
       libraryTrackId = resolved.libraryTrackId || id
       existing = resolved.existing
+      existingAudio = resolved.existingAudio || {}
       if (!audioFileId && !resolved.libraryTrackId) {
         stats.missing += 1
         console.warn(`[apply-measured] MISS ${id}`)
@@ -317,28 +363,53 @@ for (const name of queue) {
       else metadata.catalog_overrides = overrides
       libraryMetadataPatch = { metadata }
     }
+    // Rewriting sonic_dna is a TOAST + full index update on every row it touches,
+    // so only write when the merged value actually differs from what is stored.
+    const dnaChanged = !sameDna(existing, dnaWithCatalog)
+    const libraryNeedsWrite = libraryRows.some(
+      (row) =>
+        !sameDna(row.sonic_dna, dnaWithCatalog) ||
+        patchChangesRow(row, libraryCatalog) ||
+        Object.keys(libraryMetadataPatch).length > 0,
+    )
+    let wrote = false
+
     if (audioFileId) {
-      await rest('PATCH', 'audio_files', `?id=eq.${audioFileId}`, {
-        sonic_dna: dnaWithCatalog,
+      const audioScalars = {
         sonic_dna_status: status,
-        sonic_dna_error: null,
-        sonic_dna_analyzed_at: analyzedAt,
         analysis_status: status,
         ...measuredAudio,
-      })
-      await rest('PATCH', 'music_library_tracks', `?audio_file_id=eq.${audioFileId}`, {
-        sonic_dna: dnaWithCatalog,
-        ...libraryCatalog,
-        ...libraryMetadataPatch,
-      })
-    } else if (libraryTrackId) {
+      }
+      if (dnaChanged || existingAudio.sonic_dna_error != null || patchChangesRow(existingAudio, audioScalars)) {
+        await rest('PATCH', 'audio_files', `?id=eq.${audioFileId}`, {
+          ...(dnaChanged ? { sonic_dna: dnaWithCatalog, sonic_dna_analyzed_at: analyzedAt } : {}),
+          sonic_dna_error: null,
+          ...audioScalars,
+        })
+        wrote = true
+      }
+      if (libraryNeedsWrite) {
+        await rest('PATCH', 'music_library_tracks', `?audio_file_id=eq.${audioFileId}`, {
+          sonic_dna: dnaWithCatalog,
+          ...libraryCatalog,
+          ...libraryMetadataPatch,
+        })
+        wrote = true
+      }
+    } else if (libraryTrackId && libraryNeedsWrite) {
       await rest('PATCH', 'music_library_tracks', `?id=eq.${libraryTrackId}`, {
         sonic_dna: dnaWithCatalog,
         ...libraryCatalog,
         ...libraryMetadataPatch,
       })
+      wrote = true
     }
+
     stats.ok += 1
+    if (!wrote) {
+      stats.unchanged += 1
+      continue
+    }
     console.log(`[apply-measured] ${id} ${status}`)
   } catch (error) {
     const cause = error.cause?.code || error.cause?.message || ''

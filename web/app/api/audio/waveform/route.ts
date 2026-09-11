@@ -1,9 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { findAudioFile } from '@/lib/findAudioFile'
 import { extractVaultRelativePath, normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import { persistAudioFileArtifacts } from '@/utils/analysisArtifacts'
+import { sanitizeWaveformPeaks } from '@/lib/audio/sanitize-waveform-peaks'
+import { fetchWaveformPeaksFromUrl } from '@/lib/audio/waveform-peaks-source'
+import { requireAdminApi } from '@/lib/auth/route-policy'
+import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 const WAVEFORM_SELECT = 'waveform_json_url, waveform_svg_url, file_path, file_name, title'
 
@@ -69,28 +75,22 @@ export async function GET(request: Request) {
     }
 
     if (track.waveform_json_url) {
-      try {
-        const res = await fetch(track.waveform_json_url, { cache: 'no-store' })
-        if (res.ok) {
-          const waveform_data = await res.json()
-          if (Array.isArray(waveform_data) && waveform_data.length > 0) {
-            return NextResponse.json(
-              {
-                waveform_data,
-                file_path: track.file_path,
-                waveform_svg_url: track.waveform_svg_url || null,
-              },
-              {
-                headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
-              },
-            )
-          }
-        }
-      } catch {
-        // fall through to DB waveform_data
+      const peaks = await fetchWaveformPeaksFromUrl(track.waveform_json_url)
+      if (peaks?.length) {
+        return NextResponse.json(
+          {
+            waveform_data: peaks,
+            file_path: track.file_path,
+            waveform_svg_url: track.waveform_svg_url || null,
+          },
+          {
+            headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
+          },
+        )
       }
     }
 
+    // Fallback for rows that predate the Storage backfill.
     const { data: withWaveform } = await supabase
       .from('audio_files')
       .select('waveform_data, file_path, file_name, title, waveform_svg_url')
@@ -124,6 +124,70 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
+    )
+  }
+}
+
+/**
+ * POST /api/audio/waveform
+ * Persist client-rescanned peaks onto audio_files + linked library tracks.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await requireAdminApi()
+    if (!auth.ok) return auth.response
+    if (!(await supabaseIsReachable())) return supabaseUnavailableResponse()
+
+    const body = await request.json().catch(() => ({}))
+    const peaks = sanitizeWaveformPeaks(body.peaks ?? body.waveform_data)
+    if (!peaks) {
+      return NextResponse.json(
+        { error: 'peaks must be an array of at least 64 numbers' },
+        { status: 400 },
+      )
+    }
+
+    const supabase = createSupabaseServerClient()
+    const track = await findAudioFile(supabase, {
+      path: body.path || null,
+      trackId: body.trackId || null,
+      audioFileId: body.audioFileId || null,
+      title: body.title || null,
+      select: 'id, file_path, file_name, metadata, waveform_svg_url, waveform_json_url',
+    })
+    if (!track?.id) {
+      return NextResponse.json({ error: 'Audio file not found for this track' }, { status: 404 })
+    }
+
+    // Peaks are stored once in the audio-analysis bucket rather than as a TOASTed
+    // JSONB column duplicated across audio_files and every linked library track.
+    try {
+      await persistAudioFileArtifacts({
+        audioFileId: track.id,
+        filePath: track.file_path,
+        fileName: track.file_name,
+        waveformData: peaks,
+        existingMetadata: track.metadata,
+        force: true,
+      })
+    } catch (err: any) {
+      console.error('[waveform POST] artifact persist failed:', err?.message || err)
+      return NextResponse.json(
+        { error: err?.message || 'Failed to store waveform' },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      audioFileId: track.id,
+      samples: peaks.length,
+    })
+  } catch (error: any) {
+    console.error('Waveform persist error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to save waveform' },
+      { status: 500 },
     )
   }
 }

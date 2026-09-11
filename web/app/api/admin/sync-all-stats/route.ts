@@ -422,16 +422,16 @@ async function syncTrackFieldsFromAudioFiles(supabase: any) {
     // Get tracks missing key fields
     const { data: tracks } = await supabase
       .from('music_library_tracks')
-      .select('id, audio_file_id, bpm, key_signature, energy_level, danceability, waveform, duration')
+      .select('id, audio_file_id, bpm, key_signature, energy_level, danceability, duration')
       .not('audio_file_id', 'is', null)
-      .or('bpm.is.null,key_signature.is.null,key_signature.eq.Unknown,energy_level.is.null,danceability.is.null,waveform.is.null')
+      .or('bpm.is.null,key_signature.is.null,key_signature.eq.Unknown,energy_level.is.null,danceability.is.null')
 
     if (!tracks || tracks.length === 0) return result
 
     const audioIds = Array.from(new Set(tracks.map((t: any) => t.audio_file_id)))
     const { data: audioFiles } = await supabase
       .from('audio_files')
-      .select('id, bpm, key_signature, energy_level, danceability, waveform_data, duration_seconds')
+      .select('id, bpm, key_signature, energy_level, danceability, duration_seconds')
       .in('id', audioIds)
 
     if (!audioFiles) return result
@@ -469,10 +469,8 @@ async function syncTrackFieldsFromAudioFiles(supabase: any) {
         needsUpdate = true
       }
 
-      if (!track.waveform && audioFile.waveform_data) {
-        updates.waveform = audioFile.waveform_data
-        needsUpdate = true
-      }
+      // Peaks are not copied here: they live in the audio-analysis bucket and are
+      // read via audio_files.waveform_json_url.
 
       if (!track.duration && audioFile.duration_seconds) {
         updates.duration = audioFile.duration_seconds

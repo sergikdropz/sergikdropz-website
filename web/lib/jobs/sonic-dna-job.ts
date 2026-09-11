@@ -21,6 +21,8 @@ import { mergePreferredSonicDna } from '@/lib/audio/sonic-dna-quality'
 import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
 import { updateSonicDNACache } from '@/utils/sonicDNACache'
 import { runAccuracyChallenge } from '@/lib/audio/sonic-dna-v2/accuracy-challenge'
+import { resolveWaveformPeaks } from '@/lib/audio/waveform-peaks-source'
+import { persistAudioFileArtifacts } from '@/utils/analysisArtifacts'
 
 async function setJobStage(
   jobId: string,
@@ -118,7 +120,7 @@ export async function runSonicDnaJob(jobId: string): Promise<BackgroundJob | nul
 
     // —— Waveform stage ——
     await setJobStage(jobId, 'waveform')
-    let peaks: number[] = Array.isArray(track.data.waveform_data) ? track.data.waveform_data : []
+    let peaks: number[] = (await resolveWaveformPeaks(track.data)) ?? []
     if ((!peaks.length || force) && (track.data.file_url || track.data.file_path)) {
       try {
         const { generateWaveformFromUrl } = await import('@/lib/audio/generate-waveform-server')
@@ -267,12 +269,25 @@ export async function runSonicDnaJob(jobId: string): Promise<BackgroundJob | nul
         key_signature: analysisData.key_signature,
         energy_level: analysisData.energy_level,
         danceability: analysisData.danceability,
-        waveform_data: analysisData.waveform_data,
         waveform_samples: analysisData.waveform_samples,
         waveform_version: analysisData.waveform_version,
         metadata,
       })
       .eq('id', trackId)
+
+    // Peaks go to the audio-analysis bucket, not a TOASTed column on two tables.
+    if (peaks.length) {
+      await persistAudioFileArtifacts({
+        audioFileId: trackId,
+        filePath: track.data.file_path || '',
+        fileName: track.data.file_name,
+        waveformData: peaks,
+        existingMetadata: metadata,
+        force: true,
+      }).catch((err) => {
+        console.warn('[sonic-dna-job] waveform artifact persist failed:', err?.message || err)
+      })
+    }
 
     // Dual-write library tracks sharing this audio file
     await supabase
@@ -283,7 +298,6 @@ export async function runSonicDnaJob(jobId: string): Promise<BackgroundJob | nul
         key_signature: analysisData.key_signature,
         energy_level: analysisData.energy_level,
         danceability: analysisData.danceability,
-        waveform: analysisData.waveform_data,
       })
       .eq('audio_file_id', trackId)
 

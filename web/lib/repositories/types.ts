@@ -25,6 +25,7 @@ export type AudioFileSummary = {
   bpm?: number | null
   key_signature?: string | null
   energy_level?: number | null
+  waveform_json_url?: string | null
   waveform_data?: number[] | null
   waveform_samples?: number | null
   metadata?: Record<string, unknown> | null
