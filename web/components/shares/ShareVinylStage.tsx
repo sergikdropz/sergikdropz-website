@@ -31,8 +31,8 @@ type VinylDiscProps = {
   /** Drag the platter to scrub audio (disc mode). */
   scrubEnabled?: boolean
   onScrubStart?: () => void
-  /** Called with signed seconds (clockwise / forward is positive). */
-  onScrubDelta?: (deltaSeconds: number) => void
+  /** Platter motion while scrubbing (degrees + mapped seconds + frame dt). */
+  onScrubDelta?: (tick: { deltaSeconds: number; deltaDegrees: number; dtMs: number }) => void
   onScrubEnd?: () => void
 }
 
@@ -67,6 +67,7 @@ export const VinylDisc = memo(function VinylDisc({
   /** True only after circular drag exceeds SCRUB_ARM_DEG. */
   const scrubArmedRef = useRef(false)
   const lastPointerAngleRef = useRef(0)
+  const lastMoveAtRef = useRef(0)
   const armedAccumRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
   const onScrubStartRef = useRef(onScrubStart)
@@ -108,6 +109,7 @@ export const VinylDisc = memo(function VinylDisc({
     scrubArmedRef.current = false
     armedAccumRef.current = 0
     activePointerIdRef.current = null
+    lastMoveAtRef.current = 0
     if (wasArmed) {
       endVinylScrub()
       onScrubEndRef.current?.()
@@ -126,6 +128,7 @@ export const VinylDisc = memo(function VinylDisc({
       armedAccumRef.current = 0
       activePointerIdRef.current = event.pointerId
       lastPointerAngleRef.current = pointerAngleDeg(event.clientX, event.clientY, root)
+      lastMoveAtRef.current = performance.now()
       try {
         root.setPointerCapture(event.pointerId)
       } catch {
@@ -139,6 +142,10 @@ export const VinylDisc = memo(function VinylDisc({
     if (!trackingRef.current || activePointerIdRef.current !== event.pointerId) return
     const root = rootRef.current
     if (!root) return
+
+    const now = performance.now()
+    const dtMs = Math.max(8, Math.min(64, now - (lastMoveAtRef.current || now)))
+    lastMoveAtRef.current = now
 
     const next = pointerAngleDeg(event.clientX, event.clientY, root)
     const deltaDeg = shortestAngleDelta(lastPointerAngleRef.current, next)
@@ -157,7 +164,11 @@ export const VinylDisc = memo(function VinylDisc({
 
     event.preventDefault()
     nudgeVinylAngle(deltaDeg)
-    onScrubDeltaRef.current?.(vinylDegreesToSeconds(deltaDeg))
+    onScrubDeltaRef.current?.({
+      deltaDegrees: deltaDeg,
+      deltaSeconds: vinylDegreesToSeconds(deltaDeg),
+      dtMs,
+    })
   }, [])
 
   const onPointerUp = useCallback(
@@ -332,7 +343,7 @@ type ShareVinylStageProps = {
   className?: string
   scrubEnabled?: boolean
   onScrubStart?: () => void
-  onScrubDelta?: (deltaSeconds: number) => void
+  onScrubDelta?: (tick: { deltaSeconds: number; deltaDegrees: number; dtMs: number }) => void
   onScrubEnd?: () => void
 }
 

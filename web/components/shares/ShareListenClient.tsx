@@ -90,19 +90,18 @@ export default function ShareListenClient({
   const onVinylScrubStart = useCallback(() => {
     const api = scrubApiRef.current
     scrubWasPlayingRef.current = api?.getPosition().playing ?? playing
-    api?.pause()
+    api?.beginVinylScrub()
   }, [playing])
 
-  const onVinylScrubDelta = useCallback((deltaSeconds: number) => {
-    const api = scrubApiRef.current
-    if (!api || !Number.isFinite(deltaSeconds) || deltaSeconds === 0) return
-    const { currentTime, duration } = api.getPosition()
-    const dur = duration > 0 ? duration : Number.POSITIVE_INFINITY
-    api.seek(Math.max(0, Math.min(dur, currentTime + deltaSeconds)))
-  }, [])
+  const onVinylScrubDelta = useCallback(
+    (tick: { deltaSeconds: number; deltaDegrees: number; dtMs: number }) => {
+      scrubApiRef.current?.tickVinylScrub(tick)
+    },
+    [],
+  )
 
   const onVinylScrubEnd = useCallback(() => {
-    if (scrubWasPlayingRef.current) scrubApiRef.current?.play()
+    scrubApiRef.current?.endVinylScrub(scrubWasPlayingRef.current)
     scrubWasPlayingRef.current = false
   }, [])
 

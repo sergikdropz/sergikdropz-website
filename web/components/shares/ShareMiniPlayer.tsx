@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { ShareTrackPayload } from '@/lib/shares/types'
 import ShareDockWaveformScrubber from '@/components/shares/ShareDockWaveformScrubber'
+import { VinylScrubAudio } from '@/lib/shares/vinyl-scrub-audio'
+import { relockVinylTimeline, setVinylTimelineSource } from '@/lib/shares/vinyl-spin-clock'
 
 function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00'
@@ -11,11 +13,23 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+export type VinylScrubTick = {
+  deltaSeconds: number
+  deltaDegrees: number
+  dtMs: number
+}
+
 export type ShareScrubApi = {
   seek: (seconds: number) => void
   play: () => void
   pause: () => void
   getPosition: () => { currentTime: number; duration: number; playing: boolean }
+  /** Enter turntable scrub — keeps disc live; starts scratch engine. */
+  beginVinylScrub: () => void
+  /** Seek + reverse/speed grains + scratch noise from platter motion. */
+  tickVinylScrub: (tick: VinylScrubTick) => void
+  /** Exit scrub; resume playback if requested. */
+  endVinylScrub: (resume: boolean) => void
 }
 
 type ShareMiniPlayerProps = {
@@ -72,6 +86,8 @@ export default function ShareMiniPlayer({
   const playingRef = useRef(playing)
   const currentTimeRef = useRef(currentTime)
   const durationRef = useRef(duration)
+  const scrubAudioRef = useRef<VinylScrubAudio | null>(null)
+  const vinylScrubbingRef = useRef(false)
   playingRef.current = playing
   currentTimeRef.current = currentTime
   durationRef.current = duration
@@ -79,6 +95,21 @@ export default function ShareMiniPlayer({
   useEffect(() => {
     onPlayingChange?.(playing)
   }, [playing, onPlayingChange])
+
+  useEffect(() => {
+    setVinylTimelineSource(() => {
+      const el = audioRef.current
+      return el?.currentTime ?? currentTimeRef.current
+    })
+    return () => setVinylTimelineSource(null)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      scrubAudioRef.current?.dispose()
+      scrubAudioRef.current = null
+    }
+  }, [])
 
   const track = tracks[index] || null
   const src = useMemo(() => {
@@ -100,6 +131,8 @@ export default function ShareMiniPlayer({
     setCurrentTime(0)
     setDuration(Number(track?.duration) || 0)
     setError(null)
+    if (!scrubAudioRef.current) scrubAudioRef.current = new VinylScrubAudio()
+    void scrubAudioRef.current.prepareTrack(src)
     if (playing) {
       void el.play().catch((err) => {
         setPlaying(false)
@@ -187,6 +220,44 @@ export default function ShareMiniPlayer({
           currentTime: el?.currentTime ?? currentTimeRef.current,
           duration: el?.duration || durationRef.current || 0,
           playing: playingRef.current,
+        }
+      },
+      beginVinylScrub: () => {
+        const el = audioRef.current
+        vinylScrubbingRef.current = true
+        if (!scrubAudioRef.current) scrubAudioRef.current = new VinylScrubAudio()
+        void scrubAudioRef.current.begin()
+        // Pause media clock so currentTime only moves with the platter —
+        // keep React `playing` as-is so the disc motor stay armed.
+        if (el && !el.paused) el.pause()
+      },
+      tickVinylScrub: (tick) => {
+        const el = audioRef.current
+        if (!el || !vinylScrubbingRef.current) return
+        const dur = el.duration || durationRef.current || Number.POSITIVE_INFINITY
+        const next = Math.max(
+          0,
+          Number.isFinite(dur) ? Math.min(dur, el.currentTime + tick.deltaSeconds) : el.currentTime + tick.deltaSeconds,
+        )
+        el.currentTime = next
+        currentTimeRef.current = next
+        setCurrentTime(next)
+        scrubAudioRef.current?.tick({
+          deltaSeconds: tick.deltaSeconds,
+          deltaDegrees: tick.deltaDegrees,
+          dtMs: tick.dtMs,
+          currentTime: next,
+        })
+      },
+      endVinylScrub: (resume) => {
+        const el = audioRef.current
+        vinylScrubbingRef.current = false
+        scrubAudioRef.current?.end()
+        relockVinylTimeline(el?.currentTime ?? currentTimeRef.current)
+        if (resume) playFromApi()
+        else {
+          if (el && !el.paused) el.pause()
+          setPlaying(false)
         }
       },
     }

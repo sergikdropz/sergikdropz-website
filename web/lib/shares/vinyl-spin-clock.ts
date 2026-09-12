@@ -1,26 +1,34 @@
 /**
  * Shared 33⅓ RPM vinyl clock.
  *
- * Display angle is MONOTONIC (never wrapped to 0–360). Wrapping absolute CSS
- * rotates (359° → 0°) makes Mobile Safari / WebKit look like a reverse snap.
+ * - Playing: angle locks to audio timeline (1 rev ≈ 1.8s).
+ * - Scrubbing: angle follows finger nudges; timeline origin re-locks on release.
+ * Display angle is MONOTONIC (never wrapped) so WebKit never reverse-snaps.
  */
 
 export const VINYL_RPM = 100 / 3
 export const VINYL_33_RPM_SEC = 60 / VINYL_RPM
 export const VINYL_33_RPM_MS = VINYL_33_RPM_SEC * 1000
 
-const DEG_PER_MS = (360 * VINYL_RPM) / 60_000
+/** Degrees of platter rotation per second of audio at 33⅓ RPM. */
+export const VINYL_DEG_PER_SEC = 360 / VINYL_33_RPM_SEC
+
+const DEG_PER_MS = VINYL_DEG_PER_SEC / 1000
 /** Ignore huge frame gaps (background tab) so the disc doesn't jump. */
 const MAX_FRAME_MS = 64
 
 type Listener = (angleDeg: number) => void
+type TimelineGetter = () => number
 
-/** Unbounded clockwise degrees — keeps growing while the motor runs. */
+/** Unbounded clockwise degrees — keeps growing while the motor / timeline runs. */
 let angleDeg = 0
+/** angleDeg = timelineOrigin + currentTime * VINYL_DEG_PER_SEC when timeline-locked. */
+let timelineOrigin = 0
 let lastNow = 0
 let holders = 0
 let scrubLocks = 0
 let rafId = 0
+let getTimeline: TimelineGetter | null = null
 const listeners = new Set<Listener>()
 
 function notify() {
@@ -30,14 +38,29 @@ function notify() {
 function tick(now: number) {
   const rawDt = now - lastNow
   lastNow = now
-  // Motor only runs when someone wants spin AND the platter isn't being held/scrubbed.
-  if (holders > 0 && scrubLocks === 0) {
-    const dt = rawDt > 0 && rawDt < MAX_FRAME_MS ? rawDt : Math.min(MAX_FRAME_MS, Math.max(0, rawDt))
-    if (dt > 0) {
-      angleDeg += dt * DEG_PER_MS
-      notify()
+
+  if (scrubLocks > 0) {
+    // Finger owns the platter — angle only changes via nudgeVinylAngle.
+    rafId = requestAnimationFrame(tick)
+    return
+  }
+
+  if (holders > 0) {
+    if (getTimeline) {
+      const t = getTimeline()
+      if (Number.isFinite(t) && t >= 0) {
+        angleDeg = timelineOrigin + t * VINYL_DEG_PER_SEC
+        notify()
+      }
+    } else {
+      const dt = rawDt > 0 && rawDt < MAX_FRAME_MS ? rawDt : Math.min(MAX_FRAME_MS, Math.max(0, rawDt))
+      if (dt > 0) {
+        angleDeg += dt * DEG_PER_MS
+        notify()
+      }
     }
   }
+
   rafId = requestAnimationFrame(tick)
 }
 
@@ -52,6 +75,21 @@ export function getVinylSpinAngle(): number {
   return angleDeg
 }
 
+/** Drive spin from audio.currentTime while the motor is acquired. */
+export function setVinylTimelineSource(getter: TimelineGetter | null): void {
+  getTimeline = getter
+  ensureLoop()
+}
+
+/**
+ * Re-lock timeline origin so the current visual angle matches `currentTime`
+ * (call after scrub ends or after a hard seek).
+ */
+export function relockVinylTimeline(currentTime: number): void {
+  const t = Number.isFinite(currentTime) && currentTime > 0 ? currentTime : 0
+  timelineOrigin = angleDeg - t * VINYL_DEG_PER_SEC
+}
+
 /** Take a spin hold (ref-counted). Call releaseVinylSpin when done. */
 export function acquireVinylSpin(): void {
   holders += 1
@@ -62,14 +100,17 @@ export function releaseVinylSpin(): void {
   holders = Math.max(0, holders - 1)
 }
 
-/** Hold the platter (motor stops; angle still nudged by scrub). */
+/** Hold the platter (timeline motor stops; angle still nudged by scrub). */
 export function beginVinylScrub(): void {
   scrubLocks += 1
   ensureLoop()
 }
 
-export function endVinylScrub(): void {
+export function endVinylScrub(currentTime?: number): void {
   scrubLocks = Math.max(0, scrubLocks - 1)
+  if (scrubLocks === 0 && currentTime != null) {
+    relockVinylTimeline(currentTime)
+  }
 }
 
 /** Manually rotate the platter (degrees; positive = clockwise / track forward). */
@@ -85,6 +126,12 @@ export function nudgeVinylAngle(deltaDeg: number): void {
  */
 export function vinylDegreesToSeconds(deltaDeg: number): number {
   return (deltaDeg / 360) * VINYL_33_RPM_SEC
+}
+
+/** Angular velocity (deg/s) → signed playback-rate multiple of 33⅓ RPM. */
+export function vinylVelocityToRate(degPerSec: number): number {
+  if (!Number.isFinite(degPerSec) || degPerSec === 0) return 0
+  return degPerSec / VINYL_DEG_PER_SEC
 }
 
 /** Smallest signed delta from one absolute pointer angle to another (−180…180]. */
