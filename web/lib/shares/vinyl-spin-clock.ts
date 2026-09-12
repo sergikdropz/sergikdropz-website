@@ -1,4 +1,9 @@
-/** Shared 33⅓ RPM vinyl clock — survives React remounts (no snap-back). */
+/**
+ * Shared 33⅓ RPM vinyl clock.
+ *
+ * Display angle is MONOTONIC (never wrapped to 0–360). Wrapping absolute CSS
+ * rotates (359° → 0°) makes Mobile Safari / WebKit look like a reverse snap.
+ */
 
 export const VINYL_RPM = 100 / 3
 export const VINYL_33_RPM_SEC = 60 / VINYL_RPM
@@ -10,16 +15,13 @@ const MAX_FRAME_MS = 64
 
 type Listener = (angleDeg: number) => void
 
+/** Unbounded clockwise degrees — keeps growing while the motor runs. */
 let angleDeg = 0
 let lastNow = 0
 let holders = 0
 let scrubLocks = 0
 let rafId = 0
 const listeners = new Set<Listener>()
-
-function normalizeAngle(deg: number): number {
-  return ((deg % 360) + 360) % 360
-}
 
 function notify() {
   for (const listener of listeners) listener(angleDeg)
@@ -32,7 +34,7 @@ function tick(now: number) {
   if (holders > 0 && scrubLocks === 0) {
     const dt = rawDt > 0 && rawDt < MAX_FRAME_MS ? rawDt : Math.min(MAX_FRAME_MS, Math.max(0, rawDt))
     if (dt > 0) {
-      angleDeg = normalizeAngle(angleDeg + dt * DEG_PER_MS)
+      angleDeg += dt * DEG_PER_MS
       notify()
     }
   }
@@ -45,7 +47,7 @@ function ensureLoop() {
   rafId = requestAnimationFrame(tick)
 }
 
-/** Current platter angle in degrees [0, 360). */
+/** Current platter angle in unbounded degrees (monotonic). */
 export function getVinylSpinAngle(): number {
   return angleDeg
 }
@@ -73,7 +75,7 @@ export function endVinylScrub(): void {
 /** Manually rotate the platter (degrees; positive = clockwise / track forward). */
 export function nudgeVinylAngle(deltaDeg: number): void {
   if (!Number.isFinite(deltaDeg) || deltaDeg === 0) return
-  angleDeg = normalizeAngle(angleDeg + deltaDeg)
+  angleDeg += deltaDeg
   notify()
 }
 

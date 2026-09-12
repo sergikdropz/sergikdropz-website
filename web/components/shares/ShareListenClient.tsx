@@ -276,7 +276,7 @@ export default function ShareListenClient({
             </div>
             {stageMode === 'vinyl' && (
               <p className="mt-2 text-center text-[10px] uppercase tracking-[0.18em] text-white/35">
-                Drag disc to scrub
+                Drag in a circle to scrub
               </p>
             )}
 

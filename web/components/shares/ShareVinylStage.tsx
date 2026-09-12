@@ -17,6 +17,11 @@ import {
 
 export { VINYL_33_RPM_MS, VINYL_33_RPM_SEC, VINYL_RPM }
 
+/** Degrees of finger arc before a touch becomes a scrub (avoids accidental reverse). */
+const SCRUB_ARM_DEG = 10
+/** Ignore micro jitter under this many degrees per move sample. */
+const SCRUB_JITTER_DEG = 0.35
+
 type VinylDiscProps = {
   artwork?: string
   spinning?: boolean
@@ -40,8 +45,9 @@ function pointerAngleDeg(clientX: number, clientY: number, el: HTMLElement): num
 
 /**
  * Black vinyl platter with grooves + center label artwork.
- * Rotation comes from a module-level 33⅓ RPM clock. Optional drag-scrub maps
- * platter angle to audio time at true LP speed (360° ≈ 1.8s).
+ * Rotation uses a monotonic angle (no 0–360 wrap) so mobile WebKit never
+ * reverse-snaps. Scrub arms only after a clear circular drag — taps/scrolls
+ * do not pause or reverse the disc.
  */
 export const VinylDisc = memo(function VinylDisc({
   artwork,
@@ -56,8 +62,12 @@ export const VinylDisc = memo(function VinylDisc({
   const labelPct = `${labelScale * 100}%`
   const rootRef = useRef<HTMLDivElement>(null)
   const platterRef = useRef<HTMLDivElement>(null)
-  const scrubbingRef = useRef(false)
+  /** True once pointer is down (may still be waiting for scrub arm threshold). */
+  const trackingRef = useRef(false)
+  /** True only after circular drag exceeds SCRUB_ARM_DEG. */
+  const scrubArmedRef = useRef(false)
   const lastPointerAngleRef = useRef(0)
+  const armedAccumRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
   const onScrubStartRef = useRef(onScrubStart)
   const onScrubDeltaRef = useRef(onScrubDelta)
@@ -74,6 +84,7 @@ export const VinylDisc = memo(function VinylDisc({
 
     return subscribeVinylSpin((angleDeg) => {
       const el = platterRef.current
+      // Monotonic degrees — never wrap. WebKit reverse-snaps on 359→0.
       if (el) el.style.transform = `rotate(${angleDeg}deg)`
     })
   }, [])
@@ -90,12 +101,17 @@ export const VinylDisc = memo(function VinylDisc({
     }
   }, [spinning])
 
-  const endScrub = useCallback(() => {
-    if (!scrubbingRef.current) return
-    scrubbingRef.current = false
+  const endTracking = useCallback(() => {
+    if (!trackingRef.current) return
+    const wasArmed = scrubArmedRef.current
+    trackingRef.current = false
+    scrubArmedRef.current = false
+    armedAccumRef.current = 0
     activePointerIdRef.current = null
-    endVinylScrub()
-    onScrubEndRef.current?.()
+    if (wasArmed) {
+      endVinylScrub()
+      onScrubEndRef.current?.()
+    }
   }, [])
 
   const onPointerDown = useCallback(
@@ -104,27 +120,42 @@ export const VinylDisc = memo(function VinylDisc({
       const root = rootRef.current
       if (!root) return
 
-      event.preventDefault()
-      scrubbingRef.current = true
+      // Do NOT scrub/pause yet — wait for a clear circular drag.
+      trackingRef.current = true
+      scrubArmedRef.current = false
+      armedAccumRef.current = 0
       activePointerIdRef.current = event.pointerId
       lastPointerAngleRef.current = pointerAngleDeg(event.clientX, event.clientY, root)
-      beginVinylScrub()
-      onScrubStartRef.current?.()
-      root.setPointerCapture(event.pointerId)
+      try {
+        root.setPointerCapture(event.pointerId)
+      } catch {
+        /* ignore */
+      }
     },
     [scrubEnabled],
   )
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!scrubbingRef.current || activePointerIdRef.current !== event.pointerId) return
+    if (!trackingRef.current || activePointerIdRef.current !== event.pointerId) return
     const root = rootRef.current
     if (!root) return
 
     const next = pointerAngleDeg(event.clientX, event.clientY, root)
     const deltaDeg = shortestAngleDelta(lastPointerAngleRef.current, next)
     lastPointerAngleRef.current = next
-    if (deltaDeg === 0) return
+    if (Math.abs(deltaDeg) < SCRUB_JITTER_DEG) return
 
+    if (!scrubArmedRef.current) {
+      armedAccumRef.current += Math.abs(deltaDeg)
+      if (armedAccumRef.current < SCRUB_ARM_DEG) return
+      // Crossed threshold — now take over the platter.
+      scrubArmedRef.current = true
+      event.preventDefault()
+      beginVinylScrub()
+      onScrubStartRef.current?.()
+    }
+
+    event.preventDefault()
     nudgeVinylAngle(deltaDeg)
     onScrubDeltaRef.current?.(vinylDegreesToSeconds(deltaDeg))
   }, [])
@@ -137,9 +168,9 @@ export const VinylDisc = memo(function VinylDisc({
       } catch {
         /* already released */
       }
-      endScrub()
+      endTracking()
     },
-    [endScrub],
+    [endTracking],
   )
 
   return (
@@ -151,76 +182,79 @@ export const VinylDisc = memo(function VinylDisc({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       role={scrubEnabled ? 'slider' : undefined}
-      aria-label={scrubEnabled ? 'Vinyl scrubber — drag to seek' : undefined}
+      aria-label={scrubEnabled ? 'Vinyl scrubber — drag in a circle to seek' : undefined}
     >
-      {/* Rotating vinyl body */}
-      <div ref={platterRef} className="absolute inset-0 rounded-full will-change-transform">
-        {/* Deep black PVC with slight warm edge */}
+      {/* Rotating vinyl body — no mix-blend (iOS compositing flicker) */}
+      <div
+        ref={platterRef}
+        className="absolute inset-0 rounded-full"
+        style={{ willChange: 'transform', backfaceVisibility: 'hidden' }}
+      >
         <div
           className="absolute inset-0 rounded-full"
           style={{
             background: `
               radial-gradient(circle at 50% 50%,
-                #2a2a2a 0%,
-                #141414 28%,
-                #0a0a0a 52%,
-                #050505 78%,
-                #1a1a1a 92%,
-                #0c0c0c 100%
+                #242424 0%,
+                #121212 26%,
+                #080808 50%,
+                #030303 76%,
+                #161616 90%,
+                #0a0a0a 100%
               )
             `,
             boxShadow: `
               0 28px 70px rgba(0,0,0,0.75),
-              inset 0 0 40px rgba(0,0,0,0.85),
-              inset 0 1px 0 rgba(255,255,255,0.08)
+              inset 0 0 36px rgba(0,0,0,0.9),
+              inset 0 1px 0 rgba(255,255,255,0.07)
             `,
           }}
         />
 
-        {/* Fine groove matrix */}
+        {/* Fine grooves — opacity only, no mix-blend */}
         <div
-          className="pointer-events-none absolute inset-[3.5%] rounded-full opacity-70 mix-blend-soft-light"
+          className="pointer-events-none absolute inset-[3.5%] rounded-full opacity-[0.55]"
           style={{
             background: `
               repeating-radial-gradient(
                 circle at center,
-                rgba(255,255,255,0.045) 0px,
-                rgba(255,255,255,0.045) 0.7px,
-                transparent 0.7px,
-                transparent 2.1px
+                rgba(255,255,255,0.05) 0px,
+                rgba(255,255,255,0.05) 0.6px,
+                transparent 0.6px,
+                transparent 2px
               )
             `,
           }}
           aria-hidden
         />
 
-        {/* Wider groove bands (land / groove groups) */}
+        {/* Wider groove bands */}
         <div
-          className="pointer-events-none absolute inset-[4%] rounded-full opacity-40"
+          className="pointer-events-none absolute inset-[4%] rounded-full opacity-35"
           style={{
             background: `
               repeating-radial-gradient(
                 circle at center,
                 transparent 0px,
-                transparent 5px,
-                rgba(255,255,255,0.03) 5px,
-                rgba(255,255,255,0.03) 6px,
                 transparent 6px,
-                transparent 11px,
-                rgba(0,0,0,0.25) 11px,
-                rgba(0,0,0,0.25) 12px
+                rgba(255,255,255,0.028) 6px,
+                rgba(255,255,255,0.028) 7px,
+                transparent 7px,
+                transparent 13px,
+                rgba(0,0,0,0.22) 13px,
+                rgba(0,0,0,0.22) 14px
               )
             `,
           }}
           aria-hidden
         />
 
-        {/* Lead-out ring near the label */}
+        {/* Lead-out ring */}
         <div
           className="pointer-events-none absolute rounded-full"
           style={{
             inset: `${((labelScale + 0.04) / 2) * 100}%`,
-            boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.07), inset 0 0 12px rgba(0,0,0,0.5)',
+            boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.06), inset 0 0 10px rgba(0,0,0,0.45)',
           }}
           aria-hidden
         />
@@ -230,19 +264,10 @@ export const VinylDisc = memo(function VinylDisc({
           className="pointer-events-none absolute inset-0 rounded-full"
           style={{
             boxShadow: `
-              inset 0 0 0 1px rgba(255,255,255,0.14),
-              inset 0 0 0 3px rgba(0,0,0,0.35),
-              inset 0 0 18px rgba(255,255,255,0.04)
+              inset 0 0 0 1px rgba(255,255,255,0.12),
+              inset 0 0 0 3px rgba(0,0,0,0.4),
+              inset 0 0 14px rgba(255,255,255,0.03)
             `,
-          }}
-          aria-hidden
-        />
-
-        {/* Micro surface noise */}
-        <div
-          className="pointer-events-none absolute inset-0 rounded-full opacity-[0.18] mix-blend-overlay"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E")`,
           }}
           aria-hidden
         />
@@ -255,9 +280,9 @@ export const VinylDisc = memo(function VinylDisc({
             height: labelPct,
             transform: 'translate(-50%, -50%)',
             boxShadow: `
-              0 0 0 2px rgba(0,0,0,0.8),
-              0 0 0 3px rgba(255,255,255,0.1),
-              inset 0 1px 2px rgba(255,255,255,0.12)
+              0 0 0 2px rgba(0,0,0,0.85),
+              0 0 0 3px rgba(255,255,255,0.08),
+              inset 0 1px 2px rgba(255,255,255,0.1)
             `,
           }}
         >
@@ -276,34 +301,23 @@ export const VinylDisc = memo(function VinylDisc({
               SERGIK
             </div>
           )}
-          {/* Spindle hole */}
           <div
             className="absolute left-1/2 top-1/2 h-[8%] w-[8%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-black"
             style={{
-              boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.25), 0 0 0 1px rgba(255,255,255,0.15)',
+              boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.22), 0 0 0 1px rgba(255,255,255,0.12)',
             }}
           />
         </div>
       </div>
 
-      {/* Fixed studio lamp reflections (screen space — do not rotate) */}
+      {/* Soft fixed lamp sheen only — no conic streak (reads as reverse spin on phones) */}
       <div
-        className="pointer-events-none absolute inset-0 rounded-full opacity-55"
+        className="pointer-events-none absolute inset-0 rounded-full"
         style={{
           background: `
-            radial-gradient(ellipse 42% 28% at 28% 22%, rgba(255,255,255,0.34) 0%, transparent 70%),
-            radial-gradient(ellipse 30% 22% at 72% 70%, rgba(255,255,255,0.1) 0%, transparent 70%),
-            linear-gradient(145deg, rgba(255,255,255,0.16) 0%, transparent 38%, transparent 62%, rgba(0,0,0,0.45) 100%)
+            radial-gradient(ellipse 46% 30% at 30% 24%, rgba(255,255,255,0.22) 0%, transparent 68%),
+            linear-gradient(150deg, rgba(255,255,255,0.1) 0%, transparent 40%, transparent 58%, rgba(0,0,0,0.35) 100%)
           `,
-        }}
-        aria-hidden
-      />
-      {/* Sharp specular streak */}
-      <div
-        className="pointer-events-none absolute inset-0 rounded-full opacity-40 mix-blend-screen"
-        style={{
-          background:
-            'conic-gradient(from 210deg at 50% 50%, transparent 0deg, transparent 48deg, rgba(255,255,255,0.2) 56deg, transparent 68deg, transparent 360deg)',
         }}
         aria-hidden
       />
