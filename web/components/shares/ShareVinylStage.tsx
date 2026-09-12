@@ -5,8 +5,9 @@ import {
   acquireVinylSpin,
   beginVinylScrub,
   endVinylScrub,
-  nudgeVinylAngle,
+  getVinylSpinAngle,
   releaseVinylSpin,
+  setVinylAngle,
   shortestAngleDelta,
   subscribeVinylSpin,
   vinylDegreesToSeconds,
@@ -70,12 +71,21 @@ export const VinylDisc = memo(function VinylDisc({
   const lastMoveAtRef = useRef(0)
   const armedAccumRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
+  /** Finger angle + platter angle at the moment scrub armed — absolute mapping. */
+  const scrubBasePlatterRef = useRef(0)
+  const scrubAccumDegRef = useRef(0)
+  const scrubLastPlatterRef = useRef(0)
   const onScrubStartRef = useRef(onScrubStart)
   const onScrubDeltaRef = useRef(onScrubDelta)
   const onScrubEndRef = useRef(onScrubEnd)
   onScrubStartRef.current = onScrubStart
   onScrubDeltaRef.current = onScrubDelta
   onScrubEndRef.current = onScrubEnd
+
+  const paintPlatter = useCallback((angleDeg: number) => {
+    const el = platterRef.current
+    if (el) el.style.transform = `rotate(${angleDeg}deg)`
+  }, [])
 
   useEffect(() => {
     const reduceMotion =
@@ -84,11 +94,9 @@ export const VinylDisc = memo(function VinylDisc({
     if (reduceMotion) return
 
     return subscribeVinylSpin((angleDeg) => {
-      const el = platterRef.current
-      // Monotonic degrees — never wrap. WebKit reverse-snaps on 359→0.
-      if (el) el.style.transform = `rotate(${angleDeg}deg)`
+      paintPlatter(angleDeg)
     })
-  }, [])
+  }, [paintPlatter])
 
   useEffect(() => {
     const reduceMotion =
@@ -108,6 +116,7 @@ export const VinylDisc = memo(function VinylDisc({
     trackingRef.current = false
     scrubArmedRef.current = false
     armedAccumRef.current = 0
+    scrubAccumDegRef.current = 0
     activePointerIdRef.current = null
     lastMoveAtRef.current = 0
     if (wasArmed) {
@@ -126,6 +135,7 @@ export const VinylDisc = memo(function VinylDisc({
       trackingRef.current = true
       scrubArmedRef.current = false
       armedAccumRef.current = 0
+      scrubAccumDegRef.current = 0
       activePointerIdRef.current = event.pointerId
       lastPointerAngleRef.current = pointerAngleDeg(event.clientX, event.clientY, root)
       lastMoveAtRef.current = performance.now()
@@ -138,38 +148,54 @@ export const VinylDisc = memo(function VinylDisc({
     [scrubEnabled],
   )
 
-  const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!trackingRef.current || activePointerIdRef.current !== event.pointerId) return
-    const root = rootRef.current
-    if (!root) return
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!trackingRef.current || activePointerIdRef.current !== event.pointerId) return
+      const root = rootRef.current
+      if (!root) return
 
-    const now = performance.now()
-    const dtMs = Math.max(8, Math.min(64, now - (lastMoveAtRef.current || now)))
-    lastMoveAtRef.current = now
+      const now = performance.now()
+      const dtMs = Math.max(8, Math.min(64, now - (lastMoveAtRef.current || now)))
+      lastMoveAtRef.current = now
 
-    const next = pointerAngleDeg(event.clientX, event.clientY, root)
-    const deltaDeg = shortestAngleDelta(lastPointerAngleRef.current, next)
-    lastPointerAngleRef.current = next
-    if (Math.abs(deltaDeg) < SCRUB_JITTER_DEG) return
+      const next = pointerAngleDeg(event.clientX, event.clientY, root)
+      const stepDeg = shortestAngleDelta(lastPointerAngleRef.current, next)
+      lastPointerAngleRef.current = next
+      if (Math.abs(stepDeg) < SCRUB_JITTER_DEG) return
 
-    if (!scrubArmedRef.current) {
-      armedAccumRef.current += Math.abs(deltaDeg)
-      if (armedAccumRef.current < SCRUB_ARM_DEG) return
-      // Crossed threshold — now take over the platter.
-      scrubArmedRef.current = true
+      if (!scrubArmedRef.current) {
+        armedAccumRef.current += Math.abs(stepDeg)
+        if (armedAccumRef.current < SCRUB_ARM_DEG) return
+        // Crossed threshold — finger owns the platter.
+        scrubArmedRef.current = true
+        scrubBasePlatterRef.current = getVinylSpinAngle()
+        scrubAccumDegRef.current = 0
+        scrubLastPlatterRef.current = scrubBasePlatterRef.current
+        event.preventDefault()
+        beginVinylScrub()
+        onScrubStartRef.current?.()
+      }
+
       event.preventDefault()
-      beginVinylScrub()
-      onScrubStartRef.current?.()
-    }
 
-    event.preventDefault()
-    nudgeVinylAngle(deltaDeg)
-    onScrubDeltaRef.current?.({
-      deltaDegrees: deltaDeg,
-      deltaSeconds: vinylDegreesToSeconds(deltaDeg),
-      dtMs,
-    })
-  }, [])
+      // Accumulate stepped deltas so multi-turn scrubs stay continuous.
+      scrubAccumDegRef.current += stepDeg
+      const platterAngle = scrubBasePlatterRef.current + scrubAccumDegRef.current
+      const deltaDeg = platterAngle - scrubLastPlatterRef.current
+      scrubLastPlatterRef.current = platterAngle
+
+      setVinylAngle(platterAngle)
+      paintPlatter(platterAngle)
+
+      if (Math.abs(deltaDeg) < SCRUB_JITTER_DEG) return
+      onScrubDeltaRef.current?.({
+        deltaDegrees: deltaDeg,
+        deltaSeconds: vinylDegreesToSeconds(deltaDeg),
+        dtMs,
+      })
+    },
+    [paintPlatter],
+  )
 
   const onPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -195,12 +221,8 @@ export const VinylDisc = memo(function VinylDisc({
       role={scrubEnabled ? 'slider' : undefined}
       aria-label={scrubEnabled ? 'Vinyl scrubber — drag in a circle to seek' : undefined}
     >
-      {/* Rotating vinyl body — no mix-blend (iOS compositing flicker) */}
-      <div
-        ref={platterRef}
-        className="absolute inset-0 rounded-full"
-        style={{ willChange: 'transform', backfaceVisibility: 'hidden' }}
-      >
+      {/* Rotating vinyl body — transform is JS-only on this node (no React style wipe) */}
+      <div ref={platterRef} className="absolute inset-0 rounded-full will-change-transform [backface-visibility:hidden]">
         <div
           className="absolute inset-0 rounded-full"
           style={{

@@ -120,6 +120,18 @@ export function nudgeVinylAngle(deltaDeg: number): void {
   notify()
 }
 
+/** Set absolute platter angle (used while finger-scrubbing). */
+export function setVinylAngle(nextDeg: number): void {
+  if (!Number.isFinite(nextDeg)) return
+  angleDeg = nextDeg
+  notify()
+}
+
+/** True while a scrub lock is held (timeline motor is suspended). */
+export function isVinylScrubbing(): boolean {
+  return scrubLocks > 0
+}
+
 /**
  * Map a platter rotation to audio seconds at true 33⅓ RPM.
  * One full clockwise turn ≈ +1.8s of music.

@@ -88,6 +88,7 @@ export default function ShareMiniPlayer({
   const durationRef = useRef(duration)
   const scrubAudioRef = useRef<VinylScrubAudio | null>(null)
   const vinylScrubbingRef = useRef(false)
+  const scrubUiPaintAtRef = useRef(0)
   playingRef.current = playing
   currentTimeRef.current = currentTime
   durationRef.current = duration
@@ -241,7 +242,12 @@ export default function ShareMiniPlayer({
         )
         el.currentTime = next
         currentTimeRef.current = next
-        setCurrentTime(next)
+        // Avoid React re-renders on every pointer sample — they can wipe platter transforms.
+        const now = performance.now()
+        if (now - (scrubUiPaintAtRef.current || 0) > 80) {
+          scrubUiPaintAtRef.current = now
+          setCurrentTime(next)
+        }
         scrubAudioRef.current?.tick({
           deltaSeconds: tick.deltaSeconds,
           deltaDegrees: tick.deltaDegrees,
@@ -253,7 +259,10 @@ export default function ShareMiniPlayer({
         const el = audioRef.current
         vinylScrubbingRef.current = false
         scrubAudioRef.current?.end()
-        relockVinylTimeline(el?.currentTime ?? currentTimeRef.current)
+        const t = el?.currentTime ?? currentTimeRef.current
+        currentTimeRef.current = t
+        setCurrentTime(t)
+        relockVinylTimeline(t)
         if (resume) playFromApi()
         else {
           if (el && !el.paused) el.pause()
