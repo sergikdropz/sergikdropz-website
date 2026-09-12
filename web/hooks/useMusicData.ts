@@ -61,7 +61,10 @@ async function fetchTracks(folderId?: string): Promise<Track[]> {
   if (!folderId) {
     throw new Error('folderId required for track list')
   }
-  const response = await fetch(`/api/music-library/tracks?folderId=${folderId}`)
+  const response = await fetch(`/api/music-library/tracks?folderId=${folderId}`, {
+    credentials: 'same-origin',
+  })
+  if (response.status === 401) return []
   if (!response.ok) {
     throw new Error('Failed to fetch tracks')
   }
@@ -102,10 +105,11 @@ export function useTracks(folderId?: string) {
   return useQuery({
     queryKey: queryKeys.tracks(folderId),
     queryFn: () => fetchTracks(folderId),
+    enabled: Boolean(folderId),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
-    // Don't refetch on mount if we have cached data
     refetchOnMount: false,
+    retry: false,
   })
 }
 

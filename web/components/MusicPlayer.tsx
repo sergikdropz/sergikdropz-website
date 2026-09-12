@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 'use client'
 
@@ -13,13 +14,21 @@ import {
   FaGripVertical, FaTrash, FaCog
 } from 'react-icons/fa'
 import Image from 'next/image'
-import { resolveAudioUrl } from '@/utils/resolveAudioUrl'
+import { resolveAudioUrl, resolveAudioUrls } from '@/utils/resolveAudioUrl'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import {
   isUploadedFolderArtwork,
   stripArtworkCacheBust,
   subscribeCatalogSync,
+  emitCatalogSync,
+  trackShouldUseCrateMosaic,
 } from '@/lib/catalog-sync'
+import { CrateCoverMosaic } from '@/components/music/CrateCoverMosaic'
+import {
+  mosaicCoversForTrack,
+  usePlayerCoverPool,
+  useTrackMosaicCovers,
+} from '@/hooks/useTrackMosaicCovers'
 import { generatePeakData, detectBPM } from '@/utils/audioWorkerClient'
 import { analyzeFrequencyBands, detectTransients } from '@/utils/audioAnalysis'
 import { preloadTracks } from '@/utils/serviceWorker'
@@ -28,8 +37,20 @@ import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import { trackTrackPlay } from '@/lib/analytics'
 import {
   catalogScopeLabel,
+  getRecentPlayedTrackIds,
+  isOrderedReleaseRandomScope,
+  pickNextOrderedTracks,
   pickRandomUnusedTracks,
+  rememberPlayedTrackId,
 } from '@/lib/audio/catalog-random'
+import {
+  libraryDragHasTracks,
+  overrideUpcomingQueue,
+  parseLibraryDragTracks,
+  readLibraryDragTrackIds,
+  SERGIK_LIBRARY_TRACKS_DRAG_MIME,
+  SERGIK_PLAYLIST_DRAG_MIME,
+} from '@/lib/audio/library-drag'
 import {
   expandPeakValley,
   multiBandRgbColor,
@@ -46,31 +67,28 @@ import {
   type WaveformLayerLayout,
   type WaveformSample,
 } from '@/lib/audio/waveform-view'
-import { profileFromSonicDna } from '@/lib/audio/waveform-intelligence'
-import { alignBeatGridFromPeaks, setDownbeatAt } from '@/lib/audio/beat-grid'
+import { profileFromSonicDna, withLivePlaybackGrid } from '@/lib/audio/waveform-intelligence'
+import { measureBpmFromPeaks, nudgeBeatPhaseSec, reconcileTapeBpm, resolveTapeAlignedGrid, setDownbeatAt } from '@/lib/audio/beat-grid'
 import {
   eqBiasFromDna,
   pickBestDnaTrack,
   quantizeToDnaGrid,
+  quantizePointerToVisibleGrid,
   rankDnaTracks,
   resolvePlaybackBpm,
   secondsToNextPhraseBoundary,
 } from '@/lib/audio/sonic-dna-mix'
 import {
-  buildMixPlan,
-  MixEngine,
-  buildMixIntelligence,
-  applyTechniqueToIntelligence,
-  applyEnergyCurveToIntelligence,
+  resolveAutoDjMixIntelligence,
   resolveEffectiveMixStyle,
-  resolveEffectiveMixTechniques,
-  solveAlignmentState,
   computeMixDeckRates,
-  suggestLeadInSec,
   resolveMixGridOffset,
+  resolveMixTapeGrid,
   isUnsetOffset,
   readDnaBeatPhaseSec,
   toPhaseOnlyOffsetSec,
+  wrapOffsetSec,
+  playbackGridPhaseSec,
   applyDeckTempo,
   configureKeyLock,
   formantCompensationGains,
@@ -80,23 +98,28 @@ import {
   snapshotMixQuality,
   pushMixQualityHistory,
   readMixQualityHistory,
-  resolveHoldBeatmatch,
+  consecutiveWeakMixCount,
   buildGridOnsetBundle,
   isGridLocked,
+  isGridManual,
   readGridLockScore,
   withGridLockOnDna,
   withGridAnalysisOnDna,
   AUTO_GRID_LOCK_SCORE,
   alignMixOverlayToBeatGrid,
-  resolvePhraseMixSettings,
-  PLAN_FREEZE_SEC,
-  prearmLeadSec,
-  pairBpmCompatible,
-  shouldApplyQualityGate,
-  buildSkipBlendPlan,
+  exactOverlapDurationSec,
   buildMixPairHint,
   formatMixPairHintLine,
   filterOpenness,
+  pickTrustedAutoDjTrack,
+  diagnoseAutoDjPickStall,
+  scoreAutoDjPair,
+  isFourOnFloorPocket,
+  resolveSectionAwareMixStyle,
+  assessBeatSyncSafety,
+  needsKickRemeasure,
+  mergeMixQualityHistory,
+  beatPhaseErrorSec,
   type MixPlan,
   type PhraseBars,
   type DeckId,
@@ -104,8 +127,19 @@ import {
   type MixQualitySnapshot,
   type MixQualityHistoryEntry,
   type MixQualityGrade,
+  type MixEngine,
 } from '@/lib/audio/mix-engine'
 import {
+  gateAutoDjFire,
+  shouldBlockDnaFallback,
+  orchestrateSkipBlendPlan,
+} from '@/lib/audio/auto-dj-orchestrate'
+import { AutoDjController, type AutoDjControllerHost, type AutoDjHostTrack } from '@/lib/audio/auto-dj-controller'
+import { cueIdleEarly as runCueIdleEarly } from '@/lib/audio/auto-dj-cue-idle'
+import { getMixEngineClass, loadMixEngineClass } from '@/lib/audio/mix-engine/load-mix-engine'
+import { listDeckJumpCues } from '@/lib/audio/mix-engine/cues'
+import {
+  formatTapTempoButtonLabel,
   recordTapTempo,
 } from '@/lib/audio/beat-count'
 import {
@@ -115,18 +149,81 @@ import {
   resolveIncomingRateForStrategy,
   writeAutoDJConfigToStorage,
   serializeAutoDJPayload,
+  SYNC_MODE_OPTIONS,
   type AutoDJConfig,
+  type SyncMode,
 } from '@/lib/audio/auto-dj-preferences'
-import { peaksOrEnvelopesToWaveformSamples } from '@/lib/audio/waveform-dsp-envelope'
-import { waveformAnalysisUrls, vaultRelativePath, storedWaveformLikelyStale, looksLikeSyntheticPeaks, canAnalyzeAudioWaveform, isAudioContextUnavailableError, staticWaveformJsonUrl, waveformLookupPath } from '@/lib/audio/waveform-playback-alignment'
-import { alternateAudioExtensionUrl, normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import {
+  PHASE_METER_JOG_FEEL_OPTIONS,
+  PHASE_METER_JOG_SENSITIVITY_OPTIONS,
+  PHASE_METER_QUANTIZE_OPTIONS,
+  PHASE_METER_WINDOW_OPTIONS,
+  localGridPhaseErrorSec,
+  readPhaseMeterOptionsFromStorage,
+  resolvePhaseMeterWindowBeats,
+  writePhaseMeterOptionsToStorage,
+  type PhaseMeterJogFeel,
+  type PhaseMeterOptions,
+  type PhaseMeterQuantize,
+  type PhaseMeterWindowId,
+} from '@/lib/audio/waveform-overlays'
+import { centerPhaseDeltaSec } from '@/lib/ui/phase-meter-wheel'
+import {
+  clearIDJMemoryCue,
+  DEFAULT_IDJ_CONFIG,
+  emptyIDJActiveCueMap,
+  readIDJActiveCues,
+  readIDJConfigFromStorage,
+  readIDJMemoryCues,
+  resolveIDJActiveCue,
+  sameIDJActiveCue,
+  writeIDJActiveCue,
+  writeIDJConfigToStorage,
+  writeIDJMemoryCue,
+  type IDJActiveCue,
+  type IDJActiveCueMap,
+} from '@/lib/audio/idj-preferences'
+import { nextQueueNeighbor } from '@/lib/audio/idj-queue'
+import { mixCrossfaderPosition } from '@/lib/audio/mix-xf-position'
+import {
+  HOT_CUE_SLOTS,
+  clearAllHotCueSlots,
+  clearHotCueSlot,
+  readHotCueSlots,
+  writeHotCueSlot,
+  type HotCueSlot,
+  type HotCueSlots,
+} from '@/lib/audio/hot-cues'
+import { peaksOrEnvelopesToWaveformSamples, DEFAULT_WAVEFORM_BUCKETS } from '@/lib/audio/waveform-dsp-envelope'
+import { waveformAnalysisUrls, vaultRelativePath, storedWaveformLikelyStale, looksLikeSyntheticPeaks, canAnalyzeAudioWaveform, isAudioContextUnavailableError, fetchStaticWaveformTape, waveformLookupPath } from '@/lib/audio/waveform-playback-alignment'
+import {
+  alternateAudioExtensionUrl,
+  normalizeVaultAudioUrl,
+  toSameOriginMediaUrl,
+} from '@/utils/normalizeVaultAudioUrl'
+import {
+  isDirectPlayableUrl,
+  isEdgePlaybackUrl,
+  isR2BrowserPlayEnabled,
+} from '@/lib/audio/edge-playback-url'
+import {
+  assignMediaSrcIfChanged,
+  mediaUrlExtensionCandidates,
+  mediaUrlMatchesTrack,
+  mediaUrlsRoughlyEqual,
+  peekSyncPlaybackUrl,
+} from '@/lib/audio/media-src'
 import {
   getPlaybackWaveformCache,
   setPlaybackWaveformCache,
+  clearPlaybackWaveformCache,
 } from '@/lib/audio/waveform-playback-cache'
 import { buildWaveformTapeCache } from '@/lib/audio/waveform-tape-cache'
-import { loadWaveformSamplesForTrack } from '@/lib/audio/waveform-track-loader'
-import { displayTrackBpm, displayTrackGenre, displayTrackKey } from '@/lib/audio/track-display'
+import { clearCachedWaveformSamples, loadWaveformSamplesForTrack } from '@/lib/audio/waveform-track-loader'
+import { rescanAndPersistWaveform } from '@/lib/audio/rescan-waveform'
+import { applyAdminBpmToTrack, displayTrackBpm, displayTrackGenre, displayTrackKey } from '@/lib/audio/track-display'
+import { appendSonicDnaLookupParams } from '@/lib/audio/sonic-dna-query'
+import { readCatalogOverrides } from '@/lib/catalog-lock'
 import type {
   WaveformGhostTape,
   WaveformHotCue,
@@ -152,6 +249,9 @@ import {
   DEFAULT_PLAYER_CHROME,
 } from '@/contexts/MusicPlayerContext'
 import AutoDJHeaderButton from '@/components/music/AutoDJHeaderButton'
+import IDJHeaderButton from '@/components/music/IDJHeaderButton'
+import MixSessionLog from '@/components/music/MixSessionLog'
+import IDJSettingsPanel from '@/components/music/IDJSettingsPanel'
 import DjIcon from '@/components/music/DjIcon'
 import {
   PlaybackTransportScrubber,
@@ -159,6 +259,10 @@ import {
 } from '@/components/music/PlaybackTransportScrubber'
 
 const WaveformStage = dynamic(() => import('@/components/waveform/WaveformStage'), {
+  ssr: false,
+  loading: () => null,
+})
+const PhaseAlignMeter = dynamic(() => import('@/components/waveform/PhaseAlignMeter'), {
   ssr: false,
   loading: () => null,
 })
@@ -175,9 +279,6 @@ const MixQualityHud = dynamic(() => import('@/components/music/MixQualityHud'), 
   loading: () => null,
 })
 
-// Auto DJ transition mode type (legacy sync for DJMixerMode)
-type AutoDJTransitionMode = AutoDJConfig['transitionMode']
-
 const DEFAULT_AUTO_DJ = DEFAULT_AUTO_DJ_CONFIG
 
 // Memoized Queue Item Component
@@ -188,6 +289,8 @@ interface QueueItemProps {
   onRemove: (index: number) => void
   isAutoDJNext?: boolean
   reorderEnabled?: boolean
+  /** Accept library drops even when reorder is off (e.g. empty / single upcoming). */
+  dropEnabled?: boolean
   isDragOver?: boolean
   onDragStart?: (e: React.DragEvent) => void
   onDragOver?: (e: React.DragEvent) => void
@@ -203,6 +306,7 @@ const QueueItem = React.memo(
     onRemove,
     isAutoDJNext,
     reorderEnabled = false,
+    dropEnabled = false,
     isDragOver = false,
     onDragStart,
     onDragOver,
@@ -210,12 +314,14 @@ const QueueItem = React.memo(
     onDragEnd,
   }: QueueItemProps) => {
   const art = coverArtUrl(track.artwork)
+  const mosaicCovers = useTrackMosaicCovers(trackShouldUseCrateMosaic(track) ? track : null)
+  const acceptDrop = reorderEnabled || dropEnabled
   return (
     <div
       draggable={reorderEnabled}
       onDragStart={reorderEnabled ? onDragStart : undefined}
-      onDragOver={reorderEnabled ? onDragOver : undefined}
-      onDrop={reorderEnabled ? onDrop : undefined}
+      onDragOver={acceptDrop ? onDragOver : undefined}
+      onDrop={acceptDrop ? onDrop : undefined}
       onDragEnd={reorderEnabled ? onDragEnd : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${
         isDragOver ? 'border-t-2 border-t-purple-400' : ''
@@ -229,16 +335,14 @@ const QueueItem = React.memo(
         className={`text-xs shrink-0 ${reorderEnabled ? 'text-gray-400' : 'text-gray-600'}`}
         aria-hidden
       />
-      {art && (
+      {(art || mosaicCovers.length > 0) && (
         <div className="relative w-8 h-8 rounded overflow-hidden flex-shrink-0">
-          <Image
+          <PlayerCoverArt
             src={art}
+            mosaicCovers={mosaicCovers}
             alt={track.album || track.title}
-            fill
-            className="object-cover"
-            unoptimized={shouldUnoptimizeImage(art)}
-            sizes="(max-width: 640px) 32px, 32px"
-            loading="lazy"
+            unoptimized={art ? shouldUnoptimizeImage(art) : true}
+            sizes="32px"
             quality={75}
           />
         </div>
@@ -323,6 +427,445 @@ function WaveformMenuItem({
   )
 }
 
+function WaveformMenuDropdown({
+  label,
+  value,
+  open,
+  onToggle,
+  labelClassName = 'text-[10px] font-semibold uppercase tracking-wide text-gray-500',
+  children,
+}: {
+  label: string
+  value?: string
+  open: boolean
+  onToggle: () => void
+  labelClassName?: string
+  children: React.ReactNode
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-xs text-gray-200 transition-colors hover:bg-gray-800"
+      >
+        <span className={labelClassName}>{label}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-gray-200">
+          {value ? <span className="truncate tabular-nums">{value}</span> : null}
+          <FaChevronDown
+            className={`h-2.5 w-2.5 shrink-0 text-gray-500 transition-transform ${
+              open ? 'rotate-180' : ''
+            }`}
+            aria-hidden
+          />
+        </span>
+      </button>
+      {open ? (
+        <div
+          className="max-h-48 overflow-y-auto overscroll-y-contain border-y border-gray-800/80 bg-black/40 py-0.5"
+          role="menu"
+          aria-label={`${label} options`}
+        >
+          {children}
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+/** Phase meter controls — shared by the waveform menu and the phase meter context menu. */
+function PhaseMeterMenuItems({
+  enabled,
+  hasBpm,
+  options,
+  onToggleEnabled,
+  onPatch,
+  syncMode,
+  onSyncMode,
+  onCenterPhase,
+  onAlignPlayhead,
+  onAlignBothPlayheads,
+  onClose,
+}: {
+  enabled: boolean
+  hasBpm: boolean
+  options: PhaseMeterOptions
+  onToggleEnabled: () => void
+  onPatch: (patch: Partial<PhaseMeterOptions>) => void
+  syncMode?: SyncMode
+  onSyncMode?: (mode: SyncMode) => void
+  onCenterPhase?: () => void
+  onAlignPlayhead?: () => void
+  onAlignBothPlayheads?: () => void
+  onClose?: () => void
+}) {
+  type PhaseMenuSection =
+    | 'actions'
+    | 'jog'
+    | 'sensitivity'
+    | 'sync'
+    | 'quantize'
+    | 'window'
+    | 'indicators'
+    | 'phrase'
+  const [openSection, setOpenSection] = useState<PhaseMenuSection | null>('actions')
+  const toggleSection = (section: PhaseMenuSection) => {
+    setOpenSection((prev) => (prev === section ? null : section))
+  }
+
+  const jogLabel =
+    PHASE_METER_JOG_FEEL_OPTIONS.find((o) => o.id === options.jogFeel)?.label ?? 'Normal'
+  const sensitivityLabel =
+    PHASE_METER_JOG_SENSITIVITY_OPTIONS.find(
+      (o) => Math.abs(o.value - (options.jogSensitivity ?? 1)) < 0.001,
+    )?.label ?? `${Math.round((options.jogSensitivity ?? 1) * 100)}%`
+  const quantizeLabel =
+    PHASE_METER_QUANTIZE_OPTIONS.find((o) => o.id === options.quantize)?.label ?? 'Phrase'
+  const windowLabel =
+    PHASE_METER_WINDOW_OPTIONS.find((o) => o.id === options.windowId)?.label ?? '±1 beat'
+  const syncSummary = [
+    options.centerSnap ? 'Snap' : null,
+    syncMode === 'tempo-sync' ? 'TempoSync' : syncMode === 'beat-sync' ? 'BeatSync' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const indicatorSummary = [
+    options.showBeats ? 'Beats' : null,
+    options.showBars ? 'Bars' : null,
+    options.showPhrases ? 'Phrase' : null,
+    options.showMs ? 'ms' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const run = (action?: () => void) => {
+    action?.()
+    onClose?.()
+  }
+
+  return (
+    <>
+      <WaveformMenuItem
+        label="Show phase meter"
+        active={enabled}
+        disabled={!hasBpm}
+        onSelect={onToggleEnabled}
+      />
+      <div className="px-3 py-1 text-[9px] leading-snug text-gray-500">
+        Auto DJ sync follows this window to align &amp; beatmatch.
+      </div>
+
+      <div className="my-0.5 border-t border-gray-800" />
+      <WaveformMenuDropdown
+        label="Actions"
+        open={openSection === 'actions'}
+        onToggle={() => toggleSection('actions')}
+      >
+        <WaveformMenuItem
+          label="Center phase"
+          disabled={!enabled || !hasBpm || !onCenterPhase}
+          onSelect={() => run(onCenterPhase)}
+        />
+        <WaveformMenuItem
+          label={`Align playhead · ${quantizeLabel}`}
+          disabled={
+            !enabled || !hasBpm || options.quantize === 'off' || !onAlignPlayhead
+          }
+          onSelect={() => run(onAlignPlayhead)}
+        />
+        <WaveformMenuItem
+          label={`Align both playheads · ${quantizeLabel}`}
+          disabled={
+            !enabled || !hasBpm || options.quantize === 'off' || !onAlignBothPlayheads
+          }
+          onSelect={() => run(onAlignBothPlayheads)}
+        />
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Jog feel"
+        value={jogLabel}
+        open={openSection === 'jog'}
+        onToggle={() => toggleSection('jog')}
+      >
+        {PHASE_METER_JOG_FEEL_OPTIONS.map((opt) => (
+          <WaveformMenuItem
+            key={opt.id}
+            label={opt.label}
+            active={options.jogFeel === opt.id}
+            disabled={!enabled}
+            onSelect={() => onPatch({ jogFeel: opt.id as PhaseMeterJogFeel })}
+          />
+        ))}
+        <div className="px-3 py-1 text-[9px] leading-snug text-gray-500">
+          {PHASE_METER_JOG_FEEL_OPTIONS.find((o) => o.id === options.jogFeel)?.hint}
+        </div>
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Scroll length"
+        value={sensitivityLabel}
+        open={openSection === 'sensitivity'}
+        onToggle={() => toggleSection('sensitivity')}
+      >
+        {PHASE_METER_JOG_SENSITIVITY_OPTIONS.map((opt) => (
+          <WaveformMenuItem
+            key={opt.value}
+            label={opt.label}
+            active={Math.abs((options.jogSensitivity ?? 1) - opt.value) < 0.001}
+            disabled={!enabled}
+            onSelect={() => onPatch({ jogSensitivity: opt.value })}
+          />
+        ))}
+        <div className="px-3 py-1 text-[9px] leading-snug text-gray-500">
+          Higher % = shorter stroke (more phase per scroll). Lower % = longer stroke.
+        </div>
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Sync"
+        value={syncSummary || undefined}
+        open={openSection === 'sync'}
+        onToggle={() => toggleSection('sync')}
+      >
+        <WaveformMenuItem
+          label="Magnetic center snap"
+          active={options.centerSnap}
+          disabled={!enabled}
+          onSelect={() => onPatch({ centerSnap: !options.centerSnap })}
+        />
+        {onSyncMode
+          ? SYNC_MODE_OPTIONS.map((opt) => (
+              <WaveformMenuItem
+                key={opt.id}
+                label={opt.label}
+                active={syncMode === opt.id}
+                disabled={!enabled}
+                onSelect={() => onSyncMode(opt.id)}
+              />
+            ))
+          : null}
+        {onSyncMode ? (
+          <div className="px-3 py-1 text-[9px] leading-snug text-gray-500">
+            {SYNC_MODE_OPTIONS.find((o) => o.id === syncMode)?.hint}
+          </div>
+        ) : null}
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Quantize"
+        value={quantizeLabel}
+        open={openSection === 'quantize'}
+        onToggle={() => toggleSection('quantize')}
+      >
+        {PHASE_METER_QUANTIZE_OPTIONS.map((opt) => (
+          <WaveformMenuItem
+            key={opt.id}
+            label={opt.label}
+            active={options.quantize === opt.id}
+            disabled={!enabled}
+            onSelect={() => onPatch({ quantize: opt.id as PhaseMeterQuantize })}
+          />
+        ))}
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Window"
+        value={windowLabel}
+        open={openSection === 'window'}
+        onToggle={() => toggleSection('window')}
+      >
+        {(['beat', 'bar', 'phrase'] as const).map((group) => (
+          <React.Fragment key={group}>
+            <div className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+              {group === 'beat' ? 'Beats' : group === 'bar' ? 'Bars' : 'Phrases'}
+            </div>
+            {PHASE_METER_WINDOW_OPTIONS.filter((o) => o.group === group).map((opt) => (
+              <WaveformMenuItem
+                key={opt.id}
+                label={opt.label}
+                active={options.windowId === opt.id}
+                disabled={!enabled}
+                onSelect={() => onPatch({ windowId: opt.id as PhaseMeterWindowId })}
+              />
+            ))}
+          </React.Fragment>
+        ))}
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Indicators"
+        value={indicatorSummary || undefined}
+        open={openSection === 'indicators'}
+        onToggle={() => toggleSection('indicators')}
+      >
+        <WaveformMenuItem
+          label="Beat ticks"
+          active={options.showBeats}
+          disabled={!enabled}
+          onSelect={() => onPatch({ showBeats: !options.showBeats })}
+        />
+        <WaveformMenuItem
+          label="Bar (downbeat)"
+          active={options.showBars}
+          disabled={!enabled}
+          onSelect={() => onPatch({ showBars: !options.showBars })}
+        />
+        <WaveformMenuItem
+          label="Phrase"
+          active={options.showPhrases}
+          disabled={!enabled}
+          onSelect={() => onPatch({ showPhrases: !options.showPhrases })}
+        />
+        <WaveformMenuItem
+          label="ms readout"
+          active={options.showMs}
+          disabled={!enabled}
+          onSelect={() => onPatch({ showMs: !options.showMs })}
+        />
+      </WaveformMenuDropdown>
+
+      <WaveformMenuDropdown
+        label="Phrase size"
+        value={`${options.phraseBars} bars`}
+        open={openSection === 'phrase'}
+        onToggle={() => toggleSection('phrase')}
+      >
+        {([4, 8, 16] as const).map((bars) => (
+          <WaveformMenuItem
+            key={`phase-phrase-${bars}`}
+            label={`${bars} bars`}
+            active={options.phraseBars === bars}
+            disabled={!enabled}
+            onSelect={() => onPatch({ phraseBars: bars })}
+          />
+        ))}
+      </WaveformMenuDropdown>
+    </>
+  )
+}
+
+const GRID_NUDGE_FINE_SEC = 0.001
+const GRID_NUDGE_MED_SEC = 0.01
+
+function WaveformNudgeButton({
+  label,
+  title,
+  disabled,
+  onClick,
+}: {
+  label: string
+  title: string
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onClick()
+      }}
+      className="rounded bg-gray-800 px-1 py-1 text-[10px] font-medium text-gray-200 transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {label}
+    </button>
+  )
+}
+
+function WaveformGridNudge({
+  bpm,
+  offsetSec,
+  disabled,
+  onNudge,
+  onZero,
+}: {
+  bpm: number | null
+  offsetSec: number
+  disabled?: boolean
+  onNudge: (deltaSec: number) => void
+  /** Double-click the ms readout to snap phase to 0 and persist. */
+  onZero?: () => void
+}) {
+  const beatSec = bpm && bpm > 0 ? 60 / bpm : null
+  const sixteenth = beatSec ? beatSec / 16 : 0
+  const half = beatSec ? beatSec / 2 : 0
+  const offsetMs = (Number.isFinite(offsetSec) ? offsetSec : 0) * 1000
+  return (
+    <div className="px-3 py-1.5" role="group" aria-label="Beat grid alignment nudge">
+      <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+        <span>Grid nudge</span>
+        <button
+          type="button"
+          className="font-mono font-normal normal-case tabular-nums text-gray-400 hover:text-cyan-300 disabled:cursor-default disabled:opacity-60"
+          title="Double-click to zero grid phase (0 ms) and save systemically"
+          disabled={disabled || !onZero}
+          onDoubleClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (disabled || !onZero) return
+            onZero()
+          }}
+        >
+          {offsetMs.toFixed(0)} ms
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        <WaveformNudgeButton
+          label="−1/16"
+          title="Nudge grid earlier by 1/16 beat"
+          disabled={disabled || !sixteenth}
+          onClick={() => onNudge(-sixteenth)}
+        />
+        <WaveformNudgeButton
+          label="−1 ms"
+          title="Nudge grid earlier by 1 millisecond"
+          disabled={disabled}
+          onClick={() => onNudge(-GRID_NUDGE_FINE_SEC)}
+        />
+        <WaveformNudgeButton
+          label="+1 ms"
+          title="Nudge grid later by 1 millisecond"
+          disabled={disabled}
+          onClick={() => onNudge(GRID_NUDGE_FINE_SEC)}
+        />
+        <WaveformNudgeButton
+          label="+1/16"
+          title="Nudge grid later by 1/16 beat"
+          disabled={disabled || !sixteenth}
+          onClick={() => onNudge(sixteenth)}
+        />
+      </div>
+      <div className="mt-1 grid grid-cols-3 gap-1">
+        <WaveformNudgeButton
+          label="−10 ms"
+          title="Nudge grid earlier by 10 milliseconds"
+          disabled={disabled}
+          onClick={() => onNudge(-GRID_NUDGE_MED_SEC)}
+        />
+        <WaveformNudgeButton
+          label="Flip ½"
+          title="Flip grid by half a beat"
+          disabled={disabled || !half}
+          onClick={() => onNudge(half)}
+        />
+        <WaveformNudgeButton
+          label="+10 ms"
+          title="Nudge grid later by 10 milliseconds"
+          disabled={disabled}
+          onClick={() => onNudge(GRID_NUDGE_MED_SEC)}
+        />
+      </div>
+    </div>
+  )
+}
+
 // Lazy load expanded controls
 const ExpandedPlayerControls = dynamic(
   () => import('./ExpandedPlayerControls'),
@@ -340,6 +883,8 @@ const ExpandedPlayerControls = dynamic(
 
 // Hide DJ mode until completed (set to true when ready)
 const DJ_MODE_ENABLED = false
+/** Stable empty peaks — avoid `[]` identity churn in dual-deck iDJ waveform memo. */
+const EMPTY_WAVEFORM_SAMPLES: WaveformSample[] = []
 
 /**
  * iOS and Android suspend Web Audio's AudioContext when the screen locks. Our analyzer
@@ -370,9 +915,9 @@ function coverArtUrl(artwork?: string | null, bust?: number): string | undefined
   return base
 }
 
-/** Prefer the playing track’s art; fall back to another track from the same album/folder. */
+/** Prefer the playing track’s own art; fall back to album/folder siblings. */
 function albumCoverUrl(
-  track?: { artwork?: string; album?: string; folder?: string } | null,
+  track?: { artwork?: string; album?: string; folder?: string; albumType?: string; folderId?: string } | null,
   queue: { artwork?: string; album?: string; folder?: string }[] = [],
   bust?: number,
 ): string | undefined {
@@ -391,6 +936,15 @@ function albumCoverUrl(
   return undefined
 }
 
+/** Alias kept for Media Session / lock-screen callers. */
+function lockScreenCoverUrl(
+  track?: { artwork?: string; album?: string; folder?: string } | null,
+  queue: { artwork?: string; album?: string; folder?: string }[] = [],
+  bust?: number,
+): string | undefined {
+  return albumCoverUrl(track, queue, bust)
+}
+
 function buildLockScreenArtwork(artwork?: string) {
   const src = coverArtUrl(artwork)
   if (!src) return []
@@ -402,6 +956,45 @@ function buildLockScreenArtwork(artwork?: string) {
     { src, sizes: '384x384', type: 'image/jpeg' },
     { src, sizes: '512x512', type: 'image/jpeg' },
   ]
+}
+
+function PlayerCoverArt({
+  src,
+  mosaicCovers,
+  alt,
+  unoptimized = true,
+  sizes,
+  className = 'object-cover',
+  priority = false,
+  quality = 85,
+}: {
+  src?: string
+  mosaicCovers?: string[]
+  alt: string
+  unoptimized?: boolean
+  sizes: string
+  className?: string
+  priority?: boolean
+  quality?: number
+}) {
+  if (mosaicCovers?.length) {
+    return <CrateCoverMosaic covers={mosaicCovers} />
+  }
+  if (!src) return null
+  return (
+    <Image
+      key={src}
+      src={src}
+      alt={alt}
+      fill
+      className={className}
+      unoptimized={unoptimized}
+      sizes={sizes}
+      priority={priority}
+      quality={quality}
+      loading={priority ? undefined : 'lazy'}
+    />
+  )
 }
 
 // Lazy load DJ mixer mode
@@ -427,6 +1020,7 @@ interface Track {
   file: string
   artwork?: string | null
   album?: string
+  albumType?: string
   folder?: string
   folderId?: string
   audioFileId?: string
@@ -438,6 +1032,8 @@ interface Track {
   frequency_bands?: any
   waveform_data?: number[] // Pre-computed waveform peaks from Supabase
   beat_grid_offset?: number
+  /** Lean catalog flag — admin/manual phase must not be auto-realigned. */
+  grid_manual?: boolean
   // Sonic DNA analysis (from Supabase)
   sonic_dna?: any
   sonic_dna_status?: string | null
@@ -452,6 +1048,8 @@ interface MusicPlayerProps {
   queue: Track[]
   currentSource?: { type: 'folder' | 'playlist' | null; id: string | null } | null
   getTracksFromSource?: (source: { type: 'folder' | 'playlist' | null; id: string | null } | null) => Promise<Track[]>
+  /** When Random exhausts a crate/EP, jump to another release (not the next sibling). */
+  onRequestRandomRelease?: () => Promise<boolean>
   onTrackEnd: () => void
   onNext: () => void
   onPrevious: () => void
@@ -466,7 +1064,7 @@ interface PlayerSettings {
   volume: number
   isMuted: boolean
   isShuffled: boolean
-  /** Random picks from catalog / folder / playlist — not queue-order shuffle. */
+  /** Random: crates/EPs play in order then jump; catalog/playlist least-repetition. */
   catalogRandom: boolean
   repeatMode: 'off' | 'all' | 'one'
   playbackRate: number
@@ -488,6 +1086,17 @@ const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
 const WAVEFORM_DECODE_BUFFER_LEAD_SEC = 12
 /** Give up waiting for that lead rather than never drawing band detail. */
 const WAVEFORM_DECODE_MAX_WAIT_MS = 20_000
+/** Ignore brief `waiting` blips so preload/range fetches don't flash "Buffering...". */
+const BUFFERING_UI_DELAY_MS = 400
+/** MediaError.code values — `MediaError` constants are not available on the type. */
+const MEDIA_ERR_NETWORK = 2
+const MEDIA_ERR_DECODE = 3
+const MEDIA_ERR_SRC_NOT_SUPPORTED = 4
+/** In-place reloads allowed per track for a transient AUDIO_RENDERER_ERROR. */
+const MAX_DECODE_RELOADS = 2
+const QUEUE_DOCK_HEIGHT_MIN = 180
+const QUEUE_DOCK_HEIGHT_DEFAULT = 360
+const QUEUE_DOCK_HEIGHT_STORAGE_KEY = 'sergik.music.queue-dock-height'
 const EQ_PRESETS = [
   { value: 'flat', label: 'Flat' },
   { value: 'bass', label: 'Bass Boost' },
@@ -512,11 +1121,24 @@ function tempoValueToRate(tempoValue: number): number {
   return 1 + (tempoValue / 100)
 }
 
+function queueDockHeightMax(): number {
+  if (typeof window === 'undefined') return 640
+  return Math.max(QUEUE_DOCK_HEIGHT_MIN, Math.floor(window.innerHeight * 0.75))
+}
+
+function readStoredQueueDockHeight(): number {
+  if (typeof window === 'undefined') return QUEUE_DOCK_HEIGHT_DEFAULT
+  const raw = Number(window.localStorage.getItem(QUEUE_DOCK_HEIGHT_STORAGE_KEY))
+  if (!Number.isFinite(raw)) return QUEUE_DOCK_HEIGHT_DEFAULT
+  return Math.min(Math.max(Math.round(raw), QUEUE_DOCK_HEIGHT_MIN), queueDockHeightMax())
+}
+
 export default function MusicPlayer({
   currentTrack,
   queue,
   currentSource,
   getTracksFromSource,
+  onRequestRandomRelease,
   onTrackEnd,
   onNext,
   onPrevious,
@@ -558,11 +1180,18 @@ export default function MusicPlayer({
     queuePanelHost,
     playTrack,
     seekTo,
+    clearSeekTarget,
     adoptPlayingTrack,
+    setCurrentTrack,
+    setCurrentIndex,
+    playNext,
     isAutoDJEnabled,
     setIsAutoDJEnabled,
+    isIDJEnabled,
     autoDJSettingsMenu,
     closeAutoDJSettingsMenu,
+    idjSettingsMenu,
+    closeIDJSettingsMenu,
     setPlayerChrome,
   } = useMusicPlayer()
   const isQueueOpen = isQueuePanelOpen
@@ -592,6 +1221,13 @@ export default function MusicPlayer({
     () => albumCoverUrl(currentTrack, queue, coverBust),
     [currentTrack, queue, coverBust],
   )
+  const lockScreenSrc = useMemo(
+    () => lockScreenCoverUrl(currentTrack, queue, coverBust),
+    [currentTrack, queue, coverBust],
+  )
+  const mosaicCovers = useTrackMosaicCovers(currentTrack, queue)
+  const playerCoverPool = usePlayerCoverPool(queue)
+  const hasPlayerCover = Boolean(coverSrc) || mosaicCovers.length > 0
   const waveformIntelligenceProfile = useMemo(
     () => profileFromSonicDna(currentTrack?.sonic_dna),
     [currentTrack?.sonic_dna]
@@ -648,9 +1284,10 @@ export default function MusicPlayer({
   const autoDJConfigRef = useRef(autoDJConfig)
   autoDJConfigRef.current = autoDJConfig
   const [autoDJLibrary, setAutoDJLibrary] = useState<Track[]>([])
-  const playedTrackIdsRef = useRef<Set<string>>(new Set())
   const catalogRandomFillKeyRef = useRef('')
   const autoDJIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const autoDjControllerRef = useRef<AutoDjController | null>(null)
+  const mixNowFromCurrentBarRef = useRef<(() => void) | null>(null)
   const autoDJLastAddedRef = useRef<string | null>(null)
   const autoDJPendingRef = useRef<string | null>(null)
   /** Freeze OUT plan once within ~4s so ticks cannot snap earlier. */
@@ -665,10 +1302,18 @@ export default function MusicPlayer({
   /** rAF — skip blend waits for the next outgoing beat. */
   const skipBlendRafRef = useRef<number | null>(null)
   const skipToNextRef = useRef<() => void>(() => {})
+  const skipToPreviousRef = useRef<() => void>(() => {})
   /** Seconds until the last planned mix point; drives how often we replan. */
   const autoDJPlanDelayRef = useRef<number | null>(null)
   const autoDJPlanScanRef = useRef(0)
   const [autoDJStatusMessage, setAutoDJStatusMessage] = useState('')
+  const [autoDjPickStall, setAutoDjPickStall] = useState<{
+    rejectReason: string
+    topRejectedWhy: string | null
+    needsLockGrids: boolean
+    needsRemeasureKicks: boolean
+    suggestTempoSync: boolean
+  } | null>(null)
   const [lastMixQuality, setLastMixQuality] = useState<MixQualitySnapshot | null>(null)
   const lastMixQualityRef = useRef<MixQualitySnapshot | null>(null)
   lastMixQualityRef.current = lastMixQuality
@@ -681,11 +1326,60 @@ export default function MusicPlayer({
   const autoDJLeadInRef = useRef(autoDJLeadIn)
   autoDJLeadInRef.current = autoDJLeadIn
   const [autoDJSuggestedLeadIn, setAutoDJSuggestedLeadIn] = useState(0)
+  const autoDJSuggestedLeadInRef = useRef(0)
+  autoDJSuggestedLeadInRef.current = autoDJSuggestedLeadIn
   const [fanUserId, setFanUserId] = useState<string | null>(null)
   const [autoDJCloudLoaded, setAutoDJCloudLoaded] = useState(false)
   const [autoDJSaving, setAutoDJSaving] = useState(false)
   const [autoDJDirty, setAutoDJDirty] = useState(false)
   const [isTrackListExpanded, setIsTrackListExpanded] = useState(false)
+  const [queueDockHeight, setQueueDockHeight] = useState(QUEUE_DOCK_HEIGHT_DEFAULT)
+  const [isResizingQueueDock, setIsResizingQueueDock] = useState(false)
+  const queueDockResizeStartRef = useRef({ y: 0, h: QUEUE_DOCK_HEIGHT_DEFAULT })
+  const queueDockHeightRef = useRef(QUEUE_DOCK_HEIGHT_DEFAULT)
+  queueDockHeightRef.current = queueDockHeight
+  useEffect(() => {
+    setQueueDockHeight(readStoredQueueDockHeight())
+  }, [])
+  useEffect(() => {
+    if (!isResizingQueueDock) return
+    const onMove = (e: PointerEvent) => {
+      const dy = e.clientY - queueDockResizeStartRef.current.y
+      const next = Math.min(
+        queueDockHeightMax(),
+        Math.max(QUEUE_DOCK_HEIGHT_MIN, queueDockResizeStartRef.current.h + dy),
+      )
+      setQueueDockHeight(next)
+    }
+    const onUp = () => {
+      setIsResizingQueueDock(false)
+      try {
+        window.localStorage.setItem(
+          QUEUE_DOCK_HEIGHT_STORAGE_KEY,
+          String(queueDockHeightRef.current),
+        )
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizingQueueDock])
+  const handleQueueDockResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    queueDockResizeStartRef.current = { y: e.clientY, h: queueDockHeight }
+    setIsResizingQueueDock(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
   const clearAutoDJOutWatch = useCallback(() => {
     if (autoDJOutRafRef.current != null) {
       cancelAnimationFrame(autoDJOutRafRef.current)
@@ -757,6 +1451,17 @@ export default function MusicPlayer({
         }))
         setAutoDJLeadIn(cloud.leadIn)
         writeAutoDJConfigToStorage(cloud)
+        if (Array.isArray(d.mixQualityHistory) && d.mixQualityHistory.length) {
+          setMixQualityHistory((local) => {
+            const merged = mergeMixQualityHistory(local, d.mixQualityHistory)
+            try {
+              localStorage.setItem('sergik.autoDj.mixQualityHistory', JSON.stringify(merged))
+            } catch {
+              /* quota */
+            }
+            return merged
+          })
+        }
         setAutoDJDirty(false)
       })
       .catch(() => {})
@@ -772,6 +1477,23 @@ export default function MusicPlayer({
     writeAutoDJConfigToStorage(serializeAutoDJPayload(autoDJConfig, autoDJLeadIn))
   }, [autoDJConfig, autoDJLeadIn])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const w = window as Window & {
+      __SERGIK_E2E__?: {
+        getAutoDJStatus?: () => string
+        isAutoDJEnabled?: () => boolean
+        mixNow?: () => void
+      }
+    }
+    w.__SERGIK_E2E__ = {
+      ...w.__SERGIK_E2E__,
+      getAutoDJStatus: () => autoDJStatusMessage,
+      isAutoDJEnabled: () => autoDJConfigRef.current.enabled,
+      mixNow: () => mixNowFromCurrentBarRef.current?.(),
+    }
+  }, [autoDJStatusMessage])
+
   const saveAutoDJToAccount = useCallback(async () => {
     const payload = serializeAutoDJPayload(autoDJConfig, autoDJLeadIn)
     writeAutoDJConfigToStorage(payload)
@@ -786,7 +1508,7 @@ export default function MusicPlayer({
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: payload }),
+        body: JSON.stringify({ settings: payload, mixQualityHistory }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -804,7 +1526,7 @@ export default function MusicPlayer({
     } finally {
       setAutoDJSaving(false)
     }
-  }, [autoDJConfig, autoDJLeadIn, fanUserId])
+  }, [autoDJConfig, autoDJLeadIn, fanUserId, mixQualityHistory])
 
   const prevAutoDJEnabledRef = useRef(isAutoDJEnabled)
   useEffect(() => {
@@ -823,7 +1545,8 @@ export default function MusicPlayer({
       mixEngineRef.current?.setDeckEqGains(liveDeck, liveEq, { instant: true })
     }
     prevAutoDJEnabledRef.current = isAutoDJEnabled
-  }, [isAutoDJEnabled])
+    if (isAutoDJEnabled || isIDJEnabled || expandedMode === 'dj') void loadMixEngineClass()
+  }, [isAutoDJEnabled, isIDJEnabled, expandedMode])
 
   useEffect(() => {
     if (!autoDJSettingsMenu) return
@@ -850,6 +1573,31 @@ export default function MusicPlayer({
       window.removeEventListener('pointerdown', onPointer)
     }
   }, [autoDJSettingsMenu, closeAutoDJSettingsMenu])
+
+  useEffect(() => {
+    if (!idjSettingsMenu) return
+    const openedAt = performance.now()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeIDJSettingsMenu()
+    }
+    const onPointer = (e: PointerEvent) => {
+      if (performance.now() - openedAt < 400) return
+      if (e.button === 2) return
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-idj-settings-menu]')) return
+      if (target?.closest('[aria-label="Enable iDJ"], [aria-label="Disable iDJ"]')) return
+      closeIDJSettingsMenu()
+    }
+    window.addEventListener('keydown', onKey)
+    const timer = window.setTimeout(() => {
+      window.addEventListener('pointerdown', onPointer)
+    }, 400)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
+  }, [idjSettingsMenu, closeIDJSettingsMenu])
 
   const [allSourceTracks, setAllSourceTracks] = useState<Track[]>([])
 
@@ -897,24 +1645,44 @@ export default function MusicPlayer({
       return
     }
     const exclude = new Set(queue.map((track) => track.id))
-    playedTrackIdsRef.current.forEach((id) => exclude.add(id))
     const primeCount = Math.max(1, Math.min(autoDJConfig.lookahead, 8))
     const useRandom = settings.catalogRandom || !autoDJConfig.enabled
     const remaining = pool.filter((track) => !exclude.has(track.id))
-    const selection = useRandom
-      ? pickRandomUnusedTracks(pool, exclude, primeCount, {
-          allowReshuffle: true,
-          keepExcluded: currentTrack ? [currentTrack.id] : [],
-        })
-      : remaining.slice(0, primeCount)
+    const selection =
+      useRandom && isOrderedReleaseRandomScope(currentSource)
+        ? pickNextOrderedTracks(pool, exclude, primeCount, {
+            preferAfterId: currentTrack?.id ?? null,
+          })
+        : useRandom
+          ? pickRandomUnusedTracks(pool, exclude, primeCount, {
+              allowReshuffle: true,
+              keepExcluded: currentTrack ? [currentTrack.id] : [],
+              recentIds: getRecentPlayedTrackIds(),
+            })
+          : remaining.slice(0, primeCount)
+    if (selection.length === 0 && useRandom && isOrderedReleaseRandomScope(currentSource)) {
+      void onRequestRandomRelease?.().then((jumped) => {
+        if (jumped) {
+          setAutoDJStatusMessage('Primed a fresh random crate / EP')
+        } else {
+          setAutoDJStatusMessage('Queue already contains library tracks')
+        }
+      })
+      return
+    }
     if (selection.length === 0) {
       setAutoDJStatusMessage('Queue already contains library tracks')
       return
     }
     onQueueChange([...queue, ...selection])
     const scope = catalogScopeLabel(currentSource)
+    const modeLabel = useRandom
+      ? isOrderedReleaseRandomScope(currentSource)
+        ? 'in-order '
+        : 'random '
+      : ''
     setAutoDJStatusMessage(
-      `Primed ${selection.length} ${useRandom ? 'random ' : ''}track${selection.length > 1 ? 's' : ''} from ${scope}`,
+      `Primed ${selection.length} ${modeLabel}track${selection.length > 1 ? 's' : ''} from ${scope}`,
     )
   }, [
     autoDJLibrary,
@@ -926,6 +1694,7 @@ export default function MusicPlayer({
     settings.catalogRandom,
     currentTrack,
     currentSource,
+    onRequestRandomRelease,
   ])
 
   // Update body data attribute when in DJ mode (for hiding header)
@@ -955,31 +1724,59 @@ export default function MusicPlayer({
   const [waveformData, setWaveformData] = useState<WaveformSample[]>([])
   const [precomputedPeaks, setPrecomputedPeaks] = useState<number[] | null>(null)
   const [waveformMode, setWaveformMode] = useState<WaveformColorMode>(() => {
-    if (typeof window === 'undefined') return 'energy'
+    if (typeof window === 'undefined') return 'drums'
     try {
       const stored = localStorage.getItem('sergik.waveformColorMode')
-      // Prefer MiniMeters multi-band energy (matches reference look). Soft-migrate
-      // prior Ableton "channel" / spectral defaults that rendered as a teal slab.
-      if (!stored || stored === 'gradient' || stored === 'classic' || stored === 'channel') {
-        return 'energy'
+      // CDJ decks default to drums overlay. Soft-migrate prior energy/channel slabs.
+      if (
+        !stored ||
+        stored === 'gradient' ||
+        stored === 'classic' ||
+        stored === 'channel' ||
+        stored === 'energy'
+      ) {
+        return 'drums'
       }
       return normalizeWaveformColorMode(stored)
     } catch {
-      return 'energy'
+      return 'drums'
     }
   })
   const [waveformLayerLayout, setWaveformLayerLayout] = useState<WaveformLayerLayout>(() => {
-    if (typeof window === 'undefined') return 'merged'
+    if (typeof window === 'undefined') return 'overlay'
     try {
-      return normalizeWaveformLayerLayout(localStorage.getItem('sergik.waveformLayerLayout'))
+      const stored = localStorage.getItem('sergik.waveformLayerLayout')
+      if (!stored || stored === 'merged') return 'overlay'
+      return normalizeWaveformLayerLayout(stored)
     } catch {
-      return 'merged'
+      return 'overlay'
     }
   })
   /** 0 = full track; otherwise bars visible (4/8/16… ladder). */
   const [waveformVisibleBars, setWaveformVisibleBars] = useState(0)
   const [waveformOffset, setWaveformOffset] = useState(0) // For panning when zoomed
   const [waveformFollow, setWaveformFollow] = useState(true) // Follow mode - keep playhead centered when zoomed (CDJ)
+  const [waveformOverview, setWaveformOverview] = useState(true) // Full-track overview strip under waveform
+  const [waveformPhaseMeter, setWaveformPhaseMeter] = useState(true) // CDJ phase / grid-align meter
+  const [phaseMeterOptions, setPhaseMeterOptions] = useState<PhaseMeterOptions>(() =>
+    readPhaseMeterOptionsFromStorage(),
+  )
+  const waveformPhaseMeterRef = useRef(waveformPhaseMeter)
+  waveformPhaseMeterRef.current = waveformPhaseMeter
+  const phaseMeterOptionsRef = useRef(phaseMeterOptions)
+  phaseMeterOptionsRef.current = phaseMeterOptions
+  const patchPhaseMeterOptions = useCallback((patch: Partial<PhaseMeterOptions>) => {
+    setPhaseMeterOptions((prev) => {
+      const next = { ...prev, ...patch }
+      writePhaseMeterOptionsToStorage(next)
+      return next
+    })
+  }, [])
+  /** Incoming Auto DJ deck has its own zoom/follow so live-deck ticks cannot reset it. */
+  const [incomingVisibleBars, setIncomingVisibleBars] = useState(0)
+  const [incomingOffset, setIncomingOffset] = useState(0)
+  const [incomingFollow, setIncomingFollow] = useState(false)
+  const incomingZoomTrackIdRef = useRef<string | null>(null)
   // Derived: 1 = full overview; >1 = zoomed bar window (keeps legacy checks working)
   const waveformZoom = waveformVisibleBars > 0 ? Math.max(1.05, 128 / waveformVisibleBars) : 1
   const [waveformMirror, setWaveformMirror] = useState(true) // Mirrored colorful view at 1x (matches waveform menu defaults)
@@ -989,7 +1786,12 @@ export default function MusicPlayer({
     x: number
     y: number
     deck: 'a' | 'b'
+    /** Media time under the right-click (no grid snap). */
+    timeSec: number | null
   } | null>(null)
+  const [waveformMenuSection, setWaveformMenuSection] = useState<
+    null | 'color' | 'layer' | 'zoom' | 'sonicDna' | 'phase'
+  >(null)
   const waveformMenuRef = useRef<HTMLDivElement>(null)
   const waveformMenuClamp = useClampedFixedMenuPosition(
     !!waveformMenu,
@@ -997,12 +1799,29 @@ export default function MusicPlayer({
     { width: 224, height: 640 },
     { externalRef: waveformMenuRef },
   )
+  const [phaseMeterMenu, setPhaseMeterMenu] = useState<{
+    x: number
+    y: number
+    deck: 'a' | 'b'
+  } | null>(null)
+  const phaseMeterMenuRef = useRef<HTMLDivElement>(null)
+  const phaseMeterMenuClamp = useClampedFixedMenuPosition(
+    !!phaseMeterMenu,
+    phaseMeterMenu,
+    { width: 256, height: 640 },
+    { externalRef: phaseMeterMenuRef },
+  )
   const autoDJMenuClamp = useClampedFixedMenuPosition(
     !!autoDJSettingsMenu,
     autoDJSettingsMenu
       ? { x: autoDJSettingsMenu.x - 448, y: autoDJSettingsMenu.y }
       : null,
     { width: 448, height: 560 },
+  )
+  const idjMenuClamp = useClampedFixedMenuPosition(
+    !!idjSettingsMenu,
+    idjSettingsMenu ? { x: idjSettingsMenu.x - 288, y: idjSettingsMenu.y } : null,
+    { width: 288, height: 420 },
   )
   const [sonicDnaReportOpen, setSonicDnaReportOpen] = useState(false)
   const [sonicDnaReportTrack, setSonicDnaReportTrack] = useState<Track | null>(null)
@@ -1024,7 +1843,7 @@ export default function MusicPlayer({
     }
   }, [waveformLayerLayout])
 
-  // Beat grid state — offsetSec is absolute downbeat time (see lib/audio/beat-grid)
+  // Beat grid state — offsetSec is within-beat phase [0, beatSec); 0 = downbeat at file t=0
   const [beatGridEnabled, setBeatGridEnabled] = useState(false)
   const [beatGridOffsetSec, setBeatGridOffsetSec] = useState(0)
   const beatGridOffsetSecRef = useRef(0)
@@ -1034,13 +1853,31 @@ export default function MusicPlayer({
   /** Admin/user verified grid — skip auto re-align and persist on sonic_dna. */
   const [beatGridLocked, setBeatGridLocked] = useState(false)
   const beatGridSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const autoAlignedTrackIdRef = useRef<string | null>(null)
+  const autoAlignedSigRef = useRef<string | null>(null)
   const [originalQueue, setOriginalQueue] = useState<Track[]>([])
   const [crossfadeActive, setCrossfadeActive] = useState(false)
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false)
   const [detectedBPM, setDetectedBPM] = useState<number | null>(null)
+  const [tapeBpm, setTapeBpm] = useState<number | null>(null)
+  const [tapeGridByTrackId, setTapeGridByTrackId] = useState<
+    Record<string, { bpm: number; offsetSec: number }>
+  >({})
+  const rememberTapeGrid = useCallback((trackId: string, bpm: number, offsetSec: number) => {
+    if (!trackId || !(bpm > 0) || !Number.isFinite(offsetSec)) return
+    setTapeGridByTrackId((prev) => {
+      const cur = prev[trackId]
+      if (
+        cur &&
+        Math.abs(cur.bpm - bpm) < 0.01 &&
+        Math.abs(cur.offsetSec - offsetSec) < 0.002
+      ) {
+        return prev
+      }
+      return { ...prev, [trackId]: { bpm, offsetSec } }
+    })
+  }, [])
   const [isDetectingBPM, setIsDetectingBPM] = useState(false)
   const bpmCacheRef = useRef<Map<string, number | null>>(new Map())
   const tapTempoTimeoutRef = useRef<{ a: ReturnType<typeof setTimeout> | null; b: ReturnType<typeof setTimeout> | null }>({
@@ -1112,6 +1949,48 @@ export default function MusicPlayer({
   const playbackDeckRef = useRef<'main' | 'next'>('main')
   /** Skip audio.src reload once after deck-swap handoff. */
   const skipSrcReloadRef = useRef(false)
+  /** Prevents ended/clock-poll from skip-looping the queue after a track change. */
+  const endedTrackIdRef = useRef<string | null>(null)
+  /** True while we own a src swap — loadstart must not flip isLoading (that pauses playback). */
+  const srcSwapRef = useRef(false)
+  /** Last id+url bound on the live element so effect re-runs do not load() again. */
+  const lastBoundPlaybackRef = useRef<{ id: string; url: string }>({ id: '', url: '' })
+  const trackSwitchAtRef = useRef(0)
+  const isPlayingRef = useRef(isPlaying)
+  isPlayingRef.current = isPlaying
+  /** iDJ per-deck skip: keep idle audio/selection while the live track changes. */
+  const idjDeckSkipLockRef = useRef(false)
+  /** Src swaps fire a fake `ended` while currentTime/duration are still the previous file. */
+  const idjEndedArmedRef = useRef({ live: true, idle: true })
+  const idjIgnoreEndedUntilRef = useRef(0)
+  /** Suppress Buffering… UI while a same-deck src swap / cue seek settles. */
+  const idjIgnoreBufferUiUntilRef = useRef(0)
+  const IDJ_ENDED_GUARD_MS = 900
+  const IDJ_BUFFER_UI_GUARD_MS = 1600
+  const disarmIdjEnded = (deck: 'live' | 'idle') => {
+    idjEndedArmedRef.current[deck] = false
+    const until = Date.now() + IDJ_ENDED_GUARD_MS
+    idjIgnoreEndedUntilRef.current = Math.max(idjIgnoreEndedUntilRef.current, until)
+    idjIgnoreBufferUiUntilRef.current = Math.max(
+      idjIgnoreBufferUiUntilRef.current,
+      Date.now() + IDJ_BUFFER_UI_GUARD_MS,
+    )
+    trackSwitchAtRef.current = Date.now()
+  }
+  const armIdjEnded = (deck: 'live' | 'idle') => {
+    idjEndedArmedRef.current[deck] = true
+  }
+  const isGenuineMediaEnd = (el: HTMLMediaElement | null, deck: 'live' | 'idle') => {
+    if (!el) return false
+    if (!idjEndedArmedRef.current[deck]) return false
+    if (Date.now() < idjIgnoreEndedUntilRef.current) return false
+    if (idjDeckSkipLockRef.current && deck === 'live') return false
+    const dur = el.duration
+    if (!Number.isFinite(dur) || dur < 0.5) return false
+    const t = Number.isFinite(el.currentTime) ? el.currentTime : 0
+    return t >= dur - 0.25
+  }
+  const stepLiveDeckRef = useRef<(direction: 1 | -1, opts?: { play?: boolean }) => void>(() => {})
   /** Guards React effects from cold-loading main during deck-swap settle. */
   type DeckHandoffState = {
     trackId: string
@@ -1175,6 +2054,30 @@ export default function MusicPlayer({
     return playbackDeckRef.current === 'next' ? audioRef.current : nextAudioRef.current
   }, [])
 
+  const readDeckMediaTime = useCallback((deck: DeckId): number => {
+    const engine = mixEngineRef.current
+    if (engine) return engine.getDeckMediaTime(deck)
+    const el = deck === 'b' ? nextAudioRef.current : audioRef.current
+    return el && Number.isFinite(el.currentTime) ? el.currentTime : 0
+  }, [])
+
+  const seekDeckMediaTime = useCallback((deck: DeckId, sec: number) => {
+    const engine = mixEngineRef.current
+    if (engine) {
+      engine.seekDeckMedia(deck, sec)
+      return
+    }
+    const el = deck === 'b' ? nextAudioRef.current : audioRef.current
+    if (el) el.currentTime = sec
+  }, [])
+
+  const readLiveMediaTime = useCallback((): number => {
+    const engine = mixEngineRef.current
+    if (engine) return engine.getDeckMediaTime()
+    const live = getPlaybackAudio()
+    return live && Number.isFinite(live.currentTime) ? live.currentTime : 0
+  }, [getPlaybackAudio])
+
   const detectedBPMRef = useRef(detectedBPM)
   detectedBPMRef.current = detectedBPM
 
@@ -1189,20 +2092,34 @@ export default function MusicPlayer({
 
   const toMixTrackRef = useCallback((track: Track) => {
     const cachedOffset = mixGridOffsetCacheRef.current.get(track.id)
+    const bpm =
+      resolvePlaybackBpm(track, detectedBPMRef.current) ??
+      track.bpm ??
+      detectedBPMRef.current ??
+      null
+    const beatSec = 60 / (bpm && bpm > 0 ? bpm : 120)
+    const rawOffset =
+      typeof cachedOffset === 'number' ? cachedOffset : track.beat_grid_offset
+    const slots = readHotCueSlots(track.id)
+    const hotCues = HOT_CUE_SLOTS.flatMap((slot) => {
+      const t = slots[slot]
+      return typeof t === 'number' ? [{ timeSec: t, label: `Hot ${slot}` }] : []
+    })
+    const memory = readIDJMemoryCues()[track.id]
     return {
       id: track.id,
       file: track.file,
       title: track.title,
-      bpm:
-        resolvePlaybackBpm(track, detectedBPMRef.current) ??
-        track.bpm ??
-        detectedBPMRef.current ??
-        null,
+      bpm,
       beat_grid_offset:
-        typeof cachedOffset === 'number' ? cachedOffset : track.beat_grid_offset,
+        typeof rawOffset === 'number' && Number.isFinite(rawOffset)
+          ? toPhaseOnlyOffsetSec(rawOffset, beatSec)
+          : playbackGridPhaseSec(track, bpm),
       duration: track.duration ?? null,
       sonic_dna: track.sonic_dna,
       energy_level: track.energy_level ?? null,
+      hotCues: hotCues.length ? hotCues : undefined,
+      memoryCueSec: typeof memory === 'number' && Number.isFinite(memory) ? memory : null,
     }
   }, [])
 
@@ -1218,14 +2135,6 @@ export default function MusicPlayer({
       peaks: Array<number | { positive?: number; negative?: number; rms?: number }>,
       durationSec: number,
     ) => {
-      if (isGridLocked(track.sonic_dna)) {
-        const lockedOff =
-          typeof track.beat_grid_offset === 'number' && Number.isFinite(track.beat_grid_offset)
-            ? Math.max(0, track.beat_grid_offset)
-            : 0
-        mixGridOffsetCacheRef.current.set(track.id, lockedOff)
-        return lockedOff
-      }
       // The Auto DJ tick calls this ten times a second, but onset detection over
       // the full peak array only yields a new answer when the tape or duration
       // changes — so key on those and reuse the result in between.
@@ -1233,13 +2142,39 @@ export default function MusicPlayer({
       const memo = mixGridOffsetSigRef.current.get(track.id)
       if (memo && memo.sig === sig) return memo.offset
 
+      if (
+        (isGridManual(track.sonic_dna) || track.grid_manual === true) &&
+        !isUnsetOffset(track.beat_grid_offset)
+      ) {
+        const bpm = resolvePlaybackBpm(track) ?? track.bpm ?? 120
+        const beatSec = 60 / (bpm > 0 ? bpm : 120)
+        const offset = toPhaseOnlyOffsetSec(track.beat_grid_offset!, beatSec)
+        mixGridOffsetCacheRef.current.set(track.id, offset)
+        mixGridOffsetSigRef.current.set(track.id, { sig, offset })
+        rememberTapeGrid(track.id, bpm, offset)
+        return offset
+      }
+
+      // Catalog phase (including explicit 0) wins over peak re-derivation.
+      if (!isUnsetOffset(track.beat_grid_offset)) {
+        const bpm = resolvePlaybackBpm(track) ?? track.bpm ?? 120
+        const beatSec = 60 / (bpm > 0 ? bpm : 120)
+        const offset = toPhaseOnlyOffsetSec(track.beat_grid_offset!, beatSec)
+        mixGridOffsetCacheRef.current.set(track.id, offset)
+        mixGridOffsetSigRef.current.set(track.id, { sig, offset })
+        rememberTapeGrid(track.id, bpm, offset)
+        return offset
+      }
+
       const ref = toMixTrackRef(track)
-      const offset = resolveMixGridOffset(ref, { peaks, durationSec })
+      const tape = resolveMixTapeGrid(ref, { peaks, durationSec })
+      const offset = tape.offsetSec
       mixGridOffsetCacheRef.current.set(track.id, offset)
       mixGridOffsetSigRef.current.set(track.id, { sig, offset })
+      rememberTapeGrid(track.id, tape.bpm, offset)
       return offset
     },
-    [toMixTrackRef],
+    [toMixTrackRef, rememberTapeGrid],
   )
 
   const withMixGrid = useCallback(
@@ -1300,41 +2235,18 @@ export default function MusicPlayer({
     (outTrack: Track, inTrack: Track, style: MixPlan['style'], incomingTargetRate?: number) => {
       const outRef = withMixGrid(outTrack)
       const inRef = withMixGrid(inTrack)
-      const autoDjOn = autoDJConfigRef.current.enabled
-      const techniques = autoDjOn
-        ? (['standard'] as const)
-        : resolveEffectiveMixTechniques(
-            autoDJConfigRef.current.mixTechniques,
-            outRef,
-            inRef,
-          )
-      let intel = buildMixIntelligence({
+      const cfg = autoDJConfigRef.current
+      return resolveAutoDjMixIntelligence({
         outgoing: outRef,
         incoming: inRef,
         style,
+        mixStyle: cfg.mixStyle,
+        mixTechniques: cfg.mixTechniques,
+        energyCurve: cfg.energyCurve,
         outgoingRate: getOutgoingPlaybackRate(),
         incomingTargetRate: incomingTargetRate ?? settingsRef.current.playbackRate,
+        qualityGrade: lastMixQualityRef.current?.grade,
       })
-      intel = applyTechniqueToIntelligence(
-        intel,
-        techniques,
-        autoDjOn ? 'crossfade' : autoDJConfigRef.current.mixStyle,
-      )
-      intel = applyEnergyCurveToIntelligence(
-        intel,
-        autoDjOn ? 'hold' : autoDJConfigRef.current.energyCurve,
-      )
-      if (autoDjOn) {
-        intel = {
-          ...intel,
-          incomingDelay: 0,
-          energyScale: 1,
-          echoSend: style === 'cut' ? intel.echoSend : 0,
-          lowDuckDb: style === 'crossfade' ? 0 : intel.lowDuckDb,
-          filterIntensity: style === 'crossfade' ? 0 : intel.filterIntensity,
-        }
-      }
-      return intel
     },
     [withMixGrid, getOutgoingPlaybackRate],
   )
@@ -1481,6 +2393,7 @@ export default function MusicPlayer({
   /** Bump when the live media element changes so WaveformStage re-arms its clock. */
   const [waveformMediaSyncKey, setWaveformMediaSyncKey] = useState('main')
   const [waveformMixOverlay, setWaveformMixOverlay] = useState<WaveformMixOverlay | null>(null)
+  const [waveformRescanNonce, setWaveformRescanNonce] = useState(0)
   const [waveformGhostTape, setWaveformGhostTape] = useState<WaveformGhostTape | null>(null)
   type DeckWaveformPack = {
     trackId: string
@@ -1493,6 +2406,52 @@ export default function MusicPlayer({
   }>({})
   const [waveformHotCues, setWaveformHotCues] = useState<WaveformHotCue[]>([])
   waveformHotCuesRef.current = waveformHotCues
+  const [idjCrossfade, setIdjCrossfade] = useState(0)
+  /** Auto DJ stays on; user owns channel XF (engine manualXfOverride). */
+  const [autoDjXfUnlocked, setAutoDjXfUnlocked] = useState(false)
+  /** Preserve XF position when unlocking from Auto DJ (skip live-deck snap once). */
+  const idjXfSeedRef = useRef<number | null>(null)
+  const [idleDeckPlaying, setIdleDeckPlaying] = useState(false)
+  const [idjIdleTrackId, setIdjIdleTrackId] = useState<string | null>(null)
+  /** Full track for cue deck until playNext lands it in `queue` (same-tick paint). */
+  const [cueDeckTrackOverride, setCueDeckTrackOverride] = useState<Track | null>(null)
+  const [idjMemoryCues, setIdjMemoryCues] = useState<Record<string, number>>({})
+  const idjMemoryCuesRef = useRef<Record<string, number>>({})
+  idjMemoryCuesRef.current = idjMemoryCues
+  const [idjActiveCues, setIdjActiveCues] = useState<IDJActiveCueMap>(emptyIDJActiveCueMap)
+  const idjActiveCuesRef = useRef<IDJActiveCueMap>(emptyIDJActiveCueMap())
+  const persistDeckActiveCue = useCallback(
+    (deck: 'a' | 'b', trackId: string | undefined, cue: IDJActiveCue | null) => {
+      if (!trackId) return
+      const next = writeIDJActiveCue(deck, trackId, cue)
+      idjActiveCuesRef.current = next
+      setIdjActiveCues(next)
+    },
+    [],
+  )
+  const clearDeckActiveCueIf = useCallback(
+    (deck: 'a' | 'b', trackId: string | undefined, match: IDJActiveCue) => {
+      if (!trackId) return
+      if (!sameIDJActiveCue(idjActiveCuesRef.current[deck]?.[trackId], match)) return
+      persistDeckActiveCue(deck, trackId, null)
+    },
+    [persistDeckActiveCue],
+  )
+  const [idjConfig, setIdjConfig] = useState(DEFAULT_IDJ_CONFIG)
+  const idjConfigRef = useRef(idjConfig)
+  idjConfigRef.current = idjConfig
+  const idjOnDeckEndedRef = useRef<(deck: 'live' | 'idle') => boolean>(() => false)
+  const isIDJEnabledRef = useRef(false)
+  isIDJEnabledRef.current = isIDJEnabled
+  const idjIdleTrackIdRef = useRef<string | null>(null)
+  idjIdleTrackIdRef.current = idjIdleTrackId
+  const idjLiveTrackIdRef = useRef<string | null>(currentTrack?.id ?? null)
+  const idleDeckPlayingRef = useRef(false)
+  idleDeckPlayingRef.current = idleDeckPlaying
+  const idleLoadGenRef = useRef(0)
+  const liveLoadGenRef = useRef(0)
+  const liveDeckIdRef = useRef<'a' | 'b'>('a')
+  const lastDeckSkipAtRef = useRef<{ a: number; b: number }>({ a: 0, b: 0 })
   const ghostSamplesRef = useRef<{
     trackId: string
     samples: import('@/lib/audio/waveform-view').WaveformSample[]
@@ -1508,7 +2467,18 @@ export default function MusicPlayer({
     const next = nextAudioRef.current
     if (!main || !next) return null
     if (!mixEngineRef.current) {
-      const engine = new MixEngine(main, next)
+      const MixEngineCtor = getMixEngineClass()
+      if (!MixEngineCtor) {
+        void loadMixEngineClass()
+          .then(() => {
+            attachEngineGraphRef.current()
+          })
+          .catch(() => {
+            /* fallback output keeps playback audible */
+          })
+        return null
+      }
+      const engine = new MixEngineCtor(main, next)
       engine.subscribe((ev) => {
         if (ev.type !== 'mix-quality') return
         const snap = snapshotMixQuality({
@@ -1526,6 +2496,8 @@ export default function MusicPlayer({
           const hist = pushMixQualityHistory(snap, {
             outgoingTitle: outT,
             incomingTitle: inT,
+            outgoingTrackId: plan.outgoingTrackId,
+            incomingTrackId: plan.incomingTrackId,
             syncMode: autoDJConfigRef.current.syncMode,
             reason: plan.reason,
           })
@@ -1548,8 +2520,70 @@ export default function MusicPlayer({
       mixEngineRef.current = engine
     }
     mixEngineRef.current.setKeyLock(true)
-    mixEngineRef.current.setActiveDeck(playbackDeckRef.current === 'next' ? 'b' : 'a')
-    return mixEngineRef.current
+    const engine = mixEngineRef.current
+    if (engine.getActiveTrack()) {
+      // Follow the deck that is already playing — do not flip it back to A.
+      playbackDeckRef.current = engine.getActiveDeck() === 'b' ? 'next' : 'main'
+    } else {
+      engine.setActiveDeck(playbackDeckRef.current === 'next' ? 'b' : 'a')
+    }
+    return engine
+  }, [])
+
+  /** Keep the element audible when MixEngine isn't available to own the graph. */
+  const connectFallbackOutput = useCallback(() => {
+    const ctx = audioContextRef.current
+    const source = sourceNodeRef.current
+    if (!ctx || !source) return false
+    if (fallbackOutputRef.current) return true
+    try {
+      const gain = ctx.createGain()
+      gain.gain.value = 1
+      try {
+        source.disconnect()
+      } catch {
+        /* ignore */
+      }
+      source.connect(gain)
+      gain.connect(ctx.destination)
+      const an = analyserRef.current
+      if (an) {
+        try {
+          gain.connect(an)
+        } catch {
+          /* visualisation only */
+        }
+      }
+      fallbackOutputRef.current = gain
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  const teardownFallbackOutput = useCallback(() => {
+    const gain = fallbackOutputRef.current
+    if (!gain) return
+    const source = sourceNodeRef.current
+    // Disconnect MES from the orphan gain first — otherwise Chrome stalls the element
+    // (currentTime freezes, no error) with nowhere for samples to go.
+    if (source) {
+      try {
+        source.disconnect(gain)
+      } catch {
+        try {
+          source.disconnect()
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    try {
+      gain.disconnect()
+    } catch {
+      /* ignore */
+    }
+    fallbackOutputRef.current = null
   }, [])
 
   const attachEngineGraph = useCallback(() => {
@@ -1557,11 +2591,19 @@ export default function MusicPlayer({
     const source = sourceNodeRef.current
     if (!ctx || !source) return false
     const engine = ensureMixEngine()
-    if (!engine) return false
+    if (!engine) {
+      connectFallbackOutput()
+      return false
+    }
+    teardownFallbackOutput()
     engine.adoptExternalSourceA(source)
     const ok = engine.attachGraph(ctx)
+    if (!ok) {
+      connectFallbackOutput()
+      return false
+    }
     const an = analyserRef.current
-    if (an && ok) {
+    if (an) {
       try {
         an.disconnect()
       } catch {
@@ -1570,7 +2612,14 @@ export default function MusicPlayer({
       engine.connectDeckAnalyser('a', an)
     }
     return ok
-  }, [ensureMixEngine])
+  }, [ensureMixEngine, connectFallbackOutput, teardownFallbackOutput])
+
+  // `ensureMixEngine` can only return an engine once the lazy chunk has loaded,
+  // so re-attach from the load callback instead of leaving the fallback in place.
+  const attachEngineGraphRef = useRef<() => boolean>(() => false)
+  useEffect(() => {
+    attachEngineGraphRef.current = attachEngineGraph
+  }, [attachEngineGraph])
 
   useEffect(() => {
     if (audioRef.current) configureKeyLock(audioRef.current, true)
@@ -1581,11 +2630,29 @@ export default function MusicPlayer({
     if (seekTargetSec == null || !Number.isFinite(seekTargetSec)) return
     const audio = getPlaybackAudio()
     if (!audio) return
+    // iDJ same-deck load seeks once in applyIDJLiveTrack after canplay.
+    // Re-seeking here on every canplay aborts the buffer and flashes Buffering…
+    if (
+      isIDJEnabledRef.current &&
+      (idjDeckSkipLockRef.current || skipSrcReloadRef.current)
+    ) {
+      return
+    }
+    let applied = false
     const apply = () => {
+      if (applied) return
       try {
-        audio.currentTime = seekTargetSec
-        setCurrentTime(seekTargetSec)
-        reportPlaybackPosition(seekTargetSec)
+        const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : NaN
+        let target = seekTargetSec
+        // Wait for duration before clamping a non-zero restore seek.
+        if (target > 0.05 && !Number.isFinite(dur)) return
+        if (Number.isFinite(dur)) {
+          target = Math.min(Math.max(0, target), Math.max(0, dur - 0.05))
+        }
+        audio.currentTime = target
+        applied = true
+        setCurrentTime(target)
+        reportPlaybackPosition(target)
       } catch {
         /* ignore */
       }
@@ -1599,7 +2666,10 @@ export default function MusicPlayer({
       audio.removeEventListener('canplay', apply)
       window.clearTimeout(timer)
     }
-  }, [seekNonce, seekTargetSec, currentTrack, reportPlaybackPosition, getPlaybackAudio])
+    // Only seekNonce (and its target) may re-apply. currentTrack identity
+    // changes (catalog stamps, waveform_data, BPM patches) must not jump
+    // the playhead back to the last seek.
+  }, [seekNonce, seekTargetSec, reportPlaybackPosition, getPlaybackAudio])
 
   // Flush position on tab hide / unload so reload restores the last playhead
   useEffect(() => {
@@ -1634,6 +2704,25 @@ export default function MusicPlayer({
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
+  /**
+   * A MediaElementSource with no downstream node silently stalls the element
+   * (Chrome pulls one buffer, then `currentTime` freezes with no error), so this
+   * holds a direct-to-destination output whenever MixEngine can't take over.
+   */
+  const fallbackOutputRef = useRef<GainNode | null>(null)
+  /** After a hard MES/AC failure, skip Web Audio and play via HTMLMediaElement only. */
+  const htmlAudioOnlyRef = useRef(false)
+  const [audioElementEpoch, setAudioElementEpoch] = useState(0)
+  const pendingHtmlRestoreRef = useRef<{
+    resumeAt: number
+    wasPlaying: boolean
+    liveSrc: string
+    idleSrc: string
+  } | null>(null)
+  /** True once we've created MediaElementSource on the current audio epoch. */
+  const mesCreatedForEpochRef = useRef(false)
+  /** In-place reloads used against a transient AUDIO_RENDERER_ERROR on this track. */
+  const decodeReloadsRef = useRef(0)
   const [audioContextReady, setAudioContextReady] = useState(false)
   const frequencyDataArrayRef = useRef<Float32Array | null>(null)
   const timeDataArrayRef = useRef<Float32Array | null>(null)
@@ -1665,50 +2754,64 @@ export default function MusicPlayer({
       setWaveformHotCues([])
       return
     }
-    try {
-      const raw = localStorage.getItem('sergik-hotcues-v1')
-      const all = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {}
-      const map = all[currentTrack.id] || {}
-      const cues: WaveformHotCue[] = Object.entries(map)
-        .filter(([, t]) => typeof t === 'number' && Number.isFinite(t))
-        .map(([slot, timeSec]) => ({
-          id: `${currentTrack.id}-${slot}`,
-          timeSec,
-          label: slot,
+    syncWaveformHotCuesFromSlots(currentTrack.id, readHotCueSlots(currentTrack.id))
+  }, [currentTrack?.id])
+
+  useEffect(() => {
+    setIdjMemoryCues(readIDJMemoryCues())
+    const active = readIDJActiveCues()
+    idjActiveCuesRef.current = active
+    setIdjActiveCues(active)
+    setIdjConfig(readIDJConfigFromStorage())
+  }, [])
+
+  const patchIDJConfig = useCallback((patch: Partial<typeof idjConfig>) => {
+    setIdjConfig((prev) => {
+      const next = { ...prev, ...patch }
+      writeIDJConfigToStorage(next)
+      return next
+    })
+  }, [])
+
+  const [hotCueRevision, setHotCueRevision] = useState(0)
+
+  const syncWaveformHotCuesFromSlots = useCallback((trackId: string, slots: HotCueSlots) => {
+    setWaveformHotCues(
+      HOT_CUE_SLOTS.filter((slot) => typeof slots[slot] === 'number')
+        .map((slot) => ({
+          id: `${trackId}-${slot}`,
+          timeSec: slots[slot] as number,
+          label: String(slot),
           color: 'rgba(167, 139, 250, 0.95)',
         }))
-        .sort((a, b) => a.timeSec - b.timeSec)
-      setWaveformHotCues(cues)
-    } catch {
-      setWaveformHotCues([])
-    }
-  }, [currentTrack?.id])
+        .sort((a, b) => a.timeSec - b.timeSec),
+    )
+  }, [])
 
   const persistHotCue = useCallback(
     (slot: 1 | 2 | 3 | 4, timeSec: number) => {
       if (!currentTrack?.id || typeof window === 'undefined') return
-      try {
-        const raw = localStorage.getItem('sergik-hotcues-v1')
-        const all = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {}
-        const map = { ...(all[currentTrack.id] || {}) }
-        map[String(slot)] = timeSec
-        all[currentTrack.id] = map
-        localStorage.setItem('sergik-hotcues-v1', JSON.stringify(all))
-        setWaveformHotCues(
-          Object.entries(map)
-            .map(([s, t]) => ({
-              id: `${currentTrack.id}-${s}`,
-              timeSec: t,
-              label: s,
-              color: 'rgba(167, 139, 250, 0.95)',
-            }))
-            .sort((a, b) => a.timeSec - b.timeSec)
-        )
-      } catch {
-        /* ignore */
-      }
+      const bpm = currentTrack.bpm ?? 120
+      const snapped = idjConfig.snapToGrid
+        ? quantizePointerToVisibleGrid({
+            timeSec,
+            bpm,
+            offsetSec:
+              typeof currentTrack.beat_grid_offset === 'number' &&
+              Number.isFinite(currentTrack.beat_grid_offset)
+                ? currentTrack.beat_grid_offset
+                : 0,
+            visibleBars: waveformVisibleBars,
+            beatsPerBar: 4,
+            durationSec: currentTrack.duration,
+            sonicDna: currentTrack.sonic_dna,
+          })
+        : timeSec
+      const next = writeHotCueSlot(currentTrack.id, slot, snapped)
+      syncWaveformHotCuesFromSlots(currentTrack.id, next)
+      setHotCueRevision((n) => n + 1)
     },
-    [currentTrack?.id]
+    [currentTrack, waveformVisibleBars, idjConfig.snapToGrid, syncWaveformHotCuesFromSlots]
   )
 
   const jumpHotCue = useCallback(
@@ -1799,9 +2902,17 @@ export default function MusicPlayer({
   }, [getPlaybackAudio, isDeckHandoffActive])
 
   const trackIntroOffsetSec = useCallback((track: Track) => {
-    const o = Number((track as Track & { beat_grid_offset?: number }).beat_grid_offset)
-    if (Number.isFinite(o) && o >= 0 && o < 45) return o
-    return 0
+    return playbackGridPhaseSec(
+      track,
+      resolvePlaybackBpm(track, detectedBPMRef.current) ?? track.bpm,
+    )
+  }, [])
+
+  /** Auto DJ mix-in: selected memory cue, or track start when none is set. */
+  const resolveIncomingMixCueSec = useCallback((track: Track | null | undefined): number => {
+    if (!track?.id) return 0
+    const cue = idjMemoryCuesRef.current[track.id]
+    return typeof cue === 'number' && Number.isFinite(cue) && cue >= 0 ? cue : 0
   }, [])
 
   const teardownWebAudioOutput = useCallback(() => {
@@ -1811,6 +2922,12 @@ export default function MusicPlayer({
       // noop
     }
     sourceNodeRef.current = null
+    try {
+      fallbackOutputRef.current?.disconnect()
+    } catch {
+      // noop
+    }
+    fallbackOutputRef.current = null
     try {
       analyserRef.current?.disconnect()
     } catch {
@@ -1842,6 +2959,14 @@ export default function MusicPlayer({
 
     if (!mobile || !next || prev) return
     if (!sourceNodeRef.current && !audioContextRef.current) return
+
+    // A MES-bound element stays tied to its AudioContext for life, so it cannot be
+    // reused once we close that context. Remount instead — this also restores
+    // position and play state.
+    if (mesCreatedForEpochRef.current || sourceNodeRef.current) {
+      fallBackToHtmlAudioOnlyRef.current()
+      return
+    }
 
     const audio = audioRef.current
     const url = resolvedUrl
@@ -2080,41 +3205,14 @@ export default function MusicPlayer({
         Boolean(storageRel) &&
         storedWaveformLikelyStale(currentTrack.file || '', resolvedUrl)
       if (storageRel && !skipStaticTape) {
-        const jsonPath = staticWaveformJsonUrl(storageRel)
-        try {
-          const res = await fetch(jsonPath, { cache: 'force-cache' })
-          if (res.ok) {
-            const body = await res.json()
-            // Compact deploy format: { d: number[], e: [peak,rms,low,mid,high][] }
-            // Legacy: { data, envelopes: [{peak,rms,low,mid,high}] }
-            const data: number[] | undefined = Array.isArray(body?.d)
-              ? body.d
-              : Array.isArray(body?.data)
-                ? body.data
-                : undefined
-            let envelopes:
-              | { peak: number; rms: number; low: number; mid: number; high: number }[]
-              | undefined
-            if (Array.isArray(body?.e) && body.e.length > 0 && Array.isArray(body.e[0])) {
-              envelopes = body.e.map((row: number[]) => ({
-                peak: row[0] ?? 0,
-                rms: row[1] ?? 0,
-                low: row[2] ?? 0,
-                mid: row[3] ?? 0,
-                high: row[4] ?? 0,
-              }))
-            } else if (Array.isArray(body?.envelopes) && body.envelopes.length > 0) {
-              envelopes = body.envelopes
-            }
-            if (envelopes?.length) {
-              if (applyPeaks(data || [], envelopes)) return
-            }
-            if (data?.length) {
-              if (applyPeaks(data)) return
-            }
+        const tape = await fetchStaticWaveformTape(storageRel)
+        if (tape) {
+          if (tape.envelopes?.length) {
+            if (applyPeaks(tape.data, tape.envelopes)) return
           }
-        } catch {
-          // continue
+          if (tape.data.length) {
+            if (applyPeaks(tape.data)) return
+          }
         }
       }
 
@@ -2146,7 +3244,7 @@ export default function MusicPlayer({
       for (const url of candidates) {
         if (cancelled) return
         try {
-          const peakData = await generatePeakData(url, 2000)
+          const peakData = await generatePeakData(url, DEFAULT_WAVEFORM_BUCKETS)
           if (!peakData?.data?.length) continue
           setPlaybackWaveformCache(url, peakData)
           setPlaybackWaveformCache(resolvedUrl, peakData)
@@ -2160,6 +3258,7 @@ export default function MusicPlayer({
       }
     }
 
+    const networkWork = window.setTimeout(() => {
     void (async () => {
       // Don't mark processed until we have paint data — Strict Mode cancel must retry.
       if (processedWaveformTrackRef.current === trackKey && trackWaveformBaseRef.current.length >= 64) {
@@ -2178,6 +3277,8 @@ export default function MusicPlayer({
           (inlinePeaks.length > 0 && looksLikeSyntheticPeaks(inlinePeaks)))
 
       if (preferPlayback) {
+        await waitForComfortableBuffer()
+        if (cancelled) return
         await loadFromPlayback()
         if (!cancelled && trackWaveformBaseRef.current.length < 64) {
           await showStoredPlaceholder()
@@ -2189,15 +3290,18 @@ export default function MusicPlayer({
         // Stored peaks are authoritative on this branch — `preferPlayback` above
         // already claimed the stale/synthetic cases — so decoding again would
         // pull the whole file down a second time for an identical tape.
-        if (havePaintableTape && appliedEnvelopeDetail) return
-        if (havePaintableTape) await waitForComfortableBuffer()
+        if (havePaintableTape) return
+        if (isMiniMode && !isExpanded) return
+        await waitForComfortableBuffer()
         if (cancelled) return
         await loadFromPlayback()
       }
     })()
+    }, 280)
 
     return () => {
       cancelled = true
+      window.clearTimeout(networkWork)
     }
   }, [
     trackKey,
@@ -2206,6 +3310,9 @@ export default function MusicPlayer({
     commitTrackWaveform,
     currentTrack,
     waveformNetworkAllowed,
+    isMiniMode,
+    isExpanded,
+    waveformRescanNonce,
   ])
 
   // Ultra high-definition real-time waveform analysis with transient detection
@@ -2665,42 +3772,72 @@ export default function MusicPlayer({
       return
     }
 
-    // Sync normalize to media-proxy when possible — skip async resolve round-trip
-    const syncNormalized = normalizeVaultAudioUrl(currentTrack.file)
+    const trackFile = currentTrack.file
+    const syncNormalized =
+      toSameOriginMediaUrl(trackFile) || normalizeVaultAudioUrl(trackFile)
+
+    // iDJ already bound a playable URL onto the live element — don't flip
+    // isLoading or race a second resolve that rewrites src mid-buffer.
     if (
-      syncNormalized.startsWith('/api/audio/media/') ||
-      syncNormalized.startsWith('http://') ||
-      syncNormalized.startsWith('https://')
+      isIDJEnabledRef.current &&
+      (idjDeckSkipLockRef.current ||
+        skipSrcReloadRef.current ||
+        (lastBoundPlaybackRef.current.id === currentTrack.id &&
+          mediaUrlMatchesTrack(lastBoundPlaybackRef.current.url, trackFile)))
     ) {
-      setResolvedUrl(syncNormalized)
-      setIsLoading(false)
-      resolvedUrlCacheRef.current.set(currentTrack.file, syncNormalized)
-      return
-    }
-
-    // Check cache first
-    const cached = resolvedUrlCacheRef.current.get(currentTrack.file)
-    if (cached) {
-      setResolvedUrl(cached)
+      const bound = lastBoundPlaybackRef.current.url
+      if (bound) {
+        setResolvedUrl((prev) => (prev === bound ? prev : bound))
+      }
       setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
+    const cached = resolvedUrlCacheRef.current.get(trackFile)
+    const optimistic =
+      cached && isDirectPlayableUrl(cached) && !isEdgePlaybackUrl(cached)
+        ? cached
+        : isDirectPlayableUrl(syncNormalized)
+          ? syncNormalized
+          : null
+
+    if (optimistic) {
+      setResolvedUrl((prev) => (prev === optimistic ? prev : optimistic))
+    }
+
+    setIsLoading(!optimistic)
     setError(null)
     setRetryCount(0)
+    decodeReloadsRef.current = 0
     loggedErrorsRef.current.clear()
 
-    resolveAudioUrl(currentTrack.file).then(url => {
-      setResolvedUrl(url)
-      setIsLoading(false)
-      resolvedUrlCacheRef.current.set(currentTrack.file, url)
-    }).catch(err => {
-      console.error('Failed to resolve audio URL:', err)
-      setResolvedUrl(currentTrack.file)
-      setIsLoading(false)
-    })
-  }, [currentTrack])
+    let cancelled = false
+    resolveAudioUrl(trackFile)
+      .then((url) => {
+        if (cancelled) return
+        setResolvedUrl((prev) => (prev === url ? prev : url))
+        setIsLoading(false)
+        resolvedUrlCacheRef.current.set(trackFile, url)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Failed to resolve audio URL:', err)
+        const fallback = toSameOriginMediaUrl(trackFile) || syncNormalized
+        setResolvedUrl(fallback || trackFile)
+        setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentTrack?.id, currentTrack?.file])
+
+  // Prefer server-resolved extension (m4a vs mp3) over sync catalog guess.
+  const playbackUrl = useMemo(() => {
+    if (!currentTrack?.file) return null
+    if (resolvedUrl && mediaUrlMatchesTrack(resolvedUrl, currentTrack.file)) return resolvedUrl
+    return peekSyncPlaybackUrl(currentTrack.file, resolvedUrlCacheRef.current)
+  }, [currentTrack?.id, currentTrack?.file, resolvedUrl])
 
   // Batch resolve URLs for next tracks in queue (sync for media-proxy paths — no HEAD)
   useEffect(() => {
@@ -2719,12 +3856,9 @@ export default function MusicPlayer({
     const asyncNeeded: string[] = []
     for (const file of tracksToResolve) {
       const sync = normalizeVaultAudioUrl(file)
-      if (
-        sync.startsWith('/api/audio/media/') ||
-        sync.startsWith('http://') ||
-        sync.startsWith('https://')
-      ) {
-        resolvedUrlCacheRef.current.set(file, sync)
+      const playable = toSameOriginMediaUrl(file) || sync
+      if (!isR2BrowserPlayEnabled() && isDirectPlayableUrl(playable)) {
+        resolvedUrlCacheRef.current.set(file, playable)
       } else {
         asyncNeeded.push(file)
       }
@@ -2732,12 +3866,11 @@ export default function MusicPlayer({
 
     if (asyncNeeded.length === 0) return
 
-    Promise.all(asyncNeeded.map(file => resolveAudioUrl(file)))
-      .then(urls => {
-        asyncNeeded.forEach((file, idx) => {
-          if (urls[idx]) {
-            resolvedUrlCacheRef.current.set(file, urls[idx])
-          }
+    resolveAudioUrls(asyncNeeded)
+      .then((urls) => {
+        asyncNeeded.forEach((file) => {
+          const url = urls.get(file)
+          if (url) resolvedUrlCacheRef.current.set(file, url)
         })
       })
       .catch(err => {
@@ -2749,6 +3882,12 @@ export default function MusicPlayer({
   useEffect(() => {
     if (!currentTrack || !queue.length) return
     if (phraseMixLockRef.current) return
+    if (isIDJEnabledRef.current) return
+    if (isLoading) return
+    if (Date.now() - trackSwitchAtRef.current < 800) return
+
+    const live = audioRef.current
+    if (live && isPlaying && live.readyState < 2) return
 
     const currentIndex = queue.findIndex((track) => track.id === currentTrack.id)
     if (currentIndex === -1) return
@@ -2759,6 +3898,9 @@ export default function MusicPlayer({
     const nextIndex = currentIndex + 1
     if (nextIndex < queue.length) {
       const nextTrack = queue[nextIndex]
+      if (isIDJEnabledRef.current && idjIdleTrackIdRef.current) {
+        return
+      }
       // Don't overwrite an already-cued Auto DJ idle load
       if (cuedIdleTrackIdRef.current === nextTrack.id) return
 
@@ -2767,7 +3909,7 @@ export default function MusicPlayer({
         if (!url || phraseMixLockRef.current) return
         const idle = getIdleAudio()
         if (!idle) return
-        if (idle.src === url || (idle.src && url && idle.src.includes(url.split('?')[0].slice(-40)))) {
+        if (mediaUrlsRoughlyEqual(idle.currentSrc || idle.src, url)) {
           return
         }
         idle.src = url
@@ -2780,12 +3922,9 @@ export default function MusicPlayer({
         resolvedUrlCacheRef.current.set(nextTrack.file, url)
       }
 
-      if (
-        syncUrl.startsWith('/api/audio/media/') ||
-        syncUrl.startsWith('http://') ||
-        syncUrl.startsWith('https://')
-      ) {
-        applyIdleSrc(syncUrl)
+      const playable = toSameOriginMediaUrl(nextTrack.file) || syncUrl
+      if (!isR2BrowserPlayEnabled() && isDirectPlayableUrl(playable)) {
+        applyIdleSrc(playable)
         return
       }
 
@@ -2795,7 +3934,7 @@ export default function MusicPlayer({
           console.debug('Failed to preload next track:', err)
         })
     }
-  }, [currentTrack, queue, getIdleAudio])
+  }, [currentTrack, queue, getIdleAudio, isLoading, isPlaying])
 
   // Preload next tracks in queue using Service Worker (keep shallow — deep preload
   // was HEADing/GETting 5 R2 objects and starving the live play request).
@@ -2807,7 +3946,7 @@ export default function MusicPlayer({
     if (currentIndex === -1) return
     
     const tracksToPreload = queue
-      .slice(currentIndex + 1, currentIndex + 2)
+      .slice(currentIndex + 1, currentIndex + 4)
       .map(track => track.file)
       .filter(Boolean)
     
@@ -2816,21 +3955,18 @@ export default function MusicPlayer({
       const cache = resolvedUrlCacheRef.current
       const resolved = tracksToPreload.map((file) => {
         const cached = cache.get(file)
-        if (cached) return cached
-        const sync = normalizeVaultAudioUrl(file)
-        if (
-          sync.startsWith('/api/audio/media/') ||
-          sync.startsWith('http://') ||
-          sync.startsWith('https://')
-        ) {
-          cache.set(file, sync)
-          return sync
+        if (cached && isDirectPlayableUrl(cached)) return cached
+        const playable = toSameOriginMediaUrl(file) || normalizeVaultAudioUrl(file)
+        if (!isR2BrowserPlayEnabled() && isDirectPlayableUrl(playable)) {
+          cache.set(file, playable)
+          return playable
         }
         return null
       })
       const needAsync = tracksToPreload.filter((_, i) => !resolved[i])
       const finish = (urls: string[]) => {
-        if (urls.length) preloadTracks(urls)
+        const playable = urls.filter((url) => isDirectPlayableUrl(url))
+        if (playable.length) preloadTracks(playable)
       }
       if (needAsync.length === 0) {
         finish(resolved.filter(Boolean) as string[])
@@ -2854,67 +3990,78 @@ export default function MusicPlayer({
 
   // Setup audio analysis - must be accessible from both useEffect and togglePlay
   // This should only be called after user interaction (e.g., when playing)
+  const needsWebAudioGraph = useCallback(() => {
+    return (
+      isIDJEnabledRef.current ||
+      autoDJConfigRef.current.enabled ||
+      Boolean(mixEngineRef.current?.isMixing())
+    )
+  }, [])
+
   const setupAudioAnalysis = useCallback(async () => {
     const audio = audioRef.current
     if (!audio) return
+    if (htmlAudioOnlyRef.current) return
     if (
       prefersMediaElementBackgroundPlayback() &&
       settingsRef.current.prioritizeBackgroundPlayback
     ) {
       return
     }
+    // Normal library play must stay on HTMLMediaElement → speakers.
+    // Opening AudioContext here triggers "audio device or WebAudio renderer"
+    // errors on some machines and can stall playback.
+    if (!needsWebAudioGraph()) return
 
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
       }
-      
+
       const audioContext = audioContextRef.current
-      
-      // Resume AudioContext if suspended (required after user interaction)
+
       if (audioContext.state === 'suspended') {
         try {
           await audioContext.resume()
         } catch (resumeError: any) {
-          // If resume fails, it's likely because we're not in a user gesture context
-          // This is okay - it will be resumed when user actually plays
           if (resumeError.name !== 'InvalidStateError') {
             if (process.env.NODE_ENV === 'development') {
               console.warn('AudioContext resume failed (will retry on play):', resumeError)
             }
           }
-          return // Exit early if we can't resume
+          return
         }
       }
-      
-      // Only create source node if it doesn't exist
-      // You can only create one MediaElementSourceNode per audio element
+
+      await loadMixEngineClass().catch(() => null)
+
       if (!sourceNodeRef.current) {
         try {
           const source = audioContext.createMediaElementSource(audio)
           sourceNodeRef.current = source
+          mesCreatedForEpochRef.current = true
         } catch (error: any) {
-          // If source already exists, the audio element was already connected
-          // This is okay - we'll reuse the existing connections
           if (error.name !== 'InvalidStateError') {
             throw error
           }
+          // Element is already MES-bound (often a stale HMR node). Remount to
+          // restore the HTML → speakers path.
+          fallBackToHtmlAudioOnlyRef.current()
+          return
         }
       }
-      
-      // Disconnect existing analyser connections
+
       if (analyserRef.current) {
         try {
           analyserRef.current.disconnect()
-        } catch (e) {
-          // Already disconnected
+        } catch {
+          /* already disconnected */
         }
       }
-      
+
       const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 8192 // 4096 frequency bins (~5.4 Hz/bin at 44.1kHz) — sufficient for transient detection
+      analyser.fftSize = 8192
       analyser.smoothingTimeConstant = 0
-      
       analyserRef.current = analyser
       frequencyDataArrayRef.current = new Float32Array(analyser.frequencyBinCount)
       timeDataArrayRef.current = new Float32Array(analyser.fftSize)
@@ -2923,14 +4070,20 @@ export default function MusicPlayer({
       attachEngineGraph()
       setAudioContextReady(true)
     } catch (error) {
+      htmlAudioOnlyRef.current = true
       if (process.env.NODE_ENV === 'development') {
-        console.error('Error setting up audio analysis:', error)
+        console.warn('Web Audio unavailable — staying on HTML playback:', error)
       }
     }
-  }, [attachEngineGraph])
+  }, [attachEngineGraph, needsWebAudioGraph])
+  const setupAudioAnalysisRef = useRef(setupAudioAnalysis)
+  setupAudioAnalysisRef.current = setupAudioAnalysis
 
   /** Wire both decks through MixEngine (symmetric EQ/filter/gain chains). */
   const ensureDualDeckGraph = useCallback(async () => {
+    if (htmlAudioOnlyRef.current || !needsWebAudioGraph()) {
+      return mixEngineRef.current
+    }
     try {
       await setupAudioAnalysis()
     } catch {
@@ -2938,7 +4091,164 @@ export default function MusicPlayer({
     }
     attachEngineGraph()
     return mixEngineRef.current
-  }, [setupAudioAnalysis, attachEngineGraph])
+  }, [setupAudioAnalysis, attachEngineGraph, needsWebAudioGraph])
+
+  /** Unstick a MediaElementSource that lost its path to the destination. */
+  const recoverAudibleGraph = useCallback(() => {
+    const live = getPlaybackAudio()
+    if (htmlAudioOnlyRef.current || !needsWebAudioGraph()) {
+      if (live && live.paused && isPlayingRef.current) void live.play().catch(() => {})
+      return
+    }
+    const ctx = audioContextRef.current
+    const source = sourceNodeRef.current
+    if (ctx && (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted')) {
+      void ctx.resume().catch(() => {})
+    }
+    if (!ctx || !source) {
+      void ensureDualDeckGraph().then(() => {
+        if (live && live.paused && isPlayingRef.current) void live.play().catch(() => {})
+      })
+      return
+    }
+    teardownFallbackOutput()
+    const engine = mixEngineRef.current
+    if (engine) {
+      engine.adoptExternalSourceA(source)
+      const reattached = engine.attachGraph(ctx)
+      const forced = engine.forceReconnectMediaSources()
+      if (!reattached && !forced) {
+        connectFallbackOutput()
+      }
+    } else {
+      connectFallbackOutput()
+    }
+    if (live && live.paused && isPlayingRef.current) {
+      void live.play().catch(() => {})
+    }
+  }, [
+    connectFallbackOutput,
+    teardownFallbackOutput,
+    ensureDualDeckGraph,
+    getPlaybackAudio,
+    needsWebAudioGraph,
+  ])
+  const recoverAudibleGraphRef = useRef(recoverAudibleGraph)
+  recoverAudibleGraphRef.current = recoverAudibleGraph
+
+  /**
+   * Last-resort: MES is bound to a dead AudioContext (device error). Remount
+   * both <audio> elements and stay on the HTML output path.
+   */
+  const fallBackToHtmlAudioOnly = useCallback(() => {
+    if (htmlAudioOnlyRef.current) return
+    htmlAudioOnlyRef.current = true
+    mesCreatedForEpochRef.current = false
+    const live = getPlaybackAudio()
+    const resumeAt = live && Number.isFinite(live.currentTime) ? live.currentTime : 0
+    const wasPlaying = isPlayingRef.current
+    const liveSrc = live?.currentSrc || live?.src || ''
+    const idle = getIdleAudio()
+    const idleSrc = idle?.currentSrc || idle?.src || ''
+
+    teardownFallbackOutput()
+    sourceNodeRef.current = null
+    analyserRef.current = null
+    try {
+      audioContextRef.current?.close()
+    } catch {
+      /* ignore */
+    }
+    audioContextRef.current = null
+    setAudioContextReady(false)
+    mixEngineRef.current = null
+    // Force the media bind effect to re-assign src onto the new elements.
+    lastBoundPlaybackRef.current = { id: '', url: '' }
+    pendingHtmlRestoreRef.current = {
+      resumeAt,
+      wasPlaying,
+      liveSrc,
+      idleSrc,
+    }
+
+    setAudioElementEpoch((n) => n + 1)
+  }, [getPlaybackAudio, getIdleAudio, teardownFallbackOutput])
+  const fallBackToHtmlAudioOnlyRef = useRef(fallBackToHtmlAudioOnly)
+  fallBackToHtmlAudioOnlyRef.current = fallBackToHtmlAudioOnly
+
+  // One-shot remount after mount — clears MediaElementSource left on the DOM
+  // from a previous HMR / dead AudioContext (element stays bound for its life).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (audioElementEpoch > 0) return
+    const live = audioRef.current
+    const liveSrc = live?.currentSrc || live?.src || ''
+    // Remounting swaps in fresh <audio> nodes, so running this blind tears down
+    // a deck that is already streaming: the element is emptied mid-track, the
+    // replacement re-buffers from cold, and Chromium raises
+    // AUDIO_RENDERER_ERROR on the discarded renderer. An element that is
+    // already playing demonstrably has no dead MediaElementSource to clear, and
+    // setupAudioAnalysis still remounts reactively if binding ever throws
+    // InvalidStateError — so skip the pre-emptive pass entirely.
+    if (liveSrc || isPlayingRef.current) return
+    const idle = nextAudioRef.current
+    const idleSrc = idle?.currentSrc || idle?.src || ''
+    pendingHtmlRestoreRef.current = {
+      resumeAt: live && Number.isFinite(live.currentTime) ? live.currentTime : 0,
+      wasPlaying: false,
+      liveSrc,
+      idleSrc,
+    }
+    mesCreatedForEpochRef.current = false
+    setAudioElementEpoch(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, [])
+
+  // After remounting <audio> for HTML-only recovery, restore src / seek / play.
+  useEffect(() => {
+    if (audioElementEpoch === 0) return
+    const pending = pendingHtmlRestoreRef.current
+    pendingHtmlRestoreRef.current = null
+    if (!pending) return
+
+    const main = audioRef.current
+    const next = nextAudioRef.current
+    const url = playbackUrl || pending.liveSrc
+    if (main && url) {
+      try {
+        if (assignMediaSrcIfChanged(main, url) || !(main.currentSrc || main.src)) {
+          main.src = url
+        }
+        main.volume = settingsRef.current.isMuted ? 0 : settingsRef.current.volume
+        const seek = () => {
+          try {
+            if (pending.resumeAt > 0.05 && Number.isFinite(main.duration)) {
+              main.currentTime = Math.min(pending.resumeAt, Math.max(0, main.duration - 0.05))
+            } else if (pending.resumeAt > 0.05) {
+              main.currentTime = pending.resumeAt
+            }
+          } catch {
+            /* ignore */
+          }
+          if (pending.wasPlaying || isPlayingRef.current) {
+            void main.play().catch(() => {})
+          }
+        }
+        if (main.readyState >= 1) seek()
+        else main.addEventListener('loadedmetadata', seek, { once: true })
+      } catch {
+        /* ignore */
+      }
+    }
+    if (next && pending.idleSrc) {
+      try {
+        if (next.src !== pending.idleSrc) next.src = pending.idleSrc
+        next.volume = 0
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [audioElementEpoch, playbackUrl])
 
   // Media Session API for background playback and lock screen controls
   useEffect(() => {
@@ -2951,7 +4261,7 @@ export default function MusicPlayer({
       title: currentTrack.title,
       artist: currentTrack.artist,
       album: currentTrack.album || currentTrack.folder || 'SERGIK',
-      artwork: buildLockScreenArtwork(coverSrc || currentTrack.artwork),
+      artwork: buildLockScreenArtwork(lockScreenSrc || currentTrack.artwork),
     })
 
     // Handle play action from lock screen/notification
@@ -2967,6 +4277,7 @@ export default function MusicPlayer({
     mediaSession.setActionHandler('pause', () => {
       const live = getPlaybackAudio()
       if (live && isPlaying) {
+        mixEngineRef.current?.pauseActiveClock()
         live.pause()
         setIsPlaying(false)
       }
@@ -2982,7 +4293,7 @@ export default function MusicPlayer({
     // Handle previous track
     mediaSession.setActionHandler('previoustrack', () => {
       if (queue.length > 1) {
-        onPrevious()
+        skipToPreviousRef.current()
       }
     })
 
@@ -2991,7 +4302,11 @@ export default function MusicPlayer({
       const live = getPlaybackAudio()
       if (live) {
         const skipTime = details.seekOffset || 10
-        live.currentTime = Math.max(0, live.currentTime - skipTime)
+        const engine = mixEngineRef.current
+        const now = engine?.hasBufferClock() ? engine.getActiveMediaTime() : live.currentTime
+        const next = Math.max(0, now - skipTime)
+        if (engine?.hasBufferClock()) engine.seekActiveMedia(next)
+        else live.currentTime = next
       }
     })
 
@@ -3000,7 +4315,11 @@ export default function MusicPlayer({
       const live = getPlaybackAudio()
       if (live && duration) {
         const skipTime = details.seekOffset || 10
-        live.currentTime = Math.min(duration, live.currentTime + skipTime)
+        const engine = mixEngineRef.current
+        const now = engine?.hasBufferClock() ? engine.getActiveMediaTime() : live.currentTime
+        const next = Math.min(duration, now + skipTime)
+        if (engine?.hasBufferClock()) engine.seekActiveMedia(next)
+        else live.currentTime = next
       }
     })
 
@@ -3014,7 +4333,10 @@ export default function MusicPlayer({
           typeof details.seekTime === 'number' &&
           Number.isFinite(details.seekTime)
         ) {
-          live.currentTime = Math.max(0, Math.min(duration, details.seekTime))
+          const t = Math.max(0, Math.min(duration, details.seekTime))
+          const engine = mixEngineRef.current
+          if (engine?.hasBufferClock()) engine.seekActiveMedia(t)
+          else live.currentTime = t
         }
       })
     } catch {
@@ -3028,8 +4350,7 @@ export default function MusicPlayer({
     // would tear this effect down ~10×/sec and re-register every handler.
     const updatePositionState = () => {
       const live = getPlaybackAudio()
-      const position =
-        live && Number.isFinite(live.currentTime) ? live.currentTime : autoDJCurrentTimeRef.current
+      const position = readLiveMediaTime() || autoDJCurrentTimeRef.current
       const liveDuration =
         live && Number.isFinite(live.duration) && live.duration > 0 ? live.duration : duration
       if (live && liveDuration > 0 && 'setPositionState' in mediaSession) {
@@ -3069,7 +4390,7 @@ export default function MusicPlayer({
       clear('seekforward')
       clear('seekto')
     }
-  }, [currentTrack, coverSrc, isPlaying, duration, queue.length, onNext, onPrevious, getPlaybackAudio])
+  }, [currentTrack, lockScreenSrc, isPlaying, duration, queue.length, onNext, onPrevious, getPlaybackAudio])
 
   // If the browser pauses the element when the screen locks, resume when visible again.
   useEffect(() => {
@@ -3092,18 +4413,29 @@ export default function MusicPlayer({
   // Audio element setup and event handlers - only when track changes
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !currentTrack || !resolvedUrl) return
+    const activeUrl = playbackUrl
+    if (!audio || !currentTrack || !activeUrl) return
 
     const handleError = (e: Event) => {
       const audio = e.target as HTMLAudioElement
       const isDevelopment = process.env.NODE_ENV === 'development'
+
+      // iDJ owns the live element during same-deck load — never audio.load() here.
+      if (
+        isIDJEnabledRef.current &&
+        (idjDeckSkipLockRef.current || skipSrcReloadRef.current || srcSwapRef.current)
+      ) {
+        return
+      }
       
       // Only log error once per URL to reduce console spam
       const errorKey = resolvedUrl || currentTrack?.file || 'unknown'
       const hasLogged = loggedErrorsRef.current.has(errorKey)
       
+      const mediaErrorCode = audio?.error?.code
+
       // Check for 544 error (Supabase Storage file not found or timeout)
-      const is544Error = audio?.error?.code === 2 || // MEDIA_ERR_NETWORK
+      const is544Error = mediaErrorCode === MEDIA_ERR_NETWORK ||
         (resolvedUrl?.includes('supabase.co') && audio?.networkState === 3) // NO_SOURCE
       
       if (!hasLogged) {
@@ -3114,120 +4446,228 @@ export default function MusicPlayer({
             console.warn(`Audio file not found or timeout (544): ${resolvedUrl}`)
             console.warn('This usually means the file doesn\'t exist in Supabase Storage or the file is too large.')
           } else {
-            console.error('Audio loading error:', e)
+            // Format/extension retries are expected (m4a↔mp3); don't scream.
+            if (mediaErrorCode === MEDIA_ERR_SRC_NOT_SUPPORTED || retryCount < 2) {
+              console.warn('Audio loading error:', {
+                code: mediaErrorCode,
+                message: audio?.error?.message,
+                src: (audio?.currentSrc || resolvedUrl || '').slice(-80),
+              })
+            } else {
+              console.error('Audio loading error:', e)
+            }
           }
         }
       }
-      
-      // Retry mechanism
-      if (retryCount < 2) {
+
+      // createMediaElementSource() binds an element to one AudioContext for the
+      // element's lifetime. Once that context closes (deck teardown, background
+      // playback switch), the element can never render again and every load fails
+      // with MEDIA_ERR_DECODE / AUDIO_RENDERER_ERROR. No src can fix that — remount
+      // onto a fresh, unbound element.
+      if (
+        mediaErrorCode === MEDIA_ERR_DECODE &&
+        (mesCreatedForEpochRef.current || sourceNodeRef.current) &&
+        !htmlAudioOnlyRef.current
+      ) {
+        fallBackToHtmlAudioOnlyRef.current()
+        return
+      }
+
+      // Chromium reports AUDIO_RENDERER_ERROR as MEDIA_ERR_DECODE, but it is an
+      // output-renderer failure, not a codec one: readyState is HAVE_ENOUGH_DATA
+      // and the very same element plays the very same URL after a plain load().
+      // It has no MediaElementSource to blame, so the remount above never fires
+      // and nothing else retries a decode error — the track just dies. Reload in
+      // place a couple of times before surfacing an error.
+      if (mediaErrorCode === MEDIA_ERR_DECODE && decodeReloadsRef.current < MAX_DECODE_RELOADS) {
+        const attempt = decodeReloadsRef.current + 1
+        decodeReloadsRef.current = attempt
+        const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
+        const wasPlaying = isPlayingRef.current
         setTimeout(() => {
-          setRetryCount(prev => prev + 1)
-          
-          const alt =
-            (resolvedUrl && alternateAudioExtensionUrl(resolvedUrl)) ||
-            (currentTrack.file && alternateAudioExtensionUrl(currentTrack.file))
-          // Prefer .mp3↔.wav on same-origin / media proxy (R2 may only have one form).
-          const altIsSameOrigin =
-            Boolean(alt) &&
-            !alt!.startsWith('http://') &&
-            !alt!.startsWith('https://')
-          if (alt && audio.src !== alt && altIsSameOrigin) {
-            audio.src = alt
-            setResolvedUrl(alt)
-            if (currentTrack.file) {
-              resolvedUrlCacheRef.current.set(currentTrack.file, alt)
-            }
-            audio.load()
-          } else if (
-            isDevelopment &&
-            resolvedUrl &&
-            (resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://')) &&
-            currentTrack.file !== resolvedUrl
+          if (
+            isIDJEnabledRef.current &&
+            (idjDeckSkipLockRef.current || skipSrcReloadRef.current || srcSwapRef.current)
           ) {
-            audio.src = currentTrack.file
+            return
+          }
+          if (!audio.isConnected) return
+          try {
             audio.load()
-          } else if (resolvedUrl === currentTrack.file) {
-            audio.load()
-          } else if (isDevelopment) {
-            audio.src = currentTrack.file
-            audio.load()
-          } else {
-            audio.load()
+            if (resumeAt > 0) audio.currentTime = resumeAt
+            if (wasPlaying) void audio.play().catch(() => {})
+          } catch {
+            /* the error handler will fire again and fall through to the message */
+          }
+        }, 300 * attempt)
+        return
+      }
+
+      // Only a missing or unsupported source can be fixed by another extension. A
+      // decode failure means we fetched the right bytes and could not render them.
+      const canRetryExtension =
+        mediaErrorCode == null ||
+        mediaErrorCode === MEDIA_ERR_NETWORK ||
+        mediaErrorCode === MEDIA_ERR_SRC_NOT_SUPPORTED
+      const extensionCandidates = canRetryExtension
+        ? mediaUrlExtensionCandidates(currentTrack.file, resolvedUrl || activeUrl)
+        : []
+      const maxRetries = Math.max(0, extensionCandidates.length - 1)
+
+      // Retry mechanism — assign src only; never call load() (aborts in-flight fetch).
+      if (retryCount < maxRetries) {
+        setTimeout(() => {
+          if (
+            isIDJEnabledRef.current &&
+            (idjDeckSkipLockRef.current || skipSrcReloadRef.current || srcSwapRef.current)
+          ) {
+            return
+          }
+          const nextAttempt = retryCount + 1
+          setRetryCount(nextAttempt)
+
+          const nextUrl = extensionCandidates[nextAttempt]
+          if (nextUrl && assignMediaSrcIfChanged(audio, nextUrl)) {
+            setResolvedUrl(nextUrl)
+            if (currentTrack.file) {
+              resolvedUrlCacheRef.current.set(currentTrack.file, nextUrl)
+            }
+            return
+          }
+
+          const proxy = toSameOriginMediaUrl(resolvedUrl || currentTrack.file)
+          if (
+            proxy &&
+            assignMediaSrcIfChanged(audio, proxy) &&
+            (isEdgePlaybackUrl(resolvedUrl || '') || !isDirectPlayableUrl(resolvedUrl || ''))
+          ) {
+            setResolvedUrl(proxy)
+            if (currentTrack.file) {
+              resolvedUrlCacheRef.current.set(currentTrack.file, proxy)
+            }
           }
         }, 500 * (retryCount + 1))
       } else {
         // After retries failed, show appropriate error message
         let errorMsg = ''
         if (is544Error) {
-          errorMsg = isDevelopment 
-            ? `File not found in Supabase Storage: ${resolvedUrl?.split('/').pop() || 'unknown file'}`
-            : 'Audio file not found in Supabase Storage. Please ensure the file is uploaded.'
+          errorMsg = isDevelopment
+            ? `Media file not found: ${resolvedUrl?.split('/').pop() || 'unknown file'}`
+            : 'Audio file not found. Check vault upload or R2 sync.'
+        } else if (mediaErrorCode === MEDIA_ERR_DECODE) {
+          // Chromium reports a failure to start the system audio output with the
+          // same code as a genuine decode failure. AUDIO_RENDERER_ERROR means the
+          // bytes decoded fine and the output device refused the stream, so
+          // blaming the file sends anyone debugging this the wrong way.
+          errorMsg = /AUDIO_RENDERER_ERROR/i.test(audio.error?.message || '')
+            ? 'Your system audio output refused to start. Check the output device in Sound settings, then reload.'
+            : isDevelopment
+              ? 'Audio decode failed. The file downloaded but the renderer rejected it.'
+              : 'This track could not be played. Try another track or refresh the page.'
         } else {
-          errorMsg = isDevelopment 
-            ? 'Failed to load audio. Please check if the file exists.'
-            : 'Failed to load audio from Supabase. Please ensure the file is uploaded to Supabase Storage.'
+          errorMsg = isDevelopment
+            ? 'Failed to load audio. Check /api/audio/media and file extension (mp3/m4a/wav).'
+            : 'Failed to load audio. Try another track or refresh the page.'
         }
         setError(errorMsg)
         setIsPlaying(false)
       }
     }
 
+    let liveEl =
+      playbackDeckRef.current === 'next' && nextAudioRef.current
+        ? nextAudioRef.current
+        : audio
+
+    let bufferingUiTimer: ReturnType<typeof setTimeout> | null = null
+    const clearBufferingUiTimer = () => {
+      if (bufferingUiTimer) {
+        clearTimeout(bufferingUiTimer)
+        bufferingUiTimer = null
+      }
+    }
+
     const handleLoadStart = () => {
+      // Intentional skip/src swap: never flip isLoading. That paused the
+      // element (play effect) and retriggered load() — the reload/buffer loop.
+      if (srcSwapRef.current) return
+      if (idjDeckSkipLockRef.current || skipSrcReloadRef.current) return
+      if (Date.now() < idjIgnoreBufferUiUntilRef.current) return
+      if (liveEl.readyState >= 3 && !liveEl.paused) return
       setIsBuffering(true)
-      setIsLoading(true)
     }
 
     const handleCanPlay = () => {
+      // During an iDJ same-deck load, applyIDJLiveTrack owns seek → play →
+      // lock release. Playing here first caused a 0:00 blip then a seek jump.
+      const idjLoading =
+        isIDJEnabledRef.current &&
+        (idjDeckSkipLockRef.current || skipSrcReloadRef.current)
+      if (!idjLoading) {
+        srcSwapRef.current = false
+      }
+      armIdjEnded('live')
+      clearBufferingUiTimer()
       setIsBuffering(false)
       setIsLoading(false)
       setError(null)
-      // Don't setup audio analysis here - wait for user interaction
-      // AudioContext will be created when user actually plays audio
+      if (idjLoading) return
+      if (isPlayingRef.current && liveEl.paused && !mixEngineRef.current?.hasBufferClock()) {
+        void liveEl.play().catch(() => {})
+      }
     }
 
     const handleWaiting = () => {
-      setIsBuffering(true)
+      if (srcSwapRef.current) return
+      if (idjDeckSkipLockRef.current || skipSrcReloadRef.current) return
+      if (Date.now() < idjIgnoreBufferUiUntilRef.current) return
+      if (bufferingUiTimer) return
+      bufferingUiTimer = setTimeout(() => {
+        bufferingUiTimer = null
+        if (srcSwapRef.current || liveEl.paused) return
+        if (idjDeckSkipLockRef.current || skipSrcReloadRef.current) return
+        if (Date.now() < idjIgnoreBufferUiUntilRef.current) return
+        setIsBuffering(true)
+      }, BUFFERING_UI_DELAY_MS)
     }
 
-    let stallRecoveryTimer: NodeJS.Timeout | null = null
+    let stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null
     const handleStalled = () => {
-      if (!isPlaying || audio.paused) return
-      // Retry play first — `load()` resets the buffer and often makes a
-      // bandwidth-contended stall worse when waveform/preload fetches are live.
+      if (!isPlaying || liveEl.paused) return
+      if (stallRecoveryTimer) return
+      // Never `load()` here — that dumps the buffer and restarts the track.
+      const frozenAt = liveEl.currentTime
       stallRecoveryTimer = setTimeout(() => {
-        if (audio.paused || !isPlaying) return
-        audio.play().catch(() => {
-          const t = audio.currentTime
-          audio.load()
-          const onReloaded = () => {
-            audio.removeEventListener('loadeddata', onReloaded)
-            try {
-              audio.currentTime = t
-            } catch {
-              /* ignore */
-            }
-            audio.play().catch(() => {})
-          }
-          audio.addEventListener('loadeddata', onReloaded)
-        })
+        stallRecoveryTimer = null
+        if (liveEl.paused || !isPlaying) return
+        if (Math.abs(liveEl.currentTime - frozenAt) > 0.2) return
+        recoverAudibleGraphRef.current()
+        liveEl.play().catch(() => {})
       }, 4000)
     }
 
+    // (Freeze watchdog lives in a separate effect — this one rebinds too often
+    // when parent callbacks change and would never accumulate stuck ticks.)
+
     const handlePlaying = () => {
+      if (!(isIDJEnabledRef.current && (idjDeckSkipLockRef.current || skipSrcReloadRef.current))) {
+        srcSwapRef.current = false
+      }
       if (stallRecoveryTimer) {
         clearTimeout(stallRecoveryTimer)
         stallRecoveryTimer = null
       }
+      clearBufferingUiTimer()
       setIsBuffering(false)
-      // AudioContext should already be set up from togglePlay, but ensure it's ready
-      if (!audioContextRef.current || !sourceNodeRef.current) {
-        setupAudioAnalysis().catch(err => {
-          // Silently handle errors - AudioContext may not be available yet
-          if (err.name !== 'NotAllowedError' && err.name !== 'InvalidStateError') {
-            console.error('Failed to setup audio analysis on play:', err)
-          }
-        })
+      setIsLoading(false)
+      // Only open Web Audio when iDJ / Auto DJ actually needs the mix graph.
+      if (
+        !htmlAudioOnlyRef.current &&
+        (isIDJEnabledRef.current || autoDJConfigRef.current.enabled) &&
+        (!audioContextRef.current || !sourceNodeRef.current)
+      ) {
+        setupAudioAnalysisRef.current().catch(() => {})
       }
       
       // Track play event when audio actually starts playing
@@ -3240,84 +4680,104 @@ export default function MusicPlayer({
 
 
 
-    // Set preload strategy based on buffer size setting
-    audio.preload = getPreloadStrategy()
+    audio.preload = 'auto'
 
-    // Mixer handoff: incoming deck already playing — do not reload main src
-    if (
-      skipSrcReloadRef.current ||
-      isDeckHandoffActive(currentTrack?.id) ||
-      mixEngineRef.current?.isMixing()
-    ) {
-      skipSrcReloadRef.current = false
-      const live =
-        playbackDeckRef.current === 'next' ? nextAudioRef.current : audioRef.current
-      liveAudioRef.current = live
-      if (live) {
-        // Don't touch gains/volume here — MixEngine faders already own the handoff.
-        // Volume snaps after mix were a common end-glitch source.
-        const vol = settingsRef.current.isMuted ? 0 : settingsRef.current.volume
+    const engineLive = mixEngineRef.current
+    const live = getPlaybackAudio() || audio
+    liveEl = live
+    liveAudioRef.current = live
+    const liveSrcMatches = mediaUrlsRoughlyEqual(live.currentSrc || live.src, activeUrl)
+    const liveMatchesTrack = mediaUrlMatchesTrack(live.currentSrc || live.src, currentTrack.file)
+    const alreadyBound =
+      lastBoundPlaybackRef.current.id === currentTrack.id &&
+      (lastBoundPlaybackRef.current.url === activeUrl ||
+        mediaUrlsRoughlyEqual(lastBoundPlaybackRef.current.url, activeUrl) ||
+        liveMatchesTrack) &&
+      (liveSrcMatches || liveMatchesTrack)
+    const idjOwnsLive =
+      isIDJEnabledRef.current &&
+      (idjDeckSkipLockRef.current || skipSrcReloadRef.current)
+
+    if (idjOwnsLive || liveSrcMatches || alreadyBound) {
+      // While iDJ owns the live element, do not drop skipSrcReload here — the
+      // canplay handler (or applyIDJLiveTrack safety timeout) owns release.
+      if (!idjOwnsLive) {
+        skipSrcReloadRef.current = false
+      }
+      lastBoundPlaybackRef.current = { id: currentTrack.id, url: activeUrl }
+      if (engineLive?.getActiveTrack()?.id === currentTrack.id) {
+        playbackDeckRef.current = engineLive.getActiveDeck() === 'b' ? 'next' : 'main'
+      }
+      const syncKey = `${playbackDeckRef.current}:${currentTrack.id}`
+      setWaveformMediaSyncKey((prev) => (prev === syncKey ? prev : syncKey))
+      const t = readLiveMediaTime()
+      const d =
+        engineLive?.getDeckDuration() ||
+        (Number.isFinite(live.duration) ? live.duration : 0)
+      playbackTimeRef.current = t
+      // Avoid setState storms when this effect re-enters for an already-bound src.
+      setDuration((prev) => (Math.abs(prev - d) < 0.01 ? prev : d))
+      pushTransportTime(t, d)
+      setIsLoading(false)
+      setIsBuffering(false)
+      setError(null)
+      if (
+        !idjOwnsLive &&
+        endedTrackIdRef.current === currentTrack.id &&
+        isGenuineMediaEnd(live, 'live') &&
+        (live.ended || (live.duration > 0 && live.currentTime >= live.duration - 0.08))
+      ) {
+        endedTrackIdRef.current = null
         try {
-          mixEngineRef.current?.setMasterVolume(vol)
+          live.currentTime = 0
         } catch {
           /* ignore */
         }
-        const t = live.currentTime || 0
-        const d = Number.isFinite(live.duration) ? live.duration : 0
-        playbackTimeRef.current = t
-        setDuration(d)
-        setCurrentTime(t)
-        pushTransportTime(t, d)
-        setIsLoading(false)
-        setIsBuffering(false)
-        setError(null)
+        if (isPlayingRef.current) void live.play().catch(() => {})
       }
     } else {
-      // Cold load — reset to main deck; silence/pause idle so it can't fight
-      playbackDeckRef.current = 'main'
-      liveAudioRef.current = audio
-      setWaveformMediaSyncKey(`main:${currentTrack?.id ?? 'none'}`)
-      setCuedIdleTrackId(null)
-      mixEngineRef.current?.setActiveDeck('a')
-      mixEngineRef.current?.silenceIdle({ instant: true })
-      try {
-        mixEngineRef.current?.setMasterVolume(
-          settingsRef.current.isMuted ? 0 : settingsRef.current.volume,
-        )
-      } catch {
-        /* ignore */
+      // One src swap on the live deck only. Do not flip decks, pause idle,
+      // or tear down AudioContext — those retrigger this effect and reload.
+      srcSwapRef.current = true
+      trackSwitchAtRef.current = Date.now()
+      if (isIDJEnabledRef.current) disarmIdjEnded('live')
+      const fallbackDur =
+        typeof currentTrack.duration === 'number' && currentTrack.duration > 0
+          ? currentTrack.duration
+          : 0
+      playbackTimeRef.current = 0
+      setDuration(fallbackDur)
+      setCurrentTime(0)
+      pushTransportTime(0, fallbackDur)
+      setIsBuffering(false)
+      setIsLoading(false)
+      assignMediaSrcIfChanged(live, activeUrl)
+      lastBoundPlaybackRef.current = { id: currentTrack.id, url: activeUrl }
+      setWaveformMediaSyncKey(`${playbackDeckRef.current}:${currentTrack.id}`)
+      if (isPlayingRef.current) {
+        void live.play().catch(() => {})
       }
-      const idle = nextAudioRef.current
-      if (idle && !phraseMixLockRef.current) {
-        try {
-          idle.pause()
-          idle.volume = 0
-        } catch {
-          /* ignore */
-        }
-      }
-      // Only set src and load when track actually changes
-      audio.src = resolvedUrl
-      audio.load()
-      // Reset audio context ready state when track changes
-      setAudioContextReady(false)
+    }
+
+    if (trackedPlayRef.current !== currentTrack.id) {
+      trackedPlayRef.current = null
     }
     
-    // Reset tracked play ref when track changes
-    trackedPlayRef.current = null
-
-    const liveEl =
-      playbackDeckRef.current === 'next' && nextAudioRef.current
-        ? nextAudioRef.current
-        : audio
-    
     // Imperative scrubber paint — avoids ~10 full MusicPlayer re-renders/sec.
+    const readLiveTime = () => {
+      const engine = mixEngineRef.current
+      if (engine?.hasBufferClock()) {
+        engine.stampActiveElementTime()
+        return engine.getActiveMediaTime()
+      }
+      return liveEl.currentTime
+    }
     const updateTime = throttle(() => {
-      pushTransportTime(liveEl.currentTime, liveEl.duration)
+      pushTransportTime(readLiveTime(), liveEl.duration)
     }, 100)
     // Persist seek position less often so reload restores mini-bar progress
     const persistTime = throttle(() => {
-      reportPlaybackPosition(liveEl.currentTime)
+      reportPlaybackPosition(readLiveTime())
     }, 1000)
     const onTimeUpdate = () => {
       updateTime()
@@ -3328,8 +4788,13 @@ export default function MusicPlayer({
     const handleEnded = () => {
       // Never advance transport while a dual-deck mix is in progress
       if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
+      if (!mediaUrlMatchesTrack(liveEl.currentSrc || liveEl.src, currentTrack.file)) return
+      if (!isGenuineMediaEnd(liveEl, 'live')) return
+      if (endedTrackIdRef.current === currentTrack.id) return
+      endedTrackIdRef.current = currentTrack.id
 
       if (settings.repeatMode === 'one') {
+        endedTrackIdRef.current = null
         liveEl.currentTime = 0
         liveEl.play().catch((err) => {
           if (err.name !== 'AbortError') {
@@ -3344,36 +4809,139 @@ export default function MusicPlayer({
         return
       }
 
+      if (idjOnDeckEndedRef.current('live')) return
+
       onTrackEnd()
     }
 
     liveEl.addEventListener('timeupdate', onTimeUpdate)
     liveEl.addEventListener('loadedmetadata', updateDuration)
     liveEl.addEventListener('ended', handleEnded)
-    audio.addEventListener('error', handleError)
-    audio.addEventListener('loadstart', handleLoadStart)
-    audio.addEventListener('canplay', handleCanPlay)
-    audio.addEventListener('waiting', handleWaiting)
-    audio.addEventListener('stalled', handleStalled)
-    audio.addEventListener('playing', handlePlaying)
+    let endedFromClock = false
+    const clockPoll = window.setInterval(() => {
+      const engine = mixEngineRef.current
+      if (!engine?.hasBufferClock()) return
+      onTimeUpdate()
+      if (!mediaUrlMatchesTrack(liveEl.currentSrc || liveEl.src, currentTrack.file)) return
+      const dur = liveEl.duration
+      if (
+        !endedFromClock &&
+        isGenuineMediaEnd(liveEl, 'live') &&
+        dur > 0 &&
+        engine.getActiveMediaTime() >= dur - 0.08
+      ) {
+        endedFromClock = true
+        handleEnded()
+      }
+    }, 100)
+    liveEl.addEventListener('error', handleError)
+    liveEl.addEventListener('loadstart', handleLoadStart)
+    liveEl.addEventListener('canplay', handleCanPlay)
+    liveEl.addEventListener('waiting', handleWaiting)
+    liveEl.addEventListener('stalled', handleStalled)
+    liveEl.addEventListener('playing', handlePlaying)
 
     return () => {
       if (stallRecoveryTimer) clearTimeout(stallRecoveryTimer)
+      clearBufferingUiTimer()
+      window.clearInterval(clockPoll)
       liveEl.removeEventListener('timeupdate', onTimeUpdate)
       liveEl.removeEventListener('loadedmetadata', updateDuration)
       liveEl.removeEventListener('ended', handleEnded)
-      audio.removeEventListener('error', handleError)
-      audio.removeEventListener('loadstart', handleLoadStart)
-      audio.removeEventListener('canplay', handleCanPlay)
-      audio.removeEventListener('waiting', handleWaiting)
-      audio.removeEventListener('stalled', handleStalled)
-      audio.removeEventListener('playing', handlePlaying)
+      liveEl.removeEventListener('error', handleError)
+      liveEl.removeEventListener('loadstart', handleLoadStart)
+      liveEl.removeEventListener('canplay', handleCanPlay)
+      liveEl.removeEventListener('waiting', handleWaiting)
+      liveEl.removeEventListener('stalled', handleStalled)
+      liveEl.removeEventListener('playing', handlePlaying)
     }
-  }, [currentTrack, resolvedUrl, retryCount, getPreloadStrategy, setupAudioAnalysis, reportPlaybackPosition, pushTransportTime, isDeckHandoffActive])
+  }, [currentTrack?.id, playbackUrl, retryCount, reportPlaybackPosition, pushTransportTime, getPlaybackAudio, audioElementEpoch])
+
+  /**
+   * MES with no destination freezes currentTime without firing `stalled`.
+   * Keep this interval OUT of the media-bind effect — that effect's deps churn
+   * and would reset stuck-tick counters before recovery can fire.
+   */
+  useEffect(() => {
+    let freezeLastSec = 0
+    let freezeStuckTicks = 0
+    let freezeRecoverAttempts = 0
+    const timer = window.setInterval(() => {
+      const liveEl = getPlaybackAudio()
+      if (!liveEl) return
+      if (!isPlayingRef.current) {
+        freezeStuckTicks = 0
+        freezeLastSec = liveEl.currentTime
+        return
+      }
+      // isPlaying but element paused — play() aborted or MES-bound element won't run.
+      if (liveEl.paused) {
+        freezeStuckTicks += 1
+        if (freezeStuckTicks >= 2) {
+          freezeStuckTicks = 0
+          if (mesCreatedForEpochRef.current || sourceNodeRef.current) {
+            fallBackToHtmlAudioOnlyRef.current()
+          } else {
+            void liveEl.play().catch(() => {
+              fallBackToHtmlAudioOnlyRef.current()
+            })
+          }
+        }
+        return
+      }
+      if (htmlAudioOnlyRef.current) {
+        freezeStuckTicks = 0
+        freezeLastSec = liveEl.currentTime
+        return
+      }
+      // Buffer source may leave the element paused while still audible — but if
+      // the buffer clock exists AND the AudioContext is dead, fall through.
+      const engine = mixEngineRef.current
+      const ctx = audioContextRef.current
+      const ctxDead =
+        !ctx ||
+        ctx.state === 'closed' ||
+        (ctx.state as string) === 'interrupted'
+      if (engine?.hasBufferClock() && !ctxDead) {
+        freezeStuckTicks = 0
+        freezeLastSec = liveEl.currentTime
+        return
+      }
+      const now = liveEl.currentTime
+      if (Math.abs(now - freezeLastSec) < 0.05) {
+        freezeStuckTicks += 1
+        if (freezeStuckTicks >= 2) {
+          freezeStuckTicks = 0
+          freezeRecoverAttempts += 1
+          if (freezeRecoverAttempts >= 2 || ctxDead || !sourceNodeRef.current) {
+            fallBackToHtmlAudioOnlyRef.current()
+          } else {
+            const mark = liveEl.currentTime
+            recoverAudibleGraphRef.current()
+            void liveEl.play().catch(() => {})
+            window.setTimeout(() => {
+              if (htmlAudioOnlyRef.current) return
+              if (!isPlayingRef.current) return
+              const el = getPlaybackAudio()
+              if (!el || el.paused) return
+              if (Math.abs(el.currentTime - mark) < 0.08) {
+                fallBackToHtmlAudioOnlyRef.current()
+              }
+            }, 700)
+          }
+        }
+      } else {
+        freezeStuckTicks = 0
+        freezeRecoverAttempts = 0
+      }
+      freezeLastSec = liveEl.currentTime
+    }, 500)
+    return () => window.clearInterval(timer)
+  }, [getPlaybackAudio])
 
   // Track buffering progress and adjust buffer dynamically
   useEffect(() => {
-    const audio = audioRef.current
+    const audio = getPlaybackAudio()
     if (!audio || !resolvedUrl) return
 
     const updateBuffered = () => {
@@ -3397,7 +4965,7 @@ export default function MusicPlayer({
     return () => {
       audio.removeEventListener('progress', updateBuffered)
     }
-  }, [resolvedUrl, isPlaying, settings.bufferSize, connectionQuality])
+  }, [resolvedUrl, isPlaying, settings.bufferSize, connectionQuality, getPlaybackAudio])
 
   const easeLivePlaybackRate = useCallback(
     (fromRate: number, toRate: number, durationMs = 1400) => {
@@ -3526,7 +5094,13 @@ export default function MusicPlayer({
           ? queueRef.current
           : [...queueRef.current, nextTrack]
         playTrack(nextTrack, qFallback)
-        seekTo(trackIntroOffsetSec(nextTrack))
+        seekTo(
+          autoDJConfigRef.current.enabled && !autoDJConfigRef.current.creativeMode
+            ? trackIntroOffsetSec(nextTrack)
+            : autoDJConfigRef.current.enabled
+              ? resolveIncomingMixCueSec(nextTrack)
+              : trackIntroOffsetSec(nextTrack),
+        )
         return
       }
 
@@ -3560,42 +5134,71 @@ export default function MusicPlayer({
       const q = queueRef.current.some((t) => t.id === nextTrack.id)
         ? queueRef.current
         : [...queueRef.current, nextTrack]
-      const introSec = plan?.incomingStartSec ?? trackIntroOffsetSec(nextTrack)
+      const introSec =
+        plan &&
+        plan.incomingTrackId === nextTrack.id &&
+        typeof plan.resolvedIncomingSec === 'number' &&
+        Number.isFinite(plan.resolvedIncomingSec)
+          ? plan.resolvedIncomingSec
+          : plan &&
+              plan.incomingTrackId === nextTrack.id &&
+              typeof plan.incomingStartSec === 'number' &&
+              Number.isFinite(plan.incomingStartSec)
+            ? plan.incomingStartSec
+            : autoDJConfigRef.current.enabled && !autoDJConfigRef.current.creativeMode
+              ? trackIntroOffsetSec(nextTrack)
+              : autoDJConfigRef.current.enabled
+                ? resolveIncomingMixCueSec(nextTrack)
+                : plan?.incomingStartSec ?? trackIntroOffsetSec(nextTrack)
       const live = getPlaybackAudio() || main
-      const remain =
-        (Number.isFinite(live.duration) ? live.duration : 0) -
-        (Number.isFinite(live.currentTime) ? live.currentTime : 0)
+      const liveNow = readLiveMediaTime()
+      const liveDur =
+        mixEngineRef.current?.getDeckDuration() ||
+        (Number.isFinite(live.duration) ? live.duration : 0)
+      const remain = liveDur - liveNow
       const autoDjDoctrine =
         autoDJConfigRef.current.enabled &&
         (plan?.blendFromOut !== false || plan?.phrase1Lock !== false || plan?.exactOverlap === true)
       const remainBlend = remain - 0.05
       const mixDurationSec = autoDjDoctrine && plan?.mixDurationSec
-        ? remainBlend >= plan.mixDurationSec * 0.95
-          ? plan.mixDurationSec
-          : Math.max(0.8, Math.min(plan.mixDurationSec, remainBlend, 48))
+        ? plan.exactOverlap !== false
+          ? exactOverlapDurationSec(plan.mixDurationSec)
+          : remainBlend >= plan.mixDurationSec * 0.95
+            ? plan.mixDurationSec
+            : Math.max(0.8, Math.min(plan.mixDurationSec, remainBlend, 48))
         : Math.max(0.8, Math.min(mixSec, remain - 0.15, 48))
       const beatmatchRate = computeMixIncomingRate(currentTrack, nextTrack)
 
-      const mixStyle = resolveEffectiveMixStyle(
-        autoDJConfig.mixStyle,
-        autoDJConfig.mixTechniques,
-        autoDJConfig.transitionMode,
-      )
+      const mixStyle = resolveSectionAwareMixStyle({
+        outgoing: currentTrack ?? ({ id: 'out', file: '', title: '' } as Track),
+        incoming: nextTrack,
+        outSec: liveNow,
+        userStyle: autoDJConfig.mixStyle,
+        techniques: autoDJConfig.mixTechniques,
+        currentStyle: resolveEffectiveMixStyle(
+          autoDJConfig.mixStyle,
+          autoDJConfig.mixTechniques,
+        ),
+        sectionStyle: autoDJConfig.sectionStyle,
+      })
 
       const resolvedPlan: MixPlan =
         plan && plan.incomingTrackId === nextTrack.id
           ? {
               ...plan,
               mixDurationSec,
+              // Keep AlignmentState / phrase-1 — do not overwrite with host memory cue.
               incomingStartSec: introSec,
+              resolvedIncomingSec: introSec,
               rateRatio: incomingRate || plan.rateRatio || beatmatchRate,
               style: plan.style ?? mixStyle,
             }
           : {
               outgoingTrackId: currentTrack?.id || 'out',
               incomingTrackId: nextTrack.id,
-              startAtOutgoingSec: live.currentTime || 0,
+              startAtOutgoingSec: liveNow,
               incomingStartSec: introSec,
+              resolvedIncomingSec: introSec,
               mixDurationSec,
               rateRatio: incomingRate || beatmatchRate,
               style: mixStyle,
@@ -3658,7 +5261,7 @@ export default function MusicPlayer({
         }
         // Ensure ghost samples ready
         if (ghostSamplesRef.current?.trackId !== nextTrack.id) {
-          void loadWaveformSamplesForTrack(nextTrack, url).then((packed) => {
+          void loadWaveformSamplesForTrack(nextTrack, url, { allowFullDecode: true }).then((packed) => {
             if (!packed) return
             cacheMixGridOffset(nextTrack, packed.samples, packed.durationSec || nextTrack.duration || 180)
             ghostSamplesRef.current = {
@@ -3730,35 +5333,32 @@ export default function MusicPlayer({
         // Sync waveform clock to live deck immediately (don't wait for React commit)
         liveAudioRef.current =
           playbackDeckRef.current === 'next' ? nextAudioRef.current : audioRef.current
-        setWaveformMediaSyncKey(
-          `${playbackDeckRef.current}:${nextTrack.id}:${Math.round((liveAudioRef.current?.currentTime || 0) * 10)}`,
-        )
+        setWaveformMediaSyncKey(`${playbackDeckRef.current}:${nextTrack.id}`)
+        const xfRest = nextDeck === 'next' ? 1 : 0
+        setIdjCrossfade(xfRest)
+        mixEngineRef.current?.setManualCrossfade(xfRest)
         setCuedIdleTrackId(null)
         setCrossfadeActive(false)
         clearMixVisualProgress()
         phraseMixLockRef.current = false
 
         const liveAfter = getPlaybackAudio()
-        if (liveAfter?.paused) {
+        if (liveAfter?.paused && !engine.hasBufferClock()) {
           void liveAfter.play().catch(() => {})
         }
         // Engine already soft-opens filters after handoff settle — avoid a second snap.
 
         adoptPlayingTrack(nextTrack, q)
         setResolvedUrl(url)
-        const liveRate =
-          liveAfter && Number.isFinite(liveAfter.playbackRate) && liveAfter.playbackRate > 0
-            ? liveAfter.playbackRate
-            : handoffTarget
-        if (Math.abs(liveRate - handoffTarget) > 0.004) {
-          easeLivePlaybackRate(liveRate, handoffTarget, autoDJConfigRef.current.enabled ? 900 : 650)
-        }
+        // MixEngine already slews both decks onto mixEndRate. A second
+        // easeLivePlaybackRate here fought that ramp and felt like a stop.
         if (autoDJConfigRef.current.enabled) {
-          // Former outgoing deck is idle — pre-cue N+2 after handoff settle so mix
-          // planning and beatmatch rate are ready before the next OUT window.
+          // Wait until outgoing fader + park settle before pausing that deck
+          // to load N+2 — pause-during-tail is the end-of-mix click.
           window.setTimeout(() => {
+            if (mixEngineRef.current?.isMixing()) return
             void precueIdleForQueueSuccessorRef.current?.(nextTrack, q)
-          }, 150)
+          }, 700)
         }
         mixIntelRef.current = null
         setWaveformMixOverlay(null)
@@ -3781,13 +5381,13 @@ export default function MusicPlayer({
       clearSkipBlendWatch,
       restoreMainVolume,
       trackIntroOffsetSec,
+      resolveIncomingMixCueSec,
       playTrack,
       seekTo,
       adoptPlayingTrack,
       getPlaybackAudio,
       ensureMixEngine,
       ensureDualDeckGraph,
-      easeLivePlaybackRate,
       handleMixDeckEq,
       handleMixDeckRate,
       handleMixDeckFilter,
@@ -3852,6 +5452,73 @@ export default function MusicPlayer({
     }
   }, [getIdleAudio])
 
+  const wasIDJEnabledRef = useRef(false)
+  useEffect(() => {
+    if (!isIDJEnabled) {
+      if (wasIDJEnabledRef.current) {
+        mixEngineRef.current?.clearManualCrossfade()
+        silenceCuedIdle()
+        setIdleDeckPlaying(false)
+        setIdjIdleTrackId(null)
+        setCueDeckTrackOverride(null)
+        idjIdleTrackIdRef.current = null
+      }
+      wasIDJEnabledRef.current = false
+      return
+    }
+    const enabling = !wasIDJEnabledRef.current
+    wasIDJEnabledRef.current = true
+    if (!enabling) return
+    const xf = playbackDeckRef.current === 'next' ? 1 : 0
+    setIdjCrossfade(xf)
+    void (async () => {
+      await loadMixEngineClass()
+      try {
+        await ensureDualDeckGraph()
+      } catch {
+        /* mix without analysis */
+      }
+      mixEngineRef.current?.setManualCrossfade(xf)
+    })()
+  }, [isIDJEnabled, ensureDualDeckGraph, silenceCuedIdle])
+
+  useEffect(() => {
+    if (isExpanded || !isIDJEnabled) return
+    const idle = getIdleAudio()
+    if (!idle || idle.paused) return
+    idle.pause()
+    setIdleDeckPlaying(false)
+  }, [isExpanded, isIDJEnabled, getIdleAudio])
+
+  useEffect(() => {
+    const idle = getIdleAudio()
+    if (!idle) return
+    const onPlay = () => setIdleDeckPlaying(true)
+    const onPause = () => setIdleDeckPlaying(false)
+    const onEnded = () => {
+      if (!isGenuineMediaEnd(idle, 'idle')) return
+      if (idjOnDeckEndedRef.current('idle')) return
+      setIdleDeckPlaying(false)
+    }
+    const onCanPlay = () => armIdjEnded('idle')
+    idle.addEventListener('play', onPlay)
+    idle.addEventListener('pause', onPause)
+    idle.addEventListener('ended', onEnded)
+    idle.addEventListener('canplay', onCanPlay)
+    return () => {
+      idle.removeEventListener('play', onPlay)
+      idle.removeEventListener('pause', onPause)
+      idle.removeEventListener('ended', onEnded)
+      idle.removeEventListener('canplay', onCanPlay)
+    }
+  }, [getIdleAudio, currentTrack?.id, isIDJEnabled])
+
+  const armResolvedUrlForTrack = useCallback((track: Track | null | undefined) => {
+    if (!track?.file) return
+    const url = peekSyncPlaybackUrl(track.file, resolvedUrlCacheRef.current)
+    if (url) setResolvedUrl((prev) => (prev === url ? prev : url))
+  }, [])
+
   const hardSkipToNext = useCallback(() => {
     clearSkipBlendWatch()
     clearAutoDJOutWatch()
@@ -3861,174 +5528,214 @@ export default function MusicPlayer({
     phraseMixLockRef.current = false
     skipSrcReloadRef.current = false
     deckHandoffRef.current = null
-    onNext?.()
-  }, [clearSkipBlendWatch, clearAutoDJOutWatch, silenceCuedIdle, onNext])
-
-  /**
-   * Skip / next: if Auto DJ has a cued incoming (or a next track), blend from
-   * the next outgoing beat into parked phrase 1. Never cold-load the cued deck.
-   */
-  const handleSkipToNext = useCallback(() => {
-    if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
-
-    clearSkipBlendWatch()
-
+    endedTrackIdRef.current = null
     const q = queueRef.current
-    if (q.length < 2) {
-      onNext?.()
-      return
-    }
     const cur = autoDJCurrentTrackRef.current
     const idx = cur ? q.findIndex((t) => t.id === cur.id) : -1
-    const next = (idx >= 0 ? q[idx + 1] : null) ?? q[0]
-    if (!next || next.id === cur?.id) {
-      onNext?.()
-      return
-    }
+    const next = (idx >= 0 && idx < q.length - 1 ? q[idx + 1] : q[0]) ?? null
+    armResolvedUrlForTrack(next)
+    onNext?.()
+  }, [clearSkipBlendWatch, clearAutoDJOutWatch, silenceCuedIdle, onNext, armResolvedUrlForTrack])
 
-    const autoOn = autoDJConfigRef.current.enabled
-    const fadeSec = settingsRef.current.crossfadeDuration
-    if (!autoOn) {
-      if (fadeSec > 0) {
-        startCrossfade(next, fadeSec)
-        return
-      }
-      hardSkipToNext()
-      return
-    }
+  /**
+   * AutoDJ skip-while-cued: blend from the next outgoing beat into the parked
+   * phrase-1 cue instead of a hard cut. Falls back to hard skip when not cued.
+   */
+  const tryAutoDjSkipBlend = useCallback((): boolean => {
+    if (!autoDJConfigRef.current.enabled) return false
+    if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return false
+
+    const cur = autoDJCurrentTrackRef.current
+    const q = queueRef.current
+    if (!cur) return false
+    const idx = q.findIndex((t) => t.id === cur.id)
+    const next = idx >= 0 && idx < q.length - 1 ? q[idx + 1] : null
+    if (!next) return false
+    if (cuedIdleTrackIdRef.current !== next.id) return false
 
     const live = getPlaybackAudio()
-    const now = live && Number.isFinite(live.currentTime) ? live.currentTime : 0
-    const duration =
-      live && Number.isFinite(live.duration) && live.duration > 0 ? live.duration : 0
-    const remain = duration > 0 ? duration - now : 48
-    if (remain < 1.25) {
-      hardSkipToNext()
-      return
-    }
+    if (!live) return false
+    const nowSec = Number.isFinite(live.currentTime) ? live.currentTime : 0
+    const liveDur =
+      mixEngineRef.current?.getDeckDuration() ||
+      (Number.isFinite(live.duration) ? live.duration : cur.duration || 0)
 
-    clearAutoDJOutWatch()
-    autoDJPendingRef.current = null
-    setAutoDJPendingTrackId(null)
+    const prior =
+      (autoDJFrozenPlanRef.current?.incomingId === next.id
+        ? autoDJFrozenPlanRef.current.plan
+        : null) ||
+      (lastMixPlanRef.current?.incomingTrackId === next.id ? lastMixPlanRef.current : null)
 
     const cfg = autoDJConfigRef.current
-    const phraseMix = resolvePhraseMixSettings(cfg, {
-      qualityGate: shouldApplyQualityGate(lastMixQualityRef.current?.grade)
-        ? lastMixQualityRef.current?.grade
-        : null,
-    })
     const outBpm =
-      resolvePlaybackBpm(cur, detectedBPMRef.current) ??
-      cur?.bpm ??
-      detectedBPMRef.current ??
-      120
-    const mixStyle = resolveEffectiveMixStyle(
-      cfg.mixStyle,
-      cfg.mixTechniques,
-      cfg.transitionMode,
-    )
-    const prior =
-      autoDJFrozenPlanRef.current?.incomingId === next.id
-        ? autoDJFrozenPlanRef.current.plan
-        : lastMixPlanRef.current?.incomingTrackId === next.id
-          ? lastMixPlanRef.current
-          : null
-    const rate = computeMixIncomingRate(cur, next)
-    const plan = buildSkipBlendPlan({
-      outgoingTrackId: cur?.id || 'out',
-      incomingTrackId: next.id,
-      nowSec: now,
-      outgoingBpm: outBpm,
-      outgoingOffsetSec: beatGridOffsetSecRef.current,
-      incomingStartSec: prior?.incomingStartSec ?? trackIntroOffsetSec(next),
-      overlapBars: phraseMix.overlapBars,
-      rateRatio: rate,
-      style: mixStyle,
-      outPhraseBars: phraseMix.outPhraseBars,
-      inPhraseBars: phraseMix.inPhraseBars,
-      remainSec: remain,
-      prior,
-    })
-    lastMixPlanRef.current = plan
-    mixEngineRef.current?.silenceIdle({ instant: true })
-    setAutoDJStatusMessage(`Skip blend → “${next.title}”`)
-
-    const fireAt = plan.startAtOutgoingSec
+      resolvePlaybackBpm(cur, detectedBPMRef.current) ?? cur.bpm ?? detectedBPMRef.current ?? 120
+    const inBpm = resolvePlaybackBpm(next, null) ?? next.bpm ?? outBpm
+    const outRate = getOutgoingPlaybackRate()
     const handoffTarget = resolveIncomingRateForStrategy({
-      strategy: phraseMix.bpmStrategy,
-      beatmatchRate: rate,
+      strategy: cfg.bpmStrategy,
+      beatmatchRate: 1,
       sliderRate: settingsRef.current.playbackRate,
     })
+    const rateRatio = computeMixDeckRates({
+      outgoingBpm: outBpm,
+      incomingBpm: inBpm,
+      outgoingPlaybackRate: outRate,
+      incomingTargetRate: handoffTarget,
+    }).incomingRate
 
-    const fire = () => {
-      skipBlendRafRef.current = null
-      void startPhraseMix(next, plan.mixDurationSec, rate, plan, {
-        incomingTargetRate: handoffTarget,
-      })
-    }
+    const style =
+      prior?.style ??
+      resolveEffectiveMixStyle(cfg.mixStyle, cfg.mixTechniques)
+    const skipPlan = orchestrateSkipBlendPlan({
+      outgoingTrackId: cur.id,
+      incomingTrackId: next.id,
+      nowSec,
+      outgoingBpm: outBpm,
+      outgoingOffsetSec: beatGridOffsetSecRef.current,
+      incomingStartSec:
+        prior?.resolvedIncomingSec ??
+        prior?.incomingStartSec ??
+        (autoDJConfigRef.current.creativeMode
+          ? resolveIncomingMixCueSec(next)
+          : trackIntroOffsetSec(next)),
+      overlapBars: (prior?.overlapBars ?? cfg.overlapBars) as PhraseBars,
+      rateRatio,
+      style,
+      outPhraseBars: prior?.outPhraseBars ?? cfg.outPhraseBars,
+      inPhraseBars: prior?.inPhraseBars ?? cfg.inPhraseBars,
+      remainSec: Math.max(0, liveDur - nowSec),
+      prior,
+    })
 
-    if (!live || fireAt <= now + 0.02 || fireAt >= duration - 0.05) {
-      fire()
-      return
-    }
-
+    clearAutoDJOutWatch()
     clearSkipBlendWatch()
-    const watch = () => {
-      if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) {
-        skipBlendRafRef.current = null
+    autoDJPendingRef.current = next.id
+    setAutoDJPendingTrackId(next.id)
+    setAutoDJStatusMessage(`Skip blend → “${next.title}”`)
+    lastMixPlanRef.current = skipPlan
+
+    const fireAt = skipPlan.startAtOutgoingSec
+    const fireSkip = () => {
+      if (!autoDJConfigRef.current.enabled || phraseMixLockRef.current) {
+        clearSkipBlendWatch()
         return
       }
-      const t = getPlaybackAudio()?.currentTime ?? 0
-      if (t + 0.005 >= fireAt) {
-        fire()
+      const liveNow = getPlaybackAudio()?.currentTime ?? autoDJCurrentTimeRef.current
+      if (liveNow + 0.012 < fireAt) {
+        skipBlendRafRef.current = requestAnimationFrame(fireSkip)
         return
       }
-      skipBlendRafRef.current = requestAnimationFrame(watch)
+      clearSkipBlendWatch()
+      autoDJFrozenPlanRef.current = null
+      const gate = gateAutoDjFire({
+        hasIncomingReady: mixEngineRef.current?.hasIncomingReady() === true,
+        plannedOverlapSec: skipPlan.mixDurationSec,
+        exactOverlapSec: skipPlan.mixDurationSec,
+        requireIncomingReady: false,
+      })
+      void startPhraseMix(
+        next,
+        gate.mixDurationSec,
+        skipPlan.rateRatio,
+        { ...skipPlan, mixDurationSec: gate.mixDurationSec },
+        { incomingTargetRate: handoffTarget },
+      )
     }
-    skipBlendRafRef.current = requestAnimationFrame(watch)
+
+    if (nowSec + 0.02 >= fireAt) {
+      fireSkip()
+    } else {
+      skipBlendRafRef.current = requestAnimationFrame(fireSkip)
+    }
+    return true
   }, [
-    onNext,
-    startCrossfade,
-    startPhraseMix,
-    hardSkipToNext,
-    getPlaybackAudio,
-    computeMixIncomingRate,
-    trackIntroOffsetSec,
     clearAutoDJOutWatch,
     clearSkipBlendWatch,
+    getPlaybackAudio,
+    getOutgoingPlaybackRate,
+    resolveIncomingMixCueSec,
+    trackIntroOffsetSec,
+    startPhraseMix,
   ])
 
+  const handleSkipToPrevious = useCallback(() => {
+    if (isIDJEnabledRef.current) {
+      stepLiveDeckRef.current(-1)
+      return
+    }
+    clearSkipBlendWatch()
+    clearAutoDJOutWatch()
+    mixEngineRef.current?.stopMix()
+    silenceCuedIdle()
+    setCuedIdleTrackId(null)
+    phraseMixLockRef.current = false
+    skipSrcReloadRef.current = false
+    deckHandoffRef.current = null
+    endedTrackIdRef.current = null
+    const q = queueRef.current
+    const cur = autoDJCurrentTrackRef.current
+    const idx = cur ? q.findIndex((t) => t.id === cur.id) : -1
+    const prev = (idx > 0 ? q[idx - 1] : q[q.length - 1]) ?? null
+    armResolvedUrlForTrack(prev)
+    onPrevious?.()
+  }, [clearSkipBlendWatch, clearAutoDJOutWatch, silenceCuedIdle, onPrevious, armResolvedUrlForTrack])
+
+  /**
+   * Skip / next: AutoDJ skip-blend when cued; iDJ steps the live deck only;
+   * otherwise hard cut.
+   */
+  const handleSkipToNext = useCallback(() => {
+    if (isIDJEnabledRef.current) {
+      stepLiveDeckRef.current(1)
+      return
+    }
+    if (tryAutoDjSkipBlend()) return
+    hardSkipToNext()
+  }, [hardSkipToNext, tryAutoDjSkipBlend])
+
   skipToNextRef.current = handleSkipToNext
+  skipToPreviousRef.current = handleSkipToPrevious
 
   // Playback control
   useEffect(() => {
     const audio = getPlaybackAudio()
     if (!audio) return
 
-    if (isPlaying && !isLoading && !error) {
-      audio.play().catch((err) => {
-        // Ignore AbortError - it's expected when play() is interrupted by pause()
-        if (err.name !== 'AbortError') {
-          console.error('Audio play failed:', err)
-          setIsPlaying(false)
-          setError('Playback failed')
-        }
-      })
+    if (isPlaying && !error) {
+      // iDJ same-deck load owns the first play after seek; don't resume early.
+      if (idjDeckSkipLockRef.current || skipSrcReloadRef.current) return
+      if (srcSwapRef.current && audio.readyState < 2) return
+      if (mixEngineRef.current?.hasBufferClock()) {
+        mixEngineRef.current.resumeActiveClock()
+      } else if (audio.paused) {
+        audio.play().catch((err) => {
+          if (err.name !== 'AbortError') {
+            console.error('Audio play failed:', err)
+            setIsPlaying(false)
+            setError('Playback failed')
+          }
+        })
+      }
     } else if (
+      !isPlaying &&
       !phraseMixLockRef.current &&
       !mixEngineRef.current?.isMixing() &&
       !isDeckHandoffActive(currentTrack?.id)
     ) {
+      mixEngineRef.current?.pauseActiveClock()
       audio.pause()
     }
-  }, [isPlaying, isLoading, error, getPlaybackAudio, isDeckHandoffActive, currentTrack?.id])
+  }, [isPlaying, error, getPlaybackAudio, isDeckHandoffActive, currentTrack?.id])
 
   // Seek function
   const seek = useCallback((seconds: number) => {
     const audio = getPlaybackAudio()
     if (!audio) return
-    const newTime = Math.max(0, Math.min(duration, audio.currentTime + seconds))
-    audio.currentTime = newTime
+    const engine = mixEngineRef.current
+    const now = engine?.hasBufferClock() ? engine.getActiveMediaTime() : audio.currentTime
+    const newTime = Math.max(0, Math.min(duration, now + seconds))
+    if (engine?.hasBufferClock()) engine.seekActiveMedia(newTime)
+    else audio.currentTime = newTime
     snapPlaybackTime(newTime)
   }, [duration, snapPlaybackTime, getPlaybackAudio])
 
@@ -4208,29 +5915,53 @@ export default function MusicPlayer({
     if (!audio) return
 
     if (isPlaying) {
+      mixEngineRef.current?.pauseActiveClock()
       audio.pause()
       setIsPlaying(false)
     } else {
-      // Setup AudioContext when user clicks play (user interaction required)
-      if (!audioContextRef.current || !sourceNodeRef.current) {
-        try {
-          await ensureDualDeckGraph()
-        } catch (err: any) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('AudioContext setup failed, continuing without analysis:', err)
+      // Keep default play on HTMLMediaElement. Web Audio only for mix features.
+      if (
+        !htmlAudioOnlyRef.current &&
+        (isIDJEnabledRef.current || autoDJConfigRef.current.enabled)
+      ) {
+        if (!audioContextRef.current || !sourceNodeRef.current) {
+          try {
+            await ensureDualDeckGraph()
+          } catch (err: any) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('AudioContext setup failed, continuing without analysis:', err)
+            }
           }
-          // Continue to play even if AudioContext setup fails
+        } else {
+          recoverAudibleGraph()
         }
       }
       
-      audio.play().catch((err) => {
-        // Ignore AbortError - it's expected when play() is interrupted by pause()
-        if (err.name !== 'AbortError') {
-          console.error('Audio play failed:', err)
-          setError('Playback failed')
-        }
-      })
+      if (mixEngineRef.current?.hasBufferClock()) {
+        mixEngineRef.current.resumeActiveClock()
+      } else {
+        audio.play().catch((err) => {
+          // Ignore AbortError - it's expected when play() is interrupted by pause()
+          if (err.name !== 'AbortError') {
+            console.error('Audio play failed:', err)
+            setError('Playback failed')
+          }
+        })
+      }
       setIsPlaying(true)
+      // MES + dead AudioContext freezes currentTime with paused=false — catch it
+      // immediately after play instead of waiting on the slow interval alone.
+      const mark = audio.currentTime
+      window.setTimeout(() => {
+        if (htmlAudioOnlyRef.current) return
+        if (!isPlayingRef.current) return
+        const live = getPlaybackAudio()
+        if (!live || live.paused) return
+        if (mixEngineRef.current?.hasBufferClock()) return
+        if (Math.abs(live.currentTime - mark) < 0.05) {
+          fallBackToHtmlAudioOnlyRef.current()
+        }
+      }, 900)
     }
   }
 
@@ -4239,7 +5970,9 @@ export default function MusicPlayer({
     (newTime: number) => {
       const audio = getPlaybackAudio()
       if (!audio) return
-      audio.currentTime = newTime
+      const engine = mixEngineRef.current
+      if (engine?.hasBufferClock()) engine.seekActiveMedia(newTime)
+      else audio.currentTime = newTime
       snapPlaybackTime(newTime)
     },
     [getPlaybackAudio, snapPlaybackTime],
@@ -4272,7 +6005,11 @@ export default function MusicPlayer({
     catalogRandomFillKeyRef.current = ''
     setAutoDJStatusMessage(
       next
-        ? `Random from ${catalogScopeLabel(currentSource)} on`
+        ? `Random · ${
+            isOrderedReleaseRandomScope(currentSource)
+              ? 'crates/EPs in order → fresh release'
+              : catalogScopeLabel(currentSource)
+          } on`
         : 'Catalog random off — queue order unchanged',
     )
   }
@@ -4319,7 +6056,7 @@ export default function MusicPlayer({
     togglePlay,
     toggleShuffle,
     cycleRepeatMode,
-    onPrevious: () => onPrevious?.(),
+    onPrevious: () => handleSkipToPrevious(),
     onNext: () => skipToNextRef.current(),
   }
 
@@ -4404,27 +6141,129 @@ export default function MusicPlayer({
   const currentQueueIndex = useMemo(() => getCurrentQueueIndex(), [currentTrack, queue])
 
   const liveDeckId = waveformMediaSyncKey.startsWith('next') ? 'b' : 'a'
+  liveDeckIdRef.current = liveDeckId
+
+  const mixerCrossfadeProgress =
+    autoDjXfUnlocked ||
+    (isIDJEnabled && !(crossfadeActive && mixVisualProgress != null))
+      ? idjCrossfade
+      : mixCrossfaderPosition({
+          liveDeck: liveDeckId,
+          blendProgress: crossfadeActive ? mixVisualProgress : null,
+        })
 
   const nextQueueTrack = useMemo(() => {
     const idx = currentQueueIndex
     return idx >= 0 && queue[idx + 1] ? queue[idx + 1] : null
   }, [currentQueueIndex, queue])
 
-  /** Live deck = now playing; idle deck = up next from the queue (never the previous track). */
+  useEffect(() => {
+    if (currentTrack?.id) idjLiveTrackIdRef.current = currentTrack.id
+  }, [currentTrack?.id])
+
+  useEffect(() => {
+    if (!isIDJEnabled || idjIdleTrackIdRef.current) return
+    const idle = nextQueueTrack
+    if (!idle?.id || idle.id === currentTrack?.id) return
+    idjIdleTrackIdRef.current = idle.id
+    setIdjIdleTrackId(idle.id)
+  }, [isIDJEnabled, nextQueueTrack, currentTrack?.id])
+
+  const memoryCueMarker = useCallback((trackId: string | undefined): WaveformHotCue[] => {
+    if (!trackId) return []
+    const t = idjMemoryCues[trackId]
+    if (typeof t !== 'number' || !Number.isFinite(t)) return []
+    return [
+      {
+        id: `${trackId}-cue`,
+        timeSec: t,
+        label: 'CUE',
+        color: 'rgba(251, 191, 36, 0.95)',
+      },
+    ]
+  }, [idjMemoryCues])
+
+  const liveWaveformCues = useMemo(
+    () => [...waveformHotCues, ...memoryCueMarker(currentTrack?.id)],
+    [waveformHotCues, memoryCueMarker, currentTrack?.id],
+  )
+
+  const idleDeckTrackId = idjIdleTrackId || nextQueueTrack?.id
+
+  const idleWaveformCues = useMemo(() => {
+    const id = idleDeckTrackId
+    if (!id) return memoryCueMarker(id)
+    const slots = readHotCueSlots(id)
+    const cues: WaveformHotCue[] = HOT_CUE_SLOTS.filter((slot) => typeof slots[slot] === 'number')
+      .map((slot) => ({
+        id: `${id}-${slot}`,
+        timeSec: slots[slot] as number,
+        label: String(slot),
+        color: 'rgba(167, 139, 250, 0.95)',
+      }))
+    return [...cues, ...memoryCueMarker(id)].sort((a, b) => a.timeSec - b.timeSec)
+  }, [idleDeckTrackId, memoryCueMarker, hotCueRevision])
+
+  useEffect(() => {
+    const id = idleDeckTrackId ?? null
+    if (incomingZoomTrackIdRef.current === id) return
+    incomingZoomTrackIdRef.current = id
+    setIncomingVisibleBars(0)
+    setIncomingOffset(0)
+    setIncomingFollow(false)
+  }, [idleDeckTrackId])
+
+  /** Live deck = now playing; idle deck = iDJ pick, drop override, or queue up-next. */
   const trackForQueueDeck = useCallback(
     (deck: 'a' | 'b'): Track | null => {
       if (deck === liveDeckId) return currentTrack ?? null
+      if (idjIdleTrackId) {
+        const picked = queue.find((t) => t.id === idjIdleTrackId)
+        if (picked) return picked
+        if (cueDeckTrackOverride?.id === idjIdleTrackId) return cueDeckTrackOverride
+      }
       return nextQueueTrack ?? null
     },
-    [liveDeckId, currentTrack, nextQueueTrack],
+    [liveDeckId, currentTrack, nextQueueTrack, idjIdleTrackId, queue, cueDeckTrackOverride],
   )
 
-  const incomingDeckHot =
-    isAutoDJEnabled &&
-    !!nextQueueTrack &&
-    (crossfadeActive ||
-      autoDJCuedTrackId === nextQueueTrack.id ||
-      autoDJPendingTrackId === nextQueueTrack.id)
+  const incomingDeckHot = (isIDJEnabled || isAutoDJEnabled) && !!nextQueueTrack
+
+  const autoDjPairInsight = useMemo(() => {
+    if (!currentTrack || !nextQueueTrack) {
+      return { why: null as string | null, beatSyncUnsafe: null as string | null }
+    }
+    const last = mixQualityHistory[0]
+    const scored = scoreAutoDjPair({
+      outgoing: currentTrack,
+      incoming: nextQueueTrack,
+      syncMode: autoDJConfig.syncMode,
+      lastGrade: last?.grade,
+      lastIncomingId: last?.incomingTrackId ?? null,
+      consecutiveWeak: autoDJConfig.autoCorrectWeakMixes
+        ? consecutiveWeakMixCount(mixQualityHistory)
+        : 0,
+    })
+    const safety = assessBeatSyncSafety({
+      outgoingSonicDna: currentTrack.sonic_dna,
+      incomingSonicDna: nextQueueTrack.sonic_dna,
+      outgoingBpm: resolvePlaybackBpm(currentTrack, detectedBPM) ?? currentTrack.bpm ?? null,
+      incomingBpm: resolvePlaybackBpm(nextQueueTrack, null) ?? nextQueueTrack.bpm ?? null,
+      outgoingGridOffset: currentTrack.beat_grid_offset,
+      incomingGridOffset: nextQueueTrack.beat_grid_offset,
+      syncMode: autoDJConfig.syncMode,
+    })
+    const beatSyncUnsafe =
+      autoDJConfig.syncMode === 'beat-sync' && !safety.ok ? safety.message : null
+    return { why: scored.why, beatSyncUnsafe }
+  }, [
+    currentTrack,
+    nextQueueTrack,
+    autoDJConfig.syncMode,
+    autoDJConfig.autoCorrectWeakMixes,
+    mixQualityHistory,
+    detectedBPM,
+  ])
 
   const autoDjDeckStatusLine = useMemo(() => {
     if (!isAutoDJEnabled) return null
@@ -4432,9 +6271,13 @@ export default function MusicPlayer({
       const bars = autoDJConfig.overlapBars
       return `Blending ${Math.round(mixVisualProgress * 100)}% · ${bars}-bar overlap`
     }
+    const safetyBit = autoDjPairInsight.beatSyncUnsafe
+      ? `BeatSync unsafe — ${autoDjPairInsight.beatSyncUnsafe}`
+      : null
     if (autoDJOutCountdown != null && autoDJOutCountdown > 0) {
       const hint =
-        currentTrack && nextQueueTrack
+        autoDjPairInsight.why ||
+        (currentTrack && nextQueueTrack
           ? formatMixPairHintLine(
               buildMixPairHint(
                 {
@@ -4455,10 +6298,12 @@ export default function MusicPlayer({
                 },
               ),
             )
-          : null
-      return `OUT in ${autoDJOutCountdown.toFixed(1)}s${hint ? ` · ${hint}` : ''}`
+          : null)
+      return `OUT in ${autoDJOutCountdown.toFixed(1)}s${hint ? ` · ${hint}` : ''}${
+        safetyBit ? ` · ${safetyBit}` : ''
+      }`
     }
-    return null
+    return safetyBit
   }, [
     isAutoDJEnabled,
     crossfadeActive,
@@ -4468,33 +6313,51 @@ export default function MusicPlayer({
     currentTrack,
     nextQueueTrack,
     detectedBPM,
+    autoDjPairInsight,
   ])
 
   const resolveTrackBpm = useCallback((track: Track | null | undefined) => {
     if (!track) return null
+    const locked = Number(readCatalogOverrides(track.metadata)?.bpm)
+    if (Number.isFinite(locked) && locked > 0) return locked
+    const tape = tapeGridByTrackId[track.id]
+    if (tape?.bpm) {
+      const catalog = displayTrackBpm(track)
+      return reconcileTapeBpm(tape.bpm, locked || catalog)
+    }
+    const catalog = displayTrackBpm(track)
+    if (catalog) return catalog
     const cached = bpmCacheRef.current.get(track.id)
     if (typeof cached === 'number') return cached
     return track.bpm ?? null
-  }, [])
+  }, [tapeGridByTrackId])
 
   const resolveTrackBeatGridOffset = useCallback(
     (track: Track | null | undefined): number => {
       if (!track) return 0
-      const cached = mixGridOffsetCacheRef.current.get(track.id)
-      if (
-        typeof track.beat_grid_offset === 'number' &&
-        Number.isFinite(track.beat_grid_offset) &&
-        track.beat_grid_offset >= 0
-      ) {
-        return track.beat_grid_offset
+      const bpm = resolvePlaybackBpm(track) ?? track.bpm ?? 120
+      const beatSec = 60 / (bpm > 0 ? bpm : 120)
+      // Manual CDJ jog may store multi-bar offsets (window wrap). Do not crush
+      // those back to one beat on read — phase-only is only for DNA/tape defaults.
+      if (!isUnsetOffset(track.beat_grid_offset)) {
+        if (track.grid_manual === true || isGridManual(track.sonic_dna)) {
+          return Math.max(0, track.beat_grid_offset!)
+        }
+        return toPhaseOnlyOffsetSec(track.beat_grid_offset!, beatSec)
       }
+      const tape = tapeGridByTrackId[track.id]
+      if (tape) {
+        const tapeBeat = 60 / (tape.bpm > 0 ? tape.bpm : 120)
+        return toPhaseOnlyOffsetSec(tape.offsetSec, tapeBeat)
+      }
+      const cached = mixGridOffsetCacheRef.current.get(track.id)
       if (typeof cached === 'number' && Number.isFinite(cached)) {
+        // Cache may hold a multi-bar manual jog — keep it.
         return Math.max(0, cached)
       }
-      const ref = toMixTrackRef(track)
-      return typeof ref.beat_grid_offset === 'number' ? ref.beat_grid_offset : 0
+      return playbackGridPhaseSec(track, bpm)
     },
-    [toMixTrackRef],
+    [tapeGridByTrackId],
   )
 
   useEffect(() => {
@@ -4548,11 +6411,19 @@ export default function MusicPlayer({
       isLive: boolean,
     ) => {
       const trackCoverSrc = track ? albumCoverUrl(track, queue, coverBust) : undefined
+      const trackMosaicCovers = mosaicCoversForTrack(track, playerCoverPool)
       const liveDetectedBpm = isLive ? detectedBPM : null
+      const tape = track ? tapeGridByTrackId[track.id] : null
+      const catalogBpm = track ? displayTrackBpm(track) : null
+      const deckBpm =
+        catalogBpm ??
+        (isLive ? liveDetectedBpm : deckUi[deck].detectedBpm) ??
+        (tape?.bpm ? reconcileTapeBpm(tape.bpm, catalogBpm) : null) ??
+        resolveTrackBpm(track)
       const liveTrackForHint = liveDeckId === 'a' ? deckATrack : deckBTrack
       const pairHint =
         !isLive &&
-        isAutoDJEnabled &&
+        (isAutoDJEnabled || isIDJEnabled) &&
         track &&
         liveTrackForHint
           ? formatMixPairHintLine(
@@ -4584,14 +6455,11 @@ export default function MusicPlayer({
         coverSrc: trackCoverSrc,
         coverAlt: track?.album || track?.title || `Deck ${deck === 'a' ? 'A' : 'B'}`,
         coverUnoptimized: trackCoverSrc ? shouldUnoptimizeImage(trackCoverSrc) : true,
-        catalogBpm: track
-          ? displayTrackBpm(track) ?? liveDetectedBpm ?? resolveTrackBpm(track)
-          : null,
+        mosaicCovers: trackMosaicCovers,
+        catalogBpm,
         trackGenre: track ? displayTrackGenre(track) || null : null,
         trackKey: track ? displayTrackKey(track) || null : null,
-        detectedBPM: isLive
-          ? detectedBPM
-          : (deckUi[deck].detectedBpm ?? resolveTrackBpm(track)),
+        detectedBPM: deckBpm,
         isDetectingBPM: isLive && isDetectingBPM,
         playbackRate: deckUi[deck].playbackRate,
         tapTempoTaps: deckUi[deck].tapTempoTaps,
@@ -4630,14 +6498,372 @@ export default function MusicPlayer({
     isDetectingBPM,
     deckUi,
     resolveTrackBpm,
+    tapeGridByTrackId,
     incomingDeckHot,
     crossfadeActive,
     mixVisualProgress,
     isAutoDJEnabled,
+    isIDJEnabled,
     deckFilterUi,
     mixQualityFlash,
     coverBust,
+    playerCoverPool,
   ])
+
+  const handleIdjCrossfade = useCallback((progress: number) => {
+    const p = Math.max(0, Math.min(1, progress))
+    setIdjCrossfade(p)
+    mixEngineRef.current?.setManualCrossfade(p)
+  }, [])
+
+  const unlockCrossfaderFromAutoDj = useCallback(() => {
+    const progress = Math.max(0, Math.min(1, mixerCrossfadeProgress))
+    setAutoDjXfUnlocked(true)
+    setIdjCrossfade(progress)
+    mixEngineRef.current?.setManualXfOverride(true)
+    mixEngineRef.current?.setManualCrossfade(progress, { instant: true })
+    setAutoDJStatusMessage('Crossfader unlocked — Auto DJ still on')
+  }, [mixerCrossfadeProgress])
+
+  const relockCrossfaderToAutoDj = useCallback(() => {
+    setAutoDjXfUnlocked(false)
+    if (!crossfadeActive) {
+      const xf = liveDeckIdRef.current === 'b' ? 1 : 0
+      setIdjCrossfade(xf)
+      mixEngineRef.current?.clearManualCrossfade()
+    } else {
+      // Mid-blend: next fade tick resumes Auto DJ channel gains.
+      mixEngineRef.current?.setManualXfOverride(false)
+    }
+    setAutoDJStatusMessage((msg) =>
+      msg.startsWith('Crossfader unlocked') ? '' : msg,
+    )
+  }, [crossfadeActive])
+
+  useEffect(() => {
+    if (isAutoDJEnabled) return
+    if (!autoDjXfUnlocked) return
+    setAutoDjXfUnlocked(false)
+    mixEngineRef.current?.setManualXfOverride(false)
+  }, [isAutoDJEnabled, autoDjXfUnlocked])
+
+  useEffect(() => {
+    if (!isIDJEnabled || crossfadeActive) return
+    if (idjXfSeedRef.current != null) {
+      const seeded = idjXfSeedRef.current
+      idjXfSeedRef.current = null
+      setIdjCrossfade(seeded)
+      mixEngineRef.current?.setManualCrossfade(seeded, { instant: true })
+      return
+    }
+    const xf = liveDeckId === 'b' ? 1 : 0
+    setIdjCrossfade(xf)
+    mixEngineRef.current?.setManualCrossfade(xf)
+  }, [isIDJEnabled, liveDeckId, crossfadeActive])
+
+  const toggleIdleDeckPlay = useCallback(async () => {
+    const idle = getIdleAudio()
+    if (!idle) return
+    try {
+      await ensureDualDeckGraph()
+    } catch {
+      /* play without analysis */
+    }
+    if (idle.paused) {
+      try {
+        await idle.play()
+        setIdleDeckPlaying(true)
+      } catch (err) {
+        if ((err as { name?: string })?.name !== 'AbortError') {
+          console.error('Idle deck play failed:', err)
+        }
+      }
+      return
+    }
+    idle.pause()
+    setIdleDeckPlaying(false)
+  }, [getIdleAudio, ensureDualDeckGraph])
+
+  const handleToggleDeckPlay = useCallback(
+    (deck: 'a' | 'b') => {
+      if (deck === liveDeckIdRef.current) {
+        void togglePlay()
+        return
+      }
+      void toggleIdleDeckPlay()
+    },
+    [toggleIdleDeckPlay, togglePlay],
+  )
+
+  const startDeckPlay = useCallback(
+    (deck: 'a' | 'b') => {
+      if (deck === liveDeckIdRef.current) {
+        const live = getPlaybackAudio()
+        if (live && !live.paused) return
+        void togglePlay()
+        return
+      }
+      const idle = getIdleAudio()
+      if (idle && !idle.paused) return
+      void toggleIdleDeckPlay()
+    },
+    [getPlaybackAudio, getIdleAudio, toggleIdleDeckPlay, togglePlay],
+  )
+
+  const pauseDeckPlay = useCallback(
+    (deck: 'a' | 'b') => {
+      if (deck === liveDeckIdRef.current) {
+        const live = getPlaybackAudio()
+        if (live && !live.paused) {
+          try {
+            live.pause()
+          } catch {
+            /* ignore */
+          }
+        }
+        setIsPlaying(false)
+        return
+      }
+      const idle = getIdleAudio()
+      if (idle && !idle.paused) {
+        try {
+          idle.pause()
+        } catch {
+          /* ignore */
+        }
+      }
+      setIdleDeckPlaying(false)
+    },
+    [getPlaybackAudio, getIdleAudio],
+  )
+
+  const memoryCueStartSec = useCallback((trackId: string | undefined | null): number => {
+    if (!trackId || !idjConfigRef.current.startOnCue) return 0
+    const cue = idjMemoryCuesRef.current[trackId]
+    return typeof cue === 'number' && Number.isFinite(cue) && cue >= 0 ? cue : 0
+  }, [])
+
+  const writeDeckMemoryCue = useCallback(
+    (deck: 'a' | 'b', timeSec: number) => {
+      const track = trackForQueueDeck(deck)
+      if (!track?.id) return
+      const bpm =
+        resolvePlaybackBpm(track, deck === liveDeckId ? detectedBPM : null) ??
+        track.bpm ??
+        120
+      const visibleBars =
+        deck === liveDeckIdRef.current ? waveformVisibleBars : incomingVisibleBars
+      const snapped = idjConfig.snapToGrid
+        ? quantizePointerToVisibleGrid({
+            timeSec,
+            bpm,
+            offsetSec: resolveTrackBeatGridOffset(track),
+            visibleBars,
+            beatsPerBar: 4,
+            durationSec: track.duration,
+            sonicDna: track.sonic_dna,
+          })
+        : timeSec
+      const next = writeIDJMemoryCue(track.id, snapped)
+      idjMemoryCuesRef.current = next
+      setIdjMemoryCues(next)
+      persistDeckActiveCue(deck, track.id, { kind: 'memory' })
+    },
+    [
+      trackForQueueDeck,
+      liveDeckId,
+      detectedBPM,
+      resolveTrackBeatGridOffset,
+      waveformVisibleBars,
+      incomingVisibleBars,
+      idjConfig.snapToGrid,
+      persistDeckActiveCue,
+    ],
+  )
+
+  const handleSelectDeckActiveCue = useCallback(
+    (deck: 'a' | 'b', cue: IDJActiveCue) => {
+      persistDeckActiveCue(deck, trackForQueueDeck(deck)?.id, cue)
+    },
+    [persistDeckActiveCue, trackForQueueDeck],
+  )
+
+  const handleSetDeckCue = useCallback(
+    (deck: 'a' | 'b') => {
+      writeDeckMemoryCue(deck, readDeckMediaTime(deck))
+    },
+    [writeDeckMemoryCue, readDeckMediaTime],
+  )
+
+  const handleClearDeckCue = useCallback(
+    (deck: 'a' | 'b') => {
+      const track = trackForQueueDeck(deck)
+      if (!track?.id) return
+      const next = clearIDJMemoryCue(track.id)
+      idjMemoryCuesRef.current = next
+      setIdjMemoryCues(next)
+      clearDeckActiveCueIf(deck, track.id, { kind: 'memory' })
+    },
+    [trackForQueueDeck, clearDeckActiveCueIf],
+  )
+
+  const handleLaunchDeckCue = useCallback(
+    (deck: 'a' | 'b') => {
+      const track = trackForQueueDeck(deck)
+      if (!track?.id) return
+      const resolved = resolveIDJActiveCue({
+        active: idjActiveCuesRef.current[deck]?.[track.id],
+        memorySec: idjMemoryCues[track.id],
+        hotSlots: readHotCueSlots(track.id),
+        trackCues: listDeckJumpCues({
+          sonicDna: track.sonic_dna,
+          beatGridOffsetSec: resolveTrackBeatGridOffset(track),
+        }),
+      })
+      // Auto DJ: missing cue = track start. iDJ: CUE only jumps when a cue exists.
+      if (!resolved && !isAutoDJEnabled) return
+      const cue = resolved?.timeSec ?? 0
+      seekDeckMediaTime(deck, cue)
+      if (deck === liveDeckIdRef.current) snapPlaybackTime(cue)
+      if (idjConfigRef.current.cueJumpPlay) startDeckPlay(deck)
+      else pauseDeckPlay(deck)
+    },
+    [
+      trackForQueueDeck,
+      idjMemoryCues,
+      resolveTrackBeatGridOffset,
+      isAutoDJEnabled,
+      seekDeckMediaTime,
+      snapPlaybackTime,
+      startDeckPlay,
+      pauseDeckPlay,
+    ],
+  )
+
+  const deckHotCues = useMemo(
+    () => ({
+      a: readHotCueSlots(trackForQueueDeck('a')?.id),
+      b: readHotCueSlots(trackForQueueDeck('b')?.id),
+    }),
+    [trackForQueueDeck, hotCueRevision, currentTrack?.id, idjIdleTrackId, nextQueueTrack?.id],
+  )
+
+  const deckMemoryCueSec = useMemo(() => {
+    const aId = trackForQueueDeck('a')?.id
+    const bId = trackForQueueDeck('b')?.id
+    return {
+      a: aId != null && typeof idjMemoryCues[aId] === 'number' ? idjMemoryCues[aId] : null,
+      b: bId != null && typeof idjMemoryCues[bId] === 'number' ? idjMemoryCues[bId] : null,
+    }
+  }, [trackForQueueDeck, idjMemoryCues, idjIdleTrackId, nextQueueTrack?.id, currentTrack?.id])
+
+  const deckTrackCues = useMemo(() => {
+    const forDeck = (deck: 'a' | 'b') => {
+      const track = trackForQueueDeck(deck)
+      if (!track) return []
+      return listDeckJumpCues({
+        sonicDna: track.sonic_dna,
+        beatGridOffsetSec: resolveTrackBeatGridOffset(track),
+      })
+    }
+    return { a: forDeck('a'), b: forDeck('b') }
+  }, [trackForQueueDeck, resolveTrackBeatGridOffset, idjIdleTrackId, nextQueueTrack?.id, currentTrack?.id])
+
+  const jumpDeckToTime = useCallback(
+    (deck: 'a' | 'b', timeSec: number) => {
+      seekDeckMediaTime(deck, timeSec)
+      if (deck === liveDeckIdRef.current) snapPlaybackTime(timeSec)
+      if (idjConfigRef.current.cueJumpPlay) startDeckPlay(deck)
+      else pauseDeckPlay(deck)
+    },
+    [seekDeckMediaTime, snapPlaybackTime, startDeckPlay, pauseDeckPlay],
+  )
+
+  const handleLaunchDeckHotCue = useCallback(
+    (deck: 'a' | 'b', slot: HotCueSlot) => {
+      const timeSec = deckHotCues[deck][slot]
+      if (typeof timeSec !== 'number') return
+      jumpDeckToTime(deck, timeSec)
+    },
+    [deckHotCues, jumpDeckToTime],
+  )
+
+  const handleSetDeckHotCue = useCallback(
+    (deck: 'a' | 'b', slot: HotCueSlot) => {
+      const track = trackForQueueDeck(deck)
+      if (!track?.id) return
+      const timeSec = readDeckMediaTime(deck)
+      const bpm =
+        resolvePlaybackBpm(track, deck === liveDeckId ? detectedBPM : null) ??
+        track.bpm ??
+        120
+      const visibleBars =
+        deck === liveDeckIdRef.current ? waveformVisibleBars : incomingVisibleBars
+      const snapped = idjConfig.snapToGrid
+        ? quantizePointerToVisibleGrid({
+            timeSec,
+            bpm,
+            offsetSec: resolveTrackBeatGridOffset(track),
+            visibleBars,
+            beatsPerBar: 4,
+            durationSec: track.duration,
+            sonicDna: track.sonic_dna,
+          })
+        : timeSec
+      const next = writeHotCueSlot(track.id, slot, snapped)
+      if (track.id === currentTrack?.id) syncWaveformHotCuesFromSlots(track.id, next)
+      setHotCueRevision((n) => n + 1)
+    },
+    [
+      trackForQueueDeck,
+      readDeckMediaTime,
+      liveDeckId,
+      detectedBPM,
+      resolveTrackBeatGridOffset,
+      waveformVisibleBars,
+      incomingVisibleBars,
+      idjConfig.snapToGrid,
+      currentTrack?.id,
+      syncWaveformHotCuesFromSlots,
+    ],
+  )
+
+  const handleClearDeckHotCue = useCallback(
+    (deck: 'a' | 'b', slot: HotCueSlot) => {
+      const track = trackForQueueDeck(deck)
+      if (!track?.id) return
+      const next = clearHotCueSlot(track.id, slot)
+      if (track.id === currentTrack?.id) syncWaveformHotCuesFromSlots(track.id, next)
+      setHotCueRevision((n) => n + 1)
+      clearDeckActiveCueIf(deck, track.id, { kind: 'hot', slot })
+    },
+    [trackForQueueDeck, currentTrack?.id, syncWaveformHotCuesFromSlots, clearDeckActiveCueIf],
+  )
+
+  const handleClearAllDeckHotCues = useCallback(
+    (deck: 'a' | 'b') => {
+      const track = trackForQueueDeck(deck)
+      if (!track?.id) return
+      const next = clearAllHotCueSlots(track.id)
+      if (track.id === currentTrack?.id) syncWaveformHotCuesFromSlots(track.id, next)
+      setHotCueRevision((n) => n + 1)
+      const active = idjActiveCuesRef.current[deck]?.[track.id]
+      if (active?.kind === 'hot') {
+        const cleared = writeIDJActiveCue(deck, track.id, null)
+        idjActiveCuesRef.current = cleared
+        setIdjActiveCues(cleared)
+      }
+    },
+    [trackForQueueDeck, currentTrack?.id, syncWaveformHotCuesFromSlots],
+  )
+
+  const handleJumpDeckTrackCue = useCallback(
+    (deck: 'a' | 'b', timeSec: number) => {
+      if (!Number.isFinite(timeSec) || timeSec < 0) return
+      jumpDeckToTime(deck, timeSec)
+    },
+    [jumpDeckToTime],
+  )
 
   const syncDeckWaveformCache = useCallback((deck: 'a' | 'b', pack: DeckWaveformPack) => {
     setDeckWaveformCache((prev) => {
@@ -4652,6 +6878,450 @@ export default function MusicPlayer({
       syncDeckWaveformCache(idleDeck, { trackId, samples, durationSec })
     },
     [liveDeckId, syncDeckWaveformCache],
+  )
+
+  const loadTrackOntoIdleDeck = useCallback(
+    async (track: Track, opts?: { play?: boolean; gen?: number }) => {
+      const gen = opts?.gen ?? idleLoadGenRef.current
+      const stale = () => idleLoadGenRef.current !== gen
+      const idle = getIdleAudio()
+      if (!idle || stale()) return
+      const keepPlaying = Boolean(opts?.play)
+      let url =
+        peekSyncPlaybackUrl(track.file, resolvedUrlCacheRef.current) ||
+        resolvedUrlCacheRef.current.get(track.file) ||
+        null
+      if (!url) {
+        url = await resolveAudioUrl(track.file)
+        if (url) resolvedUrlCacheRef.current.set(track.file, url)
+      }
+      if (!url || stale()) return
+
+      const sameSrc = mediaUrlsRoughlyEqual(idle.currentSrc || idle.src, url)
+      if (!sameSrc) {
+        disarmIdjEnded('idle')
+        try {
+          idle.pause()
+        } catch {
+          /* ignore */
+        }
+        idle.src = url
+        idle.preload = 'auto'
+        try {
+          idle.volume = 0
+        } catch {
+          /* ignore */
+        }
+      }
+      setCuedIdleTrackId(track.id)
+
+      const startSec = isIDJEnabledRef.current
+        ? memoryCueStartSec(track.id)
+        : resolveIncomingMixCueSec(track)
+      const applyIdleStart = () => {
+        try {
+          idle.currentTime = startSec
+        } catch {
+          /* ignore */
+        }
+      }
+      applyIdleStart()
+      if (startSec > 0) {
+        idle.addEventListener('loadedmetadata', applyIdleStart, { once: true })
+        idle.addEventListener('canplay', applyIdleStart, { once: true })
+      }
+
+      // Auto DJ only: loadIdle parks at memory cue (or track start). iDJ keeps the HTML src.
+      const engine = mixEngineRef.current
+      if (!isIDJEnabledRef.current && engine && !engine.isMixing()) {
+        try {
+          await engine.loadIdle(withMixGrid(track), url, resolveIncomingMixCueSec(track), 1)
+        } catch {
+          /* HTML audio src is enough */
+        }
+      }
+      if (stale()) return
+
+      void loadWaveformSamplesForTrack(track, url, { allowFullDecode: true }).then((packed) => {
+        if (!packed || stale() || idjIdleTrackIdRef.current !== track.id) return
+        syncIdleDeckWaveformCache(
+          track.id,
+          packed.samples,
+          packed.durationSec || track.duration || 180,
+        )
+      })
+
+      if (keepPlaying) {
+        const playWhenReady = async () => {
+          if (stale()) return
+          try {
+            await idle.play()
+            if (stale()) return
+            setIdleDeckPlaying(true)
+          } catch (err) {
+            if ((err as { name?: string })?.name !== 'AbortError') {
+              console.error('Idle deck play failed:', err)
+            }
+          }
+        }
+        if (!sameSrc && idle.readyState < 2) {
+          const onReady = () => {
+            idle.removeEventListener('canplay', onReady)
+            void playWhenReady()
+          }
+          idle.addEventListener('canplay', onReady)
+          window.setTimeout(() => {
+            if (stale()) return
+            idle.removeEventListener('canplay', onReady)
+            void playWhenReady()
+          }, 2500)
+        } else {
+          await playWhenReady()
+        }
+      }
+    },
+    [
+      getIdleAudio,
+      setCuedIdleTrackId,
+      withMixGrid,
+      resolveIncomingMixCueSec,
+      syncIdleDeckWaveformCache,
+      memoryCueStartSec,
+    ],
+  )
+
+  const pinIdleIfNeeded = useCallback((): string | null => {
+    if (idjIdleTrackIdRef.current) return idjIdleTrackIdRef.current
+    const q = queueRef.current
+    const liveId = idjLiveTrackIdRef.current ?? autoDJCurrentTrackRef.current?.id ?? null
+    const liveIdx = liveId ? q.findIndex((item) => item.id === liveId) : -1
+    const sequential =
+      (liveIdx >= 0 ? q.slice(liveIdx + 1).find((item) => item.id !== liveId) : null) ??
+      q.find((item) => item.id && item.id !== liveId) ??
+      null
+    if (!sequential?.id) return null
+    idjIdleTrackIdRef.current = sequential.id
+    setIdjIdleTrackId(sequential.id)
+    setCueDeckTrackOverride(sequential)
+    return sequential.id
+  }, [])
+
+  const applyIDJLiveTrack = useCallback(
+    async (track: Track, opts?: { play?: boolean }) => {
+      const gen = ++liveLoadGenRef.current
+      const live = getPlaybackAudio()
+      if (!live) return
+      // Drop sticky session/scrub seeks — they re-fire on every canplay and
+      // thrash waiting↔canplay after a same-deck load (player feels dead).
+      clearSeekTarget()
+      const keepPlaying = opts?.play ?? ((!live.paused && !live.ended) || isPlayingRef.current)
+      let url = peekSyncPlaybackUrl(track.file, resolvedUrlCacheRef.current)
+      if (!url) {
+        url = await resolveAudioUrl(track.file)
+        if (url) resolvedUrlCacheRef.current.set(track.file, url)
+      }
+      if (!url || liveLoadGenRef.current !== gen) return
+
+      idjDeckSkipLockRef.current = true
+      skipSrcReloadRef.current = true
+      srcSwapRef.current = true
+      endedTrackIdRef.current = null
+      lastBoundPlaybackRef.current = { id: track.id, url }
+      disarmIdjEnded('live')
+
+      // Pause only the element for a clean resource swap. Keep React isPlaying
+      // true so canplay / the play effect resume without a second user gesture.
+      try {
+        live.pause()
+      } catch {
+        /* ignore */
+      }
+
+      const srcChanged = assignMediaSrcIfChanged(live, url)
+      const startSec = memoryCueStartSec(track.id)
+
+      const engine = mixEngineRef.current
+      if (engine && !engine.isMixing()) {
+        try {
+          engine.setActiveTrack(withMixGrid(track))
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const idx = queueRef.current.findIndex((item) => item.id === track.id)
+      idjLiveTrackIdRef.current = track.id
+      setResolvedUrl((prev) => (prev === url ? prev : url))
+      setCurrentTrack(track)
+      setCurrentIndex(idx >= 0 ? idx : 0)
+      snapPlaybackTime(startSec)
+      // Do not seekTo() here — the global seek effect re-applies on every
+      // canplay and restarts the buffer. Cue parking happens in startAfterReady.
+      setWaveformMediaSyncKey(`${playbackDeckRef.current}:${track.id}`)
+      if (keepPlaying) setIsPlaying(true)
+
+      const releaseLiveLoadLocks = () => {
+        if (liveLoadGenRef.current !== gen) return
+        idjDeckSkipLockRef.current = false
+        skipSrcReloadRef.current = false
+        srcSwapRef.current = false
+        idjIgnoreBufferUiUntilRef.current = Math.max(
+          idjIgnoreBufferUiUntilRef.current,
+          Date.now() + 700,
+        )
+      }
+
+      const startAfterReady = async () => {
+        if (liveLoadGenRef.current !== gen) return
+        try {
+          live.currentTime = startSec
+        } catch {
+          /* ignore */
+        }
+        snapPlaybackTime(startSec)
+        if (keepPlaying || isPlayingRef.current) {
+          try {
+            await live.play()
+          } catch (err) {
+            if ((err as { name?: string })?.name !== 'AbortError') {
+              console.error('Live deck skip play failed:', err)
+            }
+          }
+        }
+        if (liveLoadGenRef.current !== gen) return
+        releaseLiveLoadLocks()
+        armIdjEnded('live')
+      }
+
+      if (!srcChanged && live.readyState >= 2) {
+        await startAfterReady()
+        return
+      }
+
+      let settled = false
+      const onReady = () => {
+        if (settled || liveLoadGenRef.current !== gen) return
+        settled = true
+        live.removeEventListener('canplay', onReady)
+        live.removeEventListener('loadedmetadata', onReady)
+        void startAfterReady()
+      }
+      live.addEventListener('canplay', onReady)
+      live.addEventListener('loadedmetadata', onReady)
+      // Safety net if canplay never fires (offline / decode stall).
+      window.setTimeout(() => {
+        if (settled || liveLoadGenRef.current !== gen) return
+        settled = true
+        live.removeEventListener('canplay', onReady)
+        live.removeEventListener('loadedmetadata', onReady)
+        void startAfterReady()
+      }, 2500)
+    },
+    [
+      getPlaybackAudio,
+      snapPlaybackTime,
+      setCurrentTrack,
+      setCurrentIndex,
+      withMixGrid,
+      memoryCueStartSec,
+      clearSeekTarget,
+    ],
+  )
+
+  const stepIdleDeck = useCallback(
+    (direction: 1 | -1, opts?: { play?: boolean }) => {
+      const q = queueRef.current
+      const currentIdleId = pinIdleIfNeeded()
+      const next = nextQueueNeighbor(q, currentIdleId, null, direction)
+      if (!next) return
+      const gen = ++idleLoadGenRef.current
+      idjIdleTrackIdRef.current = next.id
+      setIdjIdleTrackId(next.id)
+      setCueDeckTrackOverride(next)
+      void loadTrackOntoIdleDeck(next, {
+        play: opts?.play ?? idleDeckPlayingRef.current,
+        gen,
+      })
+    },
+    [loadTrackOntoIdleDeck, pinIdleIfNeeded],
+  )
+
+  const stepLiveDeck = useCallback(
+    (direction: 1 | -1, opts?: { play?: boolean }) => {
+      if (mixEngineRef.current?.isMixing() || phraseMixLockRef.current) return
+      const q = queueRef.current
+      const liveId = idjLiveTrackIdRef.current ?? autoDJCurrentTrackRef.current?.id ?? null
+      // Freeze the idle pick so the other deck does not follow the new live track.
+      pinIdleIfNeeded()
+      const next = nextQueueNeighbor(q, liveId, null, direction)
+      if (!next) return
+      idjLiveTrackIdRef.current = next.id
+      void applyIDJLiveTrack(next, opts)
+    },
+    [applyIDJLiveTrack, pinIdleIfNeeded],
+  )
+  stepLiveDeckRef.current = stepLiveDeck
+
+  idjOnDeckEndedRef.current = (deck) => {
+    if (!isIDJEnabledRef.current) return false
+    if (!idjEndedArmedRef.current[deck]) return false
+    const endedDeckId = deck === 'live'
+      ? liveDeckIdRef.current
+      : liveDeckIdRef.current === 'a'
+        ? 'b'
+        : 'a'
+    if (idjConfigRef.current.continuousPlay[endedDeckId]) {
+      if (deck === 'live') stepLiveDeck(1, { play: true })
+      else stepIdleDeck(1, { play: true })
+      return true
+    }
+    if (deck === 'live') setIsPlaying(false)
+    else setIdleDeckPlaying(false)
+    return true
+  }
+
+  useEffect(() => {
+    type IDJSnapshot = {
+      liveId: string | null
+      idleId: string | null
+      liveTime: number | null
+      liveDuration: number | null
+      liveEnded: boolean
+      livePaused: boolean
+      liveReadyState: number
+      armed: { live: boolean; idle: boolean }
+      skipLocked: boolean
+      srcSwap: boolean
+      loadStarts: number
+      waitings: number
+      canplays: number
+      endeds: number
+    }
+    type E2EApi = {
+      idjSnapshot?: () => IDJSnapshot
+      fireMediaEnded?: (deck: 'live' | 'idle') => void
+      seekLiveNearEnd?: () => boolean
+      resetIdjMediaCounters?: () => void
+    }
+    const counters = { loadStarts: 0, waitings: 0, canplays: 0, endeds: 0 }
+    const w = window as Window & { __SERGIK_E2E__?: E2EApi }
+    const onLoadStart = () => {
+      counters.loadStarts += 1
+    }
+    const onWaiting = () => {
+      counters.waitings += 1
+    }
+    const onCanPlay = () => {
+      counters.canplays += 1
+    }
+    const onEnded = () => {
+      counters.endeds += 1
+    }
+    const els = [audioRef.current, nextAudioRef.current].filter(
+      (el): el is HTMLAudioElement => Boolean(el),
+    )
+    for (const el of els) {
+      el.addEventListener('loadstart', onLoadStart)
+      el.addEventListener('waiting', onWaiting)
+      el.addEventListener('canplay', onCanPlay)
+      el.addEventListener('ended', onEnded)
+    }
+    let pollId: number | null = null
+    const attach = () => {
+      const api = w.__SERGIK_E2E__
+      if (!api) return false
+      api.resetIdjMediaCounters = () => {
+        counters.loadStarts = 0
+        counters.waitings = 0
+        counters.canplays = 0
+        counters.endeds = 0
+      }
+      api.idjSnapshot = () => {
+        const live = getPlaybackAudio()
+        return {
+          liveId: idjLiveTrackIdRef.current,
+          idleId: idjIdleTrackIdRef.current,
+          liveTime: live && Number.isFinite(live.currentTime) ? live.currentTime : null,
+          liveDuration: live && Number.isFinite(live.duration) ? live.duration : null,
+          liveEnded: Boolean(live?.ended),
+          livePaused: Boolean(live?.paused),
+          liveReadyState: live?.readyState ?? 0,
+          armed: { ...idjEndedArmedRef.current },
+          skipLocked: idjDeckSkipLockRef.current,
+          srcSwap: srcSwapRef.current,
+          loadStarts: counters.loadStarts,
+          waitings: counters.waitings,
+          canplays: counters.canplays,
+          endeds: counters.endeds,
+        }
+      }
+      api.fireMediaEnded = (deck) => {
+        const el = deck === 'live' ? getPlaybackAudio() : getIdleAudio()
+        el?.dispatchEvent(new Event('ended'))
+      }
+      api.seekLiveNearEnd = () => {
+        const el = getPlaybackAudio()
+        if (!el || !Number.isFinite(el.duration) || el.duration < 0.5) return false
+        try {
+          el.currentTime = Math.max(0, el.duration - 0.05)
+        } catch {
+          return false
+        }
+        return true
+      }
+      return true
+    }
+    if (!attach()) {
+      pollId = window.setInterval(() => {
+        if (attach() && pollId != null) {
+          window.clearInterval(pollId)
+          pollId = null
+        }
+      }, 50)
+    }
+    return () => {
+      if (pollId != null) window.clearInterval(pollId)
+      for (const el of els) {
+        el.removeEventListener('loadstart', onLoadStart)
+        el.removeEventListener('waiting', onWaiting)
+        el.removeEventListener('canplay', onCanPlay)
+        el.removeEventListener('ended', onEnded)
+      }
+      const api = w.__SERGIK_E2E__
+      if (!api) return
+      delete api.idjSnapshot
+      delete api.fireMediaEnded
+      delete api.seekLiveNearEnd
+      delete api.resetIdjMediaCounters
+    }
+  }, [getPlaybackAudio, getIdleAudio])
+
+  const handleDeckPrevious = useCallback(
+    (deck: 'a' | 'b') => {
+      const now = Date.now()
+      if (now - lastDeckSkipAtRef.current[deck] < 180) return
+      lastDeckSkipAtRef.current[deck] = now
+      if (deck === liveDeckIdRef.current) {
+        stepLiveDeck(-1)
+        return
+      }
+      stepIdleDeck(-1)
+    },
+    [stepIdleDeck, stepLiveDeck],
+  )
+
+  const handleDeckNext = useCallback(
+    (deck: 'a' | 'b') => {
+      const now = Date.now()
+      if (now - lastDeckSkipAtRef.current[deck] < 180) return
+      lastDeckSkipAtRef.current[deck] = now
+      if (deck === liveDeckIdRef.current) {
+        stepLiveDeck(1)
+        return
+      }
+      stepIdleDeck(1)
+    },
+    [stepIdleDeck, stepLiveDeck],
   )
 
   /** Load the queue track after `liveTrack` onto the idle deck for the next mix. */
@@ -4673,7 +7343,7 @@ export default function MusicPlayer({
       }
       if (!url) return
 
-      void loadWaveformSamplesForTrack(successor, url).then((packed) => {
+      void loadWaveformSamplesForTrack(successor, url, { allowFullDecode: true }).then((packed) => {
         if (!packed) return
         cacheMixGridOffset(
           successor,
@@ -4708,7 +7378,7 @@ export default function MusicPlayer({
             ? settingsRef.current.playbackRate
             : 1,
       })
-      const cueSec = trackIntroOffsetSec(successor)
+      const cueSec = resolveIncomingMixCueSec(successor)
 
       try {
         await engine.loadIdle(withMixGrid(successor), url, cueSec, mixDeckRates.incomingRate)
@@ -4721,7 +7391,7 @@ export default function MusicPlayer({
     [
       ensureDualDeckGraph,
       ensureMixEngine,
-      trackIntroOffsetSec,
+      resolveIncomingMixCueSec,
       cacheMixGridOffset,
       syncIdleDeckWaveformCache,
       getOutgoingPlaybackRate,
@@ -4736,11 +7406,11 @@ export default function MusicPlayer({
     const idleTargets: { deck: 'a' | 'b'; track: Track | null | undefined }[] = [
       {
         deck: 'a',
-        track: liveDeckId === 'a' ? null : nextQueueTrack,
+        track: liveDeckId === 'a' ? null : trackForQueueDeck('a'),
       },
       {
         deck: 'b',
-        track: liveDeckId === 'b' ? null : nextQueueTrack,
+        track: liveDeckId === 'b' ? null : trackForQueueDeck('b'),
       },
     ]
 
@@ -4751,6 +7421,11 @@ export default function MusicPlayer({
 
       const ghost = ghostSamplesRef.current
       if (ghost?.trackId === track.id && ghost.samples.length > 0) {
+        cacheMixGridOffset(
+          track,
+          ghost.samples,
+          ghost.durationSec || track.duration || 180,
+        )
         syncDeckWaveformCache(deck, {
           trackId: track.id,
           samples: ghost.samples,
@@ -4765,8 +7440,13 @@ export default function MusicPlayer({
           if (!url) url = await resolveAudioUrl(track.file)
           if (!url || cancelled) return
           resolvedUrlCacheRef.current.set(track.file, url)
-          const packed = await loadWaveformSamplesForTrack(track, url)
+          const packed = await loadWaveformSamplesForTrack(track, url, { allowFullDecode: true })
           if (cancelled || !packed.samples.length) return
+          cacheMixGridOffset(
+            track,
+            packed.samples,
+            packed.durationSec || track.duration || 180,
+          )
           syncDeckWaveformCache(deck, {
             trackId: track.id,
             samples: packed.samples,
@@ -4785,11 +7465,12 @@ export default function MusicPlayer({
     isMiniMode,
     expandedMode,
     liveDeckId,
-    nextQueueTrack,
+    trackForQueueDeck,
     currentQueueIndex,
     queue,
     deckWaveformCache,
     syncDeckWaveformCache,
+    cacheMixGridOffset,
   ])
 
   // Mini/expand chrome must not collapse a docked vault queue panel.
@@ -4877,14 +7558,68 @@ export default function MusicPlayer({
     return queue
   }, [allSourceTracks, queue])
 
+  const handleCueDeckLibraryDrop = useCallback(
+    (
+      trackIds: string[],
+      payloadTracks: Array<{ id: string; [key: string]: unknown }>,
+    ) => {
+      if (!trackIds.length) return
+      const byId = new Map<string, Track>()
+      for (const t of payloadTracks) {
+        if (t?.id) byId.set(String(t.id), t as Track)
+      }
+      for (const t of autoDJPool) byId.set(t.id, t)
+      for (const t of queue) byId.set(t.id, t)
+      const incoming = trackIds
+        .map((id) => byId.get(id))
+        .filter((t): t is Track => Boolean(t?.id))
+      if (!incoming.length) {
+        setAutoDJStatusMessage('Could not cue dropped track — missing library data')
+        return
+      }
+
+      const primary = incoming[0]!
+      if (!currentTrack) {
+        playTrack(primary, incoming)
+        setAutoDJStatusMessage(
+          incoming.length === 1
+            ? `Playing “${primary.title}”`
+            : `Playing · ${incoming.length} tracks from library`,
+        )
+        return
+      }
+
+      playNext(incoming)
+      const gen = ++idleLoadGenRef.current
+      idjIdleTrackIdRef.current = primary.id
+      setIdjIdleTrackId(primary.id)
+      setCueDeckTrackOverride(primary)
+      void ensureDualDeckGraph().then(() => {
+        void loadTrackOntoIdleDeck(primary, { play: false, gen })
+      })
+      setAutoDJStatusMessage(
+        incoming.length === 1
+          ? `Cued “${primary.title}” on idle deck`
+          : `Cued “${primary.title}” · ${incoming.length - 1} more up next`,
+      )
+    },
+    [
+      autoDJPool,
+      queue,
+      currentTrack,
+      playTrack,
+      playNext,
+      ensureDualDeckGraph,
+      loadTrackOntoIdleDeck,
+    ],
+  )
+
   useEffect(() => {
-    playedTrackIdsRef.current.clear()
-    if (currentTrack?.id) playedTrackIdsRef.current.add(currentTrack.id)
     catalogRandomFillKeyRef.current = ''
   }, [currentSource?.type, currentSource?.id])
 
   useEffect(() => {
-    if (currentTrack?.id) playedTrackIdsRef.current.add(currentTrack.id)
+    if (currentTrack?.id) rememberPlayedTrackId(currentTrack.id)
   }, [currentTrack?.id])
 
   const catalogRandomLookahead = Math.max(1, Math.min(autoDJConfig.lookahead || 4, 8))
@@ -4902,10 +7637,24 @@ export default function MusicPlayer({
     if (catalogRandomFillKeyRef.current === fillKey) return
     const needed = catalogRandomLookahead - Math.max(0, upcoming)
     const exclude = new Set(queue.map((track) => track.id))
-    playedTrackIdsRef.current.forEach((id) => exclude.add(id))
+
+    if (isOrderedReleaseRandomScope(currentSource)) {
+      const picked = pickNextOrderedTracks(catalogPool, exclude, needed, {
+        preferAfterId: currentTrack.id,
+      })
+      if (picked.length === 0) return
+      catalogRandomFillKeyRef.current = fillKey
+      onQueueChange([...queue, ...picked])
+      setAutoDJStatusMessage(
+        `Playing ${catalogScopeLabel(currentSource)} in order · queued “${picked[0]!.title}”`,
+      )
+      return
+    }
+
     const picked = pickRandomUnusedTracks(catalogPool, exclude, needed, {
       allowReshuffle: true,
       keepExcluded: [currentTrack.id],
+      recentIds: getRecentPlayedTrackIds(),
     })
     if (picked.length === 0) return
     catalogRandomFillKeyRef.current = fillKey
@@ -4930,13 +7679,47 @@ export default function MusicPlayer({
     const upcomingIds = new Set(
       (currentQueueIndex >= 0 ? queue.slice(currentQueueIndex) : queue).map((t) => t.id),
     )
-    const outBpm =
-      resolvePlaybackBpm(currentTrack, detectedBPM) ||
-      detectedBPM ||
-      currentTrack.bpm ||
-      null
-    const bpmOk = (t: Track) =>
-      pairBpmCompatible(outBpm, resolvePlaybackBpm(t, null) ?? t.bpm ?? null)
+    for (const id of getRecentPlayedTrackIds()) upcomingIds.add(id)
+    upcomingIds.add(currentTrack.id)
+    const last = mixQualityHistory[0]
+    const consecutiveWeak = autoDJConfig.autoCorrectWeakMixes
+      ? consecutiveWeakMixCount(mixQualityHistory)
+      : 0
+    const trusted = pickTrustedAutoDjTrack({
+      outgoing: currentTrack,
+      candidates: autoDJPool as Track[],
+      syncMode: autoDJConfig.syncMode,
+      lastGrade: last?.grade,
+      lastIncomingId: last?.incomingTrackId ?? null,
+      consecutiveWeak,
+      excludeIds: upcomingIds,
+      randomizeTop: 2,
+    })
+    if (trusted?.track) {
+      setAutoDjPickStall(null)
+      return trusted.track as Track
+    }
+
+    // BeatSync on a 4/4 outgoing: do not DNA-fallback into trap / breaks / one-drop.
+    if (
+      shouldBlockDnaFallback({
+        syncMode: autoDJConfig.syncMode,
+        fourOnFloorOutgoing: isFourOnFloorPocket(currentTrack.sonic_dna),
+      })
+    ) {
+      const stall = diagnoseAutoDjPickStall({
+        outgoing: currentTrack,
+        candidates: autoDJPool as Track[],
+        syncMode: autoDJConfig.syncMode,
+        lastGrade: last?.grade,
+        lastIncomingId: last?.incomingTrackId ?? null,
+        consecutiveWeak,
+        excludeIds: upcomingIds,
+      })
+      setAutoDjPickStall(stall)
+      setAutoDJStatusMessage(`No next track — ${stall.rejectReason}`)
+      return null
+    }
 
     const harmonic = autoDJConfig.harmonicMatch
     if (harmonic !== 'off') {
@@ -4947,33 +7730,40 @@ export default function MusicPlayer({
       })
       const keyThreshold = harmonic === 'key-lock' ? 0.6 : 0.45
       const keyed = ranked.filter((r) => r.score.key >= keyThreshold)
-      const pool = (keyed.length ? keyed : ranked).filter((r) => bpmOk(r.track as Track))
-      const usePool = pool.length ? pool : keyed.length ? keyed : ranked
-      if (usePool.length) {
-        const pick = usePool[Math.floor(Math.random() * Math.min(3, usePool.length))]!
-        return pick.track as Track
+      if (keyed.length) {
+        setAutoDjPickStall(null)
+        return keyed[0]!.track as Track
       }
     }
-    const best = pickBestDnaTrack(currentTrack, autoDJPool, {
+    const dnaPick = (pickBestDnaTrack(currentTrack, autoDJPool, {
       excludeIds: upcomingIds,
       randomizeTop: 2,
-      minScore: 0.12,
+    }) as Track) || null
+    if (dnaPick) {
+      setAutoDjPickStall(null)
+      return dnaPick
+    }
+    const stall = diagnoseAutoDjPickStall({
+      outgoing: currentTrack,
+      candidates: autoDJPool as Track[],
+      syncMode: autoDJConfig.syncMode,
+      lastGrade: last?.grade,
+      lastIncomingId: last?.incomingTrackId ?? null,
+      consecutiveWeak,
+      excludeIds: upcomingIds,
     })
-    if (best && bpmOk(best as Track)) return best as Track
-    if (best) return best as Track
-
-    const soft = pickBestDnaTrack(currentTrack, autoDJPool, {
-      excludeIds: new Set([currentTrack.id]),
-      randomizeTop: 2,
-    })
-    return (soft as Track) || null
+    setAutoDjPickStall(stall)
+    setAutoDJStatusMessage(`No next track — ${stall.rejectReason}`)
+    return null
   }, [
     autoDJPool,
     queue,
     currentTrack,
     currentQueueIndex,
     autoDJConfig.harmonicMatch,
-    detectedBPM,
+    autoDJConfig.syncMode,
+    autoDJConfig.autoCorrectWeakMixes,
+    mixQualityHistory,
   ])
 
   // Refs for fast-changing values so Auto DJ interval doesn't churn on every timeupdate
@@ -4986,12 +7776,40 @@ export default function MusicPlayer({
   autoDJCurrentTrackRef.current = currentTrack
   autoDJPhraseDurationRef.current = phraseDuration
 
+  // Systemic beat-grid saves (other tabs / library) keep the live deck phase in lockstep.
+  useEffect(() => {
+    return subscribeCatalogSync((event) => {
+      if (event.entity !== 'track') return
+      const live = autoDJCurrentTrackRef.current
+      if (!live) return
+      const matchesCurrent =
+        live.id === event.entityId ||
+        (live as { audioFileId?: string }).audioFileId === event.entityId
+      if (!matchesCurrent) return
+      if (typeof event.patch.beat_grid_offset === 'number' && Number.isFinite(event.patch.beat_grid_offset)) {
+        setBeatGridOffsetSec(event.patch.beat_grid_offset)
+        live.beat_grid_offset = event.patch.beat_grid_offset
+      }
+      if (event.patch.sonic_dna !== undefined) {
+        live.sonic_dna = event.patch.sonic_dna
+        setBeatGridLocked(isGridLocked(event.patch.sonic_dna))
+      }
+    })
+  }, [])
+
   // Drop stale transition locks when the playhead moves to a new track
   useEffect(() => {
     // A new track means the previous track's mix distance says nothing about
     // how often we should be replanning.
     autoDJPlanDelayRef.current = null
     autoDJPlanScanRef.current = 0
+    // iDJ same-deck skips must not clear the idle cue or poke master volume —
+    // that fought live src swaps and looked like a reload/buffer loop.
+    if (isIDJEnabledRef.current) {
+      autoDJPendingRef.current = null
+      setAutoDJPendingTrackId(null)
+      return
+    }
     // Keep MixEngine lock intact during an in-flight deck-swap handoff
     if (
       phraseMixLockRef.current ||
@@ -5006,13 +7824,88 @@ export default function MusicPlayer({
     autoDJLastAddedRef.current = null
     setAutoDJPendingTrackId(null)
     clearAutoDJCrossfadeTimeout()
-        setCuedIdleTrackId(null)
+    setCuedIdleTrackId(null)
     clearFadeInterval()
     restoreMainVolume()
   }, [currentTrack?.id, clearAutoDJCrossfadeTimeout, clearFadeInterval, restoreMainVolume, isDeckHandoffActive])
 
+  const cueIdleEarlyRef = useRef<
+    (nextTrack: Track, plan: MixPlan, mixStartRate: number) => Promise<void>
+  >(async () => {})
+
+  cueIdleEarlyRef.current = async (nextTrack: Track, plan: MixPlan, mixStartRate: number) => {
+    await runCueIdleEarly(nextTrack, plan, mixStartRate, {
+      getCuedIdleTrackId: () => cuedIdleTrackIdRef.current,
+      setCuedIdleTrackId: (id) => setCuedIdleTrackId(id),
+      isEngineMixing: () => mixEngineRef.current?.isMixing() === true,
+      lockIdleTempo: (rate) => {
+        mixEngineRef.current?.lockIdleTempo(rate)
+      },
+      getIdleDeckId: () => (mixEngineRef.current?.getActiveDeck() === 'a' ? 'b' : 'a'),
+      setIdleDeckUi: (deck, patch) => {
+        setDeckUi((prev) => ({
+          ...prev,
+          [deck]: {
+            ...prev[deck],
+            playbackRate: patch.playbackRate,
+            detectedBpm:
+              patch.detectedBpm !== undefined
+                ? patch.detectedBpm ?? prev[deck].detectedBpm
+                : prev[deck].detectedBpm,
+          },
+        }))
+      },
+      silenceIdle: () => {
+        mixEngineRef.current?.silenceIdle({ instant: true })
+      },
+      ensureDualDeckGraph,
+      ensureMixEngine,
+      peekUrl: (file) => resolvedUrlCacheRef.current.get(file) || null,
+      cacheUrl: (file, url) => {
+        resolvedUrlCacheRef.current.set(file, url)
+      },
+      loadWaveformSamples: (track, url) =>
+        loadWaveformSamplesForTrack(track as Track, url, { allowFullDecode: true }),
+      cacheMixGridOffset: (track, samples, durationSec) =>
+        cacheMixGridOffset(track as Track, samples, durationSec),
+      setGhostSamples: (payload) => {
+        ghostSamplesRef.current = payload
+      },
+      syncIdleDeckWaveformCache,
+      resolveIncomingCueSec: (track) => {
+        if (!autoDJConfigRef.current.creativeMode) {
+          return trackIntroOffsetSec(track as Track)
+        }
+        return resolveIncomingMixCueSec(track as Track)
+      },
+      withMixGrid: (track) => withMixGrid(track as Track),
+      getSyncMode: () => autoDJConfigRef.current.syncMode,
+      phaseMeterEnabled: () => waveformPhaseMeterRef.current,
+      getPhaseMeter: () => ({
+        windowId: phaseMeterOptionsRef.current.windowId,
+        phraseBars: phaseMeterOptionsRef.current.phraseBars,
+      }),
+      getOutgoingTrack: () => autoDJCurrentTrackRef.current,
+      getDetectedBpm: () => detectedBPMRef.current,
+      getBeatGridOffsetSec: () => beatGridOffsetSecRef.current,
+      getDefaultOverlapBars: () => autoDJConfigRef.current.overlapBars,
+      getAudioContext: () => audioContextRef.current,
+      armIncomingBuffer: (buf) => {
+        mixEngineRef.current?.armIncomingBuffer(buf)
+      },
+      clearIdleWarmed: () => {
+        autoDJIdleWarmedRef.current = null
+      },
+      setMixOverlay: (overlay) => setWaveformMixOverlay(overlay),
+      setStatus: (message) => setAutoDJStatusMessage(message),
+    })
+  }
+
+
   useEffect(() => {
     if (!autoDJConfig.enabled || !onQueueChange) {
+      autoDjControllerRef.current?.stop()
+      autoDjControllerRef.current = null
       if (autoDJIntervalRef.current) {
         clearInterval(autoDJIntervalRef.current)
         autoDJIntervalRef.current = null
@@ -5032,158 +7925,82 @@ export default function MusicPlayer({
       return
     }
 
-    const cueIdleEarly = async (nextTrack: Track, plan: MixPlan, mixStartRate: number) => {
-      if (cuedIdleTrackIdRef.current === nextTrack.id) {
-        if (!mixEngineRef.current?.isMixing()) {
-          if (mixStartRate > 0) {
-            mixEngineRef.current?.lockIdleTempo(mixStartRate)
-            const idleDeck: DeckId = mixEngineRef.current.getActiveDeck() === 'a' ? 'b' : 'a'
-            setDeckUi((prev) => ({
-              ...prev,
-              [idleDeck]: { ...prev[idleDeck], playbackRate: clampTempoRate(mixStartRate) },
-            }))
-          }
-          mixEngineRef.current?.silenceIdle({ instant: true })
-        }
-        return
-      }
-      await ensureDualDeckGraph()
-      const engine = ensureMixEngine()
-      if (!engine || engine.isMixing()) return
-      let url = resolvedUrlCacheRef.current.get(nextTrack.file) || null
-      if (!url) {
-        url = await resolveAudioUrl(nextTrack.file)
-        if (url) resolvedUrlCacheRef.current.set(nextTrack.file, url)
-      }
-      if (!url) return
-      // Preload incoming tape in parallel with audio cue
-      void loadWaveformSamplesForTrack(nextTrack, url).then((packed) => {
-        if (!packed) return
-        cacheMixGridOffset(nextTrack, packed.samples, packed.durationSec || nextTrack.duration || 180)
-        ghostSamplesRef.current = {
-          trackId: nextTrack.id,
-          samples: packed.samples,
-          durationSec: packed.durationSec || nextTrack.duration || 180,
-          sonicDna: nextTrack.sonic_dna,
-        }
-        syncIdleDeckWaveformCache(
-          nextTrack.id,
-          packed.samples,
-          packed.durationSec || nextTrack.duration || 180,
-        )
-      })
-      try {
-        const cueSec =
-          typeof plan.resolvedIncomingSec === 'number' && Number.isFinite(plan.resolvedIncomingSec)
-            ? plan.resolvedIncomingSec
-            : plan.incomingStartSec
-        await engine.loadIdle(withMixGrid(nextTrack), url, cueSec, mixStartRate)
-        autoDJIdleWarmedRef.current = null
-        const idleDeck: DeckId = engine.getActiveDeck() === 'a' ? 'b' : 'a'
-        setDeckUi((prev) => ({
-          ...prev,
-          [idleDeck]: {
-            ...prev[idleDeck],
-            playbackRate: clampTempoRate(mixStartRate),
-            detectedBpm:
-              resolvePlaybackBpm(nextTrack, null) ?? nextTrack.bpm ?? prev[idleDeck].detectedBpm,
-          },
-        }))
-        setCuedIdleTrackId(nextTrack.id)
-        const bpm =
-          resolvePlaybackBpm(autoDJCurrentTrackRef.current, detectedBPMRef.current) ??
-          autoDJCurrentTrackRef.current?.bpm ??
-          detectedBPMRef.current ??
-          120
-        const aligned = alignMixOverlayToBeatGrid({
-          mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
-          mixDurationSec: plan.mixDurationSec,
-          bpm,
-          offsetSec: beatGridOffsetSecRef.current,
-          overlapBars: autoDJConfigRef.current.overlapBars,
-        })
-        setWaveformMixOverlay({
-          active: true,
-          mixOutSec: aligned.mixOutSec,
-          mixStartSec: aligned.mixStartSec,
-          mixEndSec: aligned.mixEndSec,
-        })
-        setAutoDJStatusMessage(`Cued “${nextTrack.title}” @ ${cueSec.toFixed(1)}s`)
-      } catch (err) {
-        console.debug('Early idle cue failed:', err)
-      }
-    }
+    const asHostTrack = (t: Track): AutoDjHostTrack => t as AutoDjHostTrack
 
-    const tick = () => {
-      if (phraseMixLockRef.current) {
-        setAutoDJOutCountdown(null)
-        return
-      }
-
-      const live = getPlaybackAudio()
-      const ct = live && Number.isFinite(live.currentTime) ? live.currentTime : autoDJCurrentTimeRef.current
-      const dur =
-        live && Number.isFinite(live.duration) && live.duration > 0
+    const host: AutoDjControllerHost = {
+      getConfig: () => autoDJConfigRef.current,
+      getLeadInSec: () => autoDJLeadInRef.current,
+      getSuggestedLeadInSec: () => autoDJSuggestedLeadInRef.current,
+      setSuggestedLeadInSec: (sec) => setAutoDJSuggestedLeadIn(sec),
+      isMixingLocked: () => phraseMixLockRef.current,
+      getNowSec: () => {
+        const live = getPlaybackAudio()
+        const engineClock = mixEngineRef.current
+        const liveTime = engineClock?.hasBufferClock()
+          ? engineClock.getActiveMediaTime()
+          : live && Number.isFinite(live.currentTime)
+            ? live.currentTime
+            : NaN
+        return Number.isFinite(liveTime) ? liveTime : autoDJCurrentTimeRef.current
+      },
+      getDurationSec: () => {
+        const live = getPlaybackAudio()
+        return live && Number.isFinite(live.duration) && live.duration > 0
           ? live.duration
           : autoDJDurationRef.current
-      const q = autoDJQueueRef.current
-      const track = autoDJCurrentTrackRef.current
-      const phrase = autoDJPhraseDurationRef.current
-
-      if (!track || dur <= 0 || !Number.isFinite(ct)) return
-      const currentIndex = q.findIndex((t) => t.id === track.id)
-      if (currentIndex < 0) return
-
-      if (trackWaveformBaseRef.current.length >= 64) {
-        cacheMixGridOffset(track, trackWaveformBaseRef.current, dur)
-      }
-
-      const upcomingCount = q.length - 1 - currentIndex
-
-      // 1) Keep DNA-matched lookahead in the queue
-      if (upcomingCount < autoDJConfig.lookahead) {
-        const candidate = pickAutoDJTrack()
-        if (
-          candidate &&
-          !q.some((t) => t.id === candidate.id) &&
-          autoDJLastAddedRef.current !== candidate.id
-        ) {
-          autoDJLastAddedRef.current = candidate.id
-          const nextQueue = [...q, candidate]
-          queueRef.current = nextQueue
-          autoDJQueueRef.current = nextQueue
-          onQueueChange(nextQueue)
-          setAutoDJStatusMessage(`Auto DJ queued “${candidate.title}” (DNA)`)
-          return
+      },
+      getQueue: () => autoDJQueueRef.current.map(asHostTrack),
+      setQueue: (queue) => {
+        const next = queue as Track[]
+        queueRef.current = next
+        autoDJQueueRef.current = next
+      },
+      getCurrentTrack: () => {
+        const t = autoDJCurrentTrackRef.current
+        return t ? asHostTrack(t) : null
+      },
+      getPhraseDurationSec: () => autoDJPhraseDurationRef.current,
+      getOutgoingPlaybackRate: () => getOutgoingPlaybackRate(),
+      getDetectedBpm: () => detectedBPMRef.current,
+      getBeatGridOffsetSec: () => beatGridOffsetSecRef.current,
+      getSliderPlaybackRate: () => settingsRef.current.playbackRate,
+      getLastMixGrade: () => lastMixQualityRef.current?.grade ?? null,
+      getConsecutiveWeak: () =>
+        autoDJConfigRef.current.autoCorrectWeakMixes
+          ? consecutiveWeakMixCount(readMixQualityHistory())
+          : 0,
+      withMixGrid: (track) => withMixGrid(track as Track),
+      resolveIncomingCueSec: (track) => {
+        if (!autoDJConfigRef.current.creativeMode) {
+          return trackIntroOffsetSec(track as Track)
         }
-      }
-
-      // 2) Outro phrase → intro phrase mix (DNA plan)
-      if (autoDJPendingRef.current) return
-      const nextTrackInQueue = q[currentIndex + 1]
-      if (!nextTrackInQueue) {
-        setAutoDJOutCountdown(null)
-        return
-      }
-
-      if (!resolvedUrlCacheRef.current.get(nextTrackInQueue.file)) {
-        void resolveAudioUrl(nextTrackInQueue.file).then((resolved) => {
-          if (resolved) resolvedUrlCacheRef.current.set(nextTrackInQueue.file, resolved)
+        return resolveIncomingMixCueSec(track as Track)
+      },
+      pickNextTrack: () => {
+        const t = pickAutoDJTrack()
+        return t ? asHostTrack(t) : null
+      },
+      cacheMixGridFromLiveWaveform: (track, durationSec) => {
+        if (trackWaveformBaseRef.current.length >= 64) {
+          cacheMixGridOffset(track as Track, trackWaveformBaseRef.current, durationSec)
+        }
+      },
+      cacheMixGridFromGhost: (track) => {
+        if (ghostSamplesRef.current?.trackId === track.id) {
+          cacheMixGridOffset(
+            track as Track,
+            ghostSamplesRef.current.samples,
+            ghostSamplesRef.current.durationSec,
+          )
+        }
+      },
+      peekUrl: (file) => resolvedUrlCacheRef.current.get(file) || null,
+      ensureUrl: (file) => {
+        void resolveAudioUrl(file).then((resolved) => {
+          if (resolved) resolvedUrlCacheRef.current.set(file, resolved)
         })
-      }
-
-      if (
-        autoDJFrozenPlanRef.current &&
-        (autoDJFrozenPlanRef.current.outgoingId !== track.id ||
-          autoDJFrozenPlanRef.current.incomingId !== nextTrackInQueue.id)
-      ) {
-        autoDJFrozenPlanRef.current = null
-      }
-
-      // N+2: warm waveform + grid for the track after next (debounced by id)
-      const lookAhead2 = q[currentIndex + 2]
-      if (lookAhead2 && mixLookahead2IdRef.current !== lookAhead2.id) {
-        mixLookahead2IdRef.current = lookAhead2.id
+      },
+      warmLookahead2: (lookAhead2) => {
         void (async () => {
           let url = resolvedUrlCacheRef.current.get(lookAhead2.file) || null
           if (!url) {
@@ -5191,507 +8008,225 @@ export default function MusicPlayer({
             if (url) resolvedUrlCacheRef.current.set(lookAhead2.file, url)
           }
           if (!url) return
-          const packed = await loadWaveformSamplesForTrack(lookAhead2, url)
+          const packed = await loadWaveformSamplesForTrack(lookAhead2 as Track, url, {
+            allowFullDecode: true,
+          })
           if (!packed || mixLookahead2IdRef.current !== lookAhead2.id) return
-          cacheMixGridOffset(
-            lookAhead2,
-            packed.samples,
-            packed.durationSec || lookAhead2.duration || 180,
-          )
-        })()
-      }
-
-      // buildMixPlan runs phrase and cue-point math across the whole track, twice
-      // per pass. Early in a track that work is discarded, so scan coarsely to
-      // locate the mix point and tighten to every tick as the outro comes up.
-      const lastDelay = autoDJPlanDelayRef.current
-      const scanEvery =
-        lastDelay == null || lastDelay <= phrase + 6 ? 1 : lastDelay > 60 ? 10 : 3
-      autoDJPlanScanRef.current += 1
-      if (autoDJPlanScanRef.current % scanEvery !== 0) return
-
-      const outRate = getOutgoingPlaybackRate()
-      const outBpm =
-        resolvePlaybackBpm(track, detectedBPMRef.current) ??
-        track.bpm ??
-        detectedBPMRef.current ??
-        120
-
-      if (ghostSamplesRef.current?.trackId === nextTrackInQueue.id) {
-        cacheMixGridOffset(
-          nextTrackInQueue,
-          ghostSamplesRef.current.samples,
-          ghostSamplesRef.current.durationSec,
-        )
-      }
-
-      const outRef = {
-        ...withMixGrid(track),
-        duration: dur,
-        // Always plan against the waveform's live beatgrid (not a stale peak cache).
-        beat_grid_offset: beatGridOffsetSecRef.current,
-      }
-      const inRef = withMixGrid(nextTrackInQueue)
-      const outgoingGridOffset = beatGridOffsetSecRef.current
-      const incomingGridOffset =
-        typeof inRef.beat_grid_offset === 'number' ? inRef.beat_grid_offset : undefined
-
-      const resolvedTechniques = resolveEffectiveMixTechniques(
-        autoDJConfig.mixTechniques,
-        outRef,
-        inRef,
-      )
-      const engineStyle = resolveEffectiveMixStyle(
-        autoDJConfig.mixStyle,
-        resolvedTechniques,
-        autoDJConfig.transitionMode,
-      )
-
-      const phraseMix = resolvePhraseMixSettings(autoDJConfig, {
-        qualityGate: shouldApplyQualityGate(lastMixQualityRef.current?.grade)
-          ? lastMixQualityRef.current?.grade
-          : null,
-      })
-
-      const basePlan = buildMixPlan({
-        outgoing: outRef,
-        incoming: inRef,
-        nowSec: ct,
-        outPhraseBars: phraseMix.outPhraseBars,
-        inPhraseBars: phraseMix.inPhraseBars,
-        overlapBars: phraseMix.overlapBars,
-        cuePriority: phraseMix.cuePriority,
-        mixLengthBias: phraseMix.mixLengthBias,
-        energyCurve: phraseMix.energyCurve,
-        harmonicMatch: autoDJConfig.harmonicMatch,
-        outgoingPlaybackRate: outRate,
-        outgoingGridOffset,
-        incomingGridOffset,
-        style: engineStyle,
-        autoStyle: false,
-        leadInSec: 0,
-        canonicalPhraseCues: phraseMix.canonicalPhraseCues,
-        exactOverlap: phraseMix.exactOverlap,
-      })
-      if (!basePlan) return
-
-      const suggestedLead = suggestLeadInSec({
-        startAtOutgoingSec: basePlan.startAtOutgoingSec,
-        nowSec: ct,
-        bpm: outBpm,
-        outPhraseBars: phraseMix.outPhraseBars,
-      })
-      if (Math.abs(suggestedLead - autoDJSuggestedLeadIn) > 0.04) {
-        setAutoDJSuggestedLeadIn(suggestedLead)
-      }
-      const effectiveLeadIn = Math.max(autoDJLeadIn, suggestedLead)
-
-      // Lead-in is prepare-only — rebuild only to stamp prepareLeadInSec (OUT unchanged).
-      let plan =
-        effectiveLeadIn > 0
-          ? buildMixPlan({
-              outgoing: outRef,
-              incoming: inRef,
-              nowSec: ct,
-              outPhraseBars: phraseMix.outPhraseBars,
-              inPhraseBars: phraseMix.inPhraseBars,
-              overlapBars: phraseMix.overlapBars,
-              cuePriority: phraseMix.cuePriority,
-              mixLengthBias: phraseMix.mixLengthBias,
-              energyCurve: phraseMix.energyCurve,
-              harmonicMatch: autoDJConfig.harmonicMatch,
-              outgoingPlaybackRate: outRate,
-              outgoingGridOffset,
-              incomingGridOffset,
-              style: engineStyle,
-              autoStyle: false,
-              leadInSec: effectiveLeadIn,
-              canonicalPhraseCues: phraseMix.canonicalPhraseCues,
-              exactOverlap: phraseMix.exactOverlap,
-            }) || basePlan
-          : basePlan
-
-      // Snap OUT/IN to the same beatgrid the waveform paints (live offset + BPM).
-      const aligned = alignMixOverlayToBeatGrid({
-        mixOutSec:
-          typeof plan.mixOutMarkerSec === 'number' ? plan.mixOutMarkerSec : plan.startAtOutgoingSec,
-        mixDurationSec: plan.mixDurationSec,
-        bpm: outBpm,
-        offsetSec: beatGridOffsetSecRef.current,
-        overlapBars: autoDJConfig.overlapBars,
-      })
-      plan = {
-        ...plan,
-        startAtOutgoingSec: aligned.mixOutSec,
-        mixOutMarkerSec: aligned.mixOutSec,
-        mixDurationSec: aligned.mixDurationSec,
-      }
-
-      // Freeze once within 4s of OUT so later ticks cannot snap earlier.
-      const frozen = autoDJFrozenPlanRef.current
-      if (
-        frozen &&
-        frozen.outgoingId === track.id &&
-        frozen.incomingId === nextTrackInQueue.id
-      ) {
-        const frozenStart = frozen.plan.startAtOutgoingSec
-        if (plan.startAtOutgoingSec + 0.05 < frozenStart) {
-          plan = {
-            ...frozen.plan,
-            prepareLeadInSec: effectiveLeadIn,
-          }
-        } else {
-          autoDJFrozenPlanRef.current = {
-            outgoingId: track.id,
-            incomingId: nextTrackInQueue.id,
-            plan,
-          }
-        }
-      } else if (plan.startAtOutgoingSec - ct <= PLAN_FREEZE_SEC) {
-        autoDJFrozenPlanRef.current = {
-          outgoingId: track.id,
-          incomingId: nextTrackInQueue.id,
-          plan,
-        }
-      }
-
-      setWaveformMixOverlay({
-        active: true,
-        mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
-        mixStartSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
-        mixEndSec:
-          (plan.mixOutMarkerSec ?? plan.startAtOutgoingSec) + plan.mixDurationSec,
-      })
-
-      const mixDeckRates = computeMixDeckRates({
-        outgoingBpm: outBpm,
-        incomingBpm:
-          resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm,
-        outgoingPlaybackRate: outRate,
-        incomingTargetRate:
-          phraseMix.bpmStrategy === 'manual' ? settingsRef.current.playbackRate : 1,
-      })
-      // Pre-arm at beatmatch rate; mix end target is handoff (usually native 1.0).
-      const cueArmRate = mixDeckRates.incomingRate
-      const inBpmForGuard =
-        resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm
-      const { holdBeatmatch, safety } = resolveHoldBeatmatch({
-        syncMode: phraseMix.syncMode,
-        outgoingSonicDna: track.sonic_dna,
-        incomingSonicDna: nextTrackInQueue.sonic_dna,
-        outgoingBpm: outBpm,
-        incomingBpm: inBpmForGuard,
-        outgoingGridOffset,
-        incomingGridOffset,
-      })
-      plan.holdBeatmatch = holdBeatmatch
-      plan.masterTempoHandoff = true
-      plan.phrase1Lock = true
-      plan.blendFromOut = true
-
-      const delaySeconds = plan.startAtOutgoingSec - ct
-      autoDJPlanDelayRef.current = delaySeconds
-      if (delaySeconds > 0 && delaySeconds <= 90) {
-        setAutoDJOutCountdown(Math.round(delaySeconds * 10) / 10)
-      } else {
-        setAutoDJOutCountdown(null)
-      }
-      if (!safety.ok && safety.forceTempoSync && delaySeconds > 0 && delaySeconds <= 8) {
-        setAutoDJStatusMessage((prev) =>
-          prev.includes(safety.message) ? prev : `${safety.message} · TempoSync`,
-        )
-      }
-
-      const prepareLead = Math.max(
-        effectiveLeadIn,
-        typeof plan.prepareLeadInSec === 'number' ? plan.prepareLeadInSec : 0,
-        prearmLeadSec(outBpm),
-      )
-
-      const incomingPeaksReady =
-        (ghostSamplesRef.current?.trackId === nextTrackInQueue.id &&
-          (ghostSamplesRef.current.samples?.length ?? 0) >= 64) ||
-        (Array.isArray(inRef.waveformPeaks) && inRef.waveformPeaks.length >= 64)
-
-      if (!incomingPeaksReady && delaySeconds > 0.4) {
-        // Peaks refine grid alignment only — never block audio cue or OUT fire.
-        const url = resolvedUrlCacheRef.current.get(nextTrackInQueue.file) || null
-        if (!url) {
-          void resolveAudioUrl(nextTrackInQueue.file).then((resolved) => {
-            if (resolved) resolvedUrlCacheRef.current.set(nextTrackInQueue.file, resolved)
-          })
-        } else if (ghostSamplesRef.current?.trackId !== nextTrackInQueue.id) {
-          void loadWaveformSamplesForTrack(nextTrackInQueue, url).then((packed) => {
-            if (!packed) return
-            cacheMixGridOffset(
-              nextTrackInQueue,
-              packed.samples,
-              packed.durationSec || nextTrackInQueue.duration || 180,
-            )
-            ghostSamplesRef.current = {
-              trackId: nextTrackInQueue.id,
-              samples: packed.samples,
-              durationSec: packed.durationSec || nextTrackInQueue.duration || 180,
-              sonicDna: nextTrackInQueue.sonic_dna,
-            }
-            syncIdleDeckWaveformCache(
-              nextTrackInQueue.id,
-              packed.samples,
-              packed.durationSec || nextTrackInQueue.duration || 180,
-            )
-          })
-        }
-        if (delaySeconds <= prepareLead + 0.45) {
-          void cueIdleEarly(nextTrackInQueue, plan, cueArmRate)
-        }
-      }
-
-      if (
-        delaySeconds > 0 &&
-        delaySeconds <= prepareLead + 0.45 &&
-        cuedIdleTrackIdRef.current === nextTrackInQueue.id
-      ) {
-        const idle = getIdleAudio()
-        if (idle) {
-          const inBpm =
-            resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm
-          // Media-time alignment: base BPM only (never bpm × rate).
-          const align = solveAlignmentState({
-            plannedIncomingSec: plan.incomingStartSec,
-            outgoingTimeSec: ct,
-            outgoingBpm: outBpm,
-            outgoingOffsetSec: outgoingGridOffset,
-            outgoingSonicDna: track.sonic_dna,
-            outgoingPeaks: outRef.waveformPeaks,
-            outgoingDurationSec: outRef.waveformDurationSec ?? dur,
-            incomingBpm: inBpm,
-            incomingOffsetSec: incomingGridOffset,
-            incomingSonicDna: nextTrackInQueue.sonic_dna,
-            incomingPeaks: inRef.waveformPeaks,
-            incomingDurationSec: inRef.waveformDurationSec,
-            phraseBars: 8,
-            dnaConfidence: plan.dnaConfidence,
-            phraseLock: plan.phraseLock,
-            phrase1Lock: plan.phrase1Lock !== false,
-          })
-          plan.resolvedIncomingSec = align.incomingCueSec
-          if (!mixEngineRef.current?.isMixing()) {
-            mixEngineRef.current?.parkIdleAtCue(align.incomingCueSec, cueArmRate)
-          }
-        }
-      }
-
-      const beatSec = 60 / Math.max(60, outBpm)
-      if (
-        delaySeconds > 0 &&
-        delaySeconds <= beatSec * 2.5 &&
-        cuedIdleTrackIdRef.current === nextTrackInQueue.id &&
-        autoDJIdleWarmedRef.current !== nextTrackInQueue.id &&
-        !mixEngineRef.current?.isMixing()
-      ) {
-        autoDJIdleWarmedRef.current = nextTrackInQueue.id
-        mixEngineRef.current?.warmIdle(cueArmRate)
-      }
-
-      const armWindowSec = Math.max(prepareLead + beatSec * 2, 3)
-
-      // Pre-roll incoming on the idle deck before OUT so launch is instant at the marker.
-      if (delaySeconds <= armWindowSec + phrase && delaySeconds > -0.25) {
-        void cueIdleEarly(nextTrackInQueue, plan, cueArmRate)
-      }
-
-      if (delaySeconds > armWindowSec) return
-
-      const targetOut = plan.startAtOutgoingSec
-
-      const fireAutoDJMix = () => {
-        const releasePending = () => {
-          autoDJPendingRef.current = null
-          setAutoDJPendingTrackId(null)
-        }
-        if (!autoDJConfigRef.current.enabled || phraseMixLockRef.current) {
-          clearAutoDJOutWatch()
-          clearAutoDJCrossfadeTimeout()
-          releasePending()
-          return
-        }
-        const liveQ = autoDJQueueRef.current
-        const liveTrack = autoDJCurrentTrackRef.current
-        if (!liveTrack || liveTrack.id !== track.id) {
-          clearAutoDJOutWatch()
-          clearAutoDJCrossfadeTimeout()
-          releasePending()
-          return
-        }
-        const stillNext = liveQ.find((t) => t.id === nextTrackInQueue.id)
-        if (!stillNext) {
-          clearAutoDJOutWatch()
-          clearAutoDJCrossfadeTimeout()
-          releasePending()
-          return
-        }
-
-        const liveEl = getPlaybackAudio()
-        const nowSec = liveEl?.currentTime ?? autoDJCurrentTimeRef.current
-        const liveDur = liveEl?.duration && liveEl.duration > 0 ? liveEl.duration : dur
-        const fireOutRate = getOutgoingPlaybackRate()
-        const frozenPlan = autoDJFrozenPlanRef.current?.plan
-        const outMarker = frozenPlan?.startAtOutgoingSec ?? targetOut
-
-        // Tight tolerance — rAF watch should land on the marker, not a beat early.
-        if (nowSec < outMarker - 0.012) {
-          return
-        }
-
-        const idleEl = getIdleAudio()
-        if (idleEl && idleEl.readyState < 2 && nowSec < outMarker + 0.12) {
-          if (autoDJOutRafRef.current == null) {
-            autoDJOutRafRef.current = requestAnimationFrame(() => {
-              autoDJOutRafRef.current = null
-              fireAutoDJMix()
-            })
-          }
-          return
-        }
-
-        clearAutoDJOutWatch()
-        clearAutoDJCrossfadeTimeout()
-        setAutoDJOutCountdown(null)
-
-        const fireOutRef = { ...withMixGrid(liveTrack), duration: liveDur }
-        const fireInRef = withMixGrid(stillNext)
-        const remainAfterOut = Math.max(0.5, liveDur - outMarker - 0.05)
-        const fresh =
-          frozenPlan && nowSec <= outMarker + beatSec * 0.75
-            ? {
-                ...frozenPlan,
-                mixDurationSec:
-                  frozenPlan.exactOverlap ||
-                  (frozenPlan.phrase1Lock !== false && frozenPlan.style === 'crossfade')
-                    ? remainAfterOut >= frozenPlan.mixDurationSec * 0.98
-                      ? frozenPlan.mixDurationSec
-                      : Math.min(frozenPlan.mixDurationSec, remainAfterOut)
-                    : Math.min(frozenPlan.mixDurationSec, remainAfterOut),
+          const durationSec = packed.durationSec || lookAhead2.duration || 180
+          cacheMixGridOffset(lookAhead2 as Track, packed.samples, durationSec)
+          if (needsKickRemeasure(lookAhead2.sonic_dna, durationSec)) {
+            const bpm =
+              resolvePlaybackBpm(lookAhead2 as Track, null) ?? lookAhead2.bpm ?? null
+            if (bpm && bpm > 0 && packed.samples.length >= 64) {
+              const offset =
+                typeof lookAhead2.beat_grid_offset === 'number' &&
+                Number.isFinite(lookAhead2.beat_grid_offset)
+                  ? lookAhead2.beat_grid_offset
+                  : 0
+              const bundle = buildGridOnsetBundle({
+                sonicDna: lookAhead2.sonic_dna,
+                peaks: packed.samples,
+                durationSec,
+                bpm,
+                offsetSec: offset,
+              })
+              if (bundle.kickOnsetSec.length >= 4) {
+                const nextDna = withGridAnalysisOnDna(lookAhead2.sonic_dna, {
+                  kickOnsetSec: bundle.kickOnsetSec,
+                  snareClapOnsetSec:
+                    bundle.snareClapOnsetSec.length >= 4
+                      ? bundle.snareClapOnsetSec
+                      : undefined,
+                  offsetSec: offset,
+                })
+                lookAhead2.sonic_dna = nextDna
+                if (onQueueChangeRef.current) {
+                  onQueueChangeRef.current(
+                    (queueRef.current || []).map((t) =>
+                      t.id === lookAhead2.id ? { ...t, sonic_dna: nextDna } : t,
+                    ),
+                  )
+                }
+                if (canEditOrigBpm) {
+                  void fetch('/api/music-library/tracks', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: lookAhead2.id,
+                      beat_grid_offset: offset,
+                      sonic_dna: nextDna,
+                    }),
+                  }).catch(() => {})
+                }
               }
-            : buildMixPlan({
-                outgoing: fireOutRef,
-                incoming: fireInRef,
-                nowSec,
-                outPhraseBars: phraseMix.outPhraseBars,
-                inPhraseBars: phraseMix.inPhraseBars,
-                overlapBars: phraseMix.overlapBars,
-                cuePriority: phraseMix.cuePriority,
-                mixLengthBias: phraseMix.mixLengthBias,
-                energyCurve: phraseMix.energyCurve,
-                harmonicMatch: autoDJConfig.harmonicMatch,
-                outgoingPlaybackRate: fireOutRate,
-                outgoingGridOffset:
-                  typeof fireOutRef.beat_grid_offset === 'number'
-                    ? fireOutRef.beat_grid_offset
-                    : undefined,
-                incomingGridOffset:
-                  typeof fireInRef.beat_grid_offset === 'number'
-                    ? fireInRef.beat_grid_offset
-                    : undefined,
-                style: plan.style,
-                autoStyle: false,
-                leadInSec: 0,
-                canonicalPhraseCues: phraseMix.canonicalPhraseCues,
-                exactOverlap: phraseMix.exactOverlap,
-              }) ||
-              lastMixPlanRef.current ||
-              plan
-
-        setAutoDJStatusMessage(`Auto DJ ${fresh.reason} → “${stillNext.title}”`)
-        setAutoDJPendingTrackId(stillNext.id)
-        autoDJFrozenPlanRef.current = null
-
-        const mixDur =
-          fresh.style === 'cut'
-            ? Math.min(1.15, Math.max(0.65, fresh.mixDurationSec * 0.35))
-            : fresh.mixDurationSec
-        const handoffTarget = resolveIncomingRateForStrategy({
-          strategy: phraseMix.bpmStrategy,
-          beatmatchRate: fresh.rateRatio,
-          sliderRate: settingsRef.current.playbackRate,
-        })
-        const fireOutBpm =
-          resolvePlaybackBpm(liveTrack, detectedBPMRef.current) ??
-          liveTrack.bpm ??
-          detectedBPMRef.current ??
-          120
-        const fireInBpm =
-          resolvePlaybackBpm(stillNext, null) ?? stillNext.bpm ?? fireOutBpm
-        fresh.rateRatio = computeMixDeckRates({
-          outgoingBpm: fireOutBpm,
-          incomingBpm: fireInBpm,
-          outgoingPlaybackRate: fireOutRate,
-          incomingTargetRate: handoffTarget,
-        }).incomingRate
-        const { holdBeatmatch: fireHold } = resolveHoldBeatmatch({
-          syncMode: phraseMix.syncMode,
-          outgoingSonicDna: liveTrack.sonic_dna,
-          incomingSonicDna: stillNext.sonic_dna,
-          outgoingBpm: fireOutBpm,
-          incomingBpm: fireInBpm,
-          outgoingGridOffset:
-            typeof fireOutRef.beat_grid_offset === 'number'
-              ? fireOutRef.beat_grid_offset
-              : undefined,
-          incomingGridOffset:
-            typeof fireInRef.beat_grid_offset === 'number'
-              ? fireInRef.beat_grid_offset
-              : undefined,
-        })
-        fresh.holdBeatmatch = fireHold
-        fresh.masterTempoHandoff = true
-        fresh.phrase1Lock = true
-        fresh.blendFromOut = true
-        void startPhraseMix(
-          stillNext,
-          mixDur,
-          fresh.rateRatio,
-          {
-            ...fresh,
-            mixDurationSec: mixDur,
+            }
+          }
+        })()
+      },
+      getLookahead2Id: () => mixLookahead2IdRef.current,
+      setLookahead2Id: (id) => {
+        mixLookahead2IdRef.current = id
+      },
+      phaseMeterEnabled: () => waveformPhaseMeterRef.current,
+      getPhaseMeter: () => ({
+        windowId: phaseMeterOptionsRef.current.windowId,
+        phraseBars: phaseMeterOptionsRef.current.phraseBars,
+      }),
+      enterPlan: (plan) => {
+        mixEngineRef.current?.enterPlan(plan)
+      },
+      cueIdleEarly: (track, plan, rate) => {
+        void cueIdleEarlyRef.current(track as Track, plan, rate)
+      },
+      getCuedIdleTrackId: () => cuedIdleTrackIdRef.current,
+      getIdleWarmedId: () => autoDJIdleWarmedRef.current,
+      setIdleWarmedId: (id) => {
+        autoDJIdleWarmedRef.current = id
+      },
+      isEngineMixing: () => mixEngineRef.current?.isMixing() === true,
+      hasIncomingReady: () => mixEngineRef.current?.hasIncomingReady() === true,
+      canEnterFire: () => mixEngineRef.current?.canEnterFire() === true,
+      getIdleReadyState: () => getIdleAudio()?.readyState ?? 0,
+      parkAndWarmIdle: (cueSec, rate) => {
+        mixEngineRef.current?.parkIdleAtCue(cueSec, rate)
+        mixEngineRef.current?.warmIdle(rate)
+      },
+      nudgeIdleToMaster: (args) => {
+        mixEngineRef.current?.nudgeIdleToMaster(args)
+      },
+      incomingPeaksReady: (track, inRef) =>
+        (ghostSamplesRef.current?.trackId === track.id &&
+          (ghostSamplesRef.current.samples?.length ?? 0) >= 64) ||
+        (Array.isArray(inRef.waveformPeaks) && inRef.waveformPeaks.length >= 64),
+      loadIncomingPeaks: (track) => {
+        const url = resolvedUrlCacheRef.current.get(track.file) || null
+        if (!url) {
+          void resolveAudioUrl(track.file).then((resolved) => {
+            if (resolved) resolvedUrlCacheRef.current.set(track.file, resolved)
+          })
+          return
+        }
+        if (ghostSamplesRef.current?.trackId === track.id) return
+        void loadWaveformSamplesForTrack(track as Track, url, { allowFullDecode: true }).then(
+          (packed) => {
+            if (!packed) return
+            const durationSec = packed.durationSec || track.duration || 180
+            cacheMixGridOffset(track as Track, packed.samples, durationSec)
+            if (needsKickRemeasure(track.sonic_dna, durationSec)) {
+              const bpm = resolvePlaybackBpm(track as Track, null) ?? track.bpm ?? null
+              if (bpm && bpm > 0 && packed.samples.length >= 64) {
+                const offset =
+                  typeof track.beat_grid_offset === 'number' &&
+                  Number.isFinite(track.beat_grid_offset)
+                    ? track.beat_grid_offset
+                    : 0
+                const bundle = buildGridOnsetBundle({
+                  sonicDna: track.sonic_dna,
+                  peaks: packed.samples,
+                  durationSec,
+                  bpm,
+                  offsetSec: offset,
+                })
+                if (bundle.kickOnsetSec.length >= 4) {
+                  const nextDna = withGridAnalysisOnDna(track.sonic_dna, {
+                    kickOnsetSec: bundle.kickOnsetSec,
+                    snareClapOnsetSec:
+                      bundle.snareClapOnsetSec.length >= 4
+                        ? bundle.snareClapOnsetSec
+                        : undefined,
+                    offsetSec: offset,
+                  })
+                  track.sonic_dna = nextDna
+                  if (onQueueChangeRef.current) {
+                    onQueueChangeRef.current(
+                      (queueRef.current || []).map((t) =>
+                        t.id === track.id ? { ...t, sonic_dna: nextDna } : t,
+                      ),
+                    )
+                  }
+                }
+              }
+            }
+            ghostSamplesRef.current = {
+              trackId: track.id,
+              samples: packed.samples,
+              durationSec,
+              sonicDna: track.sonic_dna,
+            }
+            syncIdleDeckWaveformCache(track.id, packed.samples, durationSec)
           },
-          { incomingTargetRate: handoffTarget },
         )
-      }
-
-      autoDJPendingRef.current = nextTrackInQueue.id
-      setAutoDJPendingTrackId(nextTrackInQueue.id)
-      lastMixPlanRef.current = plan
-
-      if (delaySeconds <= 0) {
-        fireAutoDJMix()
-        return
-      }
-
-      clearAutoDJOutWatch()
-      const watchOutMarker = () => {
-        if (!autoDJConfigRef.current.enabled || phraseMixLockRef.current) {
-          autoDJOutRafRef.current = null
-          return
+      },
+      startPhraseMix: (track, mixDur, rate, plan, opts) => {
+        void startPhraseMix(track as Track, mixDur, rate, plan, opts)
+      },
+      setStatus: (msg) => setAutoDJStatusMessage(msg),
+      setPendingTrackId: (id) => setAutoDJPendingTrackId(id),
+      setOutCountdown: (sec) => setAutoDJOutCountdown(sec),
+      setMixOverlay: (overlay) => setWaveformMixOverlay(overlay),
+      clearOutWatch: () => clearAutoDJOutWatch(),
+      clearCrossfadeTimeout: () => clearAutoDJCrossfadeTimeout(),
+      watchOutMarker: (targetOut, fire) => {
+        clearAutoDJOutWatch()
+        const watch = () => {
+          if (!autoDJConfigRef.current.enabled || phraseMixLockRef.current) {
+            autoDJOutRafRef.current = null
+            return
+          }
+          const liveEl = getPlaybackAudio()
+          const nowSec = liveEl?.currentTime ?? autoDJCurrentTimeRef.current
+          if (nowSec >= targetOut - 0.005) {
+            autoDJOutRafRef.current = null
+            fire()
+            return
+          }
+          autoDJOutRafRef.current = requestAnimationFrame(watch)
         }
-        const liveEl = getPlaybackAudio()
-        const nowSec = liveEl?.currentTime ?? autoDJCurrentTimeRef.current
-        if (nowSec >= targetOut - 0.005) {
-          autoDJOutRafRef.current = null
-          fireAutoDJMix()
-          return
+        autoDJOutRafRef.current = requestAnimationFrame(watch)
+      },
+      scheduleFireRetry: (fire) => {
+        if (autoDJOutRafRef.current == null) {
+          autoDJOutRafRef.current = requestAnimationFrame(() => {
+            autoDJOutRafRef.current = null
+            fire()
+          })
         }
-        autoDJOutRafRef.current = requestAnimationFrame(watchOutMarker)
-      }
-      autoDJOutRafRef.current = requestAnimationFrame(watchOutMarker)
+      },
+      getFrozen: () => autoDJFrozenPlanRef.current,
+      setFrozen: (frozen) => {
+        autoDJFrozenPlanRef.current = frozen
+      },
+      getLastPlan: () => lastMixPlanRef.current,
+      setLastPlan: (plan) => {
+        lastMixPlanRef.current = plan
+      },
+      getPendingId: () => autoDJPendingRef.current,
+      setPendingId: (id) => {
+        autoDJPendingRef.current = id
+      },
+      getLastAddedId: () => autoDJLastAddedRef.current,
+      setLastAddedId: (id) => {
+        autoDJLastAddedRef.current = id
+      },
+      getPlanDelay: () => autoDJPlanDelayRef.current,
+      setPlanDelay: (sec) => {
+        autoDJPlanDelayRef.current = sec
+      },
+      getPlanScan: () => autoDJPlanScanRef.current,
+      setPlanScan: (n) => {
+        autoDJPlanScanRef.current = n
+      },
+      onQueueChange: (queue) => onQueueChange(queue as Track[]),
     }
 
-    autoDJIntervalRef.current = setInterval(tick, 100)
-    tick()
+    const controller = new AutoDjController(host)
+    autoDjControllerRef.current?.stop()
+    autoDjControllerRef.current = controller
+    controller.start()
     return () => {
-      if (autoDJIntervalRef.current) {
-        clearInterval(autoDJIntervalRef.current)
-        autoDJIntervalRef.current = null
+      controller.stop()
+      if (autoDjControllerRef.current === controller) {
+        autoDjControllerRef.current = null
       }
       clearAutoDJCrossfadeTimeout()
     }
@@ -5708,28 +8243,35 @@ export default function MusicPlayer({
     autoDJConfig.harmonicMatch,
     autoDJConfig.bpmStrategy,
     autoDJConfig.syncMode,
+    autoDJConfig.sectionStyle,
     autoDJConfig.lookahead,
+    autoDJConfig.blendQuantize,
+    autoDJConfig.beatCorrect,
+    autoDJConfig.autoCorrectWeakMixes,
+    autoDJConfig.creativeMode,
     autoDJLeadIn,
     onQueueChange,
     pickAutoDJTrack,
     startPhraseMix,
-    playTrack,
-    seekTo,
-    trackIntroOffsetSec,
+    resolveIncomingMixCueSec,
     clearAutoDJCrossfadeTimeout,
+    clearAutoDJOutWatch,
     clearFadeInterval,
     restoreMainVolume,
-    detectedBPM,
     ensureMixEngine,
     ensureDualDeckGraph,
     getPlaybackAudio,
     getOutgoingPlaybackRate,
-    toMixTrackRef,
     withMixGrid,
     getIdleAudio,
     cacheMixGridOffset,
     syncIdleDeckWaveformCache,
+    canEditOrigBpm,
+    pickAutoDJTrack,
+    trackIntroOffsetSec,
+    resolveIncomingMixCueSec,
   ])
+
 
   const UPCOMING_PREVIEW = 8
   /** Tracks already queued after the current one (“assigned cues”). */
@@ -5787,7 +8329,9 @@ export default function MusicPlayer({
       : autoDJConfig.enabled
         ? 'Auto DJ matches'
         : settings.catalogRandom
-          ? `Random from ${catalogScopeLabel(currentSource)}`
+          ? isOrderedReleaseRandomScope(currentSource)
+            ? 'EP/crate in order'
+            : `Random from ${catalogScopeLabel(currentSource)}`
           : settings.isShuffled
             ? 'Up next'
             : 'Next in library'
@@ -5810,8 +8354,59 @@ export default function MusicPlayer({
   }
 
   const [queueDragOverIndex, setQueueDragOverIndex] = useState<number | null>(null)
+  const [queueLibraryDropActive, setQueueLibraryDropActive] = useState(false)
   const queueDragActiveRef = useRef(false)
   const canReorderQueue = assignedUpcoming.length > 1 && Boolean(onQueueChange)
+  const canAcceptLibraryQueueDrop = Boolean(onQueueChange)
+
+  const resolveLibraryDropTracks = useCallback(
+    (dt: DataTransfer): Track[] => {
+      const fromPayload = parseLibraryDragTracks(dt) as Track[]
+      if (fromPayload.length) return fromPayload.filter((t) => Boolean(t?.id))
+      const ids = readLibraryDragTrackIds(dt)
+      if (!ids.length) return []
+      const byId = new Map<string, Track>()
+      for (const t of autoDJPool) byId.set(t.id, t)
+      for (const t of queue) byId.set(t.id, t)
+      return ids.map((id) => byId.get(id)).filter((t): t is Track => Boolean(t?.id))
+    },
+    [autoDJPool, queue],
+  )
+
+  const applyLibraryQueueOverride = useCallback(
+    (incoming: Track[]) => {
+      if (!incoming.length) return
+      setIsTrackListExpanded(true)
+      if (!currentTrack) {
+        playTrack(incoming[0], incoming)
+        setAutoDJStatusMessage(
+          incoming.length === 1
+            ? `Playing “${incoming[0]!.title}”`
+            : `Playing · ${incoming.length} tracks from library`,
+        )
+        return
+      }
+      if (!onQueueChange) return
+      const next = overrideUpcomingQueue(queue, currentQueueIndex, incoming)
+      const unchanged =
+        next.length === queue.length && next.every((t, i) => t.id === queue[i]?.id)
+      if (!unchanged) {
+        onQueueChange(next)
+        setAutoDJStatusMessage(
+          incoming.length === 1
+            ? `Up next overridden · “${incoming[0]!.title}”`
+            : `Up next overridden · ${incoming.length} tracks`,
+        )
+      }
+    },
+    [currentTrack, playTrack, onQueueChange, queue, currentQueueIndex],
+  )
+
+  const isLibraryQueueDrag = useCallback((dt: DataTransfer | null) => {
+    if (!dt || queueDragActiveRef.current) return false
+    if (Array.from(dt.types || []).includes(QUEUE_DRAG_MIME)) return false
+    return libraryDragHasTracks(dt)
+  }, [])
 
   const handleQueueDragStart = useCallback((e: React.DragEvent, displayIndex: number, trackId: string) => {
     if (!canReorderQueue) return
@@ -5822,35 +8417,97 @@ export default function MusicPlayer({
   }, [canReorderQueue])
 
   const handleQueueDragOver = useCallback((e: React.DragEvent, displayIndex: number) => {
-    if (!canReorderQueue) return
-    if (!e.dataTransfer.types.includes(QUEUE_DRAG_MIME) && !queueDragActiveRef.current) return
+    const libraryDrop = canAcceptLibraryQueueDrop && isLibraryQueueDrag(e.dataTransfer)
+    const reorderDrop =
+      canReorderQueue &&
+      (e.dataTransfer.types.includes(QUEUE_DRAG_MIME) || queueDragActiveRef.current)
+    if (!libraryDrop && !reorderDrop) return
     e.preventDefault()
     e.stopPropagation()
-    e.dataTransfer.dropEffect = 'move'
+    e.dataTransfer.dropEffect = libraryDrop ? 'copy' : 'move'
+    if (libraryDrop) setQueueLibraryDropActive(true)
     setQueueDragOverIndex((prev) => (prev === displayIndex ? prev : displayIndex))
-  }, [canReorderQueue])
+  }, [canAcceptLibraryQueueDrop, canReorderQueue, isLibraryQueueDrag])
+
+  const handleQueuePanelDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!canAcceptLibraryQueueDrop || !isLibraryQueueDrag(e.dataTransfer)) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'copy'
+      setQueueLibraryDropActive(true)
+    },
+    [canAcceptLibraryQueueDrop, isLibraryQueueDrag],
+  )
+
+  const handleQueuePanelDragLeave = useCallback((e: React.DragEvent) => {
+    const next = e.relatedTarget as Node | null
+    if (next && e.currentTarget.contains(next)) return
+    setQueueLibraryDropActive(false)
+    setQueueDragOverIndex(null)
+  }, [])
 
   const handleQueueDrop = useCallback(
     (e: React.DragEvent, toDisplayIdx: number) => {
-      if (!canReorderQueue || !onQueueChange) return
+      if (!onQueueChange) return
+
+      if (isLibraryQueueDrag(e.dataTransfer) || e.dataTransfer.types.includes(SERGIK_LIBRARY_TRACKS_DRAG_MIME) || e.dataTransfer.types.includes(SERGIK_PLAYLIST_DRAG_MIME)) {
+        const incoming = resolveLibraryDropTracks(e.dataTransfer)
+        if (incoming.length) {
+          e.preventDefault()
+          e.stopPropagation()
+          setQueueDragOverIndex(null)
+          setQueueLibraryDropActive(false)
+          queueDragActiveRef.current = false
+          applyLibraryQueueOverride(incoming)
+          return
+        }
+      }
+
+      if (!canReorderQueue) return
       const raw = e.dataTransfer.getData(QUEUE_DRAG_MIME)
       const fromDisplayIdx = parseInt(raw, 10)
       if (!Number.isFinite(fromDisplayIdx)) return
       e.preventDefault()
       e.stopPropagation()
       setQueueDragOverIndex(null)
+      setQueueLibraryDropActive(false)
       queueDragActiveRef.current = false
       const next = reorderUpcomingQueue(queue, currentQueueIndex, fromDisplayIdx, toDisplayIdx)
       const unchanged =
         next.length === queue.length && next.every((t, i) => t.id === queue[i]?.id)
       if (!unchanged) onQueueChange(next)
     },
-    [canReorderQueue, onQueueChange, queue, currentQueueIndex],
+    [
+      canReorderQueue,
+      onQueueChange,
+      queue,
+      currentQueueIndex,
+      isLibraryQueueDrag,
+      resolveLibraryDropTracks,
+      applyLibraryQueueOverride,
+    ],
+  )
+
+  const handleQueuePanelDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!canAcceptLibraryQueueDrop) return
+      const incoming = resolveLibraryDropTracks(e.dataTransfer)
+      if (!incoming.length) return
+      e.preventDefault()
+      e.stopPropagation()
+      setQueueDragOverIndex(null)
+      setQueueLibraryDropActive(false)
+      queueDragActiveRef.current = false
+      applyLibraryQueueOverride(incoming)
+    },
+    [canAcceptLibraryQueueDrop, resolveLibraryDropTracks, applyLibraryQueueOverride],
   )
 
   const handleQueueDragEnd = useCallback(() => {
     queueDragActiveRef.current = false
     setQueueDragOverIndex(null)
+    setQueueLibraryDropActive(false)
   }, [])
 
   const playbackRates = PLAYBACK_RATES
@@ -5895,6 +8552,16 @@ export default function MusicPlayer({
   useEffect(() => {
     if (!currentTrack) {
       setDetectedBPM(null)
+      setTapeBpm(null)
+      return
+    }
+
+    const catalogBpm = displayTrackBpm(currentTrack)
+    if (catalogBpm) {
+      setDetectedBPM(catalogBpm)
+      if (bpmCacheRef.current) {
+        bpmCacheRef.current.set(currentTrack.id, catalogBpm)
+      }
       return
     }
 
@@ -6174,41 +8841,28 @@ export default function MusicPlayer({
         throw new Error('No track selected')
       }
 
-      const patchTrackBpm = (source: Track): Track => {
-        const next: Track = { ...source, bpm: newBPM }
-        if (next.sonic_dna && typeof next.sonic_dna === 'object') {
-          const dna = { ...next.sonic_dna } as Record<string, unknown>
-          if (dna.technical && typeof dna.technical === 'object') {
-            dna.technical = { ...(dna.technical as object), bpm: newBPM }
-          }
-          if (dna.measured && typeof dna.measured === 'object') {
-            dna.measured = { ...(dna.measured as object), bpm: newBPM }
-          }
-          const comprehensive = dna.comprehensive
-          if (comprehensive && typeof comprehensive === 'object') {
-            const comp = { ...(comprehensive as Record<string, unknown>) }
-            if (comp.measured && typeof comp.measured === 'object') {
-              comp.measured = { ...(comp.measured as object), bpm: newBPM }
-            }
-            dna.comprehensive = comp
-          }
-          next.sonic_dna = dna
-        }
-        return next
-      }
+      const patchTrackBpm = (source: Track): Track => applyAdminBpmToTrack(source, newBPM)
 
       const applyLocalBpm = () => {
         bpmCacheRef.current.set(track.id, newBPM)
         if (syncLiveDetected && currentTrack?.id === track.id) {
           setDetectedBPM(newBPM)
+          setTapeBpm(newBPM)
         }
+        const existing = tapeGridByTrackId[track.id]
+        rememberTapeGrid(
+          track.id,
+          newBPM,
+          existing?.offsetSec ?? (currentTrack?.id === track.id ? beatGridOffsetSec : 0),
+        )
+        autoAlignedSigRef.current = null
         if (onQueueChangeRef.current) {
           onQueueChangeRef.current(queue.map((t) => (t.id === track.id ? patchTrackBpm(t) : t)))
         }
+        // After the queue replace — last write wins so live extras (grid, DNA)
+        // on currentTrack are not overwritten by a stale queue copy.
         if (currentTrack?.id === track.id) {
-          const patched = patchTrackBpm(currentTrack)
-          currentTrack.bpm = patched.bpm
-          currentTrack.sonic_dna = patched.sonic_dna
+          setCurrentTrack(patchTrackBpm(currentTrack))
         }
       }
 
@@ -6217,24 +8871,32 @@ export default function MusicPlayer({
         return
       }
 
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(track.id)
+      const isUUID = (value: string | undefined) =>
+        Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
+      const persistId = [track.id, track.audioFileId].find(isUUID)
 
-      if (!isUUID) {
+      if (!persistId) {
         if (process.env.NODE_ENV === 'development') {
           console.warn('Track is not in database, updating local state only')
         }
         applyLocalBpm()
+        emitCatalogSync({
+          entity: 'track',
+          entityId: track.id,
+          patch: { bpm: newBPM },
+        })
         return
       }
 
       try {
         const response = await fetch('/api/audio/update-bpm', {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            trackId: track.id,
+            trackId: persistId,
             bpm: newBPM,
           }),
         })
@@ -6253,14 +8915,27 @@ export default function MusicPlayer({
           throw new Error(errorMessage)
         }
 
-        await response.json()
+        const saved = await response.json()
         applyLocalBpm()
+        const syncIds = [
+          persistId,
+          saved?.data?.audioFileId,
+          ...(Array.isArray(saved?.data?.libraryTrackIds) ? saved.data.libraryTrackIds : []),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+        for (const id of [...new Set(syncIds)]) {
+          emitCatalogSync({
+            entity: 'track',
+            entityId: id,
+            patch: { bpm: newBPM },
+            publishVersion: saved?.publishVersion ?? null,
+          })
+        }
       } catch (error: unknown) {
         console.error('Error updating BPM:', error)
         throw error
       }
     },
-    [canEditOrigBpm, currentTrack, queue],
+    [canEditOrigBpm, currentTrack, queue, rememberTapeGrid, tapeGridByTrackId, beatGridOffsetSec, setCurrentTrack],
   )
 
   const handleDeckBPMUpdate = useCallback(
@@ -6270,12 +8945,10 @@ export default function MusicPlayer({
         throw new Error('No track on this deck')
       }
       const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
-      if (deck !== liveDeck) {
-        setDeckUi((prev) => ({
-          ...prev,
-          [deck]: { ...prev[deck], detectedBpm: newBPM },
-        }))
-      }
+      setDeckUi((prev) => ({
+        ...prev,
+        [deck]: { ...prev[deck], detectedBpm: newBPM },
+      }))
       await handleBPMUpdate(newBPM, track, deck === liveDeck)
     },
     [handleBPMUpdate, resolveDeckTrack],
@@ -6348,32 +9021,185 @@ export default function MusicPlayer({
     return zoomLevelToVisibleRatio(zoomLevel)
   }, [])
 
-  const waveformBpm =
-    resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm || null
+  const waveformBpm = (() => {
+    const locked = currentTrack
+      ? Number(readCatalogOverrides(currentTrack.metadata)?.bpm)
+      : NaN
+    if (Number.isFinite(locked) && locked > 0) return locked
+    const catalog = currentTrack ? displayTrackBpm(currentTrack) : null
+    const tapeRaw =
+      (currentTrack?.id && tapeGridByTrackId[currentTrack.id]?.bpm) || tapeBpm || null
+    if (tapeRaw) return reconcileTapeBpm(tapeRaw, catalog)
+    return (
+      resolvePlaybackBpm(currentTrack, detectedBPM) ||
+      detectedBPM ||
+      currentTrack?.bpm ||
+      null
+    )
+  })()
   const waveformBeatDurationSec = waveformBpm && waveformBpm > 0 ? 60 / waveformBpm : null
   const waveformBeatsPerBar = beatGridBeatsPerBar || 4
   const isWaveformBarZoomed = waveformVisibleBars > 0
 
-  const persistBeatGridOffset = useCallback(
-    (offset: number) => {
-      if (!currentTrack?.id) return
-      if (beatGridSaveTimeoutRef.current) clearTimeout(beatGridSaveTimeoutRef.current)
-      beatGridSaveTimeoutRef.current = setTimeout(async () => {
+  const persistBeatGridOffsetForTrack = useCallback(
+    (
+      track: Track | null | undefined,
+      offset: number,
+      sonicDna?: unknown,
+      opts?: { immediate?: boolean; gridManual?: boolean },
+    ) => {
+      if (!track?.id) return
+      const isUuid = (value: string | undefined) =>
+        Boolean(
+          value &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value),
+        )
+      const persistId = [track.id, (track as { audioFileId?: string }).audioFileId].find(isUuid)
+      if (beatGridSaveTimeoutRef.current) {
+        clearTimeout(beatGridSaveTimeoutRef.current)
+        beatGridSaveTimeoutRef.current = null
+      }
+
+      const run = async () => {
+        if (!canEditOrigBpm || !persistId) {
+          if (canEditOrigBpm && !persistId) {
+            console.warn('Beat grid not saved: track is not in the catalog (missing UUID)')
+          }
+          return
+        }
         try {
-          await fetch('/api/music-library/tracks', {
-            method: 'PUT',
+          const response = await fetch('/api/audio/update-beat-grid', {
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              id: currentTrack.id,
-              beat_grid_offset: offset,
+              trackId: persistId,
+              offsetSec: offset,
+              ...(sonicDna !== undefined ? { sonicDna } : {}),
+              ...(typeof opts?.gridManual === 'boolean' ? { gridManual: opts.gridManual } : {}),
             }),
           })
+          if (!response.ok) {
+            let message = 'Failed to persist beat grid offset'
+            try {
+              const err = await response.json()
+              if (err?.error) message = String(err.error)
+            } catch {
+              /* ignore */
+            }
+            console.warn(message)
+            return
+          }
+          const saved = await response.json().catch(() => null)
+          const nextDna = saved?.data?.sonic_dna ?? sonicDna
+          const syncIds = [
+            persistId,
+            track.id,
+            (track as { audioFileId?: string }).audioFileId,
+            saved?.data?.audioFileId,
+            ...(Array.isArray(saved?.data?.libraryTrackIds) ? saved.data.libraryTrackIds : []),
+          ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+          for (const id of [...new Set(syncIds)]) {
+            emitCatalogSync({
+              entity: 'track',
+              entityId: id,
+              patch: {
+                beat_grid_offset: offset,
+                ...(nextDna !== undefined ? { sonic_dna: nextDna } : {}),
+              },
+            })
+          }
         } catch (e) {
           console.warn('Failed to persist beat grid offset:', e)
         }
-      }, 600)
+      }
+
+      if (opts?.immediate) {
+        void run()
+        return
+      }
+      beatGridSaveTimeoutRef.current = setTimeout(() => {
+        void run()
+      }, 450)
     },
-    [currentTrack?.id]
+    [canEditOrigBpm],
+  )
+
+  const persistBeatGridOffset = useCallback(
+    (offset: number) => {
+      persistBeatGridOffsetForTrack(currentTrack ?? undefined, offset, currentTrack?.sonic_dna)
+    },
+    [currentTrack, persistBeatGridOffsetForTrack],
+  )
+
+  const commitBeatGridOffset = useCallback(
+    (
+      track: Track | null | undefined,
+      offsetSec: number,
+      opts?: {
+        bpm?: number | null
+        manual?: boolean
+        live?: boolean
+        flush?: boolean
+        /**
+         * CDJ phase-meter jog window (sec). When set, offset wraps into
+         * [0, wrapSec) instead of within-beat phase — so side-scroll can
+         * shift downbeats across 2/4/8 bars without resetting every beat.
+         */
+        wrapSec?: number
+      },
+    ) => {
+      if (!track?.id) return null
+      const bpm =
+        (opts?.bpm && opts.bpm > 0 ? opts.bpm : null) ||
+        resolveTrackBpm(track) ||
+        120
+      const beatSec = 60 / (bpm > 0 ? bpm : 120)
+      const wrapSec =
+        typeof opts?.wrapSec === 'number' && opts.wrapSec > 0 ? opts.wrapSec : null
+      const phase = wrapSec
+        ? wrapOffsetSec(offsetSec, wrapSec)
+        : toPhaseOnlyOffsetSec(offsetSec, beatSec)
+      const manual = opts?.manual !== false
+      const nextDna = withGridAnalysisOnDna(track.sonic_dna, {
+        offsetSec: phase,
+        gridOffsetSec: phase,
+        gridManual: manual,
+      })
+      track.beat_grid_offset = phase
+      track.sonic_dna = nextDna
+      track.grid_manual = manual
+      rememberTapeGrid(track.id, bpm, phase)
+      mixGridOffsetCacheRef.current.set(track.id, phase)
+      mixGridOffsetSigRef.current.delete(track.id)
+      const isLive = opts?.live ?? currentTrack?.id === track.id
+      if (isLive) {
+        setBeatGridEnabled(true)
+        setBeatGridOffsetSec(phase)
+        // Keep ref hot for rapid phase-meter wheel events before React re-renders.
+        beatGridOffsetSecRef.current = phase
+        if (currentTrack && currentTrack.id === track.id) {
+          currentTrack.beat_grid_offset = phase
+          currentTrack.sonic_dna = nextDna
+          currentTrack.grid_manual = manual
+        }
+      }
+      if (onQueueChangeRef.current) {
+        onQueueChangeRef.current(
+          (queue || []).map((t) =>
+            t.id === track.id
+              ? { ...t, beat_grid_offset: phase, sonic_dna: nextDna, grid_manual: manual }
+              : t,
+          ),
+        )
+      }
+      persistBeatGridOffsetForTrack(track, phase, nextDna, {
+        immediate: Boolean(opts?.flush),
+        gridManual: manual,
+      })
+      return phase
+    },
+    [currentTrack, persistBeatGridOffsetForTrack, queue, rememberTapeGrid, resolveTrackBpm],
   )
 
   const persistGridLock = useCallback(
@@ -6387,30 +9213,51 @@ export default function MusicPlayer({
     ) => {
       if (!currentTrack?.id) return
       const nextDna = withGridLockOnDna(currentTrack.sonic_dna, locked, extras)
+      if (!canEditOrigBpm) {
+        currentTrack.sonic_dna = nextDna
+        return
+      }
       try {
-        await fetch('/api/music-library/tracks', {
-          method: 'PUT',
+        const response = await fetch('/api/audio/update-beat-grid', {
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: currentTrack.id,
-            beat_grid_offset: beatGridOffsetSec,
-            sonic_dna: nextDna,
+            trackId: currentTrack.id,
+            offsetSec: beatGridOffsetSec,
+            sonicDna: nextDna,
+            gridManual: true,
           }),
         })
-        currentTrack.sonic_dna = nextDna
+        if (!response.ok) throw new Error('Failed to persist grid lock')
+        const saved = await response.json().catch(() => null)
+        const stampedDna = saved?.data?.sonic_dna ?? nextDna
+        currentTrack.sonic_dna = stampedDna
         if (onQueueChange) {
           const nextQ = queue.map((t) =>
             t.id === currentTrack.id
-              ? { ...t, sonic_dna: nextDna, beat_grid_offset: beatGridOffsetSec }
+              ? { ...t, sonic_dna: stampedDna, beat_grid_offset: beatGridOffsetSec }
               : t,
           )
           onQueueChange(nextQ)
+        }
+        const syncIds = [
+          currentTrack.id,
+          saved?.data?.audioFileId,
+          ...(Array.isArray(saved?.data?.libraryTrackIds) ? saved.data.libraryTrackIds : []),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+        for (const id of [...new Set(syncIds)]) {
+          emitCatalogSync({
+            entity: 'track',
+            entityId: id,
+            patch: { beat_grid_offset: beatGridOffsetSec, sonic_dna: stampedDna },
+          })
         }
       } catch (e) {
         console.warn('Failed to persist grid lock:', e)
       }
     },
-    [currentTrack, beatGridOffsetSec, onQueueChange, queue],
+    [currentTrack, beatGridOffsetSec, onQueueChange, queue, canEditOrigBpm],
   )
 
   const persistGridAnalysis = useCallback(
@@ -6425,31 +9272,48 @@ export default function MusicPlayer({
       const nextDna = withGridAnalysisOnDna(currentTrack.sonic_dna, extras)
       const offset =
         typeof extras.offsetSec === 'number' ? extras.offsetSec : beatGridOffsetSec
+      currentTrack.sonic_dna = nextDna
+      currentTrack.beat_grid_offset = offset
+      if (onQueueChange) {
+        const nextQ = queue.map((t) =>
+          t.id === currentTrack.id
+            ? { ...t, sonic_dna: nextDna, beat_grid_offset: offset }
+            : t,
+        )
+        onQueueChange(nextQ)
+      }
+      if (!canEditOrigBpm) return
       try {
-        await fetch('/api/music-library/tracks', {
-          method: 'PUT',
+        const response = await fetch('/api/audio/update-beat-grid', {
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: currentTrack.id,
-            beat_grid_offset: offset,
-            sonic_dna: nextDna,
+            trackId: currentTrack.id,
+            offsetSec: offset,
+            sonicDna: nextDna,
           }),
         })
-        currentTrack.sonic_dna = nextDna
-        currentTrack.beat_grid_offset = offset
-        if (onQueueChange) {
-          const nextQ = queue.map((t) =>
-            t.id === currentTrack.id
-              ? { ...t, sonic_dna: nextDna, beat_grid_offset: offset }
-              : t,
-          )
-          onQueueChange(nextQ)
+        if (!response.ok) throw new Error('Failed to persist grid analysis')
+        const saved = await response.json().catch(() => null)
+        const stampedDna = saved?.data?.sonic_dna ?? nextDna
+        const syncIds = [
+          currentTrack.id,
+          saved?.data?.audioFileId,
+          ...(Array.isArray(saved?.data?.libraryTrackIds) ? saved.data.libraryTrackIds : []),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+        for (const id of [...new Set(syncIds)]) {
+          emitCatalogSync({
+            entity: 'track',
+            entityId: id,
+            patch: { beat_grid_offset: offset, sonic_dna: stampedDna },
+          })
         }
       } catch (e) {
         console.warn('Failed to persist grid analysis:', e)
       }
     },
-    [currentTrack, beatGridOffsetSec, onQueueChange, queue],
+    [currentTrack, beatGridOffsetSec, onQueueChange, queue, canEditOrigBpm],
   )
 
   // Restore beat **phase** when the track changes (phrase lattice always from t=0).
@@ -6485,6 +9349,9 @@ export default function MusicPlayer({
       persistBeatGridOffset(dnaPhase)
     }
     setBeatGridOffsetSec(offset)
+    rememberTapeGrid(currentTrack.id, bpm, offset)
+    mixGridOffsetCacheRef.current.set(currentTrack.id, offset)
+    mixGridOffsetSigRef.current.delete(currentTrack.id)
     const locked = isGridLocked(currentTrack.sonic_dna)
     setBeatGridLocked(locked)
     const score = readGridLockScore(currentTrack.sonic_dna)
@@ -6498,7 +9365,7 @@ export default function MusicPlayer({
         high: bias.high * 0.35,
       })
     })
-  }, [currentTrack?.id, persistBeatGridOffset, detectedBPM, applyDeckStripEq])
+  }, [currentTrack?.id, currentTrack?.beat_grid_offset, persistBeatGridOffset, detectedBPM, applyDeckStripEq, rememberTapeGrid])
 
   const applyPeakVisualLock = useCallback(
     (offsetSec: number, bpm: number) => {
@@ -6538,30 +9405,39 @@ export default function MusicPlayer({
     [currentTrack?.sonic_dna, waveformData, duration],
   )
 
-  const alignBeatGridToWaveform = useCallback(() => {
-    if (beatGridLocked) return null as { offsetSec: number; bpm: number; lock: number } | null
+  const alignBeatGridToWaveform = useCallback((opts?: { force?: boolean }) => {
+    if (!opts?.force && (isGridManual(currentTrack?.sonic_dna) || currentTrack?.grid_manual === true)) {
+      return null
+    }
+    if (!opts?.force && !isUnsetOffset(currentTrack?.beat_grid_offset)) {
+      return null
+    }
     const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
-    if (!bpm || bpm <= 0) return null
     const peaks =
       trackWaveformBaseRef.current.length > 0
         ? trackWaveformBaseRef.current
         : waveformData
     if (!peaks.length || duration <= 0) return null
-    const aligned = alignBeatGridFromPeaks({
+    const aligned = resolveTapeAlignedGrid({
       peaks,
       durationSec: duration,
       bpm,
+      storedPhaseSec: beatGridOffsetSec,
       beatsPerBar: beatGridBeatsPerBar || 4,
       sonicDna: currentTrack?.sonic_dna,
-      preferTransientOrigin: true,
     })
     if (!aligned) return null
     const beatSec = 60 / aligned.bpm
     const phase = toPhaseOnlyOffsetSec(aligned.offsetSec, beatSec)
-    setBeatGridOffsetSec(phase)
     setBeatGridLock(aligned.lock)
-    persistBeatGridOffset(phase)
-    if (Math.abs(aligned.bpm - bpm) >= 0.05) {
+    commitBeatGridOffset(currentTrack, phase, {
+      bpm: aligned.bpm,
+      // User-forced align must stick (gridManual) so auto-align cannot overwrite it.
+      manual: Boolean(opts?.force),
+      live: true,
+    })
+    setTapeBpm(aligned.bpm)
+    if (typeof bpm !== 'number' || Math.abs(aligned.bpm - bpm) >= 0.05) {
       setDetectedBPM(aligned.bpm)
     }
     setBeatGridEnabled(true)
@@ -6584,7 +9460,7 @@ export default function MusicPlayer({
           bundle.snareClapOnsetSec.length >= 4 ? bundle.snareClapOnsetSec : undefined,
         gridLockScore: aligned.lock,
       })
-    } else if (aligned.lock >= 0.4) {
+    } else if (aligned.lock >= 0.4 || needsKickRemeasure(currentTrack?.sonic_dna, duration)) {
       void persistGridAnalysis({
         kickOnsetSec: bundle.kickOnsetSec.length >= 4 ? bundle.kickOnsetSec : undefined,
         snareClapOnsetSec:
@@ -6595,77 +9471,173 @@ export default function MusicPlayer({
     }
     return { ...aligned, offsetSec: phase }
   }, [
-    beatGridLocked,
     detectedBPM,
     currentTrack,
     waveformData,
     duration,
     beatGridBeatsPerBar,
-    persistBeatGridOffset,
+    commitBeatGridOffset,
     applyPeakVisualLock,
     isAutoDJEnabled,
     persistGridLock,
     persistGridAnalysis,
+    beatGridOffsetSec,
+    rememberTapeGrid,
   ])
 
-  // Auto-align when peaks + duration settle (unlocked / weak grids only).
+  // CDJ default: unset catalog phase → sticky 0 ms (downbeat at file t=0).
+  // Peak "Align Grid" remains a manual / force action only.
   useEffect(() => {
-    if (!currentTrack?.id || beatGridLocked) return
+    if (!currentTrack?.id) return
     if (duration <= 0) return
+    if (beatGridLocked) return
+    if (isGridManual(currentTrack.sonic_dna) || currentTrack.grid_manual === true) return
+    if (!isUnsetOffset(currentTrack.beat_grid_offset)) return
     const peaks = trackWaveformBaseRef.current
     if (peaks.length < 64) return
-    const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
-    if (!bpm || bpm <= 0) return
-
-    if (autoAlignedTrackIdRef.current === currentTrack.id) return
-
-    const existingScore = readGridLockScore(currentTrack.sonic_dna)
-    const storedOffset = currentTrack.beat_grid_offset
-    const beatSec = 60 / bpm
-    const phase = !isUnsetOffset(storedOffset)
-      ? toPhaseOnlyOffsetSec(storedOffset!, beatSec)
-      : readDnaBeatPhaseSec(currentTrack.sonic_dna, beatSec)
-    const hasSolidGrid =
-      phase != null &&
-      existingScore != null &&
-      existingScore >= AUTO_GRID_LOCK_SCORE
-    if (hasSolidGrid) {
-      autoAlignedTrackIdRef.current = currentTrack.id
-      const usePhase = phase ?? 0
-      if (
-        typeof storedOffset === 'number' &&
-        Number.isFinite(storedOffset) &&
-        storedOffset >= beatSec
-      ) {
-        setBeatGridOffsetSec(usePhase)
-        persistBeatGridOffset(usePhase)
-      }
-      applyPeakVisualLock(usePhase, bpm)
-      return
-    }
+    const sig = `${currentTrack.id}:zero:${peaks.length}:${Math.round(duration * 100)}`
+    if (autoAlignedSigRef.current === sig) return
 
     const t = window.setTimeout(() => {
-      autoAlignedTrackIdRef.current = currentTrack.id
-      alignBeatGridToWaveform()
+      autoAlignedSigRef.current = sig
+      const bpm =
+        resolvePlaybackBpm(currentTrack, detectedBPM) ||
+        detectedBPM ||
+        currentTrack.bpm ||
+        waveformBpm ||
+        120
+      commitBeatGridOffset(currentTrack, 0, { bpm, manual: true, live: true })
+      setBeatGridEnabled(true)
     }, 180)
     return () => window.clearTimeout(t)
   }, [
     currentTrack?.id,
     currentTrack?.sonic_dna,
+    currentTrack?.grid_manual,
     currentTrack?.beat_grid_offset,
+    currentTrack?.bpm,
     duration,
     waveformData.length,
     detectedBPM,
+    waveformBpm,
     beatGridLocked,
-    alignBeatGridToWaveform,
-    applyPeakVisualLock,
-    persistBeatGridOffset,
+    commitBeatGridOffset,
   ])
 
   // Reset auto-align gate when the track changes
   useEffect(() => {
-    autoAlignedTrackIdRef.current = null
+    autoAlignedSigRef.current = null
+    setTapeBpm(null)
   }, [currentTrack?.id])
+
+  // Revalidate catalog beat-grid phase once per track so session tape cache /
+  // lean queue rows without beat_grid_offset cannot keep showing a stale ms value.
+  useEffect(() => {
+    const track = currentTrack
+    if (!track?.id) return
+    let cancelled = false
+    const trackId = track.id
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `/api/music-library/tracks?ids=${encodeURIComponent(trackId)}`,
+          { credentials: 'include' },
+        )
+        if (!res.ok || cancelled) return
+        const json = await res.json().catch(() => null)
+        const row = Array.isArray(json?.tracks) ? json.tracks[0] : null
+        if (!row || cancelled) return
+        const catalogOffset = row.beat_grid_offset
+        if (isUnsetOffset(catalogOffset)) return
+        const bpm =
+          resolvePlaybackBpm(track, detectedBPMRef.current) ||
+          track.bpm ||
+          detectedBPMRef.current ||
+          120
+        const beatSec = 60 / (bpm > 0 ? bpm : 120)
+        const phase = toPhaseOnlyOffsetSec(Number(catalogOffset), beatSec)
+        const manual =
+          row.grid_manual === true || isGridManual(row.sonic_dna) || isGridManual(track.sonic_dna)
+        track.beat_grid_offset = phase
+        track.grid_manual = manual || track.grid_manual
+        if (row.sonic_dna) track.sonic_dna = row.sonic_dna
+        rememberTapeGrid(trackId, bpm, phase)
+        mixGridOffsetCacheRef.current.set(trackId, phase)
+        mixGridOffsetSigRef.current.delete(trackId)
+        if (autoDJCurrentTrackRef.current?.id === trackId) {
+          setBeatGridOffsetSec(phase)
+        }
+        if (onQueueChangeRef.current) {
+          onQueueChangeRef.current(
+            (queueRef.current || []).map((t) =>
+              t.id === trackId
+                ? {
+                    ...t,
+                    beat_grid_offset: phase,
+                    grid_manual: manual || t.grid_manual,
+                    ...(row.sonic_dna ? { sonic_dna: row.sonic_dna } : {}),
+                  }
+                : t,
+            ),
+          )
+        }
+        setCurrentTrack?.({
+          ...track,
+          beat_grid_offset: phase,
+          grid_manual: manual || track.grid_manual,
+          ...(row.sonic_dna ? { sonic_dna: row.sonic_dna } : {}),
+        })
+      } catch {
+        /* ignore — live deck keeps local phase */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentTrack?.id, rememberTapeGrid, setCurrentTrack])
+
+  // List/queue rows strip sonic_dna for payload size — hydrate from the dedicated DNA API.
+  useEffect(() => {
+    const track = currentTrack
+    if (!track?.id || track.sonic_dna) return
+    let cancelled = false
+    const trackId = track.id
+    ;(async () => {
+      try {
+        const params = new URLSearchParams()
+        appendSonicDnaLookupParams(params, {
+          libraryTrackId: track.id,
+          audioFileId: track.audioFileId,
+          file: track.file,
+          title: track.title,
+        })
+        const res = await fetch(`/api/audio/sonic-dna?${params.toString()}`, { cache: 'no-store' })
+        if (!res.ok || cancelled) return
+        const data = await res.json().catch(() => ({}))
+        const sonicDna = data?.sonicDNA
+        if (!sonicDna || cancelled) return
+        track.sonic_dna = sonicDna
+        if (typeof data.status === 'string') track.sonic_dna_status = data.status
+        if (onQueueChangeRef.current) {
+          onQueueChangeRef.current(
+            (queueRef.current || []).map((t) =>
+              t.id === trackId ? { ...t, sonic_dna: sonicDna, sonic_dna_status: data.status || t.sonic_dna_status } : t,
+            ),
+          )
+        }
+        setCurrentTrack?.({
+          ...track,
+          sonic_dna: sonicDna,
+          sonic_dna_status: data.status || track.sonic_dna_status,
+        })
+      } catch {
+        /* ignore — mix features degrade without DNA */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentTrack?.id, currentTrack?.sonic_dna, setCurrentTrack])
 
   const lockBeatGrid = useCallback(() => {
     const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
@@ -6708,20 +9680,204 @@ export default function MusicPlayer({
     void persistGridLock(false)
   }, [persistGridLock])
 
+  const persistTrackGridLock = useCallback(
+    async (track: Track, extras?: {
+      kickOnsetSec?: number[]
+      snareClapOnsetSec?: number[]
+      gridLockScore?: number
+    }) => {
+      const nextDna = withGridLockOnDna(track.sonic_dna, true, extras)
+      track.sonic_dna = nextDna
+      if (!canEditOrigBpm) return
+      try {
+        await fetch('/api/music-library/tracks', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: track.id,
+            beat_grid_offset: track.beat_grid_offset ?? 0,
+            sonic_dna: nextDna,
+          }),
+        })
+      } catch (e) {
+        console.warn('Failed to persist queued grid lock:', e)
+      }
+    },
+    [canEditOrigBpm],
+  )
+
+  const lockQueuedGrids = useCallback(() => {
+    if (currentTrack) {
+      lockBeatGrid()
+    }
+    const idx = currentQueueIndex >= 0 ? currentQueueIndex : 0
+    const upcoming = queue.slice(idx, idx + 1 + (autoDJConfig.lookahead || 2))
+    void Promise.all(
+      upcoming
+        .filter((t) => t.id !== currentTrack?.id && !isGridLocked(t.sonic_dna))
+        .map((t) => persistTrackGridLock(t)),
+    ).then(() => {
+      if (onQueueChange) {
+        onQueueChange(
+          queue.map((t) =>
+            upcoming.some((u) => u.id === t.id)
+              ? { ...t, sonic_dna: withGridLockOnDna(t.sonic_dna, true) }
+              : t,
+          ),
+        )
+      }
+      setAutoDJStatusMessage('Queued grids locked')
+      setAutoDjPickStall(null)
+    })
+  }, [
+    currentTrack,
+    lockBeatGrid,
+    currentQueueIndex,
+    queue,
+    autoDJConfig.lookahead,
+    persistTrackGridLock,
+    onQueueChange,
+  ])
+
+  const remeasureKickOnsets = useCallback(() => {
+    const targets: Track[] = []
+    if (currentTrack) targets.push(currentTrack)
+    if (nextQueueTrack && nextQueueTrack.id !== currentTrack?.id) {
+      targets.push(nextQueueTrack)
+    }
+    if (!targets.length) return
+
+    let measured = 0
+    for (const track of targets) {
+      const bpm =
+        resolvePlaybackBpm(track, track.id === currentTrack?.id ? detectedBPM : null) ||
+        (track.id === currentTrack?.id ? detectedBPM : null) ||
+        track.bpm
+      const peaks =
+        track.id === currentTrack?.id
+          ? trackWaveformBaseRef.current.length > 0
+            ? trackWaveformBaseRef.current
+            : waveformData
+          : ghostSamplesRef.current?.trackId === track.id
+            ? ghostSamplesRef.current.samples
+            : []
+      const dur =
+        track.id === currentTrack?.id
+          ? duration
+          : ghostSamplesRef.current?.trackId === track.id
+            ? ghostSamplesRef.current.durationSec
+            : track.duration || 0
+      const offset =
+        track.id === currentTrack?.id
+          ? beatGridOffsetSec
+          : typeof track.beat_grid_offset === 'number'
+            ? track.beat_grid_offset
+            : 0
+      if (!bpm || bpm <= 0 || !peaks.length || dur <= 0) continue
+      const bundle = buildGridOnsetBundle({
+        sonicDna: track.sonic_dna,
+        peaks,
+        durationSec: dur,
+        bpm,
+        offsetSec: offset,
+      })
+      if (track.id === currentTrack?.id) {
+        void persistGridAnalysis({
+          kickOnsetSec: bundle.kickOnsetSec,
+          snareClapOnsetSec: bundle.snareClapOnsetSec,
+          gridLockScore: beatGridLock ?? undefined,
+          offsetSec: beatGridOffsetSec,
+        })
+        applyPeakVisualLock(beatGridOffsetSec, bpm)
+      } else if (bundle.kickOnsetSec.length >= 4) {
+        const nextDna = withGridAnalysisOnDna(track.sonic_dna, {
+          kickOnsetSec: bundle.kickOnsetSec,
+          snareClapOnsetSec:
+            bundle.snareClapOnsetSec.length >= 4 ? bundle.snareClapOnsetSec : undefined,
+          offsetSec: offset,
+        })
+        track.sonic_dna = nextDna
+        if (onQueueChange) {
+          onQueueChange(queue.map((t) => (t.id === track.id ? { ...t, sonic_dna: nextDna } : t)))
+        }
+      }
+      if (bundle.kickOnsetSec.length) measured += bundle.kickOnsetSec.length
+    }
+    setAutoDjPickStall(null)
+    setAutoDJStatusMessage(
+      measured
+        ? `Remeasured ${measured} kick onsets`
+        : 'Need waveform peaks to remeasure kicks',
+    )
+  }, [
+    currentTrack,
+    nextQueueTrack,
+    detectedBPM,
+    waveformData,
+    duration,
+    beatGridOffsetSec,
+    beatGridLock,
+    persistGridAnalysis,
+    applyPeakVisualLock,
+    onQueueChange,
+    queue,
+  ])
+
+  const mixNowFromCurrentBar = useCallback(() => {
+    const next = nextQueueTrack
+    if (!next || !currentTrack) {
+      setAutoDJStatusMessage('Queue a next track to mix now')
+      return
+    }
+    if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return
+    const live = getPlaybackAudio()
+    const now = live?.currentTime ?? 0
+    const plan = lastMixPlanRef.current
+    const rate = computeMixIncomingRate(currentTrack, next)
+    setAutoDJStatusMessage(`Mix now → “${next.title}”`)
+    void startPhraseMix(next, plan?.mixDurationSec ?? 16, rate, plan ? {
+      ...plan,
+      startAtOutgoingSec: now,
+      mixOutMarkerSec: now,
+    } : plan)
+  }, [nextQueueTrack, currentTrack, startPhraseMix, computeMixIncomingRate, getPlaybackAudio])
+  mixNowFromCurrentBarRef.current = mixNowFromCurrentBar
+
+  const previewNextBlend = useCallback(async () => {
+    const next = nextQueueTrack
+    if (!next) {
+      setAutoDJStatusMessage('Queue a next track to preview')
+      return
+    }
+    const engine = ensureMixEngine()
+    if (!engine) {
+      setAutoDJStatusMessage('Mix engine not ready')
+      return
+    }
+    const rate = currentTrack ? computeMixIncomingRate(currentTrack, next) : 1
+    setAutoDJStatusMessage(`Previewing 4 bars → “${next.title}”`)
+    const ok = await engine.previewIncoming({ bars: 4, rate })
+    setAutoDJStatusMessage(ok ? 'Preview finished' : 'Preview failed — cue incoming first')
+  }, [nextQueueTrack, currentTrack, ensureMixEngine, computeMixIncomingRate])
+
   const snapPlayheadToDna = useCallback(
     (mode: 'kick' | 'beat' | 'phrase') => {
       const bpm = waveformBpm
       const live = getPlaybackAudio()
       if (!bpm || !live) return
       const next = quantizeToDnaGrid({
-        timeSec: live.currentTime,
+        timeSec: readLiveMediaTime(),
         bpm,
         offsetSec: beatGridOffsetSec,
         sonicDna: currentTrack?.sonic_dna,
         mode,
         beatsPerBar: beatGridBeatsPerBar || 4,
       })
-      live.currentTime = next
+      seekDeckMediaTime(
+        mixEngineRef.current?.getActiveDeck() ??
+          (playbackDeckRef.current === 'next' ? 'b' : 'a'),
+        next,
+      )
       setCurrentTime(next)
     },
     [waveformBpm, beatGridOffsetSec, currentTrack?.sonic_dna, beatGridBeatsPerBar, getPlaybackAudio]
@@ -6739,22 +9895,61 @@ export default function MusicPlayer({
 
   const resetBeatGrid = useCallback(() => {
     if (beatGridLocked) return
-    setBeatGridOffsetSec(0)
+    // Sticky CDJ zero: downbeat at file t=0 + gridManual so peak auto-align cannot undo it.
+    commitBeatGridOffset(currentTrack, 0, { bpm: waveformBpm, manual: true, live: true })
     setBeatGridLock(null)
-    persistBeatGridOffset(0)
-  }, [beatGridLocked, persistBeatGridOffset])
+  }, [beatGridLocked, commitBeatGridOffset, currentTrack, waveformBpm])
 
   const setBeatHere = useCallback(() => {
     if (beatGridLocked) return
-    const bpm = resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
+    const bpm = waveformBpm || resolvePlaybackBpm(currentTrack, detectedBPM) || detectedBPM || currentTrack?.bpm
     if (!bpm || bpm <= 0) return
     const beatSec = 60 / bpm
-    const next = setDownbeatAt(getPlaybackAudio()?.currentTime ?? playbackTimeRef.current, beatSec)
-    setBeatGridOffsetSec(next)
+    const next = setDownbeatAt(readLiveMediaTime() || playbackTimeRef.current, beatSec)
+    commitBeatGridOffset(currentTrack, next, { bpm, manual: true, live: true })
     setBeatGridLock(null)
-    persistBeatGridOffset(next)
-    setBeatGridEnabled(true)
-  }, [beatGridLocked, currentTrack, detectedBPM, persistBeatGridOffset, getPlaybackAudio])
+  }, [beatGridLocked, currentTrack, detectedBPM, commitBeatGridOffset, waveformBpm, getPlaybackAudio])
+
+  const applyRescannedWaveform = useCallback((
+    trackId: string | undefined,
+    peaks?: number[],
+    envelopes?: Array<{ peak: number; rms: number; low: number; mid: number; high: number }>,
+  ) => {
+    if (trackId) clearCachedWaveformSamples(trackId)
+    if (resolvedUrl) clearPlaybackWaveformCache(resolvedUrl)
+    if (currentTrack?.file) clearPlaybackWaveformCache(currentTrack.file)
+    processedWaveformTrackRef.current = null
+    const matchesCurrent =
+      !trackId ||
+      trackId === currentTrack?.id ||
+      trackId === currentTrack?.audioFileId
+    if (matchesCurrent && peaks && peaks.length >= 64) {
+      const samples = peaksOrEnvelopesToWaveformSamples(peaks, envelopes)
+      if (samples.length) {
+        commitTrackWaveform(samples, peaks)
+        processedWaveformTrackRef.current = currentTrack
+          ? `${currentTrack.id}-${currentTrack.file}`
+          : null
+        if (currentTrack) {
+          setCurrentTrack({ ...currentTrack, waveform_data: peaks })
+        }
+        return
+      }
+    }
+    setWaveformRescanNonce((n) => n + 1)
+  }, [commitTrackWaveform, currentTrack, resolvedUrl, setCurrentTrack])
+
+  const rescanCurrentWaveform = useCallback(async () => {
+    const track = currentTrack
+    if (!track?.file) return
+    const result = await rescanAndPersistWaveform({
+      id: track.id,
+      file: track.file,
+      audioFileId: track.audioFileId,
+      title: track.title,
+    })
+    applyRescannedWaveform(track.id, result.peaks, result.envelopes)
+  }, [applyRescannedWaveform, currentTrack])
 
   // DNA report (library) can drive the same waveform actions via event bridge
   useEffect(() => {
@@ -6763,7 +9958,7 @@ export default function MusicPlayer({
       if (!detail) return
       switch (detail.action) {
         case 'align-grid':
-          alignBeatGridToWaveform()
+          alignBeatGridToWaveform({ force: true })
           break
         case 'set-beat-here':
           setBeatHere()
@@ -6777,11 +9972,14 @@ export default function MusicPlayer({
         case 'apply-eq':
           applyDnaEqPocket()
           break
+        case 'rescan-waveform':
+          applyRescannedWaveform(detail.trackId, detail.peaks, detail.envelopes)
+          break
       }
     }
     window.addEventListener(SONIC_DNA_WAVEFORM_EVENT, onDnaWaveform as EventListener)
     return () => window.removeEventListener(SONIC_DNA_WAVEFORM_EVENT, onDnaWaveform as EventListener)
-  }, [alignBeatGridToWaveform, snapPlayheadToDna, resetBeatGrid, applyDnaEqPocket, setBeatHere])
+  }, [alignBeatGridToWaveform, snapPlayheadToDna, resetBeatGrid, applyDnaEqPocket, setBeatHere, applyRescannedWaveform])
 
   waveformDataLengthRef.current = waveformData.length
   if (!waveformGestureRef.current && waveformFlushRafRef.current == null) {
@@ -6827,10 +10025,33 @@ export default function MusicPlayer({
     [scheduleWaveformFlush]
   )
 
-  const onWaveformContextMenu = useCallback((deck: 'a' | 'b', e: React.MouseEvent) => {
+  const onIncomingVisibleBarsChange = useCallback((bars: number) => {
+    setIncomingVisibleBars(bars)
+  }, [])
+
+  const onIncomingOffsetChange = useCallback((offset: number) => {
+    setIncomingOffset(offset)
+  }, [])
+
+  const onWaveformContextMenu = useCallback(
+    (deck: 'a' | 'b', e: React.MouseEvent, timeSec: number | null = null) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setWaveformMenu({
+        x: e.clientX,
+        y: e.clientY,
+        deck,
+        timeSec: typeof timeSec === 'number' && Number.isFinite(timeSec) ? timeSec : null,
+      })
+    },
+    [],
+  )
+
+  const onPhaseMeterContextMenu = useCallback((deck: 'a' | 'b', e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setWaveformMenu({ x: e.clientX, y: e.clientY, deck })
+    setWaveformMenu(null)
+    setPhaseMeterMenu({ x: e.clientX, y: e.clientY, deck })
   }, [])
 
   const resolveDeckChannelTrack = useCallback(
@@ -6844,6 +10065,248 @@ export default function MusicPlayer({
   const waveformMenuDeckBpm = waveformMenuDeckIsLive
     ? waveformBpm
     : resolveTrackBpm(waveformMenuDeckTrack)
+  const phaseMeterMenuDeck = phaseMeterMenu?.deck ?? liveDeckId
+  const phaseMeterMenuDeckBpm =
+    phaseMeterMenuDeck === liveDeckId
+      ? waveformBpm
+      : resolveTrackBpm(resolveDeckChannelTrack(phaseMeterMenuDeck))
+  const waveformMenuDeckOffsetSec = waveformMenuDeckIsLive
+    ? beatGridOffsetSec
+    : resolveTrackBeatGridOffset(waveformMenuDeckTrack)
+
+  const nudgeBeatGrid = useCallback(
+    (deltaSec: number) => {
+      const track = waveformMenuDeckIsLive ? currentTrack : waveformMenuDeckTrack
+      const bpm = waveformMenuDeckBpm
+      if (!track?.id || !bpm || bpm <= 0 || !Number.isFinite(deltaSec) || deltaSec === 0) return
+      const beatSec = 60 / bpm
+      const next = nudgeBeatPhaseSec(waveformMenuDeckOffsetSec, deltaSec, beatSec)
+      commitBeatGridOffset(track, next, {
+        bpm,
+        manual: true,
+        live: waveformMenuDeckIsLive,
+      })
+    },
+    [
+      waveformMenuDeckTrack,
+      waveformMenuDeckBpm,
+      waveformMenuDeckOffsetSec,
+      waveformMenuDeckIsLive,
+      currentTrack,
+      commitBeatGridOffset,
+    ],
+  )
+
+  const zeroBeatGrid = useCallback(() => {
+    const track = waveformMenuDeckIsLive ? currentTrack : waveformMenuDeckTrack
+    if (!track?.id) return
+    if (waveformMenuDeckIsLive && beatGridLocked) return
+    // Immediate systemic write — do not wait on the nudge debounce.
+    commitBeatGridOffset(track, 0, {
+      bpm: waveformMenuDeckBpm,
+      manual: true,
+      live: waveformMenuDeckIsLive,
+      flush: true,
+    })
+    if (waveformMenuDeckIsLive) setBeatGridLock(null)
+    if (waveformMenuDeckIsLive && currentTrack?.id === track.id && setCurrentTrack) {
+      setCurrentTrack({
+        ...currentTrack,
+        beat_grid_offset: 0,
+        grid_manual: true,
+        sonic_dna: track.sonic_dna,
+      })
+    }
+  }, [
+    waveformMenuDeckIsLive,
+    currentTrack,
+    waveformMenuDeckTrack,
+    waveformMenuDeckBpm,
+    beatGridLocked,
+    commitBeatGridOffset,
+    setCurrentTrack,
+  ])
+
+  const incomingMenuSamples =
+    waveformMenuDeckTrack &&
+    ((deckWaveformCache[waveformMenuDeck]?.trackId === waveformMenuDeckTrack.id &&
+      deckWaveformCache[waveformMenuDeck]!.samples) ||
+      (ghostSamplesRef.current?.trackId === waveformMenuDeckTrack.id
+        ? ghostSamplesRef.current.samples
+        : null))
+  const incomingMenuDuration =
+    waveformMenuDeckTrack &&
+    ((deckWaveformCache[waveformMenuDeck]?.trackId === waveformMenuDeckTrack.id &&
+      deckWaveformCache[waveformMenuDeck]!.durationSec) ||
+      (ghostSamplesRef.current?.trackId === waveformMenuDeckTrack.id
+        ? ghostSamplesRef.current.durationSec
+        : waveformMenuDeckTrack.duration) ||
+      0)
+  const menuDeckReady = Boolean(waveformMenuDeckBpm && waveformMenuDeckTrack)
+  const menuVisibleBars = waveformMenuDeckIsLive ? waveformVisibleBars : incomingVisibleBars
+  const menuFollow = waveformMenuDeckIsLive ? waveformFollow : incomingFollow
+
+  const setMenuBeatHere = useCallback(() => {
+    const track = waveformMenuDeckIsLive ? currentTrack : waveformMenuDeckTrack
+    const bpm = waveformMenuDeckBpm
+    if (!track || !bpm) return
+    const time = waveformMenuDeckIsLive
+      ? readLiveMediaTime() || playbackTimeRef.current
+      : readDeckMediaTime(waveformMenuDeck)
+    commitBeatGridOffset(track, setDownbeatAt(time || 0, 60 / bpm), {
+      bpm,
+      manual: true,
+      live: waveformMenuDeckIsLive,
+    })
+    if (waveformMenuDeckIsLive) setBeatGridLock(null)
+  }, [
+    waveformMenuDeckIsLive,
+    currentTrack,
+    waveformMenuDeckTrack,
+    waveformMenuDeckBpm,
+    waveformMenuDeck,
+    commitBeatGridOffset,
+  ])
+
+  /** Prefer selected memory cue; otherwise the right-click waveform time. */
+  const resolveMenuAlignPoint = useCallback((): {
+    timeSec: number
+    source: 'memory' | 'point'
+  } | null => {
+    const deck = waveformMenu?.deck
+    if (!deck) return null
+    const track = waveformMenuDeckIsLive ? currentTrack : waveformMenuDeckTrack
+    const trackId = track?.id
+    if (trackId) {
+      const active = idjActiveCues[deck]?.[trackId]
+      if (active?.kind === 'memory') {
+        const mem = idjMemoryCues[trackId]
+        if (typeof mem === 'number' && Number.isFinite(mem) && mem >= 0) {
+          return { timeSec: mem, source: 'memory' }
+        }
+      }
+    }
+    const clickSec = waveformMenu?.timeSec
+    if (typeof clickSec === 'number' && Number.isFinite(clickSec) && clickSec >= 0) {
+      return { timeSec: clickSec, source: 'point' }
+    }
+    return null
+  }, [
+    waveformMenu,
+    waveformMenuDeckIsLive,
+    currentTrack,
+    waveformMenuDeckTrack,
+    idjActiveCues,
+    idjMemoryCues,
+  ])
+
+  const menuAlignPoint = resolveMenuAlignPoint()
+
+  const alignMenuBeatGridToPoint = useCallback(() => {
+    const track = waveformMenuDeckIsLive ? currentTrack : waveformMenuDeckTrack
+    const bpm = waveformMenuDeckBpm
+    const point = resolveMenuAlignPoint()
+    if (!track || !bpm || bpm <= 0 || !point) return
+    if (waveformMenuDeckIsLive && beatGridLocked) return
+    commitBeatGridOffset(track, setDownbeatAt(point.timeSec, 60 / bpm), {
+      bpm,
+      manual: true,
+      live: waveformMenuDeckIsLive,
+    })
+    if (waveformMenuDeckIsLive) setBeatGridLock(null)
+    setWaveformMenu(null)
+  }, [
+    waveformMenuDeckIsLive,
+    currentTrack,
+    waveformMenuDeckTrack,
+    waveformMenuDeckBpm,
+    resolveMenuAlignPoint,
+    beatGridLocked,
+    commitBeatGridOffset,
+  ])
+
+  const resetMenuBeatGrid = useCallback(() => {
+    const track = waveformMenuDeckIsLive ? currentTrack : waveformMenuDeckTrack
+    if (!track) return
+    if (waveformMenuDeckIsLive && beatGridLocked) return
+    commitBeatGridOffset(track, 0, {
+      bpm: waveformMenuDeckBpm,
+      manual: false,
+      live: waveformMenuDeckIsLive,
+    })
+    if (waveformMenuDeckIsLive) setBeatGridLock(null)
+  }, [
+    waveformMenuDeckIsLive,
+    currentTrack,
+    waveformMenuDeckTrack,
+    waveformMenuDeckBpm,
+    beatGridLocked,
+    commitBeatGridOffset,
+  ])
+
+  const alignMenuDeckGrid = useCallback(() => {
+    if (waveformMenuDeckIsLive) {
+      alignBeatGridToWaveform({ force: true })
+      return
+    }
+    const track = waveformMenuDeckTrack
+    const peaks = incomingMenuSamples
+    const durationSec = Number(incomingMenuDuration) || 0
+    if (!track || !peaks || peaks.length < 64 || durationSec <= 0) return
+    const aligned = resolveTapeAlignedGrid({
+      peaks,
+      durationSec,
+      bpm: waveformMenuDeckBpm,
+      storedPhaseSec: waveformMenuDeckOffsetSec,
+      sonicDna: track.sonic_dna,
+      beatsPerBar: waveformBeatsPerBar,
+    })
+    if (!aligned) return
+    commitBeatGridOffset(track, aligned.offsetSec, {
+      bpm: aligned.bpm,
+      manual: true,
+      live: false,
+    })
+  }, [
+    waveformMenuDeckIsLive,
+    waveformMenuDeckTrack,
+    incomingMenuSamples,
+    incomingMenuDuration,
+    waveformMenuDeckBpm,
+    waveformMenuDeckOffsetSec,
+    waveformBeatsPerBar,
+    alignBeatGridToWaveform,
+    commitBeatGridOffset,
+  ])
+
+  const snapMenuPlayhead = useCallback(
+    (mode: 'kick' | 'beat' | 'phrase') => {
+      if (waveformMenuDeckIsLive) {
+        snapPlayheadToDna(mode)
+        return
+      }
+      const bpm = waveformMenuDeckBpm
+      if (!bpm) return
+      const next = quantizeToDnaGrid({
+        timeSec: readDeckMediaTime(waveformMenuDeck) || 0,
+        bpm,
+        offsetSec: waveformMenuDeckOffsetSec,
+        sonicDna: waveformMenuDeckTrack?.sonic_dna,
+        mode,
+        beatsPerBar: waveformBeatsPerBar || 4,
+      })
+      seekDeckMediaTime(waveformMenuDeck, next)
+    },
+    [
+      waveformMenuDeckIsLive,
+      snapPlayheadToDna,
+      waveformMenuDeckBpm,
+      waveformMenuDeck,
+      waveformMenuDeckOffsetSec,
+      waveformMenuDeckTrack?.sonic_dna,
+      waveformBeatsPerBar,
+    ],
+  )
 
   const showDeckChannelWaveforms =
     isExpanded && !isMiniMode && (expandedMode as string) !== 'dj'
@@ -6859,7 +10322,9 @@ export default function MusicPlayer({
     const deckBTrack = trackForQueueDeck('b')
 
     const resolveIdleSamples = (deck: 'a' | 'b', track: Track | null | undefined) => {
-      if (!track?.id) return { samples: [] as typeof waveformData, durationSec: 0 }
+      // Stable empty ref — a fresh [] each memo pass retriggers WaveformStage paints.
+      const empty = EMPTY_WAVEFORM_SAMPLES
+      if (!track?.id) return { samples: empty, durationSec: 0 }
       const cached = deckWaveformCache[deck]
       if (cached?.trackId === track.id) {
         return { samples: cached.samples, durationSec: cached.durationSec }
@@ -6871,7 +10336,7 @@ export default function MusicPlayer({
           durationSec: ghost.durationSec || track.duration || 180,
         }
       }
-      return { samples: [] as typeof waveformData, durationSec: track.duration || 180 }
+      return { samples: empty, durationSec: track.duration || 180 }
     }
 
     const deckAIdle = deckAIsLive ? null : resolveIdleSamples('a', deckATrack)
@@ -6882,12 +10347,22 @@ export default function MusicPlayer({
     const deckBDuration = deckBIsLive ? duration || 0 : deckBIdle!.durationSec
     const deckABpm = deckAIsLive ? waveformBpm : resolveTrackBpm(deckATrack)
     const deckBBpm = deckBIsLive ? waveformBpm : resolveTrackBpm(deckBTrack)
-    const deckAIntel = deckAIsLive
-      ? waveformIntelligenceProfile
-      : profileFromSonicDna(deckATrack?.sonic_dna)
-    const deckBIntel = deckBIsLive
-      ? waveformIntelligenceProfile
-      : profileFromSonicDna(deckBTrack?.sonic_dna)
+    const deckAGridOffset = deckAIsLive
+      ? beatGridOffsetSec
+      : resolveTrackBeatGridOffset(deckATrack)
+    const deckBGridOffset = deckBIsLive
+      ? beatGridOffsetSec
+      : resolveTrackBeatGridOffset(deckBTrack)
+    const deckAIntel = withLivePlaybackGrid(
+      deckAIsLive ? waveformIntelligenceProfile : profileFromSonicDna(deckATrack?.sonic_dna),
+      deckAGridOffset,
+      deckABpm,
+    )
+    const deckBIntel = withLivePlaybackGrid(
+      deckBIsLive ? waveformIntelligenceProfile : profileFromSonicDna(deckBTrack?.sonic_dna),
+      deckBGridOffset,
+      deckBBpm,
+    )
 
     const renderDeckWaveform = (
       deck: 'a' | 'b',
@@ -6905,12 +10380,13 @@ export default function MusicPlayer({
       <WaveformStage
         audioRef={opts.audioRef}
         mediaSyncKey={opts.mediaSyncKey}
-        isPlaying={opts.isLive ? isPlaying : incomingDeckHot}
+        readMediaTime={() => readDeckMediaTime(deck)}
+        isPlaying={opts.isLive ? isPlaying : (isIDJEnabled || isAutoDJEnabled) ? idleDeckPlaying : incomingDeckHot}
         samples={opts.samples}
         durationSec={opts.durationSec}
-        visibleBars={waveformVisibleBars}
-        offsetIndex={opts.isLive ? waveformOffset : 0}
-        follow={opts.isLive ? waveformFollow : incomingDeckHot}
+        visibleBars={opts.isLive ? waveformVisibleBars : incomingVisibleBars}
+        offsetIndex={opts.isLive ? waveformOffset : incomingOffset}
+        follow={opts.isLive ? waveformFollow : incomingFollow}
         mirror={waveformMirror}
         colorMode={waveformMode}
         layerLayout={waveformLayerLayout}
@@ -6919,19 +10395,40 @@ export default function MusicPlayer({
         beatGridEnabled={beatGridEnabled && Boolean(opts.bpm)}
         beatGridOffsetSec={opts.beatGridOffsetSec}
         beatsPerBar={waveformBeatsPerBar}
+        snapToGrid={idjConfig.snapToGrid}
         mixOverlay={opts.isLive && isAutoDJEnabled ? waveformMixOverlay : null}
         ghostTape={null}
-        hotCues={opts.isLive ? waveformHotCues : []}
+        hotCues={opts.isLive ? liveWaveformCues : (isIDJEnabled || isAutoDJEnabled) ? idleWaveformCues : []}
         deckId={deck === 'a' ? 'A' : 'B'}
         hoverRoot={undefined}
         gestureActiveRef={waveformGestureRef}
         className={`relative h-full w-full touch-none overflow-hidden ${
-          opts.isLive && waveformZoom > 1.04 ? 'cursor-grab' : 'cursor-pointer'
+          (opts.isLive ? waveformZoom : incomingVisibleBars > 0) ? 'cursor-grab' : 'cursor-pointer'
         } ${!opts.isLive && !incomingDeckHot ? 'opacity-80' : ''}`}
-        onVisibleBarsChange={opts.isLive ? onWaveformVisibleBarsChange : () => {}}
-        onOffsetChange={opts.isLive ? onWaveformOffsetChange : () => {}}
-        onSeekSec={opts.isLive ? snapPlaybackTime : () => {}}
-        onContextMenu={(e) => onWaveformContextMenu(deck, e)}
+        onVisibleBarsChange={
+          opts.isLive ? onWaveformVisibleBarsChange : onIncomingVisibleBarsChange
+        }
+        onOffsetChange={opts.isLive ? onWaveformOffsetChange : onIncomingOffsetChange}
+        onFollowChange={opts.isLive ? setWaveformFollow : setIncomingFollow}
+        onSeekSec={
+          opts.isLive
+            ? snapPlaybackTime
+            : incomingDeckHot
+              ? (t) => seekDeckMediaTime(deck, t)
+              : () => {}
+        }
+        onCueSec={
+          isIDJEnabled || isAutoDJEnabled ? (t) => writeDeckMemoryCue(deck, t) : undefined
+        }
+        onJumpPlay={
+          isIDJEnabled || isAutoDJEnabled ? () => startDeckPlay(deck) : undefined
+        }
+        seekMediaTime={
+          opts.isLive || incomingDeckHot ? (t) => seekDeckMediaTime(deck, t) : undefined
+        }
+        onContextMenu={(e, timeSec) => onWaveformContextMenu(deck, e, timeSec)}
+        showOverview={waveformOverview}
+        showPhaseMeter={false}
       />
     )
 
@@ -6942,9 +10439,7 @@ export default function MusicPlayer({
         samples: deckASamples,
         durationSec: deckADuration,
         bpm: deckABpm,
-        beatGridOffsetSec: deckAIsLive
-          ? beatGridOffsetSec
-          : resolveTrackBeatGridOffset(deckATrack),
+        beatGridOffsetSec: deckAGridOffset,
         mediaSyncKey: deckAIsLive ? waveformMediaSyncKey : 'idle-a',
         intelligenceProfile: deckAIntel,
       }),
@@ -6954,9 +10449,7 @@ export default function MusicPlayer({
         samples: deckBSamples,
         durationSec: deckBDuration,
         bpm: deckBBpm,
-        beatGridOffsetSec: deckBIsLive
-          ? beatGridOffsetSec
-          : resolveTrackBeatGridOffset(deckBTrack),
+        beatGridOffsetSec: deckBGridOffset,
         mediaSyncKey: deckBIsLive ? waveformMediaSyncKey : 'idle-b',
         intelligenceProfile: deckBIntel,
       }),
@@ -6980,15 +10473,22 @@ export default function MusicPlayer({
     waveformVisibleBars,
     waveformOffset,
     waveformFollow,
+    waveformOverview,
     waveformMirror,
     waveformMode,
     waveformLayerLayout,
     waveformIntelligenceProfile,
     beatGridEnabled,
     beatGridOffsetSec,
+    idjConfig.snapToGrid,
     waveformBeatsPerBar,
     isAutoDJEnabled,
     incomingDeckHot,
+    incomingVisibleBars,
+    incomingOffset,
+    incomingFollow,
+    onIncomingVisibleBarsChange,
+    onIncomingOffsetChange,
     waveformMixOverlay,
     waveformGhostTape,
     waveformHotCues,
@@ -6998,6 +10498,257 @@ export default function MusicPlayer({
     onWaveformOffsetChange,
     snapPlaybackTime,
     onWaveformContextMenu,
+    isIDJEnabled,
+    idleDeckPlaying,
+    liveWaveformCues,
+    idleWaveformCues,
+    seekDeckMediaTime,
+    writeDeckMemoryCue,
+    startDeckPlay,
+    readDeckMediaTime,
+  ])
+
+  /** Stacked A/B phase meters above the mixer crossfader (full chrome width). */
+  const readDeckSyncPhaseError = useCallback(
+    (deck: 'a' | 'b', selfBpm: number | null, selfOffset: number) => {
+      if (!(isIDJEnabled || isAutoDJEnabled) || !selfBpm || selfBpm <= 0) return null
+      const peer = deck === 'a' ? 'b' : 'a'
+      const peerTrack = trackForQueueDeck(peer)
+      const peerBpm = peer === liveDeckId ? waveformBpm : resolveTrackBpm(peerTrack)
+      if (!peerBpm || peerBpm <= 0) return null
+      const peerEl = peer === 'a' ? audioRef.current : nextAudioRef.current
+      if (!peerEl || peerEl.readyState < 1) return null
+      const peerOffset =
+        peer === liveDeckId ? beatGridOffsetSec : resolveTrackBeatGridOffset(peerTrack)
+      const selfTime = readDeckMediaTime(deck)
+      const peerTime = readDeckMediaTime(peer)
+      const isLive = deck === liveDeckId
+      const periodBeats = resolvePhaseMeterWindowBeats(
+        phaseMeterOptions.windowId,
+        waveformBeatsPerBar || 4,
+        phaseMeterOptions.phraseBars,
+      )
+      if (isLive) {
+        return beatPhaseErrorSec({
+          outgoingTimeSec: selfTime,
+          outgoingBpm: selfBpm,
+          outgoingOffsetSec: selfOffset,
+          incomingTimeSec: peerTime,
+          incomingBpm: peerBpm,
+          incomingOffsetSec: peerOffset,
+          periodBeats,
+        })
+      }
+      return beatPhaseErrorSec({
+        outgoingTimeSec: peerTime,
+        outgoingBpm: peerBpm,
+        outgoingOffsetSec: peerOffset,
+        incomingTimeSec: selfTime,
+        incomingBpm: selfBpm,
+        incomingOffsetSec: selfOffset,
+        periodBeats,
+      })
+    },
+    [
+      isIDJEnabled,
+      isAutoDJEnabled,
+      trackForQueueDeck,
+      liveDeckId,
+      waveformBpm,
+      resolveTrackBpm,
+      beatGridOffsetSec,
+      resolveTrackBeatGridOffset,
+      readDeckMediaTime,
+      phaseMeterOptions.windowId,
+      phaseMeterOptions.phraseBars,
+      waveformBeatsPerBar,
+    ],
+  )
+
+  const centerPhaseMeterDeck = useCallback(
+    (deck: 'a' | 'b') => {
+      const isLive = deck === liveDeckId
+      const track = isLive ? currentTrack : trackForQueueDeck(deck)
+      const bpm = isLive ? waveformBpm : resolveTrackBpm(track)
+      if (!track?.id || !bpm || bpm <= 0) return
+      const offsetSec = isLive ? beatGridOffsetSecRef.current : resolveTrackBeatGridOffset(track)
+      const beatSec = 60 / bpm
+      const windowBeats = resolvePhaseMeterWindowBeats(
+        phaseMeterOptions.windowId,
+        waveformBeatsPerBar || 4,
+        phaseMeterOptions.phraseBars,
+      )
+      const wrapSec = windowBeats * beatSec
+      const peerErr = readDeckSyncPhaseError(deck, bpm, offsetSec)
+      const errSec =
+        typeof peerErr === 'number' && Number.isFinite(peerErr)
+          ? peerErr
+          : localGridPhaseErrorSec({
+              currentTimeSec: readDeckMediaTime(deck),
+              bpm,
+              offsetSec,
+              // Needle stays beat-lock; multi-bar wrap is only for offset storage.
+            })
+      const polarity: 1 | -1 =
+        typeof peerErr === 'number' && Number.isFinite(peerErr) && isLive ? 1 : -1
+      const delta = centerPhaseDeltaSec({ errSec, polarity })
+      if (!delta) return
+      const next = nudgeBeatPhaseSec(offsetSec, delta, beatSec, wrapSec)
+      commitBeatGridOffset(track, next, { bpm, manual: true, live: isLive, wrapSec })
+    },
+    [
+      liveDeckId,
+      currentTrack,
+      trackForQueueDeck,
+      waveformBpm,
+      resolveTrackBpm,
+      resolveTrackBeatGridOffset,
+      readDeckSyncPhaseError,
+      readDeckMediaTime,
+      commitBeatGridOffset,
+      phaseMeterOptions.windowId,
+      phaseMeterOptions.phraseBars,
+      waveformBeatsPerBar,
+    ],
+  )
+
+  const alignPhaseMeterPlayhead = useCallback(
+    (deck: 'a' | 'b') => {
+      const mode = phaseMeterOptions.quantize
+      if (mode === 'off') return
+      const isLive = deck === liveDeckId
+      const track = isLive ? currentTrack : trackForQueueDeck(deck)
+      const bpm = isLive ? waveformBpm : resolveTrackBpm(track)
+      if (!bpm || bpm <= 0) return
+      const offsetSec = isLive ? beatGridOffsetSec : resolveTrackBeatGridOffset(track)
+      const next = quantizeToDnaGrid({
+        timeSec: readDeckMediaTime(deck) || 0,
+        bpm,
+        offsetSec,
+        sonicDna: track?.sonic_dna,
+        mode,
+        beatsPerBar: waveformBeatsPerBar || 4,
+      })
+      seekDeckMediaTime(deck, next)
+      if (isLive) setCurrentTime(next)
+    },
+    [
+      phaseMeterOptions.quantize,
+      liveDeckId,
+      currentTrack,
+      trackForQueueDeck,
+      waveformBpm,
+      resolveTrackBpm,
+      beatGridOffsetSec,
+      resolveTrackBeatGridOffset,
+      readDeckMediaTime,
+      waveformBeatsPerBar,
+      seekDeckMediaTime,
+    ],
+  )
+
+  const alignBothPhaseMeterPlayheads = useCallback(() => {
+    alignPhaseMeterPlayhead('a')
+    alignPhaseMeterPlayhead('b')
+  }, [alignPhaseMeterPlayhead])
+
+  const deckPhaseMeters = useMemo(() => {
+    if (!waveformPhaseMeter || !showDeckChannelWaveforms) return null
+
+    const deckATrack = trackForQueueDeck('a')
+    const deckBTrack = trackForQueueDeck('b')
+    const deckAIsLive = liveDeckId === 'a'
+    const deckBIsLive = liveDeckId === 'b'
+    const deckABpm = deckAIsLive ? waveformBpm : resolveTrackBpm(deckATrack)
+    const deckBBpm = deckBIsLive ? waveformBpm : resolveTrackBpm(deckBTrack)
+    const deckAGridOffset = deckAIsLive
+      ? beatGridOffsetSec
+      : resolveTrackBeatGridOffset(deckATrack)
+    const deckBGridOffset = deckBIsLive
+      ? beatGridOffsetSec
+      : resolveTrackBeatGridOffset(deckBTrack)
+
+    const makeMeter = (
+      deck: 'a' | 'b',
+      label: 'A' | 'B',
+      bpm: number | null,
+      offsetSec: number,
+      isLive: boolean,
+    ) => (
+      <PhaseAlignMeter
+        key={deck}
+        deckLabel={label}
+        bpm={bpm}
+        beatsPerBar={waveformBeatsPerBar}
+        offsetSec={offsetSec}
+        options={phaseMeterOptions}
+        readTimeSec={() => readDeckMediaTime(deck)}
+        readOffsetSec={() => {
+          const track = isLive ? currentTrack : trackForQueueDeck(deck)
+          if (isLive) return beatGridOffsetSecRef.current
+          return track ? resolveTrackBeatGridOffset(track) : offsetSec
+        }}
+        readPhaseErrorSec={() => {
+          const track = isLive ? currentTrack : trackForQueueDeck(deck)
+          const liveOffset = isLive
+            ? beatGridOffsetSecRef.current
+            : track
+              ? resolveTrackBeatGridOffset(track)
+              : offsetSec
+          return readDeckSyncPhaseError(deck, bpm, liveOffset)
+        }}
+        nudgePolarity={isLive ? 1 : -1}
+        onPhaseNudge={(deltaSec) => {
+          const track = isLive ? currentTrack : trackForQueueDeck(deck)
+          if (!track?.id || !bpm || bpm <= 0) return
+          // Phase-meter jog stays live even when the waveform grid is locked —
+          // locking blocks auto/align writes, not the CDJ jog strip.
+          const beatSec = 60 / bpm
+          const windowBeats = resolvePhaseMeterWindowBeats(
+            phaseMeterOptions.windowId,
+            waveformBeatsPerBar || 4,
+            phaseMeterOptions.phraseBars,
+          )
+          const wrapSec = windowBeats * beatSec
+          // Read live offset (ref / track) so rapid wheel ticks accumulate
+          // instead of replaying against a stale useMemo closure.
+          const offsetNow = isLive
+            ? beatGridOffsetSecRef.current
+            : resolveTrackBeatGridOffset(track)
+          const next = nudgeBeatPhaseSec(offsetNow, deltaSec, beatSec, wrapSec)
+          commitBeatGridOffset(track, next, {
+            bpm,
+            manual: true,
+            live: isLive,
+            wrapSec,
+          })
+        }}
+        onAlignPlayhead={() => alignPhaseMeterPlayhead(deck)}
+      />
+    )
+
+    return (
+      <>
+        {makeMeter('a', 'A', deckABpm, deckAGridOffset, deckAIsLive)}
+        {makeMeter('b', 'B', deckBBpm, deckBGridOffset, deckBIsLive)}
+      </>
+    )
+  }, [
+    waveformPhaseMeter,
+    showDeckChannelWaveforms,
+    liveDeckId,
+    trackForQueueDeck,
+    waveformBpm,
+    resolveTrackBpm,
+    resolveTrackBeatGridOffset,
+    beatGridOffsetSec,
+    waveformBeatsPerBar,
+    phaseMeterOptions,
+    readDeckSyncPhaseError,
+    readDeckMediaTime,
+    currentTrack,
+    commitBeatGridOffset,
+    alignPhaseMeterPlayhead,
   ])
 
   const markPanEnabled = useCallback((visibleBars: number) => {
@@ -7071,6 +10822,28 @@ export default function MusicPlayer({
     applyVisibleBars(next, 0.5)
   }, [applyVisibleBars])
 
+  const applyMenuVisibleBars = useCallback(
+    (bars: number, focal = 0.5) => {
+      if (waveformMenuDeckIsLive) {
+        applyVisibleBars(bars, focal)
+        return
+      }
+      setIncomingVisibleBars(bars <= 0 ? 0 : nearestBarZoomStep(bars))
+    },
+    [waveformMenuDeckIsLive, applyVisibleBars],
+  )
+
+  const handleMenuZoom = useCallback(
+    (delta: number) => {
+      if (waveformMenuDeckIsLive) {
+        handleWaveformZoom(delta)
+        return
+      }
+      setIncomingVisibleBars((prev) => stepVisibleBars(prev, delta > 0 ? 1 : -1))
+    },
+    [waveformMenuDeckIsLive, handleWaveformZoom],
+  )
+
   const handleWaveformPan = useCallback((delta: number) => {
     if (waveformVisibleBarsRef.current <= 0) return
     const length = waveformDataLengthRef.current
@@ -7083,7 +10856,10 @@ export default function MusicPlayer({
   }, [samplesForVisibleBars])
 
   useEffect(() => {
-    if (!waveformMenu) return
+    if (!waveformMenu) {
+      setWaveformMenuSection(null)
+      return
+    }
 
     const onPointerDown = (e: PointerEvent) => {
       if (waveformMenuRef.current?.contains(e.target as Node)) return
@@ -7100,6 +10876,25 @@ export default function MusicPlayer({
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [waveformMenu])
+
+  useEffect(() => {
+    if (!phaseMeterMenu) return
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (phaseMeterMenuRef.current?.contains(e.target as Node)) return
+      setPhaseMeterMenu(null)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPhaseMeterMenu(null)
+    }
+
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [phaseMeterMenu])
 
   // Reset zoom/pan when minimized or not expanded; keep Colorful + Mirror defaults
   useEffect(() => {
@@ -7150,6 +10945,7 @@ export default function MusicPlayer({
 
   const lockBackgroundScroll = Boolean(
     autoDJSettingsMenu ||
+      idjSettingsMenu ||
       showTrackDetails ||
       (isSettingsOpen && !isMiniMode) ||
       (isQueueOpen && !isQueueDocked),
@@ -7180,17 +10976,19 @@ export default function MusicPlayer({
             : `max-h-[90vh] overscroll-contain ${lockBackgroundScroll ? 'overflow-hidden' : 'overflow-y-auto'}`
         }
       >
-      <audio 
-        ref={audioRef} 
-        preload="metadata" 
+      <audio
+        key={`main-audio-${audioElementEpoch}`}
+        ref={audioRef}
+        preload="metadata"
         crossOrigin="anonymous"
         playsInline
         webkit-playsinline="true"
         x-webkit-airplay="allow"
       />
-      <audio 
-        ref={nextAudioRef} 
-        preload="none" 
+      <audio
+        key={`next-audio-${audioElementEpoch}`}
+        ref={nextAudioRef}
+        preload="none"
         crossOrigin="anonymous"
         playsInline
         webkit-playsinline="true"
@@ -7217,17 +11015,15 @@ export default function MusicPlayer({
           <div className="flex w-full min-w-0 flex-col gap-1.5 sm:hidden">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
-                {coverSrc && (
+                {hasPlayerCover && (
                   <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md">
-                    <Image
-                      key={coverSrc}
+                    <PlayerCoverArt
                       src={coverSrc}
+                      mosaicCovers={mosaicCovers}
                       alt={coverAlt}
-                      fill
-                      className="object-cover"
                       unoptimized={coverUnoptimized}
                       sizes="44px"
-                      priority={true}
+                      priority
                       quality={75}
                     />
                   </div>
@@ -7239,7 +11035,7 @@ export default function MusicPlayer({
               <div className="flex shrink-0 items-center gap-0.5 justify-self-center">
                 <button
                   type="button"
-                  onClick={onPrevious}
+                  onClick={handleSkipToPrevious}
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
                   disabled={queue.length <= 1}
                   aria-label="Previous track"
@@ -7298,7 +11094,7 @@ export default function MusicPlayer({
                 <FaRandom className="h-3 w-3" />
               </button>
               <button
-                onClick={onPrevious}
+                onClick={handleSkipToPrevious}
                 className="flex min-h-[36px] min-w-[36px] items-center justify-center p-1.5 text-white transition-colors hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
                 disabled={queue.length <= 1}
                 title="Previous"
@@ -7336,21 +11132,19 @@ export default function MusicPlayer({
                   <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-500 text-[6px]">1</span>
                 )}
                 {settings.repeatMode === 'all' && (
-                  <span className="absolute -right-0.5 -top-0.5 text-[6px]">∞</span>
+                  <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-500 text-[6px]">∞</span>
                 )}
               </button>
             </div>
-            {coverSrc && (
+            {hasPlayerCover && (
               <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded">
-                <Image
-                  key={coverSrc}
+                <PlayerCoverArt
                   src={coverSrc}
+                  mosaicCovers={mosaicCovers}
                   alt={coverAlt}
-                  fill
-                  className="object-cover"
                   unoptimized={coverUnoptimized}
                   sizes="40px"
-                  priority={true}
+                  priority
                   quality={75}
                 />
               </div>
@@ -7414,7 +11208,101 @@ export default function MusicPlayer({
         </>
       )}
 
-      {/* Full Player chrome */}
+      {/* Expanded decks / mix session sit above the chrome row when open. */}
+      {!isMiniMode && isExpanded && (
+        <div className="border-t border-gray-800">
+          {expandedMode === 'controls' || !djModeAvailable ? (
+            <ExpandedPlayerControls
+              decks={expandedDeckChannels}
+              deckWaveforms={deckChannelWaveforms}
+              phaseMeters={deckPhaseMeters}
+              onPhaseMetersContextMenu={onPhaseMeterContextMenu}
+              onTapTempo={handleDeckTapTempo}
+              onTempoChange={handleDeckTempoChange}
+              onChangePlaybackRate={changeDeckPlaybackRate}
+              getTempoPercentage={getTempoPercentage}
+              getAdjustedBPM={getAdjustedBPM}
+              rateToTempoValue={rateToTempoValue}
+              onBPMUpdate={handleDeckBPMUpdate}
+              canEditOrigBpm={canEditOrigBpm}
+              onDeckEqGains={handleDeckEqGains}
+              isPlaying={isPlaying}
+              isLoading={isLoading}
+              error={error}
+              canSkip={queue.length > 1}
+              onPrevious={handleSkipToPrevious}
+              onNext={handleSkipToNext}
+              onDeckPrevious={handleDeckPrevious}
+              onDeckNext={handleDeckNext}
+              onTogglePlay={() => {
+                void togglePlay()
+              }}
+              mixProgress={mixerCrossfadeProgress}
+              mixCrossfadeActive={isIDJEnabled || isAutoDJEnabled || crossfadeActive}
+              idjActive={isIDJEnabled}
+              autoDjActive={isAutoDJEnabled}
+              onIdjCrossfade={handleIdjCrossfade}
+              autoDjXfUnlocked={autoDjXfUnlocked}
+              onUnlockCrossfaderFromAutoDj={unlockCrossfaderFromAutoDj}
+              onRelockCrossfaderToAutoDj={relockCrossfaderToAutoDj}
+              onSetCue={handleSetDeckCue}
+              onClearCue={handleClearDeckCue}
+              onLaunchCue={handleLaunchDeckCue}
+              deckHotCues={deckHotCues}
+              onLaunchDeckHotCue={handleLaunchDeckHotCue}
+              onSetDeckHotCue={handleSetDeckHotCue}
+              onClearDeckHotCue={handleClearDeckHotCue}
+              onClearAllDeckHotCues={handleClearAllDeckHotCues}
+              deckMemoryCueSec={deckMemoryCueSec}
+              deckTrackCues={deckTrackCues}
+              onJumpDeckTrackCue={handleJumpDeckTrackCue}
+              deckActiveCues={{
+                a: trackForQueueDeck('a')?.id
+                  ? idjActiveCues.a[trackForQueueDeck('a')!.id] ?? null
+                  : null,
+                b: trackForQueueDeck('b')?.id
+                  ? idjActiveCues.b[trackForQueueDeck('b')!.id] ?? null
+                  : null,
+              }}
+              onSelectDeckActiveCue={handleSelectDeckActiveCue}
+              deckHasCue={{
+                a: Boolean(
+                  trackForQueueDeck('a')?.id &&
+                    idjMemoryCues[trackForQueueDeck('a')!.id] != null,
+                ),
+                b: Boolean(
+                  trackForQueueDeck('b')?.id &&
+                    idjMemoryCues[trackForQueueDeck('b')!.id] != null,
+                ),
+              }}
+              deckPlaying={{
+                a: liveDeckId === 'a' ? isPlaying : idleDeckPlaying,
+                b: liveDeckId === 'b' ? isPlaying : idleDeckPlaying,
+              }}
+              onToggleDeckPlay={handleToggleDeckPlay}
+              deckContinuousPlay={idjConfig.continuousPlay}
+              onToggleDeckContinuousPlay={(deck) => {
+                patchIDJConfig({
+                  continuousPlay: {
+                    ...idjConfig.continuousPlay,
+                    [deck]: !idjConfig.continuousPlay[deck],
+                  },
+                })
+              }}
+              cueJumpPlay={idjConfig.cueJumpPlay}
+              onCueDeckLibraryDrop={handleCueDeckLibraryDrop}
+            />
+          ) : (
+            <DJMixerMode
+              currentTrack={currentTrack}
+              queue={queue}
+              onExit={() => setExpandedMode('controls')}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Full Player chrome — docks under expanded decks (merged iDJ / AutoDJ / Tap). */}
       {!isMiniMode && expandedMode !== 'dj' && (
         <>
           {/* Waveform above chrome when collapsed (vault Now Playing docks via portal) */}
@@ -7442,8 +11330,8 @@ export default function MusicPlayer({
               ? 'h-full w-full'
               : 'h-20 sm:h-24 md:h-32'
 
-            const incomingTrack = nextQueueTrack
             const incomingDeckId: 'a' | 'b' = liveDeckId === 'a' ? 'b' : 'a'
+            const incomingTrack = trackForQueueDeck(incomingDeckId) ?? nextQueueTrack
             const incomingCached = incomingTrack
               ? deckWaveformCache[incomingDeckId]
               : undefined
@@ -7479,12 +11367,16 @@ export default function MusicPlayer({
               <WaveformStage
                 audioRef={opts.audioRef}
                 mediaSyncKey={opts.mediaSyncKey}
-                isPlaying={opts.isLive ? isPlaying : incomingDeckHot}
+                readMediaTime={() => readDeckMediaTime(deck)}
+                seekMediaTime={
+                  opts.isLive || incomingDeckHot ? (t) => seekDeckMediaTime(deck, t) : undefined
+                }
+                isPlaying={opts.isLive ? isPlaying : (isIDJEnabled || isAutoDJEnabled) ? idleDeckPlaying : incomingDeckHot}
                 samples={opts.samples}
                 durationSec={opts.durationSec}
-                visibleBars={waveformVisibleBars}
-                offsetIndex={opts.isLive ? waveformOffset : 0}
-                follow={opts.isLive ? waveformFollow : incomingDeckHot}
+                visibleBars={opts.isLive ? waveformVisibleBars : incomingVisibleBars}
+                offsetIndex={opts.isLive ? waveformOffset : incomingOffset}
+                follow={opts.isLive ? waveformFollow : incomingFollow}
                 mirror={waveformMirror}
                 colorMode={waveformMode}
                 layerLayout={waveformLayerLayout}
@@ -7498,9 +11390,10 @@ export default function MusicPlayer({
                     : resolveTrackBeatGridOffset(incomingTrack ?? currentTrack))
                 }
                 beatsPerBar={waveformBeatsPerBar}
+                snapToGrid={idjConfig.snapToGrid}
                 mixOverlay={opts.isLive && isAutoDJEnabled ? waveformMixOverlay : null}
                 ghostTape={null}
-                hotCues={opts.isLive ? waveformHotCues : []}
+                hotCues={opts.isLive ? liveWaveformCues : (isIDJEnabled || isAutoDJEnabled) ? idleWaveformCues : []}
                 deckId={deck === 'a' ? 'A' : 'B'}
                 hoverRoot={hoverRoot}
                 gestureActiveRef={waveformGestureRef}
@@ -7509,11 +11402,27 @@ export default function MusicPlayer({
                 } ${
                   opts.isLive && waveformZoom > 1.04 ? 'cursor-grab' : 'cursor-pointer'
                 } ${!opts.isLive && !incomingDeckHot ? 'opacity-80' : ''}`}
-                onVisibleBarsChange={opts.isLive ? onWaveformVisibleBarsChange : () => {}}
-                onOffsetChange={opts.isLive ? onWaveformOffsetChange : () => {}}
-                onSeekSec={opts.isLive ? snapPlaybackTime : () => {}}
-                onContextMenu={(e) => onWaveformContextMenu(deck, e)}
+                onVisibleBarsChange={
+                  opts.isLive ? onWaveformVisibleBarsChange : onIncomingVisibleBarsChange
+                }
+                onOffsetChange={opts.isLive ? onWaveformOffsetChange : onIncomingOffsetChange}
+                onFollowChange={opts.isLive ? setWaveformFollow : setIncomingFollow}
+                onSeekSec={
+                  opts.isLive
+                    ? snapPlaybackTime
+                    : incomingDeckHot
+                      ? (t) => seekDeckMediaTime(deck, t)
+                      : () => {}
+                }
+                onCueSec={
+                  isIDJEnabled || isAutoDJEnabled ? (t) => writeDeckMemoryCue(deck, t) : undefined
+                }
+                onJumpPlay={
+                  isIDJEnabled || isAutoDJEnabled ? () => startDeckPlay(deck) : undefined
+                }
+                onContextMenu={(e, timeSec) => onWaveformContextMenu(deck, e, timeSec)}
                 showOverview={false}
+                showPhaseMeter={false}
               />
             )
 
@@ -7534,7 +11443,11 @@ export default function MusicPlayer({
                     durationSec: incomingDuration,
                     bpm: resolveTrackBpm(incomingTrack),
                     mediaSyncKey: incomingDeckId === 'b' ? 'idle-b' : 'idle-a',
-                    intelligenceProfile: profileFromSonicDna(incomingTrack.sonic_dna),
+                    intelligenceProfile: withLivePlaybackGrid(
+                      profileFromSonicDna(incomingTrack.sonic_dna),
+                      resolveTrackBeatGridOffset(incomingTrack),
+                      resolveTrackBpm(incomingTrack),
+                    ),
                     beatGridOffsetSec: resolveTrackBeatGridOffset(incomingTrack),
                   })
                 : null
@@ -7586,7 +11499,11 @@ export default function MusicPlayer({
           })()}
 
           {/* Main Controls */}
-          <div className="w-full max-w-none px-3 sm:px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:py-3">
+          <div
+            className={`w-full max-w-none px-3 sm:px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:py-3 ${
+              isExpanded ? 'sticky bottom-0 z-20 border-t border-gray-800 bg-black' : ''
+            }`}
+          >
             {/* Mobile: art + title | centered transport (seek via waveform unless it is collapsed) */}
             <div className="md:hidden">
               {!isExpanded && isWaveformCollapsed && (
@@ -7602,27 +11519,7 @@ export default function MusicPlayer({
               )}
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
-                  {coverSrc && (
-                    <button
-                      type="button"
-                      onClick={() => setShowTrackDetails(!showTrackDetails)}
-                      className="relative h-12 w-12 shrink-0 overflow-hidden rounded touch-manipulation"
-                      title="View track details"
-                      aria-label="View track details"
-                    >
-                      <Image
-                        key={coverSrc}
-                        src={coverSrc}
-                        alt={coverAlt}
-                        fill
-                        className="object-cover"
-                        unoptimized={coverUnoptimized}
-                        sizes="48px"
-                        priority
-                        quality={85}
-                      />
-                    </button>
-                  )}
+                  {/* Cover art omitted on mobile — deck strips / waveform already show artwork. */}
                   {(isLoading || error) && (
                   <div className="min-w-0 flex-1 overflow-hidden">
                     {isLoading && (
@@ -7636,12 +11533,15 @@ export default function MusicPlayer({
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 justify-self-center">
                   {isExpanded ? (
-                    <AutoDJHeaderButton size="compact" />
+                    <div className="flex items-center gap-1">
+                      <AutoDJHeaderButton size="compact" />
+                      <IDJHeaderButton size="compact" />
+                    </div>
                   ) : (
                     <>
                       <button
                         type="button"
-                        onClick={onPrevious}
+                        onClick={handleSkipToPrevious}
                         className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
                         disabled={queue.length <= 1}
                         aria-label="Previous track"
@@ -7706,7 +11606,18 @@ export default function MusicPlayer({
                   isExpanded ? 'md:col-start-1' : 'shrink-0'
                 }`}
               >
-              {!isExpanded && coverSrc && (
+              {isExpanded && (
+                <button
+                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center p-2 transition-colors touch-manipulation ${
+                    isSettingsOpen ? 'text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  title="Settings"
+                >
+                  <FaCog />
+                </button>
+              )}
+              {!isExpanded && hasPlayerCover && (
                 <button
                   type="button"
                   onClick={() => setShowTrackDetails(!showTrackDetails)}
@@ -7714,12 +11625,10 @@ export default function MusicPlayer({
                   title="View track details"
                   aria-label="View track details"
                 >
-                  <Image
-                    key={coverSrc}
+                  <PlayerCoverArt
                     src={coverSrc}
+                    mosaicCovers={mosaicCovers}
                     alt={coverAlt}
-                    fill
-                    className="object-cover"
                     unoptimized={coverUnoptimized}
                     sizes="56px"
                     priority
@@ -7766,7 +11675,7 @@ export default function MusicPlayer({
                   <FaRandom />
                 </button>
                 <button
-                  onClick={onPrevious}
+                  onClick={handleSkipToPrevious}
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-white transition-colors hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
                   disabled={queue.length <= 1}
                   title="Previous"
@@ -7803,7 +11712,9 @@ export default function MusicPlayer({
                     </span>
                   )}
                   {settings.repeatMode === 'all' && (
-                    <span className="absolute -right-1 -top-1 text-[8px]">∞</span>
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500 text-[8px]">
+                      ∞
+                    </span>
                   )}
                 </button>
               </div>
@@ -7831,6 +11742,7 @@ export default function MusicPlayer({
 
               {isExpanded && (
               <div className="hidden items-center gap-2 justify-self-center md:col-start-2 lg:flex">
+                <IDJHeaderButton size="header" />
                 <button
                   onClick={toggleShuffle}
                   className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors touch-manipulation ${
@@ -7869,9 +11781,20 @@ export default function MusicPlayer({
                     </span>
                   )}
                   {settings.repeatMode === 'all' && (
-                    <span className="absolute -right-1 -top-1 text-[8px]">∞</span>
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500 text-[8px]">
+                      ∞
+                    </span>
                   )}
                 </button>
+                <AutoDJHeaderButton size="header" />
+                <MixSessionLog
+                  size="header"
+                  entries={mixQualityHistory}
+                  liveStatus={autoDJStatusMessage || null}
+                  headerStatus={
+                    isIDJEnabled ? 'iDJ — you mix both decks' : autoDjDeckStatusLine
+                  }
+                />
               </div>
               )}
 
@@ -7914,7 +11837,7 @@ export default function MusicPlayer({
                   />
                 </div>
               )}
-              <AutoDJHeaderButton size="header" />
+              {!isExpanded && <AutoDJHeaderButton size="header" />}
               {!isExpanded && (
                 <button
                   onClick={() => setIsExpanded(true)}
@@ -7928,6 +11851,7 @@ export default function MusicPlayer({
                   />
                 </button>
               )}
+              {!isExpanded && (
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                 className={`flex min-h-[44px] min-w-[44px] items-center justify-center p-2 transition-colors touch-manipulation ${
@@ -7937,6 +11861,7 @@ export default function MusicPlayer({
               >
                 <FaCog />
               </button>
+              )}
 
               {djModeAvailable && (
                 <button
@@ -7953,6 +11878,25 @@ export default function MusicPlayer({
                   {expandedMode === 'controls' ? '🎛️' : '⚙️'}
                 </button>
               )}
+              {isExpanded && (
+                <button
+                  type="button"
+                  onClick={handleTapTempo}
+                  className={`flex h-[43px] min-w-[2.75rem] items-center justify-center rounded-xl px-3 text-xs font-semibold transition-all active:scale-95 touch-manipulation ${
+                    deckUi[liveDeckId].tapTempoTaps.length > 0 ||
+                    deckUi[liveDeckId].tapTempoSectionBpms.length > 0
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                  title="Tap 16 beats to measure BPM (does not change playback)"
+                >
+                  {formatTapTempoButtonLabel({
+                    taps: deckUi[liveDeckId].tapTempoTaps,
+                    bpm: deckUi[liveDeckId].tapTempoBPM,
+                    sectionsCompleted: deckUi[liveDeckId].tapTempoSectionBpms.length,
+                  })}
+                </button>
+              )}
               </div>
             </div>
           </div>
@@ -7963,13 +11907,15 @@ export default function MusicPlayer({
             data-allow-scroll-when-locked=""
             className={
               isQueueDocked
-                ? 'w-full bg-black px-5 pt-3 pb-3'
+                ? 'relative flex w-full flex-col overflow-hidden bg-black'
                 : 'fixed left-0 right-0 z-[10040] border-t border-gray-800 bg-black pt-3 pb-3 shadow-2xl overscroll-y-contain'
             }
             style={
               isQueueDocked
                 ? {
-                    maxHeight: 'min(55vh, calc(100dvh - var(--global-music-player-height, 5rem) - 8rem))',
+                    height: queueDockHeight,
+                    maxHeight:
+                      'min(75vh, calc(100dvh - var(--music-lib-chrome-top, 4rem) - var(--global-music-player-height, 5rem) - 4rem))',
                   }
                 : {
                     bottom: 'var(--global-music-player-height, 5rem)',
@@ -7979,14 +11925,25 @@ export default function MusicPlayer({
             role="dialog"
             aria-label="Playlist queue"
           >
-            <div className={`${isQueueDocked ? 'max-h-full' : 'container mx-auto max-h-full px-4'} overflow-y-auto`}>
+            <div
+              className={`${
+                isQueueDocked
+                  ? 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-3 pb-2'
+                  : 'container mx-auto max-h-full overflow-y-auto px-4'
+              }`}
+            >
               <div className="flex items-start justify-between mb-2">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold text-white">
                     {`Queue (${queue.length}) · ${upcomingListLabel}`}
                   </h3>
                   {autoDJStatusMessage && (
-                    <p className="text-[10px] text-emerald-300">{autoDJStatusMessage}</p>
+                    <p
+                      data-testid="autodj-status"
+                      className="text-[10px] text-emerald-300"
+                    >
+                      {autoDJStatusMessage}
+                    </p>
                   )}
                   <MixQualityHud quality={lastMixQuality} compact />
                 </div>
@@ -7995,7 +11952,7 @@ export default function MusicPlayer({
                     type="button"
                     onClick={primeQueue}
                     className="h-11 min-w-[88px] shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold bg-gray-800 text-gray-200 hover:bg-gray-700 transition-colors touch-manipulation"
-                    title="Add upcoming library tracks to the queue"
+                    title="Add upcoming library tracks to the queue (skips the last 35 played)"
                     aria-label="Prime queue"
                   >
                     Prime queue
@@ -8011,8 +11968,8 @@ export default function MusicPlayer({
                     }`}
                     title={
                       autoDJConfig.enabled
-                        ? 'Random from catalog / playlist / folder — applies when Auto DJ is off. Does not reorder the queue list.'
-                        : 'Random from catalog / playlist / folder — does not reorder the queue list'
+                        ? 'Random on: play crates/EPs in order, then jump to a fresh random release (not the next on the shelf). Catalog/playlists use least-repetition picks. Applies when Auto DJ is off.'
+                        : 'Random on: play crates/EPs in order, then jump to a fresh random release (not the next on the shelf). Catalog/playlists avoid the last 35 played tracks.'
                     }
                     aria-label={
                       settings.catalogRandom ? 'Disable catalog random' : 'Enable catalog random'
@@ -8046,7 +12003,7 @@ export default function MusicPlayer({
                       <span className="absolute -top-1 -right-1 text-[8px] bg-blue-500 rounded-full w-3 h-3 flex items-center justify-center">1</span>
                     )}
                     {settings.repeatMode === 'all' && (
-                      <span className="absolute -top-1 -right-1 text-[8px]">∞</span>
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500 text-[8px]">∞</span>
                     )}
                   </button>
                   <button
@@ -8061,14 +12018,30 @@ export default function MusicPlayer({
               </div>
               {/* Auto DJ settings live in the now-playing Auto DJ right-click menu */}
                             {/* Collapsible Queue Track List */}
-              <div className="mt-3 bg-gray-900/70 border border-gray-800 rounded-lg">
+              <div
+                className={`mt-3 bg-gray-900/70 border rounded-lg transition-colors ${
+                  queueLibraryDropActive
+                    ? 'border-purple-400/70 ring-1 ring-purple-400/40 bg-purple-950/30'
+                    : 'border-gray-800'
+                }`}
+                onDragEnter={handleQueuePanelDragOver}
+                onDragOver={handleQueuePanelDragOver}
+                onDragLeave={handleQueuePanelDragLeave}
+                onDrop={handleQueuePanelDrop}
+              >
                 <button
                   onClick={() => setIsTrackListExpanded((prev) => !prev)}
                   className="w-full flex items-center justify-between p-3 hover:bg-gray-800/50 transition-colors rounded-lg"
                 >
                   <span className="text-xs uppercase tracking-[0.2em] text-gray-400">
                     {upcomingListLabel} ({displayTracks.length})
-                    {canReorderQueue ? ' · drag to reorder' : ''}
+                    {canReorderQueue && canAcceptLibraryQueueDrop
+                      ? ' · drag to reorder · drop to replace'
+                      : canReorderQueue
+                        ? ' · drag to reorder'
+                        : canAcceptLibraryQueueDrop
+                          ? ' · drop library to replace'
+                          : ''}
                   </span>
                   <FaChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isTrackListExpanded ? 'rotate-180' : ''}`} />
                 </button>
@@ -8076,7 +12049,7 @@ export default function MusicPlayer({
                 <div 
                   ref={queueContainerRef}
                   className={`overflow-y-auto border-t border-gray-800/50 ${
-                    isQueueDocked ? 'max-h-[min(40vh,20rem)]' : 'max-h-[min(50vh,24rem)]'
+                    isQueueDocked ? 'max-h-none' : 'max-h-[min(50vh,24rem)]'
                   }`}
                 >
                   {isLoadingSourceTracks ? (
@@ -8102,7 +12075,8 @@ export default function MusicPlayer({
                                 (isDnaSuggestion && index === 0)
                               }
                               reorderEnabled={reorderEnabled}
-                              isDragOver={queueDragOverIndex === index}
+                              dropEnabled={canAcceptLibraryQueueDrop}
+                              isDragOver={queueDragOverIndex === index || (queueLibraryDropActive && index === 0)}
                               onDragStart={(e) => handleQueueDragStart(e, index, track.id)}
                               onDragOver={(e) => handleQueueDragOver(e, index)}
                               onDrop={(e) => handleQueueDrop(e, index)}
@@ -8120,15 +12094,21 @@ export default function MusicPlayer({
                   ) : (
                     <div className="flex items-center justify-center py-8 px-4">
                       <div className="text-gray-400 text-sm text-center">
-                        {autoDJConfig.enabled
+                        {queueLibraryDropActive
+                          ? 'Drop to replace up next'
+                          : autoDJConfig.enabled
                           ? 'No upcoming tracks.'
                           : settings.catalogRandom
                             ? isLoadingSourceTracks
                               ? `Loading ${catalogScopeLabel(currentSource)}…`
-                              : `Picking random tracks from ${catalogScopeLabel(currentSource)}…`
+                              : isOrderedReleaseRandomScope(currentSource)
+                                ? 'Finishing this release in order — next up is a fresh random crate / EP.'
+                                : `Picking random tracks from ${catalogScopeLabel(currentSource)}…`
                             : settings.isShuffled
                               ? 'Queue-order shuffle is on — add tracks or turn on Random.'
-                              : 'No upcoming tracks.'}
+                              : canAcceptLibraryQueueDrop
+                                ? 'No upcoming tracks. Drop library tracks here to set up next.'
+                                : 'No upcoming tracks.'}
                       </div>
                     </div>
                   )}
@@ -8136,6 +12116,29 @@ export default function MusicPlayer({
                 )}
               </div>
             </div>
+            {isQueueDocked && (
+              <div
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize queue panel"
+                title="Drag to resize"
+                onPointerDown={handleQueueDockResizeStart}
+                className={`group relative flex h-2.5 shrink-0 cursor-row-resize items-center justify-center border-t touch-none ${
+                  isResizingQueueDock
+                    ? 'border-purple-400/50 bg-purple-500/25'
+                    : 'border-gray-800 hover:border-purple-500/40 hover:bg-purple-500/10'
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className={`h-0.5 w-10 rounded-full transition-colors ${
+                    isResizingQueueDock
+                      ? 'bg-purple-300'
+                      : 'bg-gray-600 group-hover:bg-purple-400/80'
+                  }`}
+                />
+              </div>
+            )}
           </div>,
           queueDockHost ?? document.body
         )}
@@ -8653,7 +12656,7 @@ export default function MusicPlayer({
             <div className="md:hidden container mx-auto px-3 sm:px-4 pb-3 border-t border-gray-800 pt-3">
               <div className="flex items-center justify-center gap-3 sm:gap-4 mb-3">
                 <button
-                  onClick={onPrevious}
+                  onClick={handleSkipToPrevious}
                   className="p-2.5 text-white hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
                   disabled={queue.length <= 1}
                   title="Previous"
@@ -8690,7 +12693,7 @@ export default function MusicPlayer({
                     <span className="absolute -top-1 -right-1 text-[8px] bg-blue-500 rounded-full w-3 h-3 flex items-center justify-center">1</span>
                   )}
                   {settings.repeatMode === 'all' && (
-                    <span className="absolute -top-1 -right-1 text-[8px]">∞</span>
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500 text-[8px]">∞</span>
                   )}
                 </button>
                 <AutoDJHeaderButton size="compact" />
@@ -8789,6 +12792,19 @@ export default function MusicPlayer({
                   lastMixQuality={lastMixQuality}
                   mixQualityHistory={mixQualityHistory}
                   onMixQualityHistoryChange={setMixQualityHistory}
+                  pairWhy={autoDjPairInsight.why}
+                  beatSyncUnsafe={autoDjPairInsight.beatSyncUnsafe}
+                  pickStall={autoDjPickStall}
+                  mixActionsDisabled={!nextQueueTrack || crossfadeActive}
+                  onMixNow={mixNowFromCurrentBar}
+                  onPreviewBlend={() => { void previewNextBlend() }}
+                  onLockQueuedGrids={lockQueuedGrids}
+                  onRemeasureKicks={remeasureKickOnsets}
+                  onTempoSyncPair={() => {
+                    patchAutoDJConfig({ syncMode: 'tempo-sync' })
+                    setAutoDjPickStall(null)
+                    setAutoDJStatusMessage('TempoSync this pair — BeatSync stall cleared')
+                  }}
                   onPatch={patchAutoDJConfig}
                   onLeadIn={(value) => {
                     setAutoDJLeadIn(value)
@@ -8798,6 +12814,63 @@ export default function MusicPlayer({
                   onReset={resetAutoDJToDefaults}
                 />
               </div>
+        </div>,
+        document.body,
+      )}
+
+      {idjSettingsMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={idjMenuClamp.ref}
+          {...idjMenuClamp.rootProps}
+          data-idj-settings-menu=""
+          data-allow-scroll-when-locked=""
+          className="fixed w-[min(18rem,calc(100vw-1rem))] overflow-y-auto overscroll-y-contain rounded-lg border border-gray-700 bg-gray-950 shadow-2xl"
+          style={idjMenuClamp.style}
+          role="dialog"
+          aria-label="iDJ settings"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <PopupMenuDragHeader
+            title={
+              <span className="flex items-center gap-2">
+                <span>iDJ Settings</span>
+                {isIDJEnabled && (
+                  <span className="rounded bg-violet-600/30 px-1.5 py-0.5 text-[9px] normal-case tracking-normal text-violet-300">
+                    ON
+                  </span>
+                )}
+              </span>
+            }
+            headerProps={{
+              ...idjMenuClamp.headerProps,
+              className: `${idjMenuClamp.headerProps.className} bg-gray-950`,
+            }}
+            trailing={
+              <button
+                type="button"
+                data-no-drag=""
+                onClick={closeIDJSettingsMenu}
+                className="flex min-h-[32px] min-w-[32px] items-center justify-center text-gray-400 hover:text-white"
+                aria-label="Close iDJ settings"
+              >
+                <FaTimes className="h-3 w-3" />
+              </button>
+            }
+          />
+          <div className="px-3 pb-3 pt-2">
+            <IDJSettingsPanel
+              config={idjConfig}
+              onPatch={patchIDJConfig}
+              onCenterCrossfader={() => {
+                setIdjCrossfade(0.5)
+                mixEngineRef.current?.setManualCrossfade(0.5)
+              }}
+              onResetEq={() => {
+                applyDeckStripEq('a', { low: 0, mid: 0, high: 0 }, { instant: true })
+                applyDeckStripEq('b', { low: 0, mid: 0, high: 0 }, { instant: true })
+              }}
+            />
+          </div>
         </div>,
         document.body,
       )}
@@ -8829,14 +12902,12 @@ export default function MusicPlayer({
                 <FaTimes />
               </button>
             </div>
-            {coverSrc && (
+            {hasPlayerCover && (
               <div className="relative w-full h-64 rounded-lg overflow-hidden mb-4">
-                <Image
-                  key={coverSrc}
+                <PlayerCoverArt
                   src={coverSrc}
+                  mosaicCovers={mosaicCovers}
                   alt={coverAlt}
-                  fill
-                  className="object-cover"
                   unoptimized={coverUnoptimized}
                   sizes="400px"
                   quality={90}
@@ -8890,48 +12961,6 @@ export default function MusicPlayer({
         document.body,
       )}
 
-      {/* Expanded Controls - Must be outside the conditional to show in DJ mode */}
-      {!isMiniMode && isExpanded && (
-        <div className="border-t border-gray-800">
-          {expandedMode === 'controls' || !djModeAvailable ? (
-            <ExpandedPlayerControls
-              decks={expandedDeckChannels}
-              deckWaveforms={deckChannelWaveforms}
-              onTapTempo={handleDeckTapTempo}
-              onTempoChange={handleDeckTempoChange}
-              onChangePlaybackRate={changeDeckPlaybackRate}
-              getTempoPercentage={getTempoPercentage}
-              getAdjustedBPM={getAdjustedBPM}
-              rateToTempoValue={rateToTempoValue}
-              onBPMUpdate={handleDeckBPMUpdate}
-              canEditOrigBpm={canEditOrigBpm}
-              onDeckEqGains={handleDeckEqGains}
-              isPlaying={isPlaying}
-              isLoading={isLoading}
-              error={error}
-              canSkip={queue.length > 1}
-              onPrevious={onPrevious}
-              onNext={handleSkipToNext}
-              onTogglePlay={() => {
-                void togglePlay()
-              }}
-              mixProgress={mixVisualProgress}
-              mixCrossfadeActive={crossfadeActive}
-              autoDjStatusLine={autoDjDeckStatusLine}
-              mixSessionEntries={mixQualityHistory}
-              autoDjStatusMessage={autoDJStatusMessage || null}
-            />
-          ) : (
-            <DJMixerMode
-              currentTrack={currentTrack}
-              queue={queue}
-              onQueueChange={onQueueChange}
-              autoDJConfig={autoDJConfig}
-              onExit={() => setExpandedMode('controls')}
-            />
-          )}
-        </div>
-      )}
       </div>
       {waveformMenu && createPortal(
         <div
@@ -8949,29 +12978,48 @@ export default function MusicPlayer({
             headerProps={waveformMenuClamp.headerProps}
           />
           <div className="py-1">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-            Color mode
-          </div>
-          {WAVEFORM_COLOR_MODES.map((mode) => (
-            <WaveformMenuItem
-              key={mode.id}
-              label={mode.label}
-              active={waveformMode === mode.id}
-              onSelect={() => setWaveformMode(mode.id)}
-            />
-          ))}
+          <WaveformMenuDropdown
+            label="Color mode"
+            value={
+              WAVEFORM_COLOR_MODES.find((mode) => mode.id === waveformMode)?.shortLabel ??
+              WAVEFORM_COLOR_MODES.find((mode) => mode.id === waveformMode)?.label
+            }
+            open={waveformMenuSection === 'color'}
+            onToggle={() =>
+              setWaveformMenuSection((section) => (section === 'color' ? null : 'color'))
+            }
+          >
+            {WAVEFORM_COLOR_MODES.map((mode) => (
+              <WaveformMenuItem
+                key={mode.id}
+                label={mode.label}
+                active={waveformMode === mode.id}
+                onSelect={() => setWaveformMode(mode.id)}
+              />
+            ))}
+          </WaveformMenuDropdown>
           <div className="my-1 border-t border-gray-800" />
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-            Layer display
-          </div>
-          {WAVEFORM_LAYER_LAYOUTS.map((layout) => (
-            <WaveformMenuItem
-              key={layout.id}
-              label={layout.label}
-              active={waveformLayerLayout === layout.id}
-              onSelect={() => setWaveformLayerLayout(layout.id)}
-            />
-          ))}
+          <WaveformMenuDropdown
+            label="Layer display"
+            value={
+              WAVEFORM_LAYER_LAYOUTS.find((layout) => layout.id === waveformLayerLayout)
+                ?.shortLabel ??
+              WAVEFORM_LAYER_LAYOUTS.find((layout) => layout.id === waveformLayerLayout)?.label
+            }
+            open={waveformMenuSection === 'layer'}
+            onToggle={() =>
+              setWaveformMenuSection((section) => (section === 'layer' ? null : 'layer'))
+            }
+          >
+            {WAVEFORM_LAYER_LAYOUTS.map((layout) => (
+              <WaveformMenuItem
+                key={layout.id}
+                label={layout.label}
+                active={waveformLayerLayout === layout.id}
+                onSelect={() => setWaveformLayerLayout(layout.id)}
+              />
+            ))}
+          </WaveformMenuDropdown>
           <div className="my-1 border-t border-gray-800" />
           <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
             Display
@@ -8988,88 +13036,206 @@ export default function MusicPlayer({
             onSelect={() => setBeatGridEnabled((v) => !v)}
           />
           <WaveformMenuItem
+            label={
+              menuAlignPoint?.source === 'memory'
+                ? 'Align beat grid to memory cue'
+                : 'Align beat grid to this point'
+            }
+            disabled={
+              !menuDeckReady ||
+              !menuAlignPoint ||
+              (waveformMenuDeckIsLive && beatGridLocked)
+            }
+            onSelect={alignMenuBeatGridToPoint}
+          />
+          <WaveformGridNudge
+            bpm={waveformMenuDeckBpm}
+            offsetSec={waveformMenuDeckOffsetSec}
+            disabled={!waveformMenuDeckBpm || (waveformMenuDeckIsLive && beatGridLocked)}
+            onNudge={nudgeBeatGrid}
+            onZero={zeroBeatGrid}
+          />
+          <WaveformMenuItem
             label="Follow playhead"
-            active={waveformFollow}
-            disabled={waveformVisibleBars <= 0 || !waveformMenuDeckIsLive}
-            onSelect={() => setWaveformFollow((prev) => !prev)}
-          />
-          <div className="my-1 border-t border-gray-800" />
-          <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">
-            Zoom{' '}
-            {waveformVisibleBars <= 0 ? 'Full track' : `${Math.round(waveformVisibleBars)} bars`}
-          </div>
-          {[4, 8, 16].map((bars) => (
-            <WaveformMenuItem
-              key={`bars-${bars}`}
-              label={`${bars} bars`}
-              active={waveformVisibleBars === bars}
-              onSelect={() => applyVisibleBars(bars, 0.5)}
-            />
-          ))}
-          <WaveformMenuItem
-            label="Zoom in"
-            disabled={waveformVisibleBars === WAVEFORM_BAR_ZOOM_STEPS[0]}
-            onSelect={() => handleWaveformZoom(1)}
-          />
-          <WaveformMenuItem
-            label="Zoom out"
-            disabled={waveformVisibleBars <= 0}
-            onSelect={() => handleWaveformZoom(-1)}
-          />
-          <WaveformMenuItem
-            label="Fit to track"
-            onSelect={() => applyVisibleBars(0, 0.5)}
-          />
-          <div className="my-1 border-t border-gray-800" />
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-500/90">
-            Sonic DNA
-          </div>
-          <WaveformMenuItem
-            label="Open Sonic DNA"
-            disabled={!waveformMenuDeckTrack}
+            active={menuFollow}
+            disabled={menuVisibleBars <= 0}
             onSelect={() => {
-              if (waveformMenuDeckTrack) {
-                setSonicDnaReportTrack(waveformMenuDeckTrack)
-              }
-              setWaveformMenu(null)
-              setSonicDnaReportOpen(true)
+              if (waveformMenuDeckIsLive) setWaveformFollow((prev) => !prev)
+              else setIncomingFollow((prev) => !prev)
             }}
           />
           <WaveformMenuItem
-            label="Set beat here"
-            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
-            onSelect={setBeatHere}
+            label="Overview"
+            active={waveformOverview}
+            onSelect={() => setWaveformOverview((prev) => !prev)}
           />
-          <WaveformMenuItem
-            label="Snap to kick"
-            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
-            onSelect={() => snapPlayheadToDna('kick')}
+          <WaveformMenuDropdown
+            label="Phase meter"
+            value={
+              !waveformPhaseMeter
+                ? 'Off'
+                : PHASE_METER_WINDOW_OPTIONS.find((o) => o.id === phaseMeterOptions.windowId)
+                    ?.label ?? 'On'
+            }
+            open={waveformMenuSection === 'phase'}
+            onToggle={() =>
+              setWaveformMenuSection((section) => (section === 'phase' ? null : 'phase'))
+            }
+          >
+            <PhaseMeterMenuItems
+              enabled={waveformPhaseMeter}
+              hasBpm={Boolean(waveformMenuDeckBpm)}
+              options={phaseMeterOptions}
+              onToggleEnabled={() => setWaveformPhaseMeter((prev) => !prev)}
+              onPatch={patchPhaseMeterOptions}
+              syncMode={autoDJConfig.syncMode}
+              onSyncMode={(mode) => patchAutoDJConfig({ syncMode: mode })}
+              onCenterPhase={() => centerPhaseMeterDeck(waveformMenuDeck)}
+              onAlignPlayhead={() => alignPhaseMeterPlayhead(waveformMenuDeck)}
+              onAlignBothPlayheads={alignBothPhaseMeterPlayheads}
+              onClose={() => setWaveformMenu(null)}
+            />
+          </WaveformMenuDropdown>
+          <div className="my-1 border-t border-gray-800" />
+          <WaveformMenuDropdown
+            label="Zoom"
+            value={
+              menuVisibleBars <= 0 ? 'Full track' : `${Math.round(menuVisibleBars)} bars`
+            }
+            open={waveformMenuSection === 'zoom'}
+            onToggle={() =>
+              setWaveformMenuSection((section) => (section === 'zoom' ? null : 'zoom'))
+            }
+          >
+            <WaveformMenuItem
+              label="Full track"
+              active={menuVisibleBars <= 0}
+              onSelect={() => applyMenuVisibleBars(0, 0.5)}
+            />
+            {WAVEFORM_BAR_ZOOM_STEPS.map((bars) => (
+              <WaveformMenuItem
+                key={`bars-${bars}`}
+                label={`${bars} bars`}
+                active={Math.round(menuVisibleBars) === bars}
+                onSelect={() => applyMenuVisibleBars(bars, 0.5)}
+              />
+            ))}
+            <div className="my-0.5 border-t border-gray-800" />
+            <WaveformMenuItem
+              label="Zoom in"
+              disabled={menuVisibleBars === WAVEFORM_BAR_ZOOM_STEPS[0]}
+              onSelect={() => handleMenuZoom(1)}
+            />
+            <WaveformMenuItem
+              label="Zoom out"
+              disabled={menuVisibleBars <= 0}
+              onSelect={() => handleMenuZoom(-1)}
+            />
+          </WaveformMenuDropdown>
+          <div className="my-1 border-t border-gray-800" />
+          <WaveformMenuDropdown
+            label="Sonic DNA"
+            labelClassName="text-[10px] font-semibold uppercase tracking-wide text-cyan-500/90"
+            open={waveformMenuSection === 'sonicDna'}
+            onToggle={() =>
+              setWaveformMenuSection((section) => (section === 'sonicDna' ? null : 'sonicDna'))
+            }
+          >
+            <WaveformMenuItem
+              label="Open Sonic DNA"
+              disabled={!waveformMenuDeckTrack}
+              onSelect={() => {
+                if (waveformMenuDeckTrack) {
+                  setSonicDnaReportTrack(waveformMenuDeckTrack)
+                }
+                setWaveformMenu(null)
+                setSonicDnaReportOpen(true)
+              }}
+            />
+            <WaveformMenuItem
+              label="Set beat here"
+              disabled={!menuDeckReady}
+              onSelect={setMenuBeatHere}
+            />
+            <WaveformMenuItem
+              label="Snap to kick"
+              disabled={!menuDeckReady}
+              onSelect={() => snapMenuPlayhead('kick')}
+            />
+            <WaveformMenuItem
+              label="Snap to beat"
+              disabled={!menuDeckReady}
+              onSelect={() => snapMenuPlayhead('beat')}
+            />
+            <WaveformMenuItem
+              label="Snap to phrase"
+              disabled={!menuDeckReady}
+              onSelect={() => snapMenuPlayhead('phrase')}
+            />
+            <WaveformMenuItem
+              label="Align to waveform"
+              disabled={
+                !menuDeckReady ||
+                (waveformMenuDeckIsLive
+                  ? waveformData.length === 0
+                  : !incomingMenuSamples || incomingMenuSamples.length < 64)
+              }
+              onSelect={alignMenuDeckGrid}
+            />
+            <WaveformMenuItem
+              label="Apply DNA EQ pocket"
+              disabled={!waveformMenuDeckTrack?.sonic_dna || !waveformMenuDeckIsLive}
+              onSelect={applyDnaEqPocket}
+            />
+            <WaveformMenuItem
+              label="Reset beat grid"
+              disabled={!menuDeckReady || (waveformMenuDeckIsLive && beatGridLocked)}
+              onSelect={resetMenuBeatGrid}
+            />
+            {canEditOrigBpm ? (
+              <WaveformMenuItem
+                label="Rescan waveform"
+                disabled={!waveformMenuDeckTrack?.file}
+                onSelect={() => {
+                  void rescanCurrentWaveform()
+                }}
+              />
+            ) : null}
+          </WaveformMenuDropdown>
+          </div>
+        </div>,
+        document.body
+      )}
+      {phaseMeterMenu && createPortal(
+        <div
+          ref={phaseMeterMenuClamp.ref}
+          {...phaseMeterMenuClamp.rootProps}
+          role="menu"
+          aria-label="Phase meter options"
+          data-phase-meter-menu=""
+          data-allow-scroll-when-locked=""
+          className="fixed z-[12000] w-64 max-h-[min(70vh,36rem)] overflow-y-auto overscroll-y-contain rounded-lg border border-gray-700 bg-gray-900 py-0 shadow-2xl"
+          style={phaseMeterMenuClamp.style}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <PopupMenuDragHeader
+            title={`Phase meter · Deck ${phaseMeterMenuDeck === 'a' ? 'A' : 'B'}`}
+            headerProps={phaseMeterMenuClamp.headerProps}
           />
-          <WaveformMenuItem
-            label="Snap to beat"
-            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
-            onSelect={() => snapPlayheadToDna('beat')}
-          />
-          <WaveformMenuItem
-            label="Snap to phrase"
-            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
-            onSelect={() => snapPlayheadToDna('phrase')}
-          />
-          <WaveformMenuItem
-            label="Align to waveform"
-            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive || waveformData.length === 0}
-            onSelect={alignBeatGridToWaveform}
-          />
-          <WaveformMenuItem
-            label="Apply DNA EQ pocket"
-            disabled={!waveformMenuDeckTrack?.sonic_dna || !waveformMenuDeckIsLive}
-            onSelect={applyDnaEqPocket}
-          />
-          <WaveformMenuItem
-            label="Reset beat grid"
-            disabled={!waveformMenuDeckBpm || !waveformMenuDeckIsLive}
-            onSelect={resetBeatGrid}
-          />
+          <div className="py-1">
+            <PhaseMeterMenuItems
+              enabled={waveformPhaseMeter}
+              hasBpm={Boolean(phaseMeterMenuDeckBpm)}
+              options={phaseMeterOptions}
+              onToggleEnabled={() => setWaveformPhaseMeter((prev) => !prev)}
+              onPatch={patchPhaseMeterOptions}
+              syncMode={autoDJConfig.syncMode}
+              onSyncMode={(mode) => patchAutoDJConfig({ syncMode: mode })}
+              onCenterPhase={() => centerPhaseMeterDeck(phaseMeterMenuDeck)}
+              onAlignPlayhead={() => alignPhaseMeterPlayhead(phaseMeterMenuDeck)}
+              onAlignBothPlayheads={alignBothPhaseMeterPlayheads}
+              onClose={() => setPhaseMeterMenu(null)}
+            />
           </div>
         </div>,
         document.body
@@ -9085,11 +13251,12 @@ export default function MusicPlayer({
           waveformActions={{
             gridReady: Boolean(bpmForGrid),
             hasWaveform: waveformData.length > 0,
-            onAlignGrid: alignBeatGridToWaveform,
+            onAlignGrid: () => alignBeatGridToWaveform({ force: true }),
             onSetBeatHere: setBeatHere,
             onSnapPlayhead: snapPlayheadToDna,
             onResetGrid: resetBeatGrid,
             onApplyEqBias: applyDnaEqPocket,
+            onRescanWaveform: rescanCurrentWaveform,
           }}
         />
       )}

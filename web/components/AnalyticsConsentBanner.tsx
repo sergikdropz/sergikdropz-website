@@ -54,6 +54,8 @@ export default function AnalyticsConsentBanner() {
   const pathname = usePathname()
   const isAdminRoute = pathname?.startsWith('/admin') ?? false
   const isMusicLibraryRoute = pathname?.startsWith('/music-library') ?? false
+  const isShareEmbedRoute = pathname?.startsWith('/embed/') ?? false
+  const isShareListenRoute = pathname?.startsWith('/s/') ?? false
   const [consent, setConsent] = useState<AnalyticsConsentStatus>('unknown')
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -115,7 +117,7 @@ export default function AnalyticsConsentBanner() {
     return () => observer.disconnect()
   }, [isMusicLibraryRoute, pathname])
 
-  if (!mounted || isAdminRoute || consent !== 'unknown') {
+  if (!mounted || isAdminRoute || isShareEmbedRoute || isShareListenRoute || consent !== 'unknown') {
     return null
   }
 

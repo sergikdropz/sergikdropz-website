@@ -15,15 +15,25 @@ export {
   playerTrackMatchesCoverEvent,
   stampAllTrackArtwork,
   isUploadedFolderArtwork,
+  trackHasOwnArtwork,
+  trackLooksLikeEp,
+  trackShouldUseCrateMosaic,
   isImageFile,
   artworkUploadRejectReason,
 } from './artwork'
 export { folderIdFromPlaylistId, playlistIdForFolder, isCollectionPlaylist } from './ids'
 export { subscribeCatalogSync, emitCatalogSync, getLastCatalogSyncEvent } from './bus'
+export {
+  catalogPatchFromTrack,
+  catalogTrackPatchHasFields,
+  applyCatalogTrackPatch,
+} from './apply-track-patch'
 export { propagateFolderArtworkToTracks } from './propagate-folder-artwork'
 export type { FolderArtworkPropagateResult } from './propagate-folder-artwork'
 export { persistSystemicCover, resolveTrackCollection } from './persist-systemic-cover'
 export type { SystemicCoverResult } from './persist-systemic-cover'
+export { persistSystemicBeatGrid } from './persist-systemic-beat-grid'
+export type { SystemicBeatGridResult } from './persist-systemic-beat-grid'
 export { stampLibraryCover, stampPlaylistCovers } from './stamp-library-cover'
 export {
   trackTitleKey,

@@ -276,12 +276,35 @@ export function emphasizePeaksNearOnsets(
   return out
 }
 
+/** Stored kick onsets on DNA (empty when only peak-derived). */
+export function storedKickOnsetCount(sonicDna: unknown, durationSec = Number.POSITIVE_INFINITY): number {
+  const measured = extractMeasured(sonicDna)
+  return sanitizeOnsets(measured?.kickOnsetSec, durationSec).length
+}
+
+/** True when Auto DJ should rebuild kick onsets from peaks / steps. */
+export function needsKickRemeasure(
+  sonicDna: unknown,
+  durationSec = Number.POSITIVE_INFINITY,
+): boolean {
+  return storedKickOnsetCount(sonicDna, durationSec) < 4
+}
+
 export function isGridLocked(sonicDna: unknown): boolean {
   if (!sonicDna || typeof sonicDna !== 'object') return false
   const root = sonicDna as Record<string, unknown>
   if (root.gridLocked === true) return true
   const measured = extractMeasured(sonicDna)
   return Boolean(measured && (measured as { gridLocked?: boolean }).gridLocked)
+}
+
+/** True when the user nudged / set the grid and it must not be auto-realigned. */
+export function isGridManual(sonicDna: unknown): boolean {
+  if (!sonicDna || typeof sonicDna !== 'object') return false
+  const root = sonicDna as Record<string, unknown>
+  if (root.gridManual === true) return true
+  const measured = extractMeasured(sonicDna)
+  return Boolean(measured && (measured as { gridManual?: boolean }).gridManual)
 }
 
 export function readGridLockScore(sonicDna: unknown): number | null {
@@ -296,6 +319,8 @@ export type GridDnaExtras = {
   gridLockScore?: number
   /** Absolute phrase-1 downbeat (same as beat_grid_offset). */
   gridOffsetSec?: number
+  /** User-set phase — persist and do not let tape auto-align overwrite. */
+  gridManual?: boolean
 }
 
 /** Merge gridLocked (+ optional onset series) into a sonic_dna blob. */
@@ -323,6 +348,10 @@ export function withGridLockOnDna(
   ) {
     measuredRaw.gridOffsetSec = extras.gridOffsetSec
   }
+  if (typeof extras?.gridManual === 'boolean') {
+    measuredRaw.gridManual = extras.gridManual
+    base.gridManual = extras.gridManual
+  }
   base.measured = measuredRaw
   base.gridLocked = locked
   return base
@@ -346,5 +375,6 @@ export function withGridAnalysisOnDna(
     snareClapOnsetSec: extras.snareClapOnsetSec,
     gridLockScore: extras.gridLockScore,
     gridOffsetSec,
+    gridManual: extras.gridManual,
   })
 }

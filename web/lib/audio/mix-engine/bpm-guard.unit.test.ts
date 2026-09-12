@@ -66,6 +66,41 @@ describe('assessBeatSyncSafety', () => {
     expect(s.forceTempoSync).toBe(true)
   })
 
+  it('forces TempoSync on half-time drum family even without effectiveBpm', () => {
+    const s = assessBeatSyncSafety({
+      syncMode: 'beat-sync',
+      outgoingSonicDna: {
+        measured: {
+          bpm: 123,
+          bpmConfidence: 0.9,
+          drumFamily: 'half-time',
+          timingFeel: 'half-time',
+        },
+      },
+      incomingSonicDna: goodDna,
+      outgoingBpm: 123,
+      incomingBpm: 123,
+      ...grid,
+    })
+    expect(s.forceTempoSync).toBe(true)
+    expect(s.code).toBe('half-time-feel')
+  })
+
+  it('forces TempoSync on breakbeat / one-drop pockets', () => {
+    const s = assessBeatSyncSafety({
+      syncMode: 'beat-sync',
+      outgoingSonicDna: goodDna,
+      incomingSonicDna: {
+        measured: { bpm: 124, bpmConfidence: 0.9, drumFamily: 'breakbeat' },
+      },
+      outgoingBpm: 124,
+      incomingBpm: 124,
+      ...grid,
+    })
+    expect(s.forceTempoSync).toBe(true)
+    expect(s.code).toBe('broken-groove')
+  })
+
   it('forces TempoSync on pair octave mismatch', () => {
     const s = assessBeatSyncSafety({
       syncMode: 'beat-sync',

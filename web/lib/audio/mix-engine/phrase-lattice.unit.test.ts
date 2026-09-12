@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   phraseBoundarySec,
   phraseIndexAt,
+  phrasePhaseErrorSec,
+  incomingCueAtOutgoingPhrase,
+  incomingTimeAfterPhraseSeek,
   snapToFileStartPhrase,
   toPhaseOnlyOffsetSec,
 } from './phrase-lattice'
@@ -22,6 +25,47 @@ describe('phrase-lattice', () => {
     const bpm = 120
     expect(snapToFileStartPhrase(3.2, bpm, { preferEarlier: true })).toBe(0)
     expect(snapToFileStartPhrase(18, bpm)).toBeCloseTo(16, 5)
+  })
+
+  it('matches incoming phrase-1 bar to outgoing phrase phase', () => {
+    const bpm = 120
+    // 8 bars = 16s. Outgoing 4s into its cell → incoming at 4s of phrase 1.
+    expect(
+      incomingCueAtOutgoingPhrase({
+        outgoingTimeSec: 64 + 4,
+        outgoingBpm: bpm,
+        incomingBpm: bpm,
+      }),
+    ).toBeCloseTo(4, 5)
+    expect(
+      incomingCueAtOutgoingPhrase({
+        outgoingTimeSec: 64,
+        outgoingBpm: bpm,
+        incomingBpm: bpm,
+      }),
+    ).toBeCloseTo(0, 5)
+    const err = phrasePhaseErrorSec({
+      outgoingTimeSec: 68,
+      outgoingBpm: bpm,
+      incomingTimeSec: 4,
+      incomingBpm: bpm,
+    })
+    expect(Math.abs(err)).toBeLessThan(0.01)
+    const slipped = phrasePhaseErrorSec({
+      outgoingTimeSec: 68,
+      outgoingBpm: bpm,
+      incomingTimeSec: 0.1,
+      incomingBpm: bpm,
+    })
+    expect(slipped).toBeCloseTo(-3.9, 1)
+    expect(
+      incomingTimeAfterPhraseSeek({
+        incomingTimeSec: 0.1,
+        incomingBpm: bpm,
+        outgoingBpm: bpm,
+        phraseErrMasterSec: slipped,
+      }),
+    ).toBeCloseTo(4, 1)
   })
 
   it('phase fold never exceeds one beat', () => {

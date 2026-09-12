@@ -1,12 +1,24 @@
 {
   "videos": [
     {
+      "id": "smoke-break-ep-toad-the-wizard-part-1-nexus-cortex-co",
+      "title": "SERGIK - Smoke Break EP - Toad The Wizard Part 1 - Nexus Cortex Co.",
+      "description": "Art piece of collaboration between SERGIK x Myke Spotted Eagle x Michael Crowe.\n\nSERGIK - Music Production, VFX sound and video production.\nMyke Spotted Eagle - Visual artist / painter, visual story telling.\nMichael Crowe - Visual video development architect.\n\nEP Track List\n\n1. Smoke Break\n2. On and On\n3. Smoke Break rev\n4. Nimbus High",
+      "youtube_id": "RtkwXVUvdQQ",
+      "category": "music-video",
+      "date": "2026",
+      "featured": true,
+      "published": true
+    },
+    {
       "id": "utopia-ep-visual",
       "title": "SERGIK - Utopia (EP Visual)",
       "description": "EP Visual",
       "youtube_id": "OML1I_V4Dy4",
       "category": "music-video",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "bonafide-hustla",
@@ -14,7 +26,9 @@
       "description": "Music Video",
       "youtube_id": "00jCu-4hgZg",
       "category": "music-video",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "cruise-control-visualizer",
@@ -22,7 +36,9 @@
       "description": "Visualizer",
       "youtube_id": "0-ncbzh-7Jw",
       "category": "visualizer",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "in-the-streets",
@@ -30,7 +46,9 @@
       "description": "Music Video",
       "youtube_id": "ME-pcfB1bHc",
       "category": "music-video",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "electrify",
@@ -38,7 +56,9 @@
       "description": "Music Video",
       "youtube_id": "dcREFTRdviU",
       "category": "music-video",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "soul-candy-ep-visualizer",
@@ -46,7 +66,9 @@
       "description": "EP Visualizer",
       "youtube_id": "X0cWv2hIByE",
       "category": "visualizer",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "what-you-on",
@@ -54,7 +76,9 @@
       "description": "Collaboration",
       "youtube_id": "nWuixsTKMBI",
       "category": "collaboration",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "cant-stop-music-video",
@@ -62,7 +86,9 @@
       "description": "Official music video filmed at Arcosanti, Arizona at Form Music Festival 2024",
       "youtube_id": "1A0v-4u_STs",
       "category": "music-video",
-      "date": "2024"
+      "date": "2024",
+      "featured": false,
+      "published": true
     },
     {
       "id": "it-is-what-it-is",
@@ -70,7 +96,9 @@
       "description": "Music Video",
       "youtube_id": "gbDkx2lK9UI",
       "category": "music-video",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "soul-mind-body",
@@ -78,7 +106,9 @@
       "description": "Music Video",
       "youtube_id": "BaECr4F4e2E",
       "category": "music-video",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "if-you-want-to",
@@ -86,7 +116,9 @@
       "description": "Collaboration",
       "youtube_id": "fpoisbBCL00",
       "category": "collaboration",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "big-macs-n-jumbo-jacks",
@@ -94,7 +126,9 @@
       "description": "Collaboration",
       "youtube_id": "jAdkId8-8jM",
       "category": "collaboration",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     },
     {
       "id": "katana-ghost",
@@ -102,7 +136,9 @@
       "description": "Collaboration",
       "youtube_id": "Vd1YTEWZWmA",
       "category": "collaboration",
-      "date": "2025"
+      "date": "2025",
+      "featured": false,
+      "published": true
     }
   ],
   "youtube_channel": "https://youtube.com/@sergikdropz"

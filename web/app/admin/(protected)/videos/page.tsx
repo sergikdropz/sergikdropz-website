@@ -116,7 +116,10 @@ useEffect(() => {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Video Uploader</h1>
-          <p className="text-gray-400">Upload and manage video content</p>
+          <p className="text-gray-400">Upload files to storage. To curate the public YouTube page, use Videos Manager.</p>
+          <a href="/admin/videos-manager" className="mt-3 inline-block text-sm text-red-400 hover:text-red-300">
+            Open YouTube catalog →
+          </a>
         </div>
 
         {/* Upload Section */}

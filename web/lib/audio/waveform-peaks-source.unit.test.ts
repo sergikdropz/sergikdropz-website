@@ -30,6 +30,18 @@ describe('fetchWaveformPeaksFromUrl', () => {
     expect(result).toHaveLength(2000)
   })
 
+  it('reads compact { d, e } tape payloads with flux', async () => {
+    const { parseWaveformTapePayload } = await import('@/lib/audio/waveform-peaks-source')
+    const tape = parseWaveformTapePayload({
+      v: 2,
+      d: peaks(128),
+      e: Array.from({ length: 128 }, () => [0.8, 0.4, 0.3, 0.2, 0.1, 0.5]),
+    })
+    expect(tape?.peaks).toHaveLength(128)
+    expect(tape?.envelopes).toHaveLength(128)
+    expect(tape?.envelopes?.[0].flux).toBeCloseTo(0.5, 5)
+  })
+
   it('returns null on a non-ok response', async () => {
     stubFetch(() => jsonResponse(null, false))
     expect(await fetchWaveformPeaksFromUrl('https://cdn.test/missing.json')).toBeNull()

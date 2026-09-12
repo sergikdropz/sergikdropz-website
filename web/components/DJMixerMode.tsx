@@ -7,7 +7,6 @@ import { generatePeakData } from '@/utils/audioWorkerClient'
 import { analyzeFrequencyBands } from '@/utils/audioAnalysis'
 import Image from 'next/image'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
-import { scoreDnaCompatibility } from '@/lib/audio/sonic-dna-mix'
 import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
 import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
 
@@ -32,17 +31,6 @@ interface Track {
 interface DJMixerModeProps {
   currentTrack: Track | null
   queue: Track[]
-  onQueueChange?: (queue: Track[]) => void
-  autoDJConfig?: {
-    enabled: boolean
-    mode: AutoDJMode
-    transitionMode: AutoDJTransitionMode
-    outPhraseBars?: AutoDJPhraseBars
-    overlapBars?: AutoDJPhraseBars
-    /** @deprecated use overlapBars */
-    phraseBars?: AutoDJPhraseBars
-    addToQueue: boolean
-  }
   onExit?: () => void
 }
 
@@ -65,15 +53,9 @@ interface DeckState {
   beatGridOffset: number // Offset in seconds for beat alignment
 }
 
-type AutoDJMode = 'queue' | 'curate'
-type AutoDJTransitionMode = 'crossfade' | 'filter-eq' | 'cutout-filter'
-type AutoDJPhraseBars = 2 | 4 | 8 | 16 | 24 | 32
-
 export default function DJMixerMode({
   currentTrack,
   queue,
-  onQueueChange,
-  autoDJConfig,
   onExit
 }: DJMixerModeProps) {
   // Audio elements and context
@@ -226,79 +208,6 @@ export default function DJMixerMode({
     return 60 / bpm
   }, [])
 
-  const resetAutoMixEQ = useCallback((fromDeck: 'A' | 'B') => {
-    setFilterA(0)
-    setFilterB(0)
-    if (fromDeck === 'A') {
-      setDeckA((prev) => ({ ...prev, channelFader: 1 }))
-    } else {
-      setDeckB((prev) => ({ ...prev, channelFader: 1 }))
-    }
-  }, [])
-
-  const applyAutoMixStep = useCallback((t: number, fromDeck: 'A' | 'B', mode: AutoDJTransitionMode) => {
-    const crossfadeValue = fromDeck === 'A' ? t : 1 - t
-    setCrossfaderPosition(Math.max(0, Math.min(1, crossfadeValue)))
-
-    if (mode === 'crossfade') return
-
-    if (fromDeck === 'A') {
-      // Outgoing opens HPF (negative); incoming starts LPF-closed then clears
-      setFilterA(-0.85 * Math.min(1, t * 1.35))
-      setFilterB(0.7 * Math.max(0, 1 - t * 1.15))
-    } else {
-      setFilterB(-0.85 * Math.min(1, t * 1.35))
-      setFilterA(0.7 * Math.max(0, 1 - t * 1.15))
-    }
-
-    if (mode === 'cutout-filter') {
-      const isCut = t > 0.35 && t < 0.55
-      if (fromDeck === 'A') {
-        setDeckA((prev) => ({ ...prev, channelFader: isCut ? 0.25 : Math.max(0.2, 1 - t) }))
-      } else {
-        setDeckB((prev) => ({ ...prev, channelFader: isCut ? 0.25 : Math.max(0.2, 1 - t) }))
-      }
-    }
-  }, [])
-
-  // Auto DJ state
-  const [autoDJEnabled, setAutoDJEnabled] = useState(false)
-  const [autoDJMode, setAutoDJMode] = useState<AutoDJMode>('queue')
-  const [autoDJTransitionMode, setAutoDJTransitionMode] = useState<AutoDJTransitionMode>('crossfade')
-  const [autoDJPhraseBars, setAutoDJPhraseBars] = useState<AutoDJPhraseBars>(8)
-  const [autoDJAddToQueue, setAutoDJAddToQueue] = useState(true)
-  const [autoDJStatus, setAutoDJStatus] = useState('Idle')
-  const [autoDJNextTrack, setAutoDJNextTrack] = useState<Track | null>(null)
-  const [autoDJLibraryTracks, setAutoDJLibraryTracks] = useState<Track[]>([])
-  const autoDJMixTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const autoDJIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const autoDJInProgressRef = useRef(false)
-  const autoDJPreparingRef = useRef(false)
-  const recentTrackIdsRef = useRef<string[]>([])
-  const autoDJLastPreparedTrackIdRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!autoDJConfig) return
-    if (autoDJEnabled !== autoDJConfig.enabled) setAutoDJEnabled(autoDJConfig.enabled)
-    if (autoDJMode !== autoDJConfig.mode) setAutoDJMode(autoDJConfig.mode)
-    if (autoDJTransitionMode !== autoDJConfig.transitionMode) {
-      setAutoDJTransitionMode(autoDJConfig.transitionMode)
-    }
-    if (autoDJConfig) {
-      const overlap =
-        autoDJConfig.overlapBars ?? autoDJConfig.phraseBars ?? 8
-      if (autoDJPhraseBars !== overlap) setAutoDJPhraseBars(overlap)
-    }
-    if (autoDJAddToQueue !== autoDJConfig.addToQueue) setAutoDJAddToQueue(autoDJConfig.addToQueue)
-  }, [
-    autoDJConfig,
-    autoDJEnabled,
-    autoDJMode,
-    autoDJTransitionMode,
-    autoDJPhraseBars,
-    autoDJAddToQueue
-  ])
-  
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     track: Track | null
@@ -331,9 +240,6 @@ export default function DJMixerMode({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [expandedFolderId, setExpandedFolderId] = useState<string | null>(null) // Track which folder is expanded
   const [folderTracks, setFolderTracks] = useState<Track[]>([]) // Tracks from selected folder
-  const queueRef = useRef<Track[]>([])
-  const folderTracksRef = useRef<Track[]>([])
-  const selectedFolderIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     deckAStateRef.current = deckA
@@ -346,18 +252,6 @@ export default function DJMixerMode({
   useEffect(() => {
     crossfaderPositionRef.current = crossfaderPosition
   }, [crossfaderPosition])
-
-  useEffect(() => {
-    queueRef.current = queue
-  }, [queue])
-
-  useEffect(() => {
-    folderTracksRef.current = folderTracks
-  }, [folderTracks])
-
-  useEffect(() => {
-    selectedFolderIdRef.current = selectedFolderId
-  }, [selectedFolderId])
 
   // Initialize audio context and mixer graph
   useEffect(() => {
@@ -666,11 +560,13 @@ export default function DJMixerMode({
         }
       })
 
-      // Create source node
+      // An element only ever gets one MediaElementSource, so reuse it across
+      // loads and just detach its downstream chain before rewiring.
       if (sourceANodeRef.current) {
         sourceANodeRef.current.disconnect()
+      } else {
+        sourceANodeRef.current = audioContextRef.current.createMediaElementSource(audioARef.current)
       }
-      sourceANodeRef.current = audioContextRef.current.createMediaElementSource(audioARef.current)
       
       // Reconnect mixer graph
       if (
@@ -701,6 +597,10 @@ export default function DJMixerMode({
         fxWetGainARef.current.connect(gainARef.current)
         gainARef.current.connect(crossfaderGainARef.current)
         crossfaderGainARef.current.connect(masterGainRef.current)
+      } else {
+        // Without a downstream path the element stalls silently, so fall back
+        // to the raw destination rather than losing the deck entirely.
+        sourceANodeRef.current.connect(audioContextRef.current.destination)
       }
 
       setDeckA(prev => ({
@@ -745,11 +645,13 @@ export default function DJMixerMode({
         }
       })
 
-      // Create source node
+      // An element only ever gets one MediaElementSource, so reuse it across
+      // loads and just detach its downstream chain before rewiring.
       if (sourceBNodeRef.current) {
         sourceBNodeRef.current.disconnect()
+      } else {
+        sourceBNodeRef.current = audioContextRef.current.createMediaElementSource(audioBRef.current)
       }
-      sourceBNodeRef.current = audioContextRef.current.createMediaElementSource(audioBRef.current)
       
       // Reconnect mixer graph
       if (
@@ -780,6 +682,10 @@ export default function DJMixerMode({
         fxWetGainBRef.current.connect(gainBRef.current)
         gainBRef.current.connect(crossfaderGainBRef.current)
         crossfaderGainBRef.current.connect(masterGainRef.current)
+      } else {
+        // Without a downstream path the element stalls silently, so fall back
+        // to the raw destination rather than losing the deck entirely.
+        sourceBNodeRef.current.connect(audioContextRef.current.destination)
       }
 
       setDeckB(prev => ({
@@ -1405,194 +1311,6 @@ export default function DJMixerMode({
     }
   }
 
-  const fetchAutoDJLibrary = useCallback(async () => {
-    try {
-      // Paginated lean summaries — never unbounded GET /tracks
-      const { fetchAllTracksSummaryForHydration } = await import('@/utils/musicLibraryApi')
-      const tracks = await fetchAllTracksSummaryForHydration({ includeArchived: false })
-      setAutoDJLibraryTracks(
-        tracks.map((t: any) => ({
-          ...t,
-          beat_grid_offset: t.beat_grid_offset ?? 0,
-        })),
-      )
-    } catch (error) {
-      console.error('Failed to fetch Auto DJ library tracks:', error)
-      setAutoDJLibraryTracks([])
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!autoDJEnabled || autoDJMode !== 'curate' || autoDJLibraryTracks.length > 0) return
-    fetchAutoDJLibrary()
-  }, [autoDJEnabled, autoDJMode, autoDJLibraryTracks.length, fetchAutoDJLibrary])
-
-  const startAutoMix = useCallback((
-    fromDeck: 'A' | 'B',
-    toDeck: 'A' | 'B',
-    mixDuration: number
-  ) => {
-    if (autoDJInProgressRef.current) return
-    autoDJInProgressRef.current = true
-    setAutoDJStatus('Mixing...')
-
-    const targetAudio = toDeck === 'A' ? audioARef.current : audioBRef.current
-    const targetDeck = toDeck === 'A' ? deckAStateRef.current : deckBStateRef.current
-    const sourceDeck = fromDeck === 'A' ? deckAStateRef.current : deckBStateRef.current
-    const sourceAudio = fromDeck === 'A' ? audioARef.current : audioBRef.current
-
-    if (targetAudio) {
-      // Align beat phase with source deck
-      const sourcePhase = getPhase(sourceDeck) ?? 0
-      const beatDuration = getBeatDuration(targetDeck)
-      if (beatDuration) {
-        const startTime = (targetDeck.beatGridOffset || 0) + sourcePhase * beatDuration
-        const duration = targetAudio.duration || targetDeck.duration || 0
-        targetAudio.currentTime = Math.max(0, Math.min(duration, startTime))
-      }
-      targetAudio.play().catch((err) => {
-        if (err.name !== 'AbortError') {
-          console.warn('Auto DJ: failed to start target deck:', err)
-        }
-      })
-    }
-
-    const steps = 40
-    const stepMs = (mixDuration * 1000) / steps
-    let step = 0
-
-    const mixInterval = setInterval(() => {
-      step += 1
-      const t = Math.min(1, step / steps)
-      applyAutoMixStep(t, fromDeck, autoDJTransitionMode)
-
-      if (t >= 1) {
-        clearInterval(mixInterval)
-        resetAutoMixEQ(fromDeck)
-
-        // Stop source deck to avoid dual playback
-        if (sourceAudio) {
-          sourceAudio.pause()
-        }
-
-        // Finalize crossfader position
-        setCrossfaderPosition(fromDeck === 'A' ? 1 : 0)
-        autoDJInProgressRef.current = false
-        setAutoDJStatus('Locked')
-      }
-    }, stepMs)
-  }, [applyAutoMixStep, autoDJTransitionMode, getBeatDuration, getPhase, resetAutoMixEQ])
-
-  useEffect(() => {
-    if (!autoDJEnabled) {
-      setAutoDJStatus('Idle')
-      setAutoDJNextTrack(null)
-      autoDJInProgressRef.current = false
-      autoDJPreparingRef.current = false
-      if (autoDJIntervalRef.current) clearInterval(autoDJIntervalRef.current)
-      if (autoDJMixTimeoutRef.current) clearTimeout(autoDJMixTimeoutRef.current)
-      return
-    }
-
-    const tick = async () => {
-      if (!autoDJEnabled || autoDJInProgressRef.current) return
-
-      const primaryDeck = getDeckForMix()
-      const secondaryDeck = primaryDeck === 'A' ? 'B' : 'A'
-      const activeDeck = primaryDeck === 'A' ? deckAStateRef.current : deckBStateRef.current
-      const idleDeck = primaryDeck === 'A' ? deckBStateRef.current : deckAStateRef.current
-      const idleAudio = primaryDeck === 'A' ? audioBRef.current : audioARef.current
-
-      if (!activeDeck.track || !activeDeck.isPlaying) {
-        setAutoDJStatus('Waiting for playback')
-        return
-      }
-
-      rememberRecentTrack(activeDeck.track.id)
-
-      if (!idleDeck.track || idleDeck.track.id === activeDeck.track.id) {
-        if (autoDJPreparingRef.current) return
-        autoDJPreparingRef.current = true
-
-        let nextTrack: Track | null = null
-        if (autoDJMode === 'queue') {
-          nextTrack = pickNextTrackFromQueue(activeDeck.track.id)
-        } else {
-          const pool = selectedFolderIdRef.current ? folderTracksRef.current : queueRef.current
-          const curatedPool = pool.length > 0 ? pool : autoDJLibraryTracks
-          nextTrack = pickCuratedTrack(activeDeck.track, curatedPool)
-        }
-
-        if (nextTrack) {
-          if (nextTrack.id !== autoDJLastPreparedTrackIdRef.current) {
-            setAutoDJNextTrack(nextTrack)
-            autoDJLastPreparedTrackIdRef.current = nextTrack.id
-          }
-
-          if (autoDJMode === 'curate' && autoDJAddToQueue) {
-            const currentQueue = queueRef.current
-            if (!currentQueue.find((t) => t.id === nextTrack!.id)) {
-              onQueueChange?.([...currentQueue, nextTrack])
-            }
-          }
-
-          if (secondaryDeck === 'A') {
-            await loadTrackA(nextTrack)
-          } else {
-            await loadTrackB(nextTrack)
-          }
-
-          if (idleAudio) {
-            idleAudio.preload = 'auto'
-            idleAudio.load()
-          }
-          setAutoDJStatus(`Prebuffered: ${nextTrack.title}`)
-        } else {
-          setAutoDJStatus('No suitable track found')
-        }
-        autoDJPreparingRef.current = false
-      }
-
-      if (!idleDeck.track) return
-
-      const beatDuration = getBeatDuration(activeDeck)
-      if (!beatDuration || !activeDeck.duration) return
-
-      const phraseBeats = autoDJPhraseBars * 4
-      const phraseDuration = phraseBeats * beatDuration
-      const remaining = activeDeck.duration - activeDeck.currentTime
-
-      if (remaining <= phraseDuration * 1.1 && !autoDJInProgressRef.current) {
-        const delay = getTimeToNextPhrase(activeDeck, phraseBeats)
-        if (autoDJMixTimeoutRef.current) clearTimeout(autoDJMixTimeoutRef.current)
-        autoDJMixTimeoutRef.current = setTimeout(() => {
-          startAutoMix(primaryDeck, secondaryDeck, phraseDuration)
-        }, Math.max(0, delay * 1000))
-        setAutoDJStatus('Queued mix')
-      }
-    }
-
-    autoDJIntervalRef.current = setInterval(() => {
-      tick().catch((err) => console.warn('Auto DJ tick failed:', err))
-    }, 500)
-
-    return () => {
-      if (autoDJIntervalRef.current) clearInterval(autoDJIntervalRef.current)
-      if (autoDJMixTimeoutRef.current) clearTimeout(autoDJMixTimeoutRef.current)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    autoDJEnabled,
-    autoDJMode,
-    autoDJPhraseBars,
-    autoDJAddToQueue,
-    autoDJLibraryTracks,
-    onQueueChange,
-    getBeatDuration,
-    loadTrackA,
-    loadTrackB,
-  ])
-
   // Handle navigating to a child folder
   const handleChildFolderSelect = (folderId: string) => {
     handleFolderSelect(folderId)
@@ -1951,60 +1669,6 @@ export default function DJMixerMode({
     return diff
   }, [deckA, deckB, getPhase])
 
-  const rememberRecentTrack = (trackId: string) => {
-    const next = [trackId, ...recentTrackIdsRef.current.filter((id) => id !== trackId)]
-    recentTrackIdsRef.current = next.slice(0, 10)
-  }
-
-  const getDeckForMix = () => {
-    const a = deckAStateRef.current
-    const b = deckBStateRef.current
-    if (a.isPlaying && !b.isPlaying) return 'A'
-    if (b.isPlaying && !a.isPlaying) return 'B'
-    return crossfaderPositionRef.current <= 0.5 ? 'A' : 'B'
-  }
-
-  const getTimeToNextPhrase = (deckState: DeckState, phraseBeats: number) => {
-    const beatDuration = getBeatDuration(deckState)
-    if (!beatDuration) return 0
-    const offset = deckState.beatGridOffset || 0
-    const beatIndex = Math.floor((deckState.currentTime - offset) / beatDuration)
-    const remainder = ((beatIndex % phraseBeats) + phraseBeats) % phraseBeats
-    const beatsToNext = remainder === 0 ? phraseBeats : phraseBeats - remainder
-    const nextTime = offset + (beatIndex + beatsToNext) * beatDuration
-    return Math.max(0, nextTime - deckState.currentTime)
-  }
-
-  const scoreCandidateTrack = (current: Track, candidate: Track) => {
-    return scoreDnaCompatibility(current, candidate).total
-  }
-
-  const pickNextTrackFromQueue = (currentId: string) => {
-    const currentQueue = queueRef.current
-    if (currentQueue.length === 0) return null
-    const idx = currentQueue.findIndex((t) => t.id === currentId)
-    if (idx >= 0 && idx < currentQueue.length - 1) return currentQueue[idx + 1]
-    if (idx >= 0 && idx === currentQueue.length - 1) return currentQueue[0]
-    return currentQueue.find((t) => t.id !== currentId) || null
-  }
-
-  const pickCuratedTrack = (current: Track, available: Track[]) => {
-    const recentIds = new Set(recentTrackIdsRef.current)
-    const candidates = available.filter((t) => t.id !== current.id && !recentIds.has(t.id))
-    if (candidates.length === 0) return null
-    let best = candidates[0]
-    let bestScore = scoreCandidateTrack(current, best)
-    for (let i = 1; i < candidates.length; i++) {
-      const candidate = candidates[i]
-      const score = scoreCandidateTrack(current, candidate)
-      if (score > bestScore) {
-        best = candidate
-        bestScore = score
-      }
-    }
-    return best
-  }
-
   const getViewWindow = (deckState: DeckState) => {
     const duration = deckState.duration
     if (!Number.isFinite(duration) || duration <= 0) {
@@ -2073,12 +1737,16 @@ export default function DJMixerMode({
     }
     timeoutRef.current = setTimeout(async () => {
       try {
-        await fetch('/api/music-library/tracks', {
-          method: 'PUT',
+        const trackId = deckState.track?.id
+        if (!trackId) return
+        await fetch('/api/audio/update-beat-grid', {
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: deckState.track?.id,
-            beat_grid_offset: offset,
+            trackId,
+            offsetSec: offset,
+            gridManual: true,
           }),
         })
       } catch (e) {

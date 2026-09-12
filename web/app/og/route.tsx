@@ -3,11 +3,22 @@ import { NextRequest } from 'next/server'
 import artistData from '@/data/artist.json'
 import releasesData from '@/data/releases.json'
 import releaseSchedule from '@/data/release-schedule.json'
+import {
+  OG_MOSAIC_CELLS,
+  OG_MOSAIC_COLS,
+  OG_MOSAIC_ROWS,
+  buildOgMosaicIndices,
+  loadOgMosaicTiles,
+} from '@/lib/og-mosaic'
 
-export const runtime = 'edge'
+/** Node runtime: read gallery + cover tiles from disk for the mosaic collage. */
+export const runtime = 'nodejs'
+
+/** Bump when the card design changes so social caches re-fetch. */
+const OG_IMAGE_VERSION = '20260311b'
 
 const OG_IMAGE_HEADERS = {
-  'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+  'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
 }
 
 function findRelease(slug: string) {
@@ -25,10 +36,94 @@ function findRelease(slug: string) {
   }
 }
 
+async function loadSixCapsFont(): Promise<ArrayBuffer> {
+  const css = await fetch(
+    'https://fonts.googleapis.com/css2?family=Six+Caps&text=SERGIKABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    {
+      headers: {
+        // Google returns TTF for this UA; Satori needs truetype, not woff2.
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      },
+      next: { revalidate: 86400 },
+    },
+  ).then((res) => res.text())
+
+  const match = css.match(/src:\s*url\(([^)]+)\)\s*format\('truetype'\)/)
+  if (!match?.[1]) {
+    throw new Error('Six Caps font URL not found')
+  }
+
+  const fontRes = await fetch(match[1], { next: { revalidate: 86400 } })
+  if (!fontRes.ok) {
+    throw new Error(`Failed to download Six Caps (${fontRes.status})`)
+  }
+  return fontRes.arrayBuffer()
+}
+
+function ogFonts(sixCaps: ArrayBuffer) {
+  return [
+    {
+      name: 'Six Caps',
+      data: sixCaps,
+      style: 'normal' as const,
+      weight: 400 as const,
+    },
+  ]
+}
+
+function MosaicBackground({
+  tiles,
+}: {
+  tiles: { dataUrl: string }[]
+}) {
+  if (tiles.length === 0) return null
+
+  const indices = buildOgMosaicIndices(tiles.length)
+  const cellW = 1200 / OG_MOSAIC_COLS
+  const cellH = 630 / OG_MOSAIC_ROWS
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexWrap: 'wrap',
+        width: 1200,
+        height: 630,
+      }}
+    >
+      {indices.slice(0, OG_MOSAIC_CELLS).map((tileIndex, cell) => {
+        const tile = tiles[tileIndex] || tiles[cell % tiles.length]
+        if (!tile) return null
+        return (
+          <img
+            key={cell}
+            src={tile.dataUrl}
+            alt=""
+            width={Math.ceil(cellW)}
+            height={Math.ceil(cellH)}
+            style={{
+              width: `${100 / OG_MOSAIC_COLS}%`,
+              height: `${100 / OG_MOSAIC_ROWS}%`,
+              objectFit: 'cover',
+              opacity: 0.55,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'
+    const origin = request.nextUrl.origin
     const releaseSlug = request.nextUrl.searchParams.get('release')
+    const [sixCaps, mosaicTiles] = await Promise.all([
+      loadSixCapsFont(),
+      loadOgMosaicTiles({ origin, limit: 40 }),
+    ])
 
     // Per-release OG image
     if (releaseSlug) {
@@ -50,12 +145,20 @@ export async function GET(request: NextRequest) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: '#000000',
-                backgroundImage: isUpcoming
-                  ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%)'
-                  : 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(16, 185, 129, 0.1) 100%)',
                 position: 'relative',
+                overflow: 'hidden',
+                fontFamily: 'system-ui, sans-serif',
               }}
             >
+              <MosaicBackground tiles={mosaicTiles} />
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background:
+                    'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0.82) 100%)',
+                }}
+              />
               <div
                 style={{
                   display: 'flex',
@@ -64,43 +167,60 @@ export async function GET(request: NextRequest) {
                   justifyContent: 'center',
                   padding: '60px 40px',
                   textAlign: 'center',
+                  zIndex: 1,
                 }}
               >
                 {isUpcoming && (
                   <div
                     style={{
                       fontSize: 18,
-                      color: '#A78BFA',
+                      color: 'rgba(255,255,255,0.55)',
                       marginBottom: 16,
                       textTransform: 'uppercase',
-                      letterSpacing: '0.1em',
+                      letterSpacing: '0.14em',
                       fontWeight: 600,
+                      fontFamily: 'system-ui, sans-serif',
                     }}
                   >
                     Coming Soon
                   </div>
                 )}
+                <div
+                  style={{
+                    fontSize: 42,
+                    color: 'rgba(255,255,255,0.7)',
+                    marginBottom: 18,
+                    letterSpacing: '0.18em',
+                    fontFamily: 'Six Caps',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  SERGIK
+                </div>
                 <h1
                   style={{
-                    fontSize: 80,
-                    fontWeight: 'bold',
+                    fontSize: 72,
+                    fontWeight: 700,
                     color: '#FFFFFF',
                     margin: 0,
                     marginBottom: 16,
                     letterSpacing: '-0.02em',
+                    lineHeight: 1.05,
+                    fontFamily: 'system-ui, sans-serif',
                   }}
                 >
                   {release.title}
                 </h1>
                 <p
                   style={{
-                    fontSize: 28,
+                    fontSize: 26,
                     color: '#9CA3AF',
                     margin: 0,
                     marginBottom: 12,
+                    fontFamily: 'system-ui, sans-serif',
                   }}
                 >
-                  SERGIK &middot; {release.type} {yearText && `&middot; ${yearText}`}
+                  {release.type} {yearText && `· ${yearText}`}
                 </p>
                 {release.genre && (
                   <p
@@ -108,6 +228,7 @@ export async function GET(request: NextRequest) {
                       fontSize: 20,
                       color: '#6B7280',
                       margin: 0,
+                      fontFamily: 'system-ui, sans-serif',
                     }}
                   >
                     {release.genre}
@@ -116,12 +237,12 @@ export async function GET(request: NextRequest) {
               </div>
             </div>
           ),
-          { width: 1200, height: 630, headers: OG_IMAGE_HEADERS }
+          { width: 1200, height: 630, fonts: ogFonts(sixCaps), headers: OG_IMAGE_HEADERS },
         )
       }
     }
 
-    // Default OG image
+    // Default OG image — Six Caps hero over gallery + cover-art mosaic
     return new ImageResponse(
       (
         <div
@@ -133,89 +254,101 @@ export async function GET(request: NextRequest) {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#000000',
-            backgroundImage: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%)',
             position: 'relative',
+            overflow: 'hidden',
+            fontFamily: 'system-ui, sans-serif',
           }}
         >
-          {/* Background gradient overlay */}
+          <MosaicBackground tiles={mosaicTiles} />
+
           <div
             style={{
               position: 'absolute',
               inset: 0,
-              background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.8) 100%)',
+              background:
+                'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.8) 100%)',
             }}
           />
-          
-          {/* Main content */}
+
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '80px 40px',
+              padding: '64px 48px',
               zIndex: 1,
               textAlign: 'center',
+              width: '100%',
             }}
           >
-            {/* SERGIK Title */}
             <h1
               style={{
-                fontSize: 120,
-                fontWeight: 'bold',
+                fontSize: 180,
+                fontWeight: 400,
                 color: '#FFFFFF',
                 margin: 0,
-                marginBottom: 24,
-                letterSpacing: '-0.02em',
-                fontFamily: 'system-ui, -apple-system, sans-serif',
+                marginBottom: 20,
+                letterSpacing: '4.8px',
+                fontFamily: 'Six Caps',
+                textTransform: 'uppercase',
+                lineHeight: 0.9,
               }}
             >
               SERGIK
             </h1>
-            
-            {/* Bio text */}
+
             <p
               style={{
                 fontSize: 24,
-                color: '#E5E7EB',
+                color: 'rgba(229, 231, 235, 0.92)',
                 margin: 0,
-                marginBottom: 40,
-                maxWidth: 800,
-                lineHeight: 1.5,
-                textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+                marginBottom: 36,
+                maxWidth: 820,
+                lineHeight: 1.45,
+                fontFamily: 'system-ui, sans-serif',
               }}
             >
               {artistData.bio.short || 'Electronic Music Producer & DJ'}
             </p>
-            
-            {/* Action buttons preview */}
+
             <div
               style={{
                 display: 'flex',
                 gap: 16,
-                marginTop: 20,
+                marginTop: 8,
               }}
             >
               <div
                 style={{
-                  padding: '12px 24px',
+                  padding: '14px 36px',
                   backgroundColor: '#FFFFFF',
                   color: '#000000',
-                  borderRadius: 8,
-                  fontSize: 18,
+                  borderRadius: 10,
+                  fontSize: 20,
                   fontWeight: 600,
+                  minWidth: 140,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'system-ui, sans-serif',
                 }}
               >
                 Listen
               </div>
               <div
                 style={{
-                  padding: '12px 24px',
-                  border: '2px solid #FFFFFF',
+                  padding: '14px 36px',
+                  border: '2px solid rgba(255,255,255,0.85)',
                   color: '#FFFFFF',
-                  borderRadius: 8,
-                  fontSize: 18,
+                  borderRadius: 10,
+                  fontSize: 20,
                   fontWeight: 600,
+                  minWidth: 140,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'system-ui, sans-serif',
                 }}
               >
                 Watch
@@ -227,8 +360,9 @@ export async function GET(request: NextRequest) {
       {
         width: 1200,
         height: 630,
+        fonts: ogFonts(sixCaps),
         headers: OG_IMAGE_HEADERS,
-      }
+      },
     )
   } catch (e: any) {
     console.error('Error generating OG image:', e)

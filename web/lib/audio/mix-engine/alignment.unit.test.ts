@@ -124,4 +124,21 @@ describe('solveAlignmentState groove-aware snare', () => {
     expect(a.snareLock).toBe(false)
     expect(a.sources).not.toContain('snare')
   })
+
+  it('places incoming on the same bar of phrase 1 as outgoing', () => {
+    const a = solveAlignmentState({
+      plannedIncomingSec: 0,
+      outgoingTimeSec: 64 + 4, // 4s into an 8-bar cell @ 120 BPM
+      outgoingBpm: 120,
+      outgoingOffsetSec: 0,
+      incomingBpm: 120,
+      incomingOffsetSec: 0,
+      phraseBars: 8,
+      phrase1Lock: true,
+      dnaConfidence: 0.8,
+    })
+    expect(a.incomingCueSec).toBeGreaterThan(3.5)
+    expect(a.incomingCueSec).toBeLessThan(4.5)
+    expect(a.sources).toContain('phrase-phase')
+  })
 })

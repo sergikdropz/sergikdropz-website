@@ -10,8 +10,11 @@ import {
   isGridLocked,
   withGridLockOnDna,
   withGridAnalysisOnDna,
+  isGridManual,
+  needsKickRemeasure,
+  storedKickOnsetCount,
 } from './kick-onsets'
-import { dualOnsetResidualNudgeSec } from './transient-align'
+import { dualOnsetResidualNudgeSec, measureOnsetPocketResidual } from './transient-align'
 
 describe('kickOnsetsFromSteps', () => {
   it('projects kick steps onto the timeline', () => {
@@ -129,6 +132,21 @@ describe('resolveKickOnsetSec / snare / grid lock', () => {
     expect((dna.measured as { gridLockScore: number }).gridLockScore).toBe(0.5)
   })
 
+  it('needsKickRemeasure when stored onsets are missing', () => {
+    expect(needsKickRemeasure({ measured: { bpm: 120 } })).toBe(true)
+    expect(storedKickOnsetCount({ measured: { kickOnsetSec: [0, 0.5, 1, 1.5] } })).toBe(4)
+    expect(needsKickRemeasure({ measured: { kickOnsetSec: [0, 0.5, 1, 1.5] } })).toBe(false)
+  })
+
+  it('withGridAnalysisOnDna stamps a manual grid so auto-align can skip it', () => {
+    const dna = withGridAnalysisOnDna({ measured: { bpm: 128 } }, {
+      offsetSec: 0.056,
+      gridManual: true,
+    })
+    expect(isGridManual(dna)).toBe(true)
+    expect((dna.measured as { gridOffsetSec: number }).gridOffsetSec).toBeCloseTo(0.056, 5)
+  })
+
   it('withGridAnalysisOnDna writes gridOffsetSec from offsetSec', () => {
     const dna = withGridAnalysisOnDna({ measured: { bpm: 120 } }, {
       offsetSec: 2.4,
@@ -162,5 +180,33 @@ describe('dualOnsetResidualNudgeSec', () => {
     // Incoming playhead is 10ms after a shared kick — residual stays in micro band.
     expect(Math.abs(nudge)).toBeGreaterThan(0)
     expect(Math.abs(nudge)).toBeLessThanOrEqual(0.02)
+  })
+
+  it('measures kick and clap residuals separately', () => {
+    const pocket = measureOnsetPocketResidual({
+      outgoingTimeSec: 1.0,
+      incomingTimeSec: 1.0,
+      outgoingKickOnsets: [0, 0.5, 1.0, 1.5],
+      incomingKickOnsets: [0, 0.5, 1.008, 1.5],
+      outgoingSnareOnsets: [0.25, 0.75, 1.25, 1.75],
+      incomingSnareOnsets: [0.25, 0.75, 1.25, 1.75],
+    })
+    expect(pocket.kickSec).not.toBeNull()
+    expect(Math.abs(pocket.kickSec!)).toBeGreaterThan(0.004)
+    expect(pocket.clapSec).toBeNull()
+  })
+
+  it('pairs clap residual on the backbeat', () => {
+    const pocket = measureOnsetPocketResidual({
+      outgoingTimeSec: 1.25,
+      incomingTimeSec: 1.25,
+      outgoingKickOnsets: [0, 0.5, 1.0, 1.5],
+      incomingKickOnsets: [0, 0.5, 1.0, 1.5],
+      outgoingSnareOnsets: [0.25, 0.75, 1.25, 1.75],
+      incomingSnareOnsets: [0.25, 0.75, 1.262, 1.75],
+    })
+    expect(pocket.clapSec).not.toBeNull()
+    expect(Math.abs(pocket.clapSec!)).toBeGreaterThan(0.008)
+    expect(pocket.kickSec).toBeNull()
   })
 })

@@ -174,6 +174,45 @@ export function mapLibraryTrackToListItem(
     last_played_at: track.last_played_at,
     tags: track.tags,
     sort_artist: track.sort_artist,
+    // Phase only — include 0 so the player does not re-derive ~½-beat offsets from peaks.
+    beat_grid_offset: numOrNull(track.beat_grid_offset),
+    // Lean flag when DNA is already on the row (detail/PUT); list stays blob-free.
+    grid_manual: (() => {
+      const dna = track.sonic_dna
+      if (!dna || typeof dna !== 'object') return undefined
+      if ((dna as { gridManual?: boolean }).gridManual === true) return true
+      const measured = (dna as { measured?: { gridManual?: boolean } }).measured
+      return measured?.gridManual === true ? true : undefined
+    })(),
     ...(metadata ? { metadata } : {}),
+  }
+}
+
+/** Normalize a tracks PUT/GET payload whether it is still a DB row or already mapped. */
+export function coerceLibraryApiTrack(raw: any) {
+  if (!raw || typeof raw !== 'object' || !raw.id) return null
+  const looksLikeDbRow =
+    raw.folder_id != null ||
+    raw.artwork_url != null ||
+    raw.file_url != null ||
+    raw.audio_file_id != null
+  const mapped = looksLikeDbRow
+    ? mapLibraryTrackToListItem(raw, {
+        includeFullMetadata: true,
+        folder: raw.music_library_folders || null,
+      })
+    : raw
+  return {
+    ...mapped,
+    sonic_dna: raw.sonic_dna ?? mapped.sonic_dna,
+    beat_grid_offset:
+      mapped.beat_grid_offset ??
+      (typeof raw.beat_grid_offset === 'number' ? raw.beat_grid_offset : undefined),
+    grid_manual: mapped.grid_manual ?? undefined,
+    file: mapped.file || raw.file || '',
+    artwork: mapped.artwork || raw.artwork,
+    folderId: mapped.folderId || raw.folderId || raw.folder_id,
+    audioFileId: mapped.audioFileId || raw.audioFileId || raw.audio_file_id,
+    date_created: mapped.date_created || raw.date_created || raw.dateCreated,
   }
 }

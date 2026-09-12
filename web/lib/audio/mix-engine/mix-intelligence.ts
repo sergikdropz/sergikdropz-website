@@ -4,10 +4,20 @@
 
 import { eqBiasFromDna, resolvePlaybackBpm } from '@/lib/audio/sonic-dna-mix'
 import { profileFromSonicDna } from '@/lib/audio/waveform-intelligence'
+import type { EnergyCurve } from '@/lib/audio/auto-dj-preferences'
 import { energyOverlapFactor } from './plan-from-dna'
-import { isFourOnFloorPocket } from './mix-techniques'
+import {
+  applyEnergyCurveToIntelligence,
+  applyTechniqueToIntelligence,
+  isFourOnFloorPocket,
+  resolveEffectiveMixTechniques,
+  type MixStylePreset,
+  type MixTechnique,
+} from './mix-techniques'
 import { resolveStretchPolicy, type StretchPolicy } from './stretch-policy'
+import type { MixQualityGrade } from './mix-quality'
 import type { MixStyle, MixTrackRef } from './types'
+import { smoothIncomingDelay } from './blend-smooth'
 
 export type MixIntelligence = {
   outBias: { low: number; mid: number; high: number }
@@ -23,7 +33,7 @@ export type MixIntelligence = {
   softTailStart: number
   /** Outgoing HPF sweep intensity 0–1 */
   filterIntensity: number
-  /** Delay incoming fade (0–0.3 progress) when bass-heavy */
+  /** Delay incoming fade (Smooth ~0.04–0.08; techniques may raise) */
   incomingDelay: number
   outgoingStretch: StretchPolicy
   incomingStretch: StretchPolicy
@@ -103,10 +113,10 @@ export function buildMixIntelligence(params: {
   const inTarget = params.incomingTargetRate ?? 1
 
   const style = params.style
-  let microStrength = style === 'crossfade' ? 0.68 : style === 'filter-eq' ? 0.72 : 0.58
-  if (bpmDelta > 0.06) microStrength += 0.05
+  let microStrength = style === 'crossfade' ? 0.86 : style === 'filter-eq' ? 0.78 : 0.64
+  if (bpmDelta > 0.06) microStrength += 0.06
   if (vocalWeight > 0.3) microStrength -= 0.04
-  microStrength = Math.max(0.45, Math.min(0.88, microStrength))
+  microStrength = Math.max(0.5, Math.min(0.94, microStrength))
 
   const isSmooth = style === 'crossfade'
   let softTailStart = style === 'cut' ? 0.9 : style === 'filter-eq' ? 0.88 : 0.88
@@ -118,7 +128,13 @@ export function buildMixIntelligence(params: {
 
   const incomingDelay =
     isSmooth
-      ? 0
+      ? Math.min(
+          0.12,
+          smoothIncomingDelay({
+            vocalWeight,
+            incomingBass: inProfile?.spectralBias.bass ?? 0,
+          }),
+        )
       : (inProfile?.spectralBias.bass ?? 0) > 0.35 && style !== 'cut'
         ? 0.08
         : 0
@@ -156,4 +172,63 @@ export function buildMixIntelligence(params: {
         ? 8
         : 4,
   }
+}
+
+/**
+ * After a fair/poor mix, chase harder on the next blend instead of giving up
+ * on BeatSync immediately.
+ */
+export function applyQualityRecoveryToIntelligence(
+  intel: MixIntelligence,
+  grade?: MixQualityGrade | null,
+): MixIntelligence {
+  if (grade !== 'poor' && grade !== 'fair') return intel
+  const boost = grade === 'poor' ? 0.22 : 0.14
+  return {
+    ...intel,
+    microStrength: Math.min(0.98, intel.microStrength + boost),
+  }
+}
+
+/** Smooth keeps complementary bass (no filters / duck). Technique delay + echo stay. */
+export function clampIntelligenceForEngineStyle(
+  intel: MixIntelligence,
+  style: MixStyle,
+): MixIntelligence {
+  if (style !== 'crossfade') return intel
+  return {
+    ...intel,
+    filterIntensity: 0,
+    lowDuckDb: 0,
+  }
+}
+
+/** Auto DJ settings → live MixIntelligence (styles, techniques, energy, recovery). */
+export function resolveAutoDjMixIntelligence(params: {
+  outgoing: MixTrackRef
+  incoming: MixTrackRef
+  style: MixStyle
+  mixStyle: MixStylePreset
+  mixTechniques: MixTechnique[]
+  energyCurve: EnergyCurve
+  outgoingRate?: number
+  incomingTargetRate?: number
+  qualityGrade?: MixQualityGrade | null
+}): MixIntelligence {
+  const techniques = resolveEffectiveMixTechniques(
+    params.mixTechniques,
+    params.outgoing,
+    params.incoming,
+  )
+  let intel = buildMixIntelligence({
+    outgoing: params.outgoing,
+    incoming: params.incoming,
+    style: params.style,
+    outgoingRate: params.outgoingRate,
+    incomingTargetRate: params.incomingTargetRate,
+  })
+  intel = applyTechniqueToIntelligence(intel, techniques, params.mixStyle)
+  intel = applyEnergyCurveToIntelligence(intel, params.energyCurve)
+  intel = applyQualityRecoveryToIntelligence(intel, params.qualityGrade)
+  return clampIntelligenceForEngineStyle(intel, params.style)
 }

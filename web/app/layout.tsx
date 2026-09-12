@@ -45,7 +45,8 @@ export const metadata: Metadata = {
     siteName: 'SERGIK',
     images: [
       {
-        url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'}/og`,
+        // ?v= busts stale social caches when the OG card design changes
+        url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'}/og?v=20260311b`,
         width: 1200,
         height: 630,
         alt: 'SERGIK - Electronic Music Producer & DJ',
@@ -57,7 +58,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'SERGIK | Electronic Music Producer & DJ',
     description: 'SERGIK is an electronic music producer, DJ, curator, and organizer rooted in underground dance culture.',
-    images: [`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'}/og`],
+    images: [`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'}/og?v=20260311b`],
   },
   robots: {
     index: true,
@@ -85,30 +86,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'
-  const ogImageUrl = `${siteUrl}/og`
-  
+
   return (
     <html lang="en">
       <head>
-        {/* Explicit OG Image tags to prevent random image selection */}
-        <meta property="og:image" content={ogImageUrl} />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:image:type" content="image/png" />
-        <meta property="og:image:alt" content="SERGIK - Electronic Music Producer & DJ" />
-        <meta name="twitter:image" content={ogImageUrl} />
-        <meta name="twitter:image:alt" content="SERGIK - Electronic Music Producer & DJ" />
-        
         {/* Resource hints for better performance */}
         {process.env.NEXT_PUBLIC_SUPABASE_URL && (
           <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
         )}
-        {(process.env.NEXT_PUBLIC_AUDIO_BASE_URL || process.env.NEXT_PUBLIC_MEDIA_CDN_URL) && (
-          <link
-            rel="preconnect"
-            href={process.env.NEXT_PUBLIC_MEDIA_CDN_URL || process.env.NEXT_PUBLIC_AUDIO_BASE_URL}
-          />
+        {/^https?:\/\//i.test(process.env.NEXT_PUBLIC_MEDIA_CDN_URL || '') && (
+          <link rel="preconnect" href={process.env.NEXT_PUBLIC_MEDIA_CDN_URL} />
         )}
+        <link rel="preconnect" href="https://sergik-vault.e7b3fe976b079a994da8533ba6274a5d.r2.cloudflarestorage.com" />
         
         {/* Permissions Policy - allow unload for development hot reloading */}
         <meta httpEquiv="Permissions-Policy" content="unload=*" />

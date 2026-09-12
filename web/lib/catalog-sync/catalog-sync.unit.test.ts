@@ -13,6 +13,8 @@ import {
   catalogItemMatchesCoverEvent,
   collectionIdFromArtwork,
   stampAllTrackArtwork,
+  trackHasOwnArtwork,
+  trackShouldUseCrateMosaic,
 } from '@/lib/catalog-sync'
 
 describe('catalog-sync artwork helpers', () => {
@@ -38,6 +40,48 @@ describe('catalog-sync artwork helpers', () => {
     ).toBe(true)
     expect(isUploadedFolderArtwork('/images/audio/unreleased/eps/cover.jpg')).toBe(false)
     expect(isUploadedFolderArtwork('')).toBe(false)
+  })
+
+  it('detects stamped folder covers vs track-own artwork', () => {
+    expect(
+      trackHasOwnArtwork({
+        artwork: '/images/audio/artwork/folder-1789130620706.jpg',
+        folderId: '1789130620706',
+      }),
+    ).toBe(false)
+    expect(
+      trackHasOwnArtwork({
+        artwork: '/images/audio/unreleased/eps/cover.jpg',
+        folderId: 'collection-daze',
+      }),
+    ).toBe(true)
+    expect(trackHasOwnArtwork({ artwork: '', folderId: 'x' })).toBe(false)
+    expect(
+      trackShouldUseCrateMosaic({
+        artwork: '/images/audio/artwork/folder-1789130620706.jpg',
+        folderId: '1789130620706',
+        albumType: 'album',
+      }),
+    ).toBe(true)
+    expect(
+      trackShouldUseCrateMosaic({
+        artwork: '/images/audio/artwork/folder-daze.jpg',
+        folderId: 'daze',
+        albumType: 'ep',
+      }),
+    ).toBe(false)
+    expect(
+      trackShouldUseCrateMosaic({
+        artwork: '/images/audio/artwork/folder-ftp.jpg',
+        folderId: 'collection-unreleased-eps-sergik---ftp-',
+      }),
+    ).toBe(false)
+    expect(
+      trackHasOwnArtwork({
+        artwork: '/images/audio/unreleased/eps/SERGIK%20-%20FTP/cover.jpeg',
+        folderId: 'collection-unreleased-eps-sergik---ftp-',
+      }),
+    ).toBe(true)
   })
 
   it('rejects HEIC uploads that would be stored as a broken JPEG', () => {
@@ -125,5 +169,37 @@ describe('catalog-sync bus', () => {
     expect(event.patch.artwork).toMatch(/folder-collection-daze\.png\?v=/)
     expect(seen.length).toBe(1)
     expect(seen[0]).toContain('folder:collection-daze:playlist-collection-daze:')
+  })
+
+  it('broadcasts admin Orig BPM on track entities', () => {
+    const seen: number[] = []
+    const stop = subscribeCatalogSync((event) => {
+      if (event.entity === 'track' && typeof event.patch.bpm === 'number') {
+        seen.push(event.patch.bpm)
+      }
+    })
+    emitCatalogSync({
+      entity: 'track',
+      entityId: '22222222-2222-2222-2222-222222222222',
+      patch: { bpm: 128 },
+    })
+    stop()
+    expect(seen).toEqual([128])
+  })
+
+  it('broadcasts edit-track catalog fields', () => {
+    const seen: Array<{ title?: string; genre?: string }> = []
+    const stop = subscribeCatalogSync((event) => {
+      if (event.entity === 'track') {
+        seen.push({ title: event.patch.title, genre: event.patch.genre })
+      }
+    })
+    emitCatalogSync({
+      entity: 'track',
+      entityId: '22222222-2222-2222-2222-222222222222',
+      patch: { title: 'Bird Talk', genre: 'Experimental Bass' },
+    })
+    stop()
+    expect(seen).toEqual([{ title: 'Bird Talk', genre: 'Experimental Bass' }])
   })
 })

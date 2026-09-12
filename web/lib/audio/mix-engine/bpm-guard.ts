@@ -6,10 +6,12 @@ import { extractMeasured } from '@/lib/audio/sonic-dna-quality'
 import { MISSING_BPM_CONFIDENCE, readPairBpmConfidence } from './alignment'
 import { bothGridsReady } from './phrase-mix-doctrine'
 import { readGridLockScore } from './kick-onsets'
+import { isBrokenGroovePocket } from './mix-techniques'
 
 export type BeatSyncRiskCode =
   | 'low-confidence'
   | 'half-time-feel'
+  | 'broken-groove'
   | 'double-time-suspect'
   | 'pair-octave'
   | 'grids-unlocked'
@@ -42,15 +44,24 @@ function trackFeelRisk(sonicDna: unknown, playbackBpm?: number | null): BeatSync
       ? measured.bpmConfidence
       : MISSING_BPM_CONFIDENCE
 
-  if (feel.includes('half') && effective > 0 && dnaBpm > 0) {
-    const rel = Math.abs(effective - dnaBpm) / dnaBpm
-    if (rel >= 0.35) {
-      return {
-        ok: false,
-        code: 'half-time-feel',
-        message: `Half-time feel (pulse ~${Math.round(effective)} vs DNA ${Math.round(dnaBpm)})`,
-        forceTempoSync: true,
+  if (isBrokenGroovePocket(sonicDna)) {
+    const family = String(measured.drumFamily || measured.timingFeel || 'broken').toLowerCase()
+    if (feel.includes('half') && effective > 0 && dnaBpm > 0) {
+      const rel = Math.abs(effective - dnaBpm) / dnaBpm
+      if (rel >= 0.35) {
+        return {
+          ok: false,
+          code: 'half-time-feel',
+          message: `Half-time feel (pulse ~${Math.round(effective)} vs DNA ${Math.round(dnaBpm)})`,
+          forceTempoSync: true,
+        }
       }
+    }
+    return {
+      ok: false,
+      code: feel.includes('half') ? 'half-time-feel' : 'broken-groove',
+      message: `TempoSync — ${family.replace(/-/g, ' ')} pocket (no kick chase)`,
+      forceTempoSync: true,
     }
   }
 

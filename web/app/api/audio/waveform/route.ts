@@ -4,7 +4,7 @@ import { findAudioFile } from '@/lib/findAudioFile'
 import { extractVaultRelativePath, normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 import { persistAudioFileArtifacts } from '@/utils/analysisArtifacts'
 import { sanitizeWaveformPeaks } from '@/lib/audio/sanitize-waveform-peaks'
-import { fetchWaveformPeaksFromUrl } from '@/lib/audio/waveform-peaks-source'
+import { fetchWaveformTapeFromUrl } from '@/lib/audio/waveform-peaks-source'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
 
@@ -75,11 +75,12 @@ export async function GET(request: Request) {
     }
 
     if (track.waveform_json_url) {
-      const peaks = await fetchWaveformPeaksFromUrl(track.waveform_json_url)
-      if (peaks?.length) {
+      const tape = await fetchWaveformTapeFromUrl(track.waveform_json_url)
+      if (tape?.peaks?.length) {
         return NextResponse.json(
           {
-            waveform_data: peaks,
+            waveform_data: tape.peaks,
+            envelopes: tape.envelopes,
             file_path: track.file_path,
             waveform_svg_url: track.waveform_svg_url || null,
           },
@@ -147,6 +148,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const { expandCompactEnvelopes } = await import('@/lib/audio/waveform-dsp-envelope')
+    const envelopes = expandCompactEnvelopes(body.envelopes ?? body.e)
+
     const supabase = createSupabaseServerClient()
     const track = await findAudioFile(supabase, {
       path: body.path || null,
@@ -159,14 +163,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Audio file not found for this track' }, { status: 404 })
     }
 
-    // Peaks are stored once in the audio-analysis bucket rather than as a TOASTed
-    // JSONB column duplicated across audio_files and every linked library track.
+    // Peaks (+ optional rich envelopes) live in the audio-analysis bucket.
     try {
       await persistAudioFileArtifacts({
         audioFileId: track.id,
         filePath: track.file_path,
         fileName: track.file_name,
         waveformData: peaks,
+        waveformEnvelopes: envelopes,
         existingMetadata: track.metadata,
         force: true,
       })
@@ -182,6 +186,7 @@ export async function POST(request: NextRequest) {
       success: true,
       audioFileId: track.id,
       samples: peaks.length,
+      hasEnvelopes: Boolean(envelopes?.length),
     })
   } catch (error: any) {
     console.error('Waveform persist error:', error)

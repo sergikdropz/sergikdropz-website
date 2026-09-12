@@ -265,6 +265,18 @@ export function fallbackSections(
   }
 }
 
+export type PhraseSectionId = 'intro' | 'build' | 'drop' | 'break' | 'outro'
+
+/** Which arrangement section contains `timeSec`. */
+export function sectionAtSec(map: PhraseSectionMap, timeSec: number): PhraseSectionId {
+  const t = Number.isFinite(timeSec) ? timeSec : 0
+  if (t >= map.outroStartSec) return 'outro'
+  if (map.breakStartSec != null && t >= map.breakStartSec) return 'break'
+  if (t >= map.dropStartSec) return 'drop'
+  if (t >= map.buildStartSec) return 'build'
+  return 'intro'
+}
+
 /** Map PhraseSectionMap → legacy SegmentMap shape used by creative insights. */
 export function toLegacySegmentRatios(sections: PhraseSectionMap): {
   introEndRatio: number

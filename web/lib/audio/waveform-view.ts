@@ -30,6 +30,8 @@ export type WaveformSample = {
   bands?: WaveformBands
   /** Optional RMS body (DAW dual-envelope); peak lives in positive/negative. */
   rms?: number
+  /** Spectral flux / attack strength (0..1) for CDJ transient accents. */
+  flux?: number
 }
 
 export type VisibleTimeWindow = {
@@ -135,6 +137,7 @@ export const CHANNEL_LANE_RGB = [56, 196, 210] as const
 export const SERGIK_ELEMENT_COLORS = {
   drums: [232, 63, 51] as const,
   kicks: [158, 206, 230] as const,
+  snares: [255, 140, 48] as const,
   claps: [115, 238, 71] as const,
   hats: [101, 219, 238] as const,
   percussion: [144, 185, 246] as const,
@@ -146,6 +149,7 @@ export const SERGIK_ELEMENT_COLORS = {
 export type ElementBandEnergies = {
   drums: number
   kicks: number
+  snares: number
   claps: number
   hats: number
   percussion: number
@@ -157,13 +161,15 @@ export type ElementBandEnergies = {
 /** Drum-element + spectral-range palette for `drums` mode. */
 export const DRUM_SPECTRAL_COLORS = {
   kick: [255, 72, 8] as const, // sub / kick punch
-  clap: [255, 210, 48] as const, // clap / snare body
+  snare: [255, 140, 48] as const, // snare body (mid punch)
+  clap: [255, 230, 90] as const, // clap / brighter mid-high
   hat: [70, 230, 255] as const, // hats / air
   sub: [255, 40, 20] as const, // deepest low
   lowMid: [255, 140, 20] as const, // bass body
   mid: [255, 64, 180] as const, // musical mids
   highMid: [120, 255, 90] as const, // presence
   air: [140, 160, 255] as const, // top air
+  flux: [255, 196, 96] as const, // warm attack hairline (not white — keeps tape dark)
 } as const
 
 export const WAVEFORM_COLOR_MODES: Array<{
@@ -182,7 +188,7 @@ export const WAVEFORM_COLOR_MODES: Array<{
     id: 'drums',
     label: 'Drums',
     shortLabel: 'Drums',
-    description: 'Kick / clap / hat pocket from DNA phrase grids',
+    description: 'Kick / snare / clap / hat pockets from DNA + DSP bands',
   },
   {
     id: 'elements',
@@ -240,7 +246,7 @@ export function normalizeWaveformColorMode(mode: string | null | undefined): Wav
     case 'ollin':
       return 'channel'
     default:
-      return 'energy'
+      return 'drums'
   }
 }
 
@@ -267,7 +273,7 @@ export function normalizeWaveformLayerLayout(
     case 'single':
       return 'merged'
     default:
-      return 'merged'
+      return 'overlay'
   }
 }
 
@@ -396,7 +402,9 @@ export function sampleElementBands(
   const crest = peak / Math.max(1e-4, rms)
   let kicks = low * (crest > 1.6 ? 0.75 : 0.35)
   let bass = low * (crest > 1.6 ? 0.25 : 0.65)
-  let claps = mid * 0.45 + high * 0.15
+  // Snare = mid punch; clap = brighter mid/high — keep distinct for CDJ lanes
+  let snares = mid * 0.55 + high * 0.08
+  let claps = mid * 0.28 + high * 0.35
   let hats = high * 0.85
   let percussion = mid * 0.35 * Math.max(0.2, 1 - crest / 3)
   let synths = mid * Math.min(1, rms / Math.max(peak, 1e-4))
@@ -406,7 +414,7 @@ export function sampleElementBands(
   if (sample.elementType && conf > 0.28) {
     const boost = 0.35 + conf * 0.65
     if (sample.elementType === 'kick') kicks = Math.max(kicks, boost)
-    else if (sample.elementType === 'snare') claps = Math.max(claps, boost * 0.85)
+    else if (sample.elementType === 'snare') snares = Math.max(snares, boost)
     else if (sample.elementType === 'clap') claps = Math.max(claps, boost)
     else if (sample.elementType === 'hihat') hats = Math.max(hats, boost)
   }
@@ -419,6 +427,8 @@ export function sampleElementBands(
     kicks *= 1 + b.kicks
     hats *= 1 + b.hats
     percussion *= 1 + b.percussion
+    snares *= 1 + b.percussion * 0.85
+    claps *= 1 + b.percussion * 0.65
     if (!profile.hasVocals) vocals *= 0.12
     if (!profile.hasSynths) synths *= 0.22
     if (!profile.hasBass) bass *= 0.35
@@ -426,8 +436,9 @@ export function sampleElementBands(
     if (profile.bassLock === 'follows-kick' || profile.bassLock === 'rolling') bass *= 1.12
   }
 
-  const drums = Math.max(kicks, claps, hats) * 0.6 + (kicks + claps + hats) * 0.15
-  return { drums, kicks, claps, hats, percussion, bass, synths, vocals }
+  const drums =
+    Math.max(kicks, snares, claps, hats) * 0.55 + (kicks + snares + claps + hats) * 0.12
+  return { drums, kicks, snares, claps, hats, percussion, bass, synths, vocals }
 }
 
 /** SERGIK Elements mode — sharpened weighted blend of instrument palette colors. */
@@ -445,7 +456,16 @@ export function elementSpectralColor(
     0.03,
   )
   const total =
-    e.drums + e.kicks + e.claps + e.hats + e.percussion + e.bass + e.synths + e.vocals + 1e-6
+    e.drums +
+    e.kicks +
+    e.snares +
+    e.claps +
+    e.hats +
+    e.percussion +
+    e.bass +
+    e.synths +
+    e.vocals +
+    1e-6
 
   let r = 0
   let g = 0
@@ -586,7 +606,7 @@ export function zoomToVisibleRatio(zoomLevel: number): number {
  * Discrete musical zoom ladder (bars visible on screen).
  * Steps favor 4/8/16 phrase windows and then +8-bar increments toward overview.
  */
-export const WAVEFORM_BAR_ZOOM_STEPS = [4, 8, 16, 24, 32, 48, 64, 96, 128] as const
+export const WAVEFORM_BAR_ZOOM_STEPS = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128] as const
 
 export type WaveformBarZoomStep = (typeof WAVEFORM_BAR_ZOOM_STEPS)[number]
 
@@ -683,6 +703,31 @@ export function wheelDeltaToZoomFactor(deltaY: number, sensitivity = 0.00185): n
   return Math.exp(dy * sensitivity)
 }
 
+const WHEEL_AXIS_DEADZONE = 0.5
+
+/**
+ * Trackpad / mouse wheel can zoom and pan on the same event.
+ * Vertical → zoom, horizontal → pan. Pinch (ctrl/meta) is zoom-only.
+ * Shift+wheel is pan-only (mice without a horizontal axis).
+ */
+export function splitWheelAxes(
+  dx: number,
+  dy: number,
+  mods?: { shift?: boolean; pinch?: boolean },
+): { zoomDelta: number; panDelta: number } {
+  if (mods?.pinch) {
+    return { zoomDelta: dy, panDelta: 0 }
+  }
+  if (mods?.shift) {
+    const pan = Math.abs(dy) >= Math.abs(dx) ? dy : dx
+    return { zoomDelta: 0, panDelta: Math.abs(pan) >= WHEEL_AXIS_DEADZONE ? pan : 0 }
+  }
+  return {
+    zoomDelta: Math.abs(dy) >= WHEEL_AXIS_DEADZONE ? dy : 0,
+    panDelta: Math.abs(dx) >= WHEEL_AXIS_DEADZONE ? dx : 0,
+  }
+}
+
 /** Zoom in = fewer bars; zoom out = more bars; past max step → full track (0). */
 export function stepVisibleBars(currentBars: number, direction: 1 | -1): number {
   const steps = WAVEFORM_BAR_ZOOM_STEPS
@@ -695,7 +740,13 @@ export function stepVisibleBars(currentBars: number, direction: 1 | -1): number 
     return steps[idx + 1]
   }
   // zoom in
-  if (currentBars <= 0) return steps[Math.min(steps.length - 1, 4)] // enter at 32 bars
+  if (currentBars <= 0) {
+    // Enter from full overview at a phrase-ish window (32 bars when available).
+    const enter = steps.includes(32 as WaveformBarZoomStep)
+      ? 32
+      : steps[Math.min(steps.length - 1, Math.max(0, steps.length - 5))]
+    return enter
+  }
   const exact = steps.indexOf(currentBars as WaveformBarZoomStep)
   if (exact > 0) return steps[exact - 1]
   if (exact === 0) return steps[0]
@@ -769,8 +820,8 @@ export function timeToXPercent(timeSec: number, startSec: number, endSec: number
 
 /**
  * Playhead left position as a percentage of the waveform container.
+ * Always the true media time in the current view — never a fixed center.
  * Returns -1 when the playhead is outside the visible window.
- * `zoomed` = not full-track overview (bar window active).
  */
 export function playheadLeftPercent(params: {
   currentTimeSec: number
@@ -782,14 +833,18 @@ export function playheadLeftPercent(params: {
   startSec: number
   endSec: number
 }): number {
-  const { currentTimeSec, durationSec, follow, startSec, endSec } = params
+  const { currentTimeSec, durationSec, startSec, endSec } = params
+  if (durationSec <= 0 || !Number.isFinite(currentTimeSec)) return 0
   const visibleBars = params.visibleBars
   const zoomed =
     visibleBars != null ? visibleBars > 0 : (params.zoom ?? 1) > 1
-  if (durationSec <= 0) return 0
-  if (follow && zoomed) return 50
-  if (!zoomed) return (currentTimeSec / durationSec) * 100
-  if (currentTimeSec < startSec || currentTimeSec > endSec) return -1
+  if (!zoomed) {
+    return Math.max(0, Math.min(100, (currentTimeSec / durationSec) * 100))
+  }
+  const span = endSec - startSec
+  if (!(span > 0)) return Math.max(0, Math.min(100, (currentTimeSec / durationSec) * 100))
+  const pad = span * 0.002
+  if (currentTimeSec < startSec - pad || currentTimeSec > endSec + pad) return -1
   return timeToXPercent(currentTimeSec, startSec, endSec)
 }
 
@@ -1144,13 +1199,13 @@ export function multiBandRgbColor(
   r = lerp(r, 255, warmBody * 0.25)
   g = lerp(g, 220, warmBody * 0.45)
 
-  // White-hot only for strong multi-band transients (thin cyan/white spikes)
+  // Hot crest only for strong multi-band attacks — keep tape on black (no white wash)
   const peak = Math.max(low, mid, high)
   const multi = Math.min(low, mid) + Math.min(mid, high) + Math.min(low, high)
-  const whiteHot = clamp(multi * 1.1 * peak, 0, 1)
-  r = lerp(r, 255, whiteHot * 0.28)
-  g = lerp(g, 255, whiteHot * 0.32)
-  b = lerp(b, 255, whiteHot * 0.4)
+  const hotCrest = clamp(multi * 0.55 * peak, 0, 1)
+  r = lerp(r, 255, hotCrest * 0.12)
+  g = lerp(g, 210, hotCrest * 0.1)
+  b = lerp(b, 120, hotCrest * 0.08)
 
   // Saturation boost away from grey — keep MiniMeters punch on black
   const avg = (r + g + b) / 3

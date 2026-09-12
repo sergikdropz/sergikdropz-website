@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { buildWaveformStoragePayload } from '@/lib/audio/waveform-dsp-envelope'
 
 const ANALYSIS_BUCKET = 'audio-analysis'
 
@@ -106,6 +107,15 @@ export async function persistAudioFileArtifacts(params: {
   filePath: string
   fileName?: string | null
   waveformData?: number[] | null
+  /** Rich Peak/RMS/L/M/H/flux envelopes — stored alongside legacy peaks. */
+  waveformEnvelopes?: Array<{
+    peak: number
+    rms: number
+    low: number
+    mid: number
+    high: number
+    flux?: number
+  }> | null
   sonicDna?: any
   existingMetadata?: any
   force?: boolean
@@ -122,6 +132,7 @@ export async function persistAudioFileArtifacts(params: {
     audioFileId,
     filePath,
     waveformData,
+    waveformEnvelopes,
     sonicDna,
     existingMetadata,
     force = false,
@@ -146,7 +157,21 @@ export async function persistAudioFileArtifacts(params: {
     const svgPath = `waveforms/${safeBase}.svg`
     const jsonPath = `waveforms/${safeBase}.json`
     const svg = waveformPeaksToSvg(waveformData)
-    const json = JSON.stringify(waveformData)
+    const payload = buildWaveformStoragePayload({
+      peaks: waveformData,
+      envelopes: waveformEnvelopes?.length
+        ? waveformEnvelopes.map((e) => ({
+            peak: e.peak,
+            rms: e.rms,
+            low: e.low,
+            mid: e.mid,
+            high: e.high,
+            flux: typeof e.flux === 'number' ? e.flux : 0,
+          }))
+        : null,
+      path: filePath,
+    })
+    const json = JSON.stringify(payload)
 
     if (force || !existingMetadata?.analysis_artifacts?.waveform_svg_url) {
       waveform_svg_url = await uploadText(ANALYSIS_BUCKET, svgPath, svg, 'image/svg+xml')

@@ -1,6 +1,14 @@
 /**
- * Helper function to merge Sonic DNA and other analysis data into metadata
- * This ensures all fetched data is preserved in metadata for future use
+ * Merge scalar analysis results into a track's `metadata` jsonb.
+ *
+ * The full `sonic_dna` and `waveform_data` blobs are deliberately NOT mirrored
+ * here. They live in their own columns (`sonic_dna` / `waveform` on
+ * music_library_tracks, `sonic_dna` / `waveform_data` on audio_files), and every
+ * caller writes those alongside this metadata. Mirroring them grew `metadata`
+ * to ~60KB per track, which made any list query that selects the column detoast
+ * megabytes and hit the Postgres statement timeout.
+ *
+ * Keep this function to small, queryable scalars only.
  */
 
 export interface MetadataWithSonicDNA {
@@ -43,10 +51,9 @@ export function mergeSonicDNAIntoMetadata(
     ? { ...existingMetadata }
     : {}
 
-  // Always include sonic DNA if provided
+  // Blob lives in the `sonic_dna` column — only record that it was refreshed.
   if (sonicDNA) {
-    metadata.sonic_dna = sonicDNA
-    // Also store timestamp of when sonic DNA was last updated
+    delete metadata.sonic_dna
     metadata.sonic_dna_updated_at = new Date().toISOString()
   }
 
@@ -64,9 +71,8 @@ export function mergeSonicDNAIntoMetadata(
     if (analysisData.danceability !== undefined && analysisData.danceability !== null) {
       metadata.danceability = analysisData.danceability
     }
-    if (analysisData.waveform_data !== undefined) {
-      metadata.waveform_data = analysisData.waveform_data
-    }
+    // Peaks live in the waveform column; keep only the cheap sample count.
+    delete metadata.waveform_data
     if (analysisData.waveform_samples !== undefined && analysisData.waveform_samples !== null) {
       metadata.waveform_samples = analysisData.waveform_samples
     }
@@ -79,7 +85,7 @@ export function mergeSonicDNAIntoMetadata(
 
     // Include any other fields from analysisData
     Object.keys(analysisData).forEach(key => {
-      if (!['bpm', 'key_signature', 'energy_level', 'danceability', 'waveform_data', 'waveform_samples', 'duration_seconds', 'artwork_url'].includes(key)) {
+      if (!['bpm', 'key_signature', 'energy_level', 'danceability', 'waveform_data', 'waveform_samples', 'duration_seconds', 'artwork_url', 'sonic_dna', 'waveform'].includes(key)) {
         metadata[key] = analysisData[key]
       }
     })

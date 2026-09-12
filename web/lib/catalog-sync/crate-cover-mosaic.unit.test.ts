@@ -39,14 +39,15 @@ describe('crateMosaicCovers', () => {
 })
 
 describe('assignCrateMosaicCovers', () => {
-  const pool = ['/a.jpg', '/b.jpg', '/c.jpg', '/d.jpg', '/e.jpg', '/f.jpg']
+  const pool = ['/a.jpg', '/b.jpg', '/c.jpg', '/d.jpg', '/e.jpg', '/f.jpg', '/g.jpg', '/h.jpg', '/i.jpg', '/j.jpg']
 
-  it('never reuses a cover across the crate group', () => {
-    const assigned = assignCrateMosaicCovers(pool, ['one', 'two', 'three'])
-    const used = Object.values(assigned).flat()
-    expect(used).toHaveLength(6)
-    expect(new Set(used).size).toBe(6)
-    expect(assigned.one.length + assigned.two.length + assigned.three.length).toBe(6)
+  it('fills each crate tile with unique covers from the full pool', () => {
+    const assigned = assignCrateMosaicCovers(pool, ['one', 'two'])
+    expect(assigned.one).toHaveLength(9)
+    expect(assigned.two).toHaveLength(9)
+    expect(new Set(assigned.one).size).toBe(9)
+    expect(new Set(assigned.two).size).toBe(9)
+    expect(assigned.one).not.toEqual(assigned.two)
   })
 
   it('is stable for the same crate ids', () => {

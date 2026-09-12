@@ -142,6 +142,16 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Allow SoundCloud-style iframe embeds on third-party sites.
+        source: '/embed/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors *",
+          },
+        ],
+      },
+      {
         source: '/images/:path*',
         headers: [
           {

@@ -2,6 +2,7 @@ import { createReadStream, existsSync, statSync } from 'fs'
 import path from 'path'
 import { Readable } from 'stream'
 import { NextResponse } from 'next/server'
+import { orderedVaultCandidates } from '@/lib/audio/vault-object-resolver'
 import { fetchR2Object, getR2MediaConfig } from '@/lib/audio/r2Media'
 
 /**
@@ -11,7 +12,7 @@ import { fetchR2Object, getR2MediaConfig } from '@/lib/audio/r2Media'
  *
  * Upstream preference:
  * 1) Private Cloudflare R2 (R2_ACCOUNT_ID + keys + R2_BUCKET) — preferred for production
- * 2) Alternate audio extension (.mp3 ↔ .wav) on R2
+ * 2) Sibling audio extension (mp3/m4a/wav/aac) on R2, cached per asset
  * 3) Local `public/audio` (dev / missing R2 object)
  * 4) HTTP origin (AUDIO_ORIGIN / NEXT_PUBLIC_AUDIO_BASE_URL) — tunnel or public r2.dev
  */
@@ -24,18 +25,22 @@ function upstreamOrigin(): string | null {
   return base ? base.replace(/\/+$/, '') : null
 }
 
-function alternateRelativePath(relative: string): string | null {
-  if (/\.mp3$/i.test(relative)) return relative.replace(/\.mp3$/i, '.wav')
-  if (/\.wav$/i.test(relative)) return relative.replace(/\.wav$/i, '.mp3')
-  return null
-}
-
 function contentTypeFor(relative: string): string {
   if (/\.wav$/i.test(relative)) return 'audio/wav'
   if (/\.mp3$/i.test(relative)) return 'audio/mpeg'
+  if (/\.m4a$/i.test(relative)) return 'audio/mp4'
+  if (/\.aac$/i.test(relative)) return 'audio/aac'
   if (/\.flac$/i.test(relative)) return 'audio/flac'
   if (/\.aiff?$/i.test(relative)) return 'audio/aiff'
   return 'application/octet-stream'
+}
+
+function withMediaCors(headers: Headers): Headers {
+  if (!headers.has('access-control-allow-origin')) {
+    headers.set('Access-Control-Allow-Origin', '*')
+  }
+  headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+  return headers
 }
 
 const PASSTHROUGH = [
@@ -60,14 +65,17 @@ async function proxyFromR2(
 
     const out = new Headers()
     for (const [name, value] of Object.entries(result.headers)) {
-      if (value) out.set(name, value)
+      const key = name.toLowerCase()
+      if (!value || key === 'content-type') continue
+      out.set(name, value)
     }
+    out.set('content-type', contentTypeFor(relative))
     if (!out.has('accept-ranges')) out.set('accept-ranges', 'bytes')
     out.set('cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
 
     return new NextResponse(method === 'HEAD' ? null : result.body, {
       status: result.status,
-      headers: out,
+      headers: withMediaCors(out),
     })
   } catch (error: any) {
     const status = error?.$metadata?.httpStatusCode
@@ -115,12 +123,12 @@ async function proxyFromLocal(
         out.set('content-range', `bytes ${start}-${end}/${stat.size}`)
         out.set('content-length', String(end - start + 1))
         if (method === 'HEAD') {
-          return new NextResponse(null, { status: 206, headers: out })
+          return new NextResponse(null, { status: 206, headers: withMediaCors(out) })
         }
         const nodeStream = createReadStream(filePath, { start, end })
         return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, {
           status: 206,
-          headers: out,
+          headers: withMediaCors(out),
         })
       }
     }
@@ -128,12 +136,12 @@ async function proxyFromLocal(
 
   out.set('content-length', String(stat.size))
   if (method === 'HEAD') {
-    return new NextResponse(null, { status: 200, headers: out })
+    return new NextResponse(null, { status: 200, headers: withMediaCors(out) })
   }
   const nodeStream = createReadStream(filePath)
   return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, {
     status: 200,
-    headers: out,
+    headers: withMediaCors(out),
   })
 }
 
@@ -202,7 +210,7 @@ async function proxyFromHttp(request: Request, relative: string, method: 'GET' |
 
   return new NextResponse(method === 'HEAD' ? null : upstream.body, {
     status: upstream.status,
-    headers: out,
+    headers: withMediaCors(out),
   })
 }
 
@@ -238,13 +246,10 @@ async function proxy(request: Request, segments: string[], method: 'GET' | 'HEAD
     return NextResponse.json({ error: 'Invalid media path' }, { status: 400 })
   }
 
-  const primary = await trySources(request, relative, method)
-  if (primary) return primary
-
-  const alt = alternateRelativePath(relative)
-  if (alt) {
-    const secondary = await trySources(request, alt, method)
-    if (secondary) return secondary
+  // Known-good extension first, so seeks don't re-walk the miss chain each time.
+  for (const candidate of await orderedVaultCandidates(relative)) {
+    const hit = await trySources(request, candidate, method)
+    if (hit) return hit
   }
 
   return NextResponse.json({ error: 'Media not found' }, { status: 404 })

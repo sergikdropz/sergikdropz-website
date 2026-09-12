@@ -78,6 +78,9 @@ export function buildSkipBlendPlan(input: SkipBlendPlanInput): MixPlan {
     blendFromOut: true,
     masterTempoHandoff: true,
     holdBeatmatch: prior?.holdBeatmatch ?? true,
+    vinylBend: prior?.vinylBend,
+    kickCorrect: prior?.kickCorrect,
+    gridAlign: prior?.gridAlign,
     dnaConfidence: prior?.dnaConfidence,
     phraseLock: prior?.phraseLock,
   }

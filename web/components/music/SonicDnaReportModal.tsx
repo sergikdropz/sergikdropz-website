@@ -40,6 +40,7 @@ import {
   buildAudioRerunRewriteMessage,
   collectSonicDnaAdminGuidance,
 } from '@/lib/audio/sonic-dna-admin-guidance'
+import { rescanAndPersistWaveform } from '@/lib/audio/rescan-waveform'
 
 type ReviewMode = 'question' | 'challenge' | 'regenerate'
 type SectionPatch = { sectionId: SonicDnaReportSectionId; text: string }
@@ -57,6 +58,7 @@ export type SonicDnaWaveformActions = {
   onSnapPlayhead?: (mode: 'kick' | 'beat' | 'phrase') => void
   onResetGrid?: () => void
   onApplyEqBias?: () => void
+  onRescanWaveform?: () => void | Promise<void>
   /** Disable actions when BPM / waveform unavailable. */
   gridReady?: boolean
   hasWaveform?: boolean
@@ -71,6 +73,12 @@ export type SonicDnaWaveformEventDetail =
   | { action: 'snap'; mode: 'kick' | 'beat' | 'phrase' }
   | { action: 'reset-grid' }
   | { action: 'apply-eq' }
+  | {
+      action: 'rescan-waveform'
+      trackId?: string
+      peaks?: number[]
+      envelopes?: Array<{ peak: number; rms: number; low: number; mid: number; high: number }>
+    }
 
 function dispatchWaveformBridge(detail: SonicDnaWaveformEventDetail) {
   if (typeof window === 'undefined') return
@@ -120,6 +128,7 @@ export default function SonicDnaReportModal({
   const [audioRerunProgress, setAudioRerunProgress] = useState(0)
   const [audioRerunLabel, setAudioRerunLabel] = useState('Re-run audio')
   const [audioRerunPhase, setAudioRerunPhase] = useState<AudioRerunPhase>('idle')
+  const [waveformRescanning, setWaveformRescanning] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const dirtyRef = useRef(false)
@@ -629,6 +638,41 @@ export default function SonicDnaReportModal({
     }
   }
 
+  const rescanWaveform = async () => {
+    if (waveformRescanning || busy) return
+    setWaveformRescanning(true)
+    setError(null)
+    setNotice(null)
+    try {
+      if (waveformActions?.onRescanWaveform) {
+        await waveformActions.onRescanWaveform()
+        setNotice('Rescanned waveform from the playing file and saved it to the catalog.')
+        return
+      }
+      const result = await rescanAndPersistWaveform({
+        id: track.id,
+        file: track.file,
+        audioFileId: track.audioFileId,
+        title: track.title,
+      })
+      dispatchWaveformBridge({
+        action: 'rescan-waveform',
+        trackId: track.id,
+        peaks: result.peaks,
+        envelopes: result.envelopes,
+      })
+      onSaved?.({
+        ...track,
+        waveform_data: result.peaks,
+      } as Track)
+      setNotice(`Rescanned waveform · ${result.samples} peaks from the current audio file.`)
+    } catch (err: any) {
+      setError(err?.message || 'Waveform rescan failed')
+    } finally {
+      setWaveformRescanning(false)
+    }
+  }
+
   const queueRegen = async () => {
     if (!onQueueAnalysis) return
     const guidance = collectSonicDnaAdminGuidance(prompt, thread)
@@ -991,6 +1035,7 @@ export default function SonicDnaReportModal({
                 </p>
                 <p className="mb-2 text-[11px] text-cyan-100/70">
                   Same actions as the waveform right-click menu — 16 steps/bar × 8-bar phrase.
+                  Use rescan when the tape looks like a different file or a synthetic placeholder.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   <button
@@ -1069,6 +1114,17 @@ export default function SonicDnaReportModal({
                   >
                     Apply DNA EQ pocket
                   </button>
+                  {showAdminTools || waveformActions?.onRescanWaveform ? (
+                    <button
+                      type="button"
+                      disabled={waveformRescanning || busy || !track.file}
+                      onClick={() => void rescanWaveform()}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-cyan-500/60 bg-cyan-800/40 px-2 py-1 text-[11px] font-medium text-cyan-50 hover:bg-cyan-700/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <FaRedo className={`h-3 w-3 ${waveformRescanning ? 'animate-spin' : ''}`} />
+                      {waveformRescanning ? 'Rescanning…' : 'Rescan waveform'}
+                    </button>
+                  ) : null}
                 </div>
               </div>
 

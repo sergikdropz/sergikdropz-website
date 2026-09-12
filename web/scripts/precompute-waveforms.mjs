@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(__dirname, '..')
 const audioRoot = path.join(webRoot, 'public', 'audio')
 const outRoot = path.join(webRoot, 'public', 'waveforms')
-const BUCKETS = 2000
+const BUCKETS = 4096
 
 const args = process.argv.slice(2)
 const force = args.includes('--force')
@@ -33,9 +33,11 @@ function envelopesFromPcm(samples, sampleRate, buckets = BUCKETS) {
   const aMid = onePoleCoeff(2500, sampleRate)
   let lpLow = 0
   let lpMid = 0
+  let prevHigh = 0
   const out = []
   let maxPeak = 1e-8
   let maxBand = 1e-8
+  let maxFlux = 1e-8
 
   for (let b = 0; b < buckets; b++) {
     const start = b * block
@@ -45,6 +47,7 @@ function envelopesFromPcm(samples, sampleRate, buckets = BUCKETS) {
     let sumLow = 0
     let sumMid = 0
     let sumHigh = 0
+    let sumFlux = 0
     let count = 0
     for (let i = start; i < end; i++) {
       const x = samples[i] || 0
@@ -54,11 +57,14 @@ function envelopesFromPcm(samples, sampleRate, buckets = BUCKETS) {
       const low = lpLow
       const mid = lpMid - lpLow
       const high = x - lpMid
+      const aHigh = Math.abs(high)
       peak = Math.max(peak, ax)
       sumSq += x * x
       sumLow += Math.abs(low)
       sumMid += Math.abs(mid)
-      sumHigh += Math.abs(high)
+      sumHigh += aHigh
+      sumFlux += Math.abs(aHigh - prevHigh)
+      prevHigh = aHigh
       count++
     }
     const c = Math.max(1, count)
@@ -68,9 +74,11 @@ function envelopesFromPcm(samples, sampleRate, buckets = BUCKETS) {
       low: sumLow / c,
       mid: sumMid / c,
       high: sumHigh / c,
+      flux: sumFlux / c,
     }
     maxPeak = Math.max(maxPeak, env.peak, env.rms)
     maxBand = Math.max(maxBand, env.low, env.mid, env.high)
+    maxFlux = Math.max(maxFlux, env.flux)
     out.push(env)
   }
 
@@ -80,6 +88,7 @@ function envelopesFromPcm(samples, sampleRate, buckets = BUCKETS) {
     e.low /= maxBand
     e.mid /= maxBand
     e.high /= maxBand
+    e.flux /= maxFlux
   }
   return out
 }
@@ -166,7 +175,7 @@ async function main() {
       const envelopes = envelopesFromPcm(pcm, sampleRate, BUCKETS)
       const data = envelopes.map((e) => e.rms * 0.7 + e.peak * 0.3)
       const payload = {
-        v: 1,
+        v: 2,
         p: rel,
         sr: sampleRate,
         d: data.map((n) => +Number(n).toFixed(5)),
@@ -176,6 +185,7 @@ async function main() {
           +x.low.toFixed(5),
           +x.mid.toFixed(5),
           +x.high.toFixed(5),
+          +x.flux.toFixed(5),
         ]),
       }
       fs.writeFileSync(outPath, JSON.stringify(payload))

@@ -5,8 +5,9 @@
  * 1. Per-bucket Peak (transients) + RMS (body) — never bake them into one number
  * 2. 1-pole filterbank Low (~<250 Hz) / Mid (~250–2500) / High (~>2500) energies
  *    (same crossover idea as MiniMeters Multi-Band / Pioneer overview color)
- * 3. Mid channel when stereo: (L+R)/2
- * 4. Single perceptual dB display scale (MiniMeters Scaled via fasterlog2)
+ * 3. Spectral flux (frame-to-frame high-band change) for attack accents
+ * 4. Mid channel when stereo: (L+R)/2
+ * 5. Single perceptual dB display scale (MiniMeters Scaled via fasterlog2)
  *
  * Legacy mono peak arrays are lifted into this shape via crest/flux proxies until
  * tracks are re-analyzed with the rich extractor.
@@ -21,6 +22,10 @@ import {
 } from '@/lib/audio/waveform-view'
 import { scopeAmplitude } from '@/lib/audio/waveform-scope-scale'
 
+/** Default overview densify — CDJ-readable hats need ~4k buckets on long tracks. */
+export const DEFAULT_WAVEFORM_BUCKETS = 4096
+export const MAX_WAVEFORM_BUCKETS = 8192
+
 export type DspEnvelopeBucket = {
   /** Max |sample| in bucket (linear 0..1-ish) */
   peak: number
@@ -30,6 +35,8 @@ export type DspEnvelopeBucket = {
   low: number
   mid: number
   high: number
+  /** Spectral flux / attack strength in [0,1] after normalize */
+  flux: number
 }
 
 export type RichPeakData = {
@@ -40,6 +47,9 @@ export type RichPeakData = {
   sampleRate: number
 }
 
+/** Compact storage row: [peak, rms, low, mid, high] or +flux. */
+export type CompactEnvelopeRow = number[]
+
 /** One-pole lowpass coefficient for cutoffHz at sampleRate. */
 export function onePoleCoeff(cutoffHz: number, sampleRate: number): number {
   const x = Math.exp((-2 * Math.PI * cutoffHz) / Math.max(1, sampleRate))
@@ -47,7 +57,7 @@ export function onePoleCoeff(cutoffHz: number, sampleRate: number): number {
 }
 
 /**
- * Extract Peak + RMS + Low/Mid/High envelopes from PCM (DAW/DJ overview DSP).
+ * Extract Peak + RMS + Low/Mid/High + flux envelopes from PCM (DAW/DJ overview DSP).
  * Uses cascaded 1-pole filters (cheap, stable, MiniMeters-like band split).
  */
 export function extractDspEnvelopesFromPcm(params: {
@@ -56,7 +66,10 @@ export function extractDspEnvelopesFromPcm(params: {
   sampleRate: number
   buckets?: number
 }): DspEnvelopeBucket[] {
-  const buckets = Math.max(64, Math.min(8192, params.buckets ?? 2000))
+  const buckets = Math.max(
+    64,
+    Math.min(MAX_WAVEFORM_BUCKETS, params.buckets ?? DEFAULT_WAVEFORM_BUCKETS),
+  )
   const left = params.left
   const right = params.right
   const n = left.length
@@ -68,6 +81,7 @@ export function extractDspEnvelopesFromPcm(params: {
 
   let lpLow = 0
   let lpMid = 0
+  let prevHigh = 0
   const out: DspEnvelopeBucket[] = new Array(buckets)
 
   for (let b = 0; b < buckets; b++) {
@@ -78,6 +92,7 @@ export function extractDspEnvelopesFromPcm(params: {
     let sumLow = 0
     let sumMid = 0
     let sumHigh = 0
+    let sumFlux = 0
     let count = 0
 
     for (let i = start; i < end; i++) {
@@ -92,12 +107,15 @@ export function extractDspEnvelopesFromPcm(params: {
       const low = lpLow
       const mid = lpMid - lpLow
       const high = x - lpMid
+      const aHigh = Math.abs(high)
 
       peak = Math.max(peak, ax)
       sumSq += x * x
       sumLow += Math.abs(low)
       sumMid += Math.abs(mid)
-      sumHigh += Math.abs(high)
+      sumHigh += aHigh
+      sumFlux += Math.abs(aHigh - prevHigh)
+      prevHigh = aHigh
       count++
     }
 
@@ -108,6 +126,7 @@ export function extractDspEnvelopesFromPcm(params: {
       low: sumLow / c,
       mid: sumMid / c,
       high: sumHigh / c,
+      flux: sumFlux / c,
     }
   }
 
@@ -119,12 +138,15 @@ export function normalizeEnvelopeTrack(envelopes: DspEnvelopeBucket[]): DspEnvel
   if (!envelopes.length) return envelopes
   let maxPeak = 1e-8
   let maxBand = 1e-8
+  let maxFlux = 1e-8
   for (const e of envelopes) {
     if (e.peak > maxPeak) maxPeak = e.peak
     if (e.rms > maxPeak) maxPeak = e.rms
     if (e.low > maxBand) maxBand = e.low
     if (e.mid > maxBand) maxBand = e.mid
     if (e.high > maxBand) maxBand = e.high
+    const flux = typeof e.flux === 'number' ? e.flux : 0
+    if (flux > maxFlux) maxFlux = flux
   }
   return envelopes.map((e) => ({
     peak: e.peak / maxPeak,
@@ -132,6 +154,7 @@ export function normalizeEnvelopeTrack(envelopes: DspEnvelopeBucket[]): DspEnvel
     low: e.low / maxBand,
     mid: e.mid / maxBand,
     high: e.high / maxBand,
+    flux: (typeof e.flux === 'number' ? e.flux : 0) / maxFlux,
   }))
 }
 
@@ -168,7 +191,7 @@ export function legacyPeaksToEnvelopes(peaks: number[]): DspEnvelopeBucket[] {
     const low = Math.min(1, body * 1.1 * (1 - high * 0.35))
     const mid = Math.min(1, Math.max(0, v * 0.9 - low * 0.35 + high * 0.15))
 
-    out.push({ peak, rms, low, mid, high })
+    out.push({ peak, rms, low, mid, high, flux: Math.min(1, flux * 3.2) })
   }
   return normalizeEnvelopeTrack(out)
 }
@@ -198,6 +221,7 @@ export function envelopesToWaveformSamples(envelopes: DspEnvelopeBucket[]): Wave
     }
     const peak = Math.max(0, Math.min(1, e.peak))
     const rms = Math.max(0, Math.min(1, e.rms))
+    const flux = Math.max(0, Math.min(1, typeof e.flux === 'number' ? e.flux : 0))
     // Slight asymmetry like stereo Mid scope (not flat mirror)
     const positive = peak
     const negative = Math.min(1, peak * 0.92 + rms * 0.05)
@@ -205,6 +229,7 @@ export function envelopesToWaveformSamples(envelopes: DspEnvelopeBucket[]): Wave
       positive,
       negative,
       rms,
+      flux,
       bands,
       color: multiBandRgbColor(bands),
     }
@@ -233,6 +258,73 @@ export function envelopesToLegacyPeaks(envelopes: DspEnvelopeBucket[]): number[]
   return envelopes.map((e) => e.rms * 0.7 + e.peak * 0.3)
 }
 
+/** Pack envelopes for Storage / static tapes: [peak, rms, low, mid, high, flux?]. */
+export function compactEnvelopeRows(envelopes: DspEnvelopeBucket[]): CompactEnvelopeRow[] {
+  return envelopes.map((e) => [
+    +e.peak.toFixed(5),
+    +e.rms.toFixed(5),
+    +e.low.toFixed(5),
+    +e.mid.toFixed(5),
+    +e.high.toFixed(5),
+    +(typeof e.flux === 'number' ? e.flux : 0).toFixed(5),
+  ])
+}
+
+/** Unpack compact or object envelope rows. */
+export function expandCompactEnvelopes(rows: unknown): DspEnvelopeBucket[] | null {
+  if (!Array.isArray(rows) || rows.length < 64) return null
+  const out: DspEnvelopeBucket[] = []
+  for (const row of rows) {
+    if (Array.isArray(row) && row.length >= 5) {
+      out.push({
+        peak: Number(row[0]) || 0,
+        rms: Number(row[1]) || 0,
+        low: Number(row[2]) || 0,
+        mid: Number(row[3]) || 0,
+        high: Number(row[4]) || 0,
+        flux: Number(row[5]) || 0,
+      })
+      continue
+    }
+    if (row && typeof row === 'object' && !Array.isArray(row)) {
+      const r = row as Record<string, unknown>
+      out.push({
+        peak: Number(r.peak) || 0,
+        rms: Number(r.rms) || 0,
+        low: Number(r.low) || 0,
+        mid: Number(r.mid) || 0,
+        high: Number(r.high) || 0,
+        flux: Number(r.flux) || 0,
+      })
+      continue
+    }
+    return null
+  }
+  return out.length >= 64 ? out : null
+}
+
+/**
+ * Build Storage JSON payload — compact CDJ tape with peaks + envelopes.
+ * Backward compatible: parsers that only read arrays still get `d`.
+ */
+export function buildWaveformStoragePayload(params: {
+  peaks: number[]
+  envelopes?: DspEnvelopeBucket[] | null
+  sampleRate?: number
+  path?: string
+}): Record<string, unknown> | number[] {
+  const peaks = params.peaks
+  const envelopes = params.envelopes
+  if (!envelopes?.length) return peaks
+  return {
+    v: 2,
+    ...(params.path ? { p: params.path } : {}),
+    ...(typeof params.sampleRate === 'number' ? { sr: params.sampleRate } : {}),
+    d: peaks.map((n) => +Number(n).toFixed(5)),
+    e: compactEnvelopeRows(envelopes),
+  }
+}
+
 /**
  * Peak-hold densify — DAW/CDJ overview upsample must not soft-lerp away transients.
  * Between source points: hold max peak/rms/bands (zero-order + peak pick).
@@ -258,7 +350,46 @@ export function densifyEnvelopesPeakHold(
       low: Math.max(a.low, b.low),
       mid: Math.max(a.mid, b.mid),
       high: Math.max(a.high, b.high),
+      flux: Math.max(a.flux ?? 0, b.flux ?? 0),
     }
   }
   return out
+}
+
+/** CDJ dual envelope: RMS body + Peak crest (never bake into one blend). */
+export type DualEnvelopeAmps = {
+  body: number
+  peak: number
+  flux: number
+}
+
+export function dualEnvelopeAmps(sample: {
+  positive?: number
+  negative?: number
+  rms?: number
+  flux?: number
+}): DualEnvelopeAmps {
+  const peak = Math.max(0, sample.positive ?? 0, sample.negative ?? 0)
+  const body = Math.max(0, Math.min(peak, sample.rms ?? peak * 0.7))
+  const flux = Math.max(0, Math.min(1, sample.flux ?? 0))
+  return { body, peak, flux }
+}
+
+/**
+ * Interpolate dual envelopes for column paint:
+ * - body (RMS) lerps smoothly
+ * - peak / flux use max so kicks/hats never smear away
+ */
+export function interpolateDualEnvelope(
+  a: DualEnvelopeAmps,
+  b: DualEnvelopeAmps,
+  t: number,
+): DualEnvelopeAmps {
+  const u = Math.max(0, Math.min(1, t))
+  const s = u * u * (3 - 2 * u)
+  return {
+    body: a.body + (b.body - a.body) * s,
+    peak: Math.max(a.peak, b.peak),
+    flux: Math.max(a.flux, b.flux),
+  }
 }

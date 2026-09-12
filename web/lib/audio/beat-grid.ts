@@ -54,6 +54,27 @@ export function classifyBeatIndex(
   return 'beat'
 }
 
+/**
+ * Shift grid phase and wrap into [0, wrapSec).
+ * Default wrap is one beat (legacy micro-phase). Phase-meter jog passes the
+ * CDJ window period (2 / 4 / 8 bars) so side-scroll can move downbeats
+ * across the strip without resetting every beat.
+ */
+export function nudgeBeatPhaseSec(
+  phaseSec: number,
+  deltaSec: number,
+  beatSec: number,
+  wrapSec?: number,
+): number {
+  if (!(beatSec > 0) || !Number.isFinite(beatSec)) return 0
+  const wrap =
+    typeof wrapSec === 'number' && Number.isFinite(wrapSec) && wrapSec > 0 ? wrapSec : beatSec
+  const phase = Number.isFinite(phaseSec) ? phaseSec : 0
+  const delta = Number.isFinite(deltaSec) ? deltaSec : 0
+  const p = (((phase + delta) % wrap) + wrap) % wrap
+  return p < 1e-9 || wrap - p < 1e-9 ? 0 : p
+}
+
 /** Place a downbeat phase from a clicked time (Set Downbeat / Set Beat Here). */
 export function setDownbeatAt(timeSec: number, beatSec?: number): number {
   if (!Number.isFinite(timeSec) || timeSec < 0) return 0
@@ -328,9 +349,54 @@ export function buildAlignPhraseTemplate(hints: AlignBeatGridSonicHints | null):
 }
 
 /**
+ * Nudge a beat phase so early waveform peaks sit on beat lines.
+ * Used so the grid matches the tape at file start (not a kick 2–8s in).
+ */
+export function snapPhaseToEarlyPeaks(params: {
+  amps: ArrayLike<number>
+  durationSec: number
+  phaseSec: number
+  beatSec: number
+  searchEndSec?: number
+  /** Fraction of a beat to search in each direction. 0.5 covers a full valley→peak flip. */
+  snapRadiusBeats?: number
+  /** Score the whole window evenly (no intro bias). */
+  uniformWeight?: boolean
+}): number {
+  const { amps, durationSec, beatSec } = params
+  const n = amps.length
+  if (!n || !(durationSec > 0) || !(beatSec > 0)) {
+    return absoluteDownbeatSec(params.phaseSec, beatSec)
+  }
+  const phase0 = absoluteDownbeatSec(params.phaseSec, beatSec)
+  const searchEnd = Math.min(durationSec, params.searchEndSec ?? beatSec * 8)
+  const snapRadius = beatSec * Math.max(0.05, Math.min(0.5, params.snapRadiusBeats ?? 0.5))
+  const steps = 24
+  const uniform = Boolean(params.uniformWeight) || searchEnd > beatSec * 24
+  let bestPhase = phase0
+  let bestScore = -1
+  for (let s = -steps; s <= steps; s++) {
+    const cand = absoluteDownbeatSec(phase0 + (s / steps) * snapRadius, beatSec)
+    let score = 0
+    for (let t = cand; t <= searchEnd + 1e-9; t += beatSec) {
+      const idx = Math.round((t / durationSec) * n - 0.5)
+      if (idx < 0 || idx >= n) continue
+      const w = uniform ? 1 : t < beatSec * 2 ? 3.2 : t < beatSec * 4 ? 1.6 : 1
+      score += amps[idx]! * w
+    }
+    if (score > bestScore) {
+      bestScore = score
+      bestPhase = cand
+    }
+  }
+  return bestPhase
+}
+
+/**
  * Align grid to waveform peak energy, biased by Sonic DNA pocket
  * (16 steps/bar × 8-bar phrase). Single O(n) fold into a phrase histogram,
- * correlate against the DNA phrase template, then pick an early phrase downbeat.
+ * correlate against the DNA phrase template, then return within-beat phase
+ * locked to the start of the tape.
  */
 export function alignBeatGridFromPeaks(params: {
   peaks: Array<number | { positive?: number; negative?: number; rms?: number }>
@@ -522,11 +588,409 @@ export function alignBeatGridFromPeaks(params: {
   }
 
   const snapped = ((snapIdx + 0.5) / n) * durationSec
+  let phase = absoluteDownbeatSec(bestPhaseInPhrase, beatSec)
+
+  const earlyEnd = Math.min(durationSec, beatSec * 8)
+  const iEarlyEnd = Math.min(n - 1, Math.ceil(earlyEnd * binsPerSec))
+  let earlySum = 0
+  for (let i = 0; i <= iEarlyEnd; i++) earlySum += amps[i]!
+  const earlyMean = iEarlyEnd >= 0 ? earlySum / (iEarlyEnd + 1) : 0
+  const startHasContent = earlyMean >= Math.max(0.045, ampMean * 0.38)
+
+  if (startHasContent) {
+    phase = snapPhaseToEarlyPeaks({
+      amps,
+      durationSec,
+      phaseSec: phase,
+      beatSec,
+      searchEndSec: earlyEnd,
+    })
+  } else {
+    const kickPhase = absoluteDownbeatSec(snapped, beatSec)
+    const delta = Math.abs(kickPhase - phase)
+    const wrap = Math.min(delta, beatSec - delta)
+    if (wrap < beatSec * 0.12) phase = kickPhase
+  }
 
   return {
-    offsetSec: Math.max(0, snapped),
+    offsetSec: phase,
     bpm,
     lock: Math.max(0, lock),
+  }
+}
+
+function peakAmpsFromPeaks(
+  peaks: Array<number | { positive?: number; negative?: number; rms?: number }>,
+): Float32Array {
+  const n = peaks.length
+  const amps = new Float32Array(n)
+  for (let i = 0; i < n; i++) amps[i] = peakAmplitude(peaks[i]!)
+  return amps
+}
+
+/** Mean peak amplitude on beat lines (higher = grid sits on the tape). */
+export function scoreBeatGridOnPeaks(params: {
+  amps: ArrayLike<number>
+  durationSec: number
+  bpm: number
+  phaseSec: number
+}): number {
+  const beatSec = beatPeriodSec(params.bpm)
+  const n = params.amps.length
+  if (!beatSec || !(params.durationSec > 0) || !n) return 0
+  const phase = absoluteDownbeatSec(params.phaseSec, beatSec)
+  let score = 0
+  let hits = 0
+  for (let t = phase; t <= params.durationSec + 1e-9; t += beatSec) {
+    const idx = Math.round((t / params.durationSec) * n - 0.5)
+    if (idx < 0 || idx >= n) continue
+    score += params.amps[idx]!
+    hits++
+  }
+  return hits > 0 ? score / hits : 0
+}
+
+export type MeasureBpmFromPeaksResult = {
+  bpm: number
+  confidence: number
+  phaseSec: number
+}
+
+function extractTransientTimes(amps: ArrayLike<number>, durationSec: number): number[] {
+  const n = amps.length
+  if (n < 8 || !(durationSec > 0)) return []
+  let sum = 0
+  for (let i = 0; i < n; i++) sum += amps[i]!
+  const mean = sum / n
+  const thresh = Math.max(0.07, mean * 1.28)
+  const times: number[] = []
+  for (let i = 1; i < n - 1; i++) {
+    const a = amps[i]!
+    if (a < thresh) continue
+    if (a >= amps[i - 1]! && a > amps[i + 1]!) {
+      times.push(((i + 0.5) / n) * durationSec)
+    }
+  }
+  return times
+}
+
+/**
+ * Snap a measured pulse onto a catalog hint when it is only an octave or
+ * 2/3–3/2 misfold (e.g. 86 vs 128). Leave true tempo differences alone
+ * (e.g. 123 vs 125 stays 123).
+ */
+export function reconcileTapeBpm(tape: number, hint?: number | null): number {
+  if (!(tape > 0) || !Number.isFinite(tape)) return hint && hint > 0 ? hint : tape
+  if (!hint || !(hint > 0)) return tape
+  const relTape = Math.abs(tape - hint) / hint
+  if (relTape <= 0.04) return tape
+  const folds = [tape / 2, (tape * 2) / 3, tape * 1.5, tape * 2]
+  let best = tape
+  let bestRel = relTape
+  for (const f of folds) {
+    if (f < 60 || f > 200) continue
+    const r = Math.abs(f - hint) / hint
+    if (r < bestRel) {
+      best = f
+      bestRel = r
+    }
+  }
+  if (bestRel <= 0.03 && bestRel < relTape) return best
+  return tape
+}
+
+function foldBpmToDanceRange(bpm: number, hintBpm?: number | null): number {
+  let x = bpm
+  if (!(x > 0) || !Number.isFinite(x)) return bpm
+  while (x < 70) x *= 2
+  while (x > 180) x /= 2
+  if (hintBpm && hintBpm > 0) {
+    return reconcileTapeBpm(x, hintBpm)
+  }
+  return x
+}
+
+function ioiBpmCandidates(times: number[], hintBpm?: number | null): number[] {
+  if (times.length < 6) return []
+  const iois: number[] = []
+  for (let i = 1; i < times.length; i++) {
+    const dt = times[i]! - times[i - 1]!
+    if (dt >= 0.22 && dt <= 1.15) iois.push(dt)
+  }
+  if (iois.length < 4) return []
+  const bins = new Map<number, number>()
+  for (const dt of iois) {
+    const key = Math.round(dt * 80) / 80
+    bins.set(key, (bins.get(key) ?? 0) + 1)
+  }
+  const ranked = [...bins.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+  const out: number[] = []
+  for (const [period] of ranked) {
+    if (!(period > 0)) continue
+    out.push(foldBpmToDanceRange(60 / period, hintBpm))
+  }
+  return out
+}
+
+function bestPhaseScoreForBpm(params: {
+  amps: ArrayLike<number>
+  durationSec: number
+  bpm: number
+}): { phaseSec: number; score: number } {
+  const beatSec = beatPeriodSec(params.bpm)
+  if (!beatSec) return { phaseSec: 0, score: 0 }
+  let bestPhase = 0
+  let bestScore = -1
+  const steps = 32
+  for (let i = 0; i < steps; i++) {
+    const phaseSec = (i / steps) * beatSec
+    const score = scoreBeatGridOnPeaks({
+      amps: params.amps,
+      durationSec: params.durationSec,
+      bpm: params.bpm,
+      phaseSec,
+    })
+    if (score > bestScore) {
+      bestScore = score
+      bestPhase = phaseSec
+    }
+  }
+  return { phaseSec: bestPhase, score: bestScore }
+}
+
+/**
+ * Measure tempo from waveform peak energy (transients + beat-line fit).
+ * `hintBpm` only chooses octave (half/double), not the tempo itself.
+ */
+export function measureBpmFromPeaks(params: {
+  peaks: Array<number | { positive?: number; negative?: number; rms?: number }>
+  durationSec: number
+  hintBpm?: number | null
+}): MeasureBpmFromPeaksResult | null {
+  if (!(params.durationSec > 0) || params.peaks.length < 64) return null
+  const amps = peakAmpsFromPeaks(params.peaks)
+  const times = extractTransientTimes(amps, params.durationSec)
+  const hint = params.hintBpm && params.hintBpm > 0 ? params.hintBpm : null
+  const candidates: number[] = []
+  const seen = new Set<number>()
+  const push = (bpm: number | null | undefined) => {
+    if (!(typeof bpm === 'number') || !(bpm > 0) || !Number.isFinite(bpm)) return
+    const folded = foldBpmToDanceRange(bpm, hint)
+    const key = Math.round(folded * 20) / 20
+    if (seen.has(key)) return
+    seen.add(key)
+    candidates.push(folded)
+  }
+  for (const bpm of ioiBpmCandidates(times, hint)) push(bpm)
+  if (hint) {
+    push(hint)
+    push(hint * 2)
+    push(hint / 2)
+  }
+  if (candidates.length < 3) {
+    for (let bpm = 80; bpm <= 160; bpm += 2) push(bpm)
+  }
+
+  let bestBpm = hint ?? candidates[0] ?? 0
+  let bestScore = -1
+  let bestPhase = 0
+  for (const bpm of candidates) {
+    const fit = bestPhaseScoreForBpm({
+      amps,
+      durationSec: params.durationSec,
+      bpm,
+    })
+    if (fit.score > bestScore) {
+      bestScore = fit.score
+      bestBpm = bpm
+      bestPhase = fit.phaseSec
+    }
+  }
+  if (!(bestBpm > 0) || bestScore <= 0) return null
+
+  const refined = refineGridBpmFromPeaks({
+    amps,
+    durationSec: params.durationSec,
+    bpm: bestBpm,
+    phaseSec: bestPhase,
+    relSpan: 0.035,
+  })
+  const snapped = snapPhaseToEarlyPeaks({
+    amps,
+    durationSec: params.durationSec,
+    phaseSec: bestPhase,
+    beatSec: beatPeriodSec(refined) ?? 60 / refined,
+    searchEndSec: Math.min(params.durationSec, (60 / refined) * 16),
+  })
+  const meanAmp = (() => {
+    let s = 0
+    for (let i = 0; i < amps.length; i++) s += amps[i]!
+    return s / Math.max(1, amps.length)
+  })()
+  const confidence = Math.max(0.15, Math.min(0.98, bestScore / Math.max(0.08, meanAmp * 2.2)))
+  return { bpm: reconcileTapeBpm(refined, hint), confidence, phaseSec: snapped }
+}
+
+/**
+ * Nudge catalog/DNA BPM so beat lines stay on waveform transients.
+ * Search is a tight window — this is a visual lock, not a new analysis.
+ */
+export function refineGridBpmFromPeaks(params: {
+  amps: ArrayLike<number>
+  durationSec: number
+  bpm: number
+  phaseSec: number
+  relSpan?: number
+}): number {
+  const bpm0 = params.bpm
+  if (!(bpm0 > 0) || !(params.durationSec > 0) || !params.amps.length) return bpm0
+  const span = params.relSpan ?? 0.024
+  const lo = bpm0 * (1 - span)
+  const hi = bpm0 * (1 + span)
+  const steps = 20
+  let best = bpm0
+  let bestScore = -1
+  for (let i = 0; i <= steps; i++) {
+    const bpm = lo + ((hi - lo) * i) / steps
+    const score = scoreBeatGridOnPeaks({
+      amps: params.amps,
+      durationSec: params.durationSec,
+      bpm,
+      phaseSec: params.phaseSec,
+    })
+    if (score > bestScore) {
+      bestScore = score
+      best = bpm
+    }
+  }
+  return best
+}
+
+function pickBestPhaseOnPeaks(params: {
+  amps: ArrayLike<number>
+  durationSec: number
+  bpm: number
+  candidates: Array<number | null | undefined>
+}): number {
+  const beatSec = beatPeriodSec(params.bpm)
+  const fit = bestPhaseScoreForBpm({
+    amps: params.amps,
+    durationSec: params.durationSec,
+    bpm: params.bpm,
+  })
+  if (!beatSec) return fit.phaseSec
+  let bestPhase = fit.phaseSec
+  let bestScore = fit.score
+  for (const raw of params.candidates) {
+    if (raw == null || !Number.isFinite(raw) || raw < 0) continue
+    const phaseSec = absoluteDownbeatSec(raw, beatSec)
+    const score = scoreBeatGridOnPeaks({
+      amps: params.amps,
+      durationSec: params.durationSec,
+      bpm: params.bpm,
+      phaseSec,
+    })
+    if (score > bestScore) {
+      bestScore = score
+      bestPhase = phaseSec
+    }
+  }
+  return bestPhase
+}
+
+/**
+ * Grid phase + BPM that sit on the painted waveform peaks.
+ * Peak-measured tempo/phase win; stored/DNA phase is kept only when it
+ * already scores on those peaks (≤8% of a beat and not in a valley).
+ */
+export function resolveTapeAlignedGrid(params: {
+  peaks: Array<number | { positive?: number; negative?: number; rms?: number }>
+  durationSec: number
+  bpm?: number | null
+  storedPhaseSec?: number | null
+  sonicDna?: unknown
+  beatsPerBar?: number
+}): AlignBeatGridResult | null {
+  if (!(params.durationSec > 0) || !params.peaks.length) return null
+  const measured = measureBpmFromPeaks({
+    peaks: params.peaks,
+    durationSec: params.durationSec,
+    hintBpm: params.bpm,
+  })
+  const seedBpm = measured?.bpm ?? (params.bpm && params.bpm > 0 ? params.bpm : 0)
+  if (!(seedBpm > 0)) return null
+  const aligned = alignBeatGridFromPeaks({
+    peaks: params.peaks,
+    durationSec: params.durationSec,
+    bpm: seedBpm,
+    beatsPerBar: params.beatsPerBar,
+    sonicDna: params.sonicDna,
+    preferTransientOrigin: false,
+  })
+  const amps = peakAmpsFromPeaks(params.peaks)
+  const bpm0 = measured?.bpm ?? (aligned?.bpm && aligned.bpm > 0 ? aligned.bpm : seedBpm)
+  const beat0 = beatPeriodSec(bpm0)
+  if (!beat0) return aligned
+
+  let phase = pickBestPhaseOnPeaks({
+    amps,
+    durationSec: params.durationSec,
+    bpm: bpm0,
+    candidates: [
+      measured?.phaseSec,
+      aligned ? absoluteDownbeatSec(aligned.offsetSec, beat0) : null,
+      params.storedPhaseSec,
+    ],
+  })
+
+  phase = snapPhaseToEarlyPeaks({
+    amps,
+    durationSec: params.durationSec,
+    phaseSec: phase,
+    beatSec: beat0,
+    searchEndSec: params.durationSec,
+    snapRadiusBeats: 0.5,
+    uniformWeight: true,
+  })
+
+  const refinedBpm = refineGridBpmFromPeaks({
+    amps,
+    durationSec: params.durationSec,
+    bpm: bpm0,
+    phaseSec: phase,
+    relSpan: 0.035,
+  })
+  const beatSec = beatPeriodSec(refinedBpm) ?? beat0
+  phase = absoluteDownbeatSec(phase, beatSec)
+
+  const stored =
+    params.storedPhaseSec != null &&
+    Number.isFinite(params.storedPhaseSec) &&
+    params.storedPhaseSec >= 0
+      ? absoluteDownbeatSec(params.storedPhaseSec, beatSec)
+      : null
+  if (stored != null) {
+    const d = Math.abs(stored - phase)
+    const wrap = Math.min(d, beatSec - d)
+    const storedScore = scoreBeatGridOnPeaks({
+      amps,
+      durationSec: params.durationSec,
+      bpm: refinedBpm,
+      phaseSec: stored,
+    })
+    const peakScore = scoreBeatGridOnPeaks({
+      amps,
+      durationSec: params.durationSec,
+      bpm: refinedBpm,
+      phaseSec: phase,
+    })
+    if (wrap <= beatSec * 0.08 && storedScore >= peakScore * 0.97) phase = stored
+  }
+
+  return {
+    offsetSec: phase,
+    bpm: reconcileTapeBpm(refinedBpm, params.bpm),
+    lock: Math.max(0, aligned?.lock ?? measured?.confidence ?? 0.4),
   }
 }
 

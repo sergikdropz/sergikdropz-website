@@ -20,3 +20,11 @@ export function setPlaybackWaveformCache(resolvedUrl: string, data: PeakData): v
     if (oldest) cache.delete(oldest)
   }
 }
+
+export function clearPlaybackWaveformCache(resolvedUrl?: string): void {
+  if (!resolvedUrl) {
+    cache.clear()
+    return
+  }
+  cache.delete(cacheKey(resolvedUrl))
+}

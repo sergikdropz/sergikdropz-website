@@ -7,11 +7,18 @@ import {
   playerTrackMatchesCoverEvent,
   catalogItemMatchesCoverEvent,
   stampAllTrackArtwork,
+  applyCatalogTrackPatch,
+  catalogTrackPatchHasFields,
 } from '@/lib/catalog-sync'
+import { normalizeVaultAudioUrl, toSameOriginMediaUrl } from '@/utils/normalizeVaultAudioUrl'
 import {
   readAutoDJEnabledFromStorage,
   writeAutoDJEnabledToStorage,
 } from '@/lib/audio/auto-dj-preferences'
+import {
+  readIDJEnabledFromStorage,
+  writeIDJEnabledToStorage,
+} from '@/lib/audio/idj-preferences'
 
 function fisherYatesShuffle<T>(array: T[]): T[] {
   const shuffled = [...array]
@@ -22,6 +29,16 @@ function fisherYatesShuffle<T>(array: T[]): T[] {
   return shuffled
 }
 
+function normalizePersistedTrackFile(file: string | undefined): string {
+  if (!file) return ''
+  return toSameOriginMediaUrl(file) || normalizeVaultAudioUrl(file)
+}
+
+function normalizePersistedTrack(track: Track): Track {
+  const file = normalizePersistedTrackFile(track.file)
+  return file && file !== track.file ? { ...track, file } : track
+}
+
 export interface Track {
   id: string
   title: string
@@ -30,6 +47,7 @@ export interface Track {
   file: string
   artwork?: string
   album?: string
+  albumType?: string
   folder?: string
   folderId?: string
   audioFileId?: string
@@ -40,6 +58,8 @@ export interface Track {
   danceability?: number
   frequency_bands?: any
   waveform_data?: number[] // Pre-computed waveform peaks from Supabase
+  beat_grid_offset?: number
+  grid_manual?: boolean
   // Sonic DNA analysis (from Supabase)
   sonic_dna?: any
   musicbrainz_id?: string
@@ -148,6 +168,8 @@ interface MusicPlayerContextType {
   queuePanelHost: HTMLElement | null
   setQueuePanelHost: (host: HTMLElement | null) => void
   seekTo: (seconds: number) => void
+  /** Drop a pending media seek (iDJ same-deck loads must not keep re-seeking). */
+  clearSeekTarget: () => void
   seekTargetSec: number | null
   seekNonce: number
   reportPlaybackPosition: (seconds: number) => void
@@ -159,10 +181,18 @@ interface MusicPlayerContextType {
   isAutoDJEnabled: boolean
   setIsAutoDJEnabled: (enabled: boolean) => void
   toggleAutoDJ: () => void
+  /** Manual dual-deck iDJ — mutually exclusive with Auto DJ. */
+  isIDJEnabled: boolean
+  setIsIDJEnabled: (enabled: boolean) => void
+  toggleIDJ: () => void
   /** Right-click Auto DJ settings popup (MusicPlayer portal). */
   autoDJSettingsMenu: { x: number; y: number } | null
   openAutoDJSettingsMenu: (pos: { x: number; y: number }) => void
   closeAutoDJSettingsMenu: () => void
+  /** Right-click iDJ settings popup (MusicPlayer portal). */
+  idjSettingsMenu: { x: number; y: number } | null
+  openIDJSettingsMenu: (pos: { x: number; y: number }) => void
+  closeIDJSettingsMenu: () => void
   /** Bottom player chrome — synced from MusicPlayer for layout decisions elsewhere. */
   playerChrome: PlayerChromeState
   setPlayerChrome: (patch: Partial<PlayerChromeState>) => void
@@ -192,7 +222,10 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false)
   const [isAutoDJEnabled, setIsAutoDJEnabledState] = useState(false)
   const isAutoDJEnabledRef = useRef(false)
+  const [isIDJEnabled, setIsIDJEnabledState] = useState(false)
+  const isIDJEnabledRef = useRef(false)
   const [autoDJSettingsMenu, setAutoDJSettingsMenu] = useState<{ x: number; y: number } | null>(null)
+  const [idjSettingsMenu, setIdjSettingsMenu] = useState<{ x: number; y: number } | null>(null)
   const [playerChrome, setPlayerChromeState] = useState<PlayerChromeState>(DEFAULT_PLAYER_CHROME)
 
   useEffect(() => {
@@ -214,13 +247,30 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     isAutoDJEnabledRef.current = enabled
     setIsAutoDJEnabledState(enabled)
     if (persist) writeAutoDJEnabledToStorage(enabled)
+    if (enabled && isIDJEnabledRef.current) {
+      isIDJEnabledRef.current = false
+      setIsIDJEnabledState(false)
+      if (persist) writeIDJEnabledToStorage(false)
+    }
+  }, [])
+
+  const applyIDJEnabled = useCallback((enabled: boolean, persist: boolean) => {
+    isIDJEnabledRef.current = enabled
+    setIsIDJEnabledState(enabled)
+    if (persist) writeIDJEnabledToStorage(enabled)
+    if (enabled && isAutoDJEnabledRef.current) {
+      isAutoDJEnabledRef.current = false
+      setIsAutoDJEnabledState(false)
+      if (persist) writeAutoDJEnabledToStorage(false)
+    }
   }, [])
 
   // Restored after mount rather than in useState so the server-rendered toggle
   // markup matches the first client render.
   useEffect(() => {
     applyAutoDJEnabled(readAutoDJEnabledFromStorage(), false)
-  }, [applyAutoDJEnabled])
+    applyIDJEnabled(readIDJEnabledFromStorage(), false)
+  }, [applyAutoDJEnabled, applyIDJEnabled])
 
   // Catalog hydration (tracks-optimized) pauses while playback needs bandwidth.
   useEffect(() => {
@@ -241,7 +291,18 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     [applyAutoDJEnabled],
   )
 
+  const setIsIDJEnabled = useCallback(
+    (enabled: boolean) => applyIDJEnabled(enabled, true),
+    [applyIDJEnabled],
+  )
+
+  const toggleIDJ = useCallback(
+    () => applyIDJEnabled(!isIDJEnabledRef.current, true),
+    [applyIDJEnabled],
+  )
+
   const openAutoDJSettingsMenu = useCallback((pos: { x: number; y: number }) => {
+    setIdjSettingsMenu(null)
     setAutoDJSettingsMenu(pos)
   }, [])
 
@@ -249,14 +310,34 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     setAutoDJSettingsMenu(null)
   }, [])
 
+  const openIDJSettingsMenu = useCallback((pos: { x: number; y: number }) => {
+    setAutoDJSettingsMenu(null)
+    setIdjSettingsMenu(pos)
+  }, [])
+
+  const closeIDJSettingsMenu = useCallback(() => {
+    setIdjSettingsMenu(null)
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     const w = window as Window & {
-      __SERGIK_E2E__?: { openAutoDJSettings: () => void }
+      __SERGIK_E2E__?: {
+        openAutoDJSettings: () => void
+        enableIDJ: () => void
+        openIDJSettings: () => void
+      }
     }
     w.__SERGIK_E2E__ = {
+      ...w.__SERGIK_E2E__,
       openAutoDJSettings: () =>
         setAutoDJSettingsMenu({
+          x: Math.min(420, window.innerWidth - 16),
+          y: 96,
+        }),
+      enableIDJ: () => applyIDJEnabled(true, true),
+      openIDJSettings: () =>
+        setIdjSettingsMenu({
           x: Math.min(420, window.innerWidth - 16),
           y: 96,
         }),
@@ -264,12 +345,16 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     return () => {
       delete w.__SERGIK_E2E__
     }
-  }, [])
+  }, [applyIDJEnabled])
 
   const seekTo = useCallback((seconds: number) => {
     if (!Number.isFinite(seconds)) return
     setSeekTargetSec(Math.max(0, seconds))
     setSeekNonce((n) => n + 1)
+  }, [])
+
+  const clearSeekTarget = useCallback(() => {
+    setSeekTargetSec(null)
   }, [])
 
   const reportPlaybackPosition = useCallback((seconds: number) => {
@@ -278,8 +363,18 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   }, [])
 
   // Folder/EP cover assignment stamps every track in the live queue.
+  // Edit-track field saves (title/artist/genre/BPM/key/dates) patch the same rows.
   useEffect(() => {
     return subscribeCatalogSync((event) => {
+      if (event.entity === 'track' && catalogTrackPatchHasFields(event.patch)) {
+        const stampFields = (track: Track) =>
+          track.id === event.entityId || track.audioFileId === event.entityId
+            ? applyCatalogTrackPatch(track, event.patch)
+            : track
+        setQueue((prev) => prev.map(stampFields))
+        setOriginalQueue((prev) => prev.map(stampFields))
+        setCurrentTrack((prev) => (prev ? stampFields(prev) : prev))
+      }
       if (!Object.prototype.hasOwnProperty.call(event.patch, 'artwork')) return
       const folderId = event.folderId
       const trackId = event.entity === 'track' ? event.entityId : undefined
@@ -287,26 +382,33 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       const artwork = normalizeArtworkPatch(event.patch.artwork ?? null)
       const source = currentSourceRef.current
       const sourceFolderId = source?.type === 'folder' ? source.id : null
-      const stampEntireQueue = (list: Track[]) => {
+      const stampMatchingTracks = (list: Track[]) => {
         const sourceMatch =
           Boolean(folderId) &&
           Boolean(sourceFolderId) &&
           catalogItemMatchesCoverEvent({ id: sourceFolderId ?? undefined }, folderId ?? undefined)
-        const anyMatch = list.some((track) =>
-          playerTrackMatchesCoverEvent(
+        // Only stamp the whole queue when playback is scoped to that folder/EP.
+        // Mixed Auto DJ queues must not inherit one release cover onto every track.
+        if (sourceMatch) return stampAllTrackArtwork(list, artwork ?? undefined)
+        let changed = false
+        const next = list.map((track) => {
+          const matches = playerTrackMatchesCoverEvent(
             { ...track, artwork: track.artwork ?? undefined },
             { folderId: folderId ?? undefined, trackId, sourceFolderId: sourceFolderId ?? undefined },
-          ),
-        )
-        if (sourceMatch || anyMatch) return stampAllTrackArtwork(list, artwork ?? undefined)
-        return list
+          )
+          if (!matches) return track
+          if (track.artwork === (artwork ?? undefined)) return track
+          changed = true
+          return { ...track, artwork: artwork ?? undefined }
+        })
+        return changed ? next : list
       }
 
-      setQueue((prev) => stampEntireQueue(prev))
-      setOriginalQueue((prev) => stampEntireQueue(prev))
+      setQueue((prev) => stampMatchingTracks(prev))
+      setOriginalQueue((prev) => stampMatchingTracks(prev))
       setCurrentTrack((prev) => {
         if (!prev) return prev
-        const [stamped] = stampEntireQueue([prev])
+        const [stamped] = stampMatchingTracks([prev])
         return stamped
       })
     })
@@ -317,16 +419,16 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     const state = readMusicPlayerState()
     if (!state?.currentTrack) return
 
-    setCurrentTrack(state.currentTrack)
+    setCurrentTrack(normalizePersistedTrack(state.currentTrack))
     if (state.queue && state.queue.length > 0) {
-      setQueue(state.queue)
+      setQueue(state.queue.map(normalizePersistedTrack))
       setCurrentIndex(
         typeof state.currentIndex === 'number' && state.currentIndex >= 0
           ? state.currentIndex
           : 0,
       )
     } else {
-      setQueue([state.currentTrack])
+      setQueue([normalizePersistedTrack(state.currentTrack)])
       setCurrentIndex(0)
     }
     if (state.currentSource) setCurrentSource(state.currentSource)
@@ -542,6 +644,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       const newIndex = shuffledQueue.findIndex(t => t.id === currentTrack.id)
       if (newIndex >= 0) {
         setCurrentIndex(newIndex)
+        setCurrentTrack(shuffledQueue[newIndex])
       } else if (shuffledQueue.length > 0) {
         setCurrentIndex(0)
         setCurrentTrack(shuffledQueue[0])
@@ -555,6 +658,9 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       const newIndex = newQueue.findIndex(t => t.id === currentTrack.id)
       if (newIndex >= 0) {
         setCurrentIndex(newIndex)
+        // Queue patches (Orig BPM, DNA, artwork) must replace the live track
+        // object — index-only updates leave the player chrome on stale fields.
+        setCurrentTrack(newQueue[newIndex])
       } else if (newQueue.length > 0) {
         setCurrentIndex(0)
         setCurrentTrack(newQueue[0])
@@ -595,6 +701,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       queuePanelHost,
       setQueuePanelHost,
       seekTo,
+      clearSeekTarget,
       seekTargetSec,
       seekNonce,
       reportPlaybackPosition,
@@ -604,9 +711,15 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       isAutoDJEnabled,
       setIsAutoDJEnabled,
       toggleAutoDJ,
+      isIDJEnabled,
+      setIsIDJEnabled,
+      toggleIDJ,
       autoDJSettingsMenu,
       openAutoDJSettingsMenu,
       closeAutoDJSettingsMenu,
+      idjSettingsMenu,
+      openIDJSettingsMenu,
+      closeIDJSettingsMenu,
       playerChrome,
       setPlayerChrome,
     }),
@@ -631,6 +744,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       waveformHost,
       queuePanelHost,
       seekTo,
+      clearSeekTarget,
       seekTargetSec,
       seekNonce,
       reportPlaybackPosition,
@@ -639,9 +753,15 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       isAutoDJEnabled,
       setIsAutoDJEnabled,
       toggleAutoDJ,
+      isIDJEnabled,
+      setIsIDJEnabled,
+      toggleIDJ,
       autoDJSettingsMenu,
       openAutoDJSettingsMenu,
       closeAutoDJSettingsMenu,
+      idjSettingsMenu,
+      openIDJSettingsMenu,
+      closeIDJSettingsMenu,
       playerChrome,
       setPlayerChrome,
     ],
@@ -689,6 +809,7 @@ export function useMusicPlayer() {
         queuePanelHost: null,
         setQueuePanelHost: () => {},
         seekTo: () => {},
+        clearSeekTarget: () => {},
         seekTargetSec: null,
         seekNonce: 0,
         reportPlaybackPosition: () => {},
@@ -698,9 +819,15 @@ export function useMusicPlayer() {
         isAutoDJEnabled: false,
         setIsAutoDJEnabled: () => {},
         toggleAutoDJ: () => {},
+        isIDJEnabled: false,
+        setIsIDJEnabled: () => {},
+        toggleIDJ: () => {},
         autoDJSettingsMenu: null,
         openAutoDJSettingsMenu: () => {},
         closeAutoDJSettingsMenu: () => {},
+        idjSettingsMenu: null,
+        openIDJSettingsMenu: () => {},
+        closeIDJSettingsMenu: () => {},
         playerChrome: DEFAULT_PLAYER_CHROME,
         setPlayerChrome: () => {},
       }

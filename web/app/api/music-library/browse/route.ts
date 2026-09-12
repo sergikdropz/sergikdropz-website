@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'private, no-store, max-age=0, must-revalidate' }
 
 const TRACK_SELECT =
-  'id, title, artist, duration, file_url, artwork_url, bpm, key_signature, energy_level, danceability, genre, subgenre, rating, play_count, last_played_at, folder_id, audio_file_id, year, date, date_created, disc_number, track_number, created_at_timestamp, created_at, sort_artist, tags, music_library_folders(name, type, artwork_url)'
+  'id, title, artist, duration, file_url, artwork_url, bpm, key_signature, energy_level, danceability, genre, subgenre, rating, play_count, last_played_at, folder_id, audio_file_id, year, date, date_created, disc_number, track_number, created_at_timestamp, created_at, sort_artist, tags, beat_grid_offset, music_library_folders(name, type, artwork_url)'
 
 /**
  * GET /api/music-library/browse

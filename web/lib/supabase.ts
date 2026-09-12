@@ -94,6 +94,9 @@ export const createSupabaseServerClient = () => {
     },
     global: {
       headers: supabaseGlobalHeaders('sergik-web-server'),
+      // Service-role reads are per-request and gated; Next's data cache must not hold
+      // them. Opting out also avoids "items over 2MB can not be cached" on catalog pages.
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
     },
   })
 

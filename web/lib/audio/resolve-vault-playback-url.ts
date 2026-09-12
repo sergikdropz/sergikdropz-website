@@ -1,9 +1,7 @@
+import { resolveVaultObjectPath } from '@/lib/audio/vault-object-resolver'
+import { extractVaultRelativePath } from '@/utils/normalizeVaultAudioUrl'
+import { isR2BrowserPlayEnabled } from '@/lib/audio/edge-playback-url'
 import {
-  extractVaultRelativePath,
-  normalizeVaultAudioUrl,
-} from '@/utils/normalizeVaultAudioUrl'
-import {
-  getPublicMediaCdnBase,
   getR2MediaConfig,
   presignR2ObjectUrl,
   publicR2MediaUrl,
@@ -11,13 +9,18 @@ import {
 
 export type VaultPlaybackResolution = {
   url: string
+  fallbackUrl: string
   source: 'cdn' | 'presigned' | 'proxy' | 'normalized'
   expiresIn?: number
 }
 
+function proxyUrlFor(rel: string): string {
+  return `/api/audio/media/${rel.split('/').map(encodeURIComponent).join('/')}`
+}
+
 /**
- * Prefer CDN → R2 presigned URL → same-origin proxy path.
- * Used by /api/audio/resolve so playback bytes skip Vercel when possible.
+ * Prefer CDN → (gated) R2 presigned URL → same-origin proxy.
+ * `fallbackUrl` is always the proxy so the player can recover if CORS fails.
  */
 export async function resolveVaultPlaybackUrl(
   filePath: string,
@@ -25,22 +28,21 @@ export async function resolveVaultPlaybackUrl(
   const rel = extractVaultRelativePath(filePath)
   if (!rel) return null
 
+  // Catalog rows say .mp3 for assets stored as .wav/.m4a — point at the real object.
+  const resolvedRel = (await resolveVaultObjectPath(rel)) || rel
+  const fallbackUrl = proxyUrlFor(resolvedRel)
+
   const cdnUrl = publicR2MediaUrl(rel)
   if (cdnUrl) {
-    return { url: cdnUrl, source: 'cdn' }
+    return { url: cdnUrl, fallbackUrl, source: 'cdn' }
   }
 
-  if (getR2MediaConfig()) {
+  if (isR2BrowserPlayEnabled() && getR2MediaConfig()) {
     const signed = await presignR2ObjectUrl(rel)
     if (signed) {
-      return { url: signed, source: 'presigned', expiresIn: 3600 }
+      return { url: signed, fallbackUrl, source: 'presigned', expiresIn: 3600 }
     }
   }
 
-  const normalized = normalizeVaultAudioUrl(filePath)
-  if (normalized.startsWith('/api/audio/media/')) {
-    return { url: normalized, source: 'proxy' }
-  }
-
-  return normalized ? { url: normalized, source: 'normalized' } : null
+  return { url: fallbackUrl, fallbackUrl, source: 'proxy' }
 }

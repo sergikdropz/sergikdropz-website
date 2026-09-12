@@ -155,4 +155,52 @@ describe('MixEngine deck handoff', () => {
     expect(deckB.volume).toBeCloseTo(0.8, 5)
     expect(deckA.volume).toBeCloseTo(0, 5)
   })
+
+  it('refuses to flip the live song back onto the other deck after a mix', async () => {
+    const { engine, deckA, deckB } = await runMix()
+
+    engine.setActiveDeck('a')
+
+    expect(engine.getActiveDeck()).toBe('b')
+    expect(engine.getActiveTrack()?.id).toBe(trackB.id)
+    expect(deckB.volume).toBeGreaterThan(0.98)
+    expect(deckA.volume).toBeLessThan(0.02)
+  })
+
+  it('refuses enterFire from preArm until the incoming buffer is ready', async () => {
+    const deckA = createDeck()
+    const deckB = createDeck()
+    const engine = new MixEngine(asAudioElement(deckA), asAudioElement(deckB))
+    engine.setActiveTrack(trackA)
+    deckA.paused = false
+
+    const armed = await engine.enterPreArm(plan, trackB, '/b.mp3', plan.rateRatio)
+    expect(armed).toBe(true)
+    expect(engine.getBlendStage()).toBe('preArm')
+    expect(engine.canEnterFire()).toBe(false)
+
+    const fired = await engine.enterFire(plan, plan.rateRatio)
+    expect(fired).toBe(false)
+    expect(engine.getBlendStage()).toBe('preArm')
+    expect(engine.getActiveTrack()?.id).toBe(trackA.id)
+  })
+
+  it('lands on handoff then idle after the mix settles', async () => {
+    const { engine } = await runMix()
+
+    expect(engine.getActiveDeck()).toBe('b')
+    expect(engine.getActiveTrack()?.id).toBe(trackB.id)
+    expect(engine.getBlendStage()).toBe('idle')
+  })
+
+  it('does not load the on-air song onto the idle deck', async () => {
+    const { engine, deckA, deckB } = await runMix()
+    const before = deckA.src
+
+    await engine.loadIdle(trackB, '/b-again.mp3', 0)
+
+    expect(engine.getActiveDeck()).toBe('b')
+    expect(deckA.src).toBe(before)
+    expect(deckB.volume).toBeGreaterThan(0.98)
+  })
 })

@@ -196,7 +196,11 @@ export function hasMeasuredBpm(measured?: SonicDnaMeasured | null): boolean {
 export function hasMeasuredDrums(measured?: SonicDnaMeasured | null): boolean {
   const family = String(measured?.drumFamily || '').toLowerCase()
   // Family alone unlocks encyclopedia fill. Kick/snare steps are synthesized when missing.
-  return Boolean(family && family !== 'unknown')
+  if (family && family !== 'unknown') return true
+  // Older / partial rows sometimes keep step grids without a drumFamily label.
+  const kicks = Array.isArray(measured?.kickSteps) ? measured.kickSteps.length : 0
+  const snares = Array.isArray(measured?.snareSteps) ? measured.snareSteps.length : 0
+  return kicks + snares >= 2
 }
 
 export function hasMeasuredKey(measured?: SonicDnaMeasured | null): boolean {

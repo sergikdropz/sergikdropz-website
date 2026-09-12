@@ -32,6 +32,7 @@ export default function HomeInstagramFeedSection({
               className="w-full"
               maxPosts={HOMEPAGE_INSTAGRAM_MAX_POSTS}
               gridClassName="grid-cols-2 sm:grid-cols-3"
+              deferUntilVisible
             />
           </div>
         </div>

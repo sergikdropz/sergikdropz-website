@@ -14,6 +14,7 @@ import {
   nearestBarZoomStep,
   playheadLeftPercent,
   scaleVisibleBars,
+  splitWheelAxes,
   wheelDeltaToZoomFactor,
   WAVEFORM_BAR_ZOOM_STEPS,
   WAVEFORM_MAX_VISIBLE_BARS,
@@ -26,11 +27,16 @@ import { waveformDrawBudget } from '@/lib/audio/waveform-draw-budget'
 import { buildWaveformTapeCache, sliceTapeWindow, type WaveformTapeCache } from '@/lib/audio/waveform-tape-cache'
 import { paintPlayheadOverlay, paintWaveformFrame } from '@/lib/audio/waveform-canvas-paint'
 import { withLivePlaybackGrid } from '@/lib/audio/waveform-intelligence'
+import { quantizePointerToVisibleGrid } from '@/lib/audio/sonic-dna-mix'
 import {
   paintGhostLane,
   paintHotCues,
   paintMixAnnotations,
   paintOverviewStrip,
+  paintPhaseAlignStrip,
+  DEFAULT_PHASE_METER_OPTIONS,
+  resolvePhaseMeterWindowBeats,
+  type PhaseMeterOptions,
   type WaveformGhostTape,
   type WaveformHotCue,
   type WaveformMixOverlay,
@@ -46,6 +52,13 @@ export type WaveformStageProps = {
    * re-arm the RAF clock so the playhead follows the live element.
    */
   mediaSyncKey?: string
+  /**
+   * Shared MixEngine / buffer clock. When set, the playhead follows this
+   * instead of HTMLAudioElement.currentTime (paused MES after a buffer handoff).
+   */
+  readMediaTime?: () => number | null
+  /** Seek the deck clock (buffer or element). Falls back to element.currentTime. */
+  seekMediaTime?: (timeSec: number) => void
   isPlaying: boolean
   samples: WaveformSample[]
   durationSec: number
@@ -60,6 +73,8 @@ export type WaveformStageProps = {
   beatGridEnabled: boolean
   beatGridOffsetSec: number
   beatsPerBar: number
+  /** Snap clicks / scrub to the visible beat / phrase grid. */
+  snapToGrid?: boolean
   /** Auto DJ / mix window annotations on the live tape */
   mixOverlay?: WaveformMixOverlay | null
   /** Incoming tape ghost while mixing */
@@ -72,11 +87,30 @@ export type WaveformStageProps = {
   onVisibleBarsChange: (bars: number, focalRatio?: number) => void
   onOffsetChange: (offset: number) => void
   onSeekSec: (timeSec: number) => void
-  onContextMenu?: (e: React.MouseEvent) => void
+  /** Single-click sets a cue at this time (double-click still seeks). */
+  onCueSec?: (timeSec: number) => void
+  /** After a double-click jump, start this deck if it is paused. */
+  onJumpPlay?: () => void
+  /** User zoom/pan leaves the tape on that area; Follow can be turned back on. */
+  onFollowChange?: (follow: boolean) => void
+  /** Context menu; `timeSec` is the media time under the pointer (no grid snap). */
+  onContextMenu?: (e: React.MouseEvent, timeSec: number | null) => void
   /** Imperative: parent can mark gesture active to pause external follow writes. */
   gestureActiveRef?: MutableRefObject<boolean>
   /** Compact collapsed chrome hides the CDJ overview strip. */
   showOverview?: boolean
+  /** CDJ ±1-beat phase / grid-align meter under the overview. */
+  showPhaseMeter?: boolean
+  /** Phase meter window / indicator preferences. */
+  phaseMeterOptions?: Partial<PhaseMeterOptions>
+  /** Optional dual-deck phase error (sec); local grid phase used when unset. */
+  phaseErrorSec?: number | null
+  /** Live dual-deck sync error each paint frame (avoids React thrash). */
+  readPeerPhaseErrorSec?: () => number | null
+  /** Drag / click the meter to nudge beat-grid phase (seconds). */
+  onPhaseNudge?: (deltaSec: number) => void
+  /** Double-click: lock grid to playhead (set downbeat here). */
+  onPhaseLock?: () => void
 }
 
 /**
@@ -89,6 +123,8 @@ export type WaveformStageProps = {
 function WaveformStage({
   audioRef,
   mediaSyncKey = '',
+  readMediaTime,
+  seekMediaTime,
   isPlaying,
   samples,
   durationSec,
@@ -97,12 +133,13 @@ function WaveformStage({
   follow,
   mirror,
   colorMode,
-  layerLayout = 'merged',
+  layerLayout = 'overlay',
   intelligenceProfile,
   bpm,
   beatGridEnabled,
   beatGridOffsetSec,
   beatsPerBar,
+  snapToGrid = true,
   mixOverlay = null,
   ghostTape = null,
   hotCues = [],
@@ -112,9 +149,18 @@ function WaveformStage({
   onVisibleBarsChange,
   onOffsetChange,
   onSeekSec,
+  onCueSec,
+  onJumpPlay,
+  onFollowChange,
   onContextMenu,
   gestureActiveRef,
   showOverview = true,
+  showPhaseMeter = true,
+  phaseMeterOptions,
+  phaseErrorSec = null,
+  readPeerPhaseErrorSec,
+  onPhaseNudge,
+  onPhaseLock,
 }: WaveformStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -123,6 +169,24 @@ function WaveformStage({
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const overviewCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const overviewWrapRef = useRef<HTMLDivElement | null>(null)
+  const phaseCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const phaseWrapRef = useRef<HTMLDivElement | null>(null)
+  const phaseErrorSecRef = useRef(phaseErrorSec)
+  phaseErrorSecRef.current = phaseErrorSec
+  const phaseMeterOptionsRef = useRef({ ...DEFAULT_PHASE_METER_OPTIONS, ...phaseMeterOptions })
+  phaseMeterOptionsRef.current = { ...DEFAULT_PHASE_METER_OPTIONS, ...phaseMeterOptions }
+  const readPeerPhaseErrorSecRef = useRef(readPeerPhaseErrorSec)
+  readPeerPhaseErrorSecRef.current = readPeerPhaseErrorSec
+  const onPhaseNudgeRef = useRef(onPhaseNudge)
+  onPhaseNudgeRef.current = onPhaseNudge
+  const onPhaseLockRef = useRef(onPhaseLock)
+  onPhaseLockRef.current = onPhaseLock
+  const phaseDragRef = useRef<{
+    lastX: number
+    width: number
+    bpm: number
+    windowBeats: number
+  } | null>(null)
   const rafRef = useRef<number | null>(null)
   const smoothTimeRef = useRef(0)
   const tapeCacheRef = useRef<WaveformTapeCache | null>(null)
@@ -142,6 +206,31 @@ function WaveformStage({
   })
   /** Media clock: extrapolate between coarse HTMLMediaElement.currentTime updates. */
   const clockRef = useRef({ mediaAnchor: 0, wallAnchor: 0, armed: false })
+  const readMediaTimeRef = useRef(readMediaTime)
+  readMediaTimeRef.current = readMediaTime
+  const seekMediaTimeRef = useRef(seekMediaTime)
+  seekMediaTimeRef.current = seekMediaTime
+  const onFollowChangeRef = useRef(onFollowChange)
+  onFollowChangeRef.current = onFollowChange
+  const onCueSecRef = useRef(onCueSec)
+  onCueSecRef.current = onCueSec
+  const onJumpPlayRef = useRef(onJumpPlay)
+  onJumpPlayRef.current = onJumpPlay
+  /** Media time under pointer (no snap) — kept for context-menu open. */
+  const pointerTimeAtClientXRef = useRef<(clientX: number) => number | null>(() => null)
+  /** Gesture zoom/pan: keep the focal window; do not recenter on the playhead. */
+  const followHoldRef = useRef(false)
+  const followPropRef = useRef(follow)
+  if (follow && !followPropRef.current) followHoldRef.current = false
+  followPropRef.current = follow
+  const followActive = follow && !followHoldRef.current
+
+  const readClockTime = () => {
+    const fromEngine = readMediaTimeRef.current?.()
+    if (typeof fromEngine === 'number' && Number.isFinite(fromEngine)) return fromEngine
+    const a = audioRef.current
+    return a && Number.isFinite(a.currentTime) ? a.currentTime : null
+  }
   const profileRef = useRef(intelligenceProfile)
   profileRef.current = intelligenceProfile
 
@@ -179,7 +268,7 @@ function WaveformStage({
   viewRef.current = {
     visibleBars: barsRef.current,
     offsetIndex: offsetRef.current,
-    follow,
+    follow: followActive,
     mirror,
     colorMode,
     layerLayout,
@@ -240,7 +329,7 @@ function WaveformStage({
       visibleBars: view.visibleBars,
       beatsPerBar: view.beatsPerBar,
       offsetIndex: view.offsetIndex,
-      follow: view.follow && view.visibleBars > 0,
+      follow: view.follow && !followHoldRef.current && view.visibleBars > 0,
       currentTimeSec: timeSec,
       beatDurationSec,
     })
@@ -259,7 +348,7 @@ function WaveformStage({
      * translate3d on a layer React never writes width/transform into (parent
      * MusicPlayer re-renders on currentTime and was stomping canvas styles).
      */
-    const following = view.follow && view.visibleBars > 0
+    const following = view.follow && !followHoldRef.current && view.visibleBars > 0
     const span = Math.max(1e-6, timeWindow.endSec - timeWindow.startSec)
     const secPerPx = span / width
     // Wide cushion so most frames are pure GPU translate (no canvas redraw)
@@ -424,7 +513,7 @@ function WaveformStage({
     }
 
     // Drift cue: soft playhead tint when media clock disagrees (debug sync)
-    const media = audioRef.current?.currentTime
+    const media = readClockTime()
     if (
       typeof media === 'number' &&
       Number.isFinite(media) &&
@@ -459,6 +548,43 @@ function WaveformStage({
         viewEndSec: timeWindow.endSec,
         mixOverlay: view.mixOverlay,
       })
+    }
+
+    // CDJ phase / grid-align meter
+    const phase = phaseCanvasRef.current
+    const phaseWrap = phaseWrapRef.current
+    const stageBpm = view.bpm
+    if (phase && phaseWrap && stageBpm && stageBpm > 0) {
+      const pRect = phaseWrap.getBoundingClientRect()
+      const pw = Math.max(1, Math.round(pRect.width))
+      const ph = Math.max(1, Math.round(pRect.height))
+      const peer =
+        typeof readPeerPhaseErrorSecRef.current === 'function'
+          ? readPeerPhaseErrorSecRef.current()
+          : null
+      const painted = paintPhaseAlignStrip(phase.getContext('2d')!, {
+        width: pw,
+        height: ph,
+        dpr,
+        currentTimeSec: timeSec,
+        bpm: stageBpm,
+        offsetSec: view.beatGridOffsetSec,
+        beatsPerBar: view.beatsPerBar,
+        options: phaseMeterOptionsRef.current,
+        phaseErrorSec:
+          typeof peer === 'number' && Number.isFinite(peer)
+            ? peer
+            : phaseErrorSecRef.current,
+      })
+      if (phaseWrap.dataset.phaseMs !== String(Math.round(painted.errSec * 1000))) {
+        phaseWrap.dataset.phaseMs = String(Math.round(painted.errSec * 1000))
+        phaseWrap.dataset.phaseMode = painted.mode
+        phaseWrap.dataset.phaseLocked = painted.locked ? '1' : '0'
+        const ms = painted.errSec * 1000
+        phaseWrap.title = painted.locked
+          ? `${painted.mode === 'sync' ? 'Sync' : 'Grid'} locked`
+          : `${painted.mode === 'sync' ? 'Sync' : 'Grid'} ${ms >= 0 ? '+' : ''}${ms.toFixed(0)} ms — drag to nudge · double-click to lock`
+      }
     }
   }, [audioRef])
 
@@ -509,25 +635,26 @@ function WaveformStage({
     let boundAudio: HTMLAudioElement | null = null
 
     const onSeekOrPlay = () => {
-      const a = audioRef.current
-      if (!a || !Number.isFinite(a.currentTime)) return
-      armClock(a.currentTime, performance.now())
+      const media = readClockTime()
+      if (media == null) return
+      armClock(media, performance.now())
       followScrollRef.current.armed = false
-      if (!isPlaying) paint(a.currentTime, { forceBase: true })
+      if (!isPlaying) paint(media, { forceBase: true })
     }
 
     const onTimeUpdate = () => {
-      const a = audioRef.current
-      if (!a || !Number.isFinite(a.currentTime) || !isPlaying) return
+      const media = readClockTime()
+      if (media == null || !isPlaying) return
       const now = performance.now()
-      const rate = Number.isFinite(a.playbackRate) ? a.playbackRate : 1
+      const a = audioRef.current
+      const rate = a && Number.isFinite(a.playbackRate) ? a.playbackRate : 1
       const clock = clockRef.current
       const extrapolated = clock.armed
         ? clock.mediaAnchor + ((now - clock.wallAnchor) / 1000) * rate
-        : a.currentTime
+        : media
       // Ignore stair-step noise; only re-anchor when extrapolation drifted
-      if (!clock.armed || Math.abs(a.currentTime - extrapolated) > 0.05) {
-        armClock(a.currentTime, now)
+      if (!clock.armed || Math.abs(media - extrapolated) > 0.05) {
+        armClock(media, now)
       }
     }
 
@@ -552,7 +679,8 @@ function WaveformStage({
       followScrollRef.current.armed = false
       followScrollRef.current.dirty = true
       forceBasePaintRef.current = true
-      if (Number.isFinite(a.currentTime)) armClock(a.currentTime, performance.now())
+      const media = readClockTime()
+      if (media != null) armClock(media, performance.now())
     }
 
     bindAudio()
@@ -560,9 +688,15 @@ function WaveformStage({
     const advanceClock = (now: number) => {
       bindAudio()
       const a = audioRef.current
-      const media = a && Number.isFinite(a.currentTime) ? a.currentTime : null
+      const media = readClockTime()
       const rate = a && Number.isFinite(a.playbackRate) ? a.playbackRate : 1
       const clock = clockRef.current
+
+      if (readMediaTimeRef.current && media != null) {
+        armClock(media, now)
+        smoothTimeRef.current = media
+        return media
+      }
 
       if (!isPlaying || media == null) {
         if (media != null) armClock(media, now)
@@ -608,8 +742,8 @@ function WaveformStage({
     const start = () => {
       if (rafRef.current != null) return
       bindAudio()
-      const a = audioRef.current
-      if (a && Number.isFinite(a.currentTime)) armClock(a.currentTime, performance.now())
+      const media = readClockTime()
+      if (media != null) armClock(media, performance.now())
       rafRef.current = requestAnimationFrame(tick)
     }
 
@@ -653,6 +787,9 @@ function WaveformStage({
     beatGridOffsetSec,
     beatsPerBar,
     samples,
+    showOverview,
+    showPhaseMeter,
+    phaseMeterOptions,
   ])
 
   // Gestures: wheel zoom/pan, drag pan/scrub, pinch zoom
@@ -661,9 +798,7 @@ function WaveformStage({
     if (!container) return
 
     const DRAG_THRESHOLD = 8
-    const WHEEL_LOCK_MS = 180
     const ZOOM_COMMIT_MS = 140
-    const wheelLock = { mode: 'zoom' as 'zoom' | 'pan', at: 0 }
     let zoomCommitTimer: ReturnType<typeof setTimeout> | null = null
     let drag: {
       pointerId: number
@@ -678,6 +813,13 @@ function WaveformStage({
       if (gestureActiveRef) gestureActiveRef.current = active
     }
 
+    const suspendFollowForGesture = () => {
+      followHoldRef.current = true
+      viewRef.current.follow = false
+      followScrollRef.current.armed = false
+      if (followPropRef.current) onFollowChangeRef.current?.(false)
+    }
+
     const containerWidth = () => {
       const w = (viewportRef.current ?? container).getBoundingClientRect().width
       return w > 0 ? w : container.clientWidth
@@ -688,6 +830,27 @@ function WaveformStage({
       const rect = el.getBoundingClientRect()
       if (rect.width <= 0) return 0.5
       return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    }
+
+    /** Follow paints a time-centered window and never writes offsetRef. Seed from that. */
+    const syncOffsetFromFollowWindow = () => {
+      if (!viewRef.current.follow || followHoldRef.current) return
+      const length = sampleCountRef.current
+      const bars = barsRef.current
+      if (bars <= 0 || length <= 0) return
+      const beatSec = bpm && bpm > 0 ? 60 / bpm : null
+      const win = getVisibleTimeWindow({
+        durationSec,
+        sampleCount: length,
+        visibleBars: bars,
+        beatsPerBar,
+        offsetIndex: offsetRef.current,
+        follow: true,
+        currentTimeSec: smoothTimeRef.current,
+        beatDurationSec: beatSec,
+      })
+      offsetRef.current = win.startIndex
+      viewRef.current.offsetIndex = win.startIndex
     }
 
     const samplesForBars = (bars: number, length: number) => {
@@ -703,6 +866,7 @@ function WaveformStage({
 
     /** Continuous zoom — update refs + paint this frame; parent sync is debounced. */
     const applyBarsLive = (nextBars: number, focalRatio = 0.5, opts?: { snap?: boolean }) => {
+      syncOffsetFromFollowWindow()
       const length = sampleCountRef.current
       let newBars = nextBars <= 0 ? 0 : nextBars
       if (opts?.snap && newBars > 0) newBars = nearestBarZoomStep(newBars)
@@ -727,7 +891,7 @@ function WaveformStage({
         offsetRef.current = 0
         viewRef.current.visibleBars = 0
         viewRef.current.offsetIndex = 0
-        followScrollRef.current.armed = false
+        suspendFollowForGesture()
         paint(smoothTimeRef.current, { forceBase: true })
         onVisibleBarsChange(0, focalRatio)
         onOffsetChange(0)
@@ -748,7 +912,7 @@ function WaveformStage({
       offsetRef.current = newOffset
       viewRef.current.visibleBars = newBars
       viewRef.current.offsetIndex = newOffset
-      followScrollRef.current.armed = false
+      suspendFollowForGesture()
       paint(smoothTimeRef.current, { forceBase: true })
       onVisibleBarsChange(newBars, focalRatio)
       onOffsetChange(newOffset)
@@ -770,6 +934,7 @@ function WaveformStage({
     }
 
     const panPixels = (dxPx: number) => {
+      syncOffsetFromFollowWindow()
       const bars = barsRef.current
       const length = sampleCountRef.current
       const width = containerWidth()
@@ -780,25 +945,17 @@ function WaveformStage({
       const clamped = Math.max(0, Math.min(maxOffset, next))
       offsetRef.current = clamped
       viewRef.current.offsetIndex = clamped
+      suspendFollowForGesture()
       paint(smoothTimeRef.current)
       onOffsetChange(clamped)
     }
 
-    const seekAt = (clientX: number) => {
+    const applySeekTime = (t: number) => {
       const audio = audioRef.current
-      const length = sampleCountRef.current
-      const propDur = durationSec > 0 ? durationSec : 0
-      const mediaDur =
-        audio && Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0
-      // Prefer prop duration after mixer handoff (media .duration can lag one frame)
-      const dur = propDur || mediaDur
-      if (!audio || !dur || length <= 0) return
-      const bars = barsRef.current
-      const visibleCount = samplesForBars(bars, length)
-      const start = bars <= 0 ? 0 : offsetRef.current
-      const idx = Math.floor(start + focalFromClientX(clientX) * Math.min(visibleCount, length))
-      const t = Math.max(0, Math.min(dur, (idx / length) * dur))
-      audio.currentTime = t
+      const seeker = seekMediaTimeRef.current
+      if (seeker) seeker(t)
+      else if (audio) audio.currentTime = t
+      else return
       clockRef.current = { mediaAnchor: t, wallAnchor: performance.now(), armed: true }
       smoothTimeRef.current = t
       followScrollRef.current.armed = false
@@ -806,11 +963,94 @@ function WaveformStage({
       paint(t, { forceBase: true })
     }
 
-    const resolveWheelMode = (dx: number, dy: number, e: WheelEvent): 'zoom' | 'pan' => {
-      if (e.ctrlKey || e.metaKey) return 'zoom'
-      if (e.shiftKey) return 'pan'
-      if (Math.abs(dx) > 0.5 && Math.abs(dx) >= Math.abs(dy) * 0.65) return 'pan'
-      return 'zoom'
+    const timeAtClientX = (clientX: number, opts?: { snap?: boolean }): number | null => {
+      const length = sampleCountRef.current
+      const propDur = durationSec > 0 ? durationSec : 0
+      const audio = audioRef.current
+      const mediaDur =
+        audio && Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0
+      const dur = propDur || mediaDur
+      if (!dur || length <= 0) return null
+      syncOffsetFromFollowWindow()
+      const bars = barsRef.current
+      const beatSec = bpm && bpm > 0 ? 60 / bpm : null
+      const win = getVisibleTimeWindow({
+        durationSec: dur,
+        sampleCount: length,
+        visibleBars: bars,
+        beatsPerBar,
+        offsetIndex: bars <= 0 ? 0 : offsetRef.current,
+        follow: viewRef.current.follow,
+        currentTimeSec: smoothTimeRef.current,
+        beatDurationSec: beatSec,
+      })
+      // Prefer the last painted viewport window so pointer ↔ tape stay pixel-aligned
+      // (follow overscan / fractional offset can otherwise drift a few ms).
+      const painted = lastViewWindowRef.current
+      const startSec =
+        painted.end > painted.start + 1e-6 &&
+        Math.abs(painted.start - win.startSec) < Math.max(0.05, (win.endSec - win.startSec) * 0.15) &&
+        Math.abs(painted.end - win.endSec) < Math.max(0.05, (win.endSec - win.startSec) * 0.15)
+          ? painted.start
+          : win.startSec
+      const endSec =
+        painted.end > painted.start + 1e-6 &&
+        Math.abs(painted.start - win.startSec) < Math.max(0.05, (win.endSec - win.startSec) * 0.15) &&
+        Math.abs(painted.end - win.endSec) < Math.max(0.05, (win.endSec - win.startSec) * 0.15)
+          ? painted.end
+          : win.endSec
+      const span = Math.max(1e-9, endSec - startSec)
+      const el = viewportRef.current ?? container
+      const rect = el.getBoundingClientRect()
+      if (rect.width <= 0) return null
+      // Sub-pixel ratio — do not round width (round CSS width was shifting seek vs grid).
+      const focal = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      let t = startSec + focal * span
+      t = Math.max(0, Math.min(dur, t))
+      const shouldSnap = opts?.snap ?? snapToGrid
+      if (shouldSnap && bpm && bpm > 0) {
+        t = quantizePointerToVisibleGrid({
+          timeSec: t,
+          bpm,
+          offsetSec: beatGridOffsetSec,
+          visibleBars: bars,
+          beatsPerBar,
+          durationSec: dur,
+        })
+      }
+      return t
+    }
+
+    pointerTimeAtClientXRef.current = (clientX: number) => timeAtClientX(clientX, { snap: false })
+
+    const seekAt = (clientX: number) => {
+      const t = timeAtClientX(clientX)
+      if (t == null) return
+      applySeekTime(t)
+    }
+
+    const cueAt = (clientX: number) => {
+      const t = timeAtClientX(clientX)
+      if (t == null) return
+      onCueSecRef.current?.(t)
+    }
+
+    let lastTap: { at: number; x: number } | null = null
+    const TAP_DOUBLE_MS = 320
+    const TAP_DOUBLE_PX = 12
+
+    const applyWheelZoom = (dy: number, focal: number) => {
+      const factor = wheelDeltaToZoomFactor(dy)
+      const atFull = barsRef.current <= 0
+      if (atFull && factor >= 1) return
+      const next = scaleVisibleBars(barsRef.current, factor, {
+        durationSec,
+        beatDurationSec: bpm && bpm > 0 ? 60 / bpm : null,
+        beatsPerBar,
+      })
+      if (next <= 0 && atFull) return
+      const applied = atFull && next > 0 ? Math.min(next, 48) : next
+      applyBarsLive(applied, focal)
     }
 
     const onWheel = (e: WheelEvent) => {
@@ -826,37 +1066,18 @@ function WaveformStage({
         dx *= 400
         dy *= 400
       }
-      const now = performance.now()
-      const mode =
-        now - wheelLock.at < WHEEL_LOCK_MS ? wheelLock.mode : resolveWheelMode(dx, dy, e)
-      wheelLock.mode = mode
-      wheelLock.at = now
 
+      const { zoomDelta, panDelta } = splitWheelAxes(dx, dy, {
+        shift: e.shiftKey,
+        pinch: e.ctrlKey || e.metaKey,
+      })
       const focal = focalFromClientX(e.clientX)
-      if (mode === 'pan') {
-        if (barsRef.current <= 0) applyBarsLive(32, focal)
-        panPixels(-(e.shiftKey && Math.abs(dy) > Math.abs(dx) ? dy : dx))
-        scheduleZoomCommit(focal)
-      } else {
-        const factor = wheelDeltaToZoomFactor(dy)
-        const atFull = barsRef.current <= 0
-        if (atFull && factor >= 1) {
-          scheduleZoomCommit(focal)
-          return
-        }
-        const next = scaleVisibleBars(barsRef.current, factor, {
-          durationSec,
-          beatDurationSec: bpm && bpm > 0 ? 60 / bpm : null,
-          beatsPerBar,
-        })
-        if (next <= 0 && atFull) {
-          scheduleZoomCommit(focal)
-          return
-        }
-        const applied = atFull && next > 0 ? Math.min(next, 48) : next
-        applyBarsLive(applied, focal)
-        scheduleZoomCommit(focal)
+      if (zoomDelta) applyWheelZoom(zoomDelta, focal)
+      if (panDelta) {
+        if (barsRef.current <= 0 && !zoomDelta) applyBarsLive(32, focal)
+        panPixels(-panDelta)
       }
+      scheduleZoomCommit(focal)
     }
 
     const onPointerDown = (e: PointerEvent) => {
@@ -890,7 +1111,18 @@ function WaveformStage({
     const endDrag = (e: PointerEvent) => {
       if (!drag || drag.pointerId !== e.pointerId) return
       if (container.hasPointerCapture(e.pointerId)) container.releasePointerCapture(e.pointerId)
-      if (!drag.didDrag) seekAt(e.clientX)
+      if (!drag.didDrag) {
+        const now = performance.now()
+        const isDouble =
+          lastTap != null &&
+          now - lastTap.at <= TAP_DOUBLE_MS &&
+          Math.abs(e.clientX - lastTap.x) <= TAP_DOUBLE_PX
+        lastTap = { at: now, x: e.clientX }
+        if (isDouble || !onCueSecRef.current) {
+          seekAt(e.clientX)
+          if (isDouble) onJumpPlayRef.current?.()
+        } else cueAt(e.clientX)
+      }
       drag = null
       if (!pinch) markGesture(false)
     }
@@ -977,6 +1209,9 @@ function WaveformStage({
     audioRef,
     bpm,
     beatsPerBar,
+    beatGridEnabled,
+    beatGridOffsetSec,
+    snapToGrid,
     durationSec,
     gestureActiveRef,
     hoverRoot,
@@ -986,16 +1221,30 @@ function WaveformStage({
     paint,
   ])
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onContextMenu) return
+      const timeSec = pointerTimeAtClientXRef.current(e.clientX)
+      onContextMenu(e, timeSec)
+    },
+    [onContextMenu],
+  )
+
   return (
     <div
       ref={containerRef}
       data-waveform-stage=""
+      data-waveform-click-mode={onCueSec ? 'cue' : 'seek'}
       className={`${className || ''} flex flex-col`}
-      onContextMenu={onContextMenu}
+      onContextMenu={handleContextMenu}
       title={
-        showOverview
-          ? 'Scroll to zoom · drag to pan · click to seek · overview to jump · 1–4 hot cues (⌘/Ctrl+1–4 set)'
-          : 'Scroll to zoom · drag to pan · click to seek · 1–4 hot cues (⌘/Ctrl+1–4 set)'
+        onCueSec
+          ? showOverview
+            ? 'Scroll to zoom · drag to pan · click to set cue · double-click to play · overview to jump · 1–4 hot cues (⌘/Ctrl+1–4 set)'
+            : 'Scroll to zoom · drag to pan · click to set cue · double-click to play · 1–4 hot cues (⌘/Ctrl+1–4 set)'
+          : showOverview
+            ? 'Scroll to zoom · drag to pan · click to seek · overview to jump · 1–4 hot cues (⌘/Ctrl+1–4 set)'
+            : 'Scroll to zoom · drag to pan · click to seek · 1–4 hot cues (⌘/Ctrl+1–4 set)'
       }
     >
       <div className="relative min-h-0 flex-1">
@@ -1032,7 +1281,9 @@ function WaveformStage({
       {showOverview && samples.length > 0 && durationSec > 0 && (
         <div
           ref={overviewWrapRef}
-          className="relative mx-2 mb-1 h-5 shrink-0 cursor-pointer overflow-hidden rounded-sm border border-gray-800/80 bg-black"
+          className={`relative mx-2 h-5 shrink-0 cursor-pointer overflow-hidden rounded-sm border border-gray-800/80 bg-black ${
+            showPhaseMeter && bpm && bpm > 0 ? 'mb-0.5' : 'mb-1'
+          }`}
           title="Overview — click to seek"
           onPointerDown={(e) => {
             e.preventDefault()
@@ -1041,13 +1292,27 @@ function WaveformStage({
             if (!el || durationSec <= 0) return
             const rect = el.getBoundingClientRect()
             const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-            const t = ratio * durationSec
-            const audio = audioRef.current
-            if (audio) {
-              try {
-                audio.currentTime = t
-              } catch {
-                /* ignore */
+            let t = ratio * durationSec
+            if (snapToGrid && bpm && bpm > 0) {
+              t = quantizePointerToVisibleGrid({
+                timeSec: t,
+                bpm,
+                offsetSec: beatGridOffsetSec,
+                visibleBars: 0,
+                beatsPerBar,
+                durationSec,
+              })
+            }
+            const seeker = seekMediaTimeRef.current
+            if (seeker) seeker(t)
+            else {
+              const audio = audioRef.current
+              if (audio) {
+                try {
+                  audio.currentTime = t
+                } catch {
+                  /* ignore */
+                }
               }
             }
             clockRef.current = { mediaAnchor: t, wallAnchor: performance.now(), armed: true }
@@ -1058,6 +1323,71 @@ function WaveformStage({
           }}
         >
           <canvas ref={overviewCanvasRef} className="pointer-events-none block h-full w-full" aria-hidden />
+        </div>
+      )}
+      {showPhaseMeter && samples.length > 0 && durationSec > 0 && bpm != null && bpm > 0 && (
+        <div
+          ref={phaseWrapRef}
+          className={`relative mx-2 mb-1 h-5 shrink-0 overflow-hidden rounded-sm border border-gray-800/80 bg-black ${
+            onPhaseNudge ? 'cursor-ew-resize touch-none' : ''
+          }`}
+          title="Phase / grid align — drag to nudge · double-click to lock"
+          role="slider"
+          aria-label={`Deck ${deckId} beat phase alignment`}
+          aria-valuemin={-50}
+          aria-valuemax={50}
+          aria-valuenow={0}
+          onPointerDown={(e) => {
+            if (!onPhaseNudgeRef.current || !bpm || bpm <= 0) return
+            e.preventDefault()
+            e.stopPropagation()
+            const el = phaseWrapRef.current
+            if (!el) return
+            el.setPointerCapture(e.pointerId)
+            phaseDragRef.current = {
+              lastX: e.clientX,
+              width: Math.max(1, el.getBoundingClientRect().width),
+              bpm,
+              windowBeats: resolvePhaseMeterWindowBeats(
+                phaseMeterOptionsRef.current.windowId,
+                beatsPerBar,
+                phaseMeterOptionsRef.current.phraseBars,
+              ),
+            }
+          }}
+          onPointerMove={(e) => {
+            const drag = phaseDragRef.current
+            const nudge = onPhaseNudgeRef.current
+            if (!drag || !nudge) return
+            const dx = e.clientX - drag.lastX
+            if (Math.abs(dx) < 0.5) return
+            drag.lastX = e.clientX
+            // Full strip width = windowBeats of phase
+            const beatSec = 60 / drag.bpm
+            const deltaSec = (dx / drag.width) * drag.windowBeats * beatSec
+            nudge(deltaSec)
+            paint(smoothTimeRef.current)
+          }}
+          onPointerUp={(e) => {
+            const el = phaseWrapRef.current
+            try {
+              el?.releasePointerCapture(e.pointerId)
+            } catch {
+              /* ignore */
+            }
+            phaseDragRef.current = null
+          }}
+          onPointerCancel={() => {
+            phaseDragRef.current = null
+          }}
+          onDoubleClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onPhaseLockRef.current?.()
+            paint(smoothTimeRef.current, { forceBase: true })
+          }}
+        >
+          <canvas ref={phaseCanvasRef} className="pointer-events-none block h-full w-full" aria-hidden />
         </div>
       )}
     </div>

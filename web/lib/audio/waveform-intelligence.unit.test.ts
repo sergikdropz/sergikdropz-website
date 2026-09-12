@@ -85,6 +85,13 @@ describe('profileFromSonicDna', () => {
     expect(profile!.centroidHz).toBeGreaterThan(3000)
   })
 
+  it('folds absolute DNA gridOffsetSec into within-beat phase', () => {
+    const profile = profileFromSonicDna({
+      measured: { bpm: 120, gridOffsetSec: 3.2 },
+    })
+    expect(profile?.gridOffsetSec).toBeCloseTo(0.2, 5)
+  })
+
   it('builds stable cache keys', () => {
     const a = profileFromSonicDna({
       measured: { spectral: { relative: { bass: 0.3 } } },

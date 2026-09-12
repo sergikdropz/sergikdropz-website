@@ -31,6 +31,9 @@ describe('buildSkipBlendPlan', () => {
     phraseBars: 8,
     reason: 'Auto DJ',
     holdBeatmatch: true,
+    vinylBend: false,
+    kickCorrect: false,
+    gridAlign: 'beat',
   }
 
   it('fires from the next beat and keeps the parked phrase-1 cue', () => {
@@ -56,6 +59,9 @@ describe('buildSkipBlendPlan', () => {
     expect(plan.reason).toBe('Skip blend')
     expect(plan.phrase1Lock).toBe(true)
     expect(plan.blendFromOut).toBe(true)
+    expect(plan.vinylBend).toBe(false)
+    expect(plan.kickCorrect).toBe(false)
+    expect(plan.gridAlign).toBe('beat')
   })
 
   it('ignores a prior plan for a different incoming track', () => {

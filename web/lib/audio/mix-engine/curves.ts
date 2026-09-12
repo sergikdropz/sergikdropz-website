@@ -31,6 +31,82 @@ export function equalPowerGains(x: number): { a: number; b: number } {
   }
 }
 
+/** Shared Smooth handoff 0→1 (faders + complementary bass). */
+export function handoffU(progress: number): number {
+  return smootherstep(progress)
+}
+
+/** Incoming starts killed; outgoing ends killed. Sum is constant when u matches. */
+export const BASS_KILL_DB = 24
+/** Incoming bass stays killed until this handoff u, then opens. */
+export const BASS_INCOMING_KNEE = 0.5
+/** Soft open width after the knee (~1 bar of an 8-bar blend). */
+export const BASS_KNEE_WIDTH = 0.125
+
+/** Incoming bass open amount 0→1 after the downbeat knee. */
+export function bassOpenU(
+  inU: number,
+  knee = BASS_INCOMING_KNEE,
+  width = BASS_KNEE_WIDTH,
+): number {
+  const i = clamp01(inU)
+  const w = Math.max(0.04, width)
+  if (i <= knee) return 0
+  return smootherstep(clamp01((i - knee) / w))
+}
+
+export function complementaryBassDb(
+  outU: number,
+  opts?: { inU?: number; killDb?: number; incomingKnee?: number; kneeWidth?: number },
+): { out: number; inn: number } {
+  const kill = Math.max(0, opts?.killDb ?? BASS_KILL_DB)
+  const o = clamp01(outU)
+  const iRaw = clamp01(opts?.inU ?? outU)
+  const knee = opts?.incomingKnee
+  const i =
+    typeof knee === 'number' && knee > 0
+      ? bassOpenU(iRaw, knee, opts?.kneeWidth)
+      : iRaw
+  return { out: -kill * o, inn: -kill * (1 - i) }
+}
+
+/** Complementary mid/vocal kill when both decks are vocal-heavy. */
+export const MID_KILL_DB = 8
+
+/** Mid duck depth from vocal weight (0 when neither track is vocal). */
+export function midDuckDb(vocalWeight: number, maxDb = MID_KILL_DB): number {
+  if (!(vocalWeight > 0.08) || !(maxDb > 0)) return 0
+  return maxDb * clamp01(vocalWeight / 0.35)
+}
+
+export function complementaryMidDb(
+  outU: number,
+  inU: number,
+  vocalWeight: number,
+  maxDb = MID_KILL_DB,
+): { out: number; inn: number } {
+  const kill = midDuckDb(vocalWeight, maxDb)
+  if (!(kill > 0.05)) return { out: 0, inn: 0 }
+  const o = clamp01(outU)
+  const i = clamp01(inU)
+  return { out: -kill * o, inn: -kill * (1 - i) }
+}
+
+/** Shared Smooth pair — delay / energyScale only change incoming. */
+export function handoffPair(
+  progress: number,
+  intel?: Pick<MixIntelligence, 'incomingDelay' | 'energyScale'>,
+): { outU: number; inU: number } {
+  const x = clamp01(progress)
+  const delay = intel?.incomingDelay ?? 0
+  const energyScale = intel?.energyScale ?? 1
+  const outU = handoffU(x)
+  const inProgress = delay > 0.01 ? clamp01((x - delay) / Math.max(1e-6, 1 - delay)) : x
+  const inShaped =
+    energyScale > 1.02 ? clamp01(Math.pow(inProgress, 1 / energyScale)) : inProgress
+  return { outU, inU: handoffU(inShaped) }
+}
+
 /**
  * Style-shaped dual-deck gains.
  * `a` = outgoing, `b` = incoming. Always ends at a≈0, b≈1.
@@ -76,8 +152,14 @@ export function styleMixGains(
       }
     }
     case 'crossfade':
-    default:
-      return equalPowerGains(smootherstep(x))
+    default: {
+      const { outU, inU } = handoffPair(x, intel)
+      if (Math.abs(outU - inU) < 1e-6) return equalPowerGains(outU)
+      return {
+        a: Math.cos(outU * Math.PI * 0.5),
+        b: Math.sin(inU * Math.PI * 0.5),
+      }
+    }
   }
 }
 
@@ -135,6 +217,7 @@ export function intelligentDeckMixAtProgress(params: {
     style: 'crossfade',
     outBias: outBase,
     inBias: inBase,
+    intel: params.intel,
   })
 }
 
@@ -146,6 +229,7 @@ export function crossfadeDeckEqAtProgress(params: {
   style?: MixStyle
   outBias?: FilterMixEqGains
   inBias?: FilterMixEqGains
+  intel?: MixIntelligence
 }): { outgoing: FilterMixEqGains; incoming: FilterMixEqGains } {
   const x = clamp01(params.progress)
   const outBase = params.outBias ?? { low: 0, mid: 0, high: 0 }
@@ -168,17 +252,20 @@ export function crossfadeDeckEqAtProgress(params: {
     }
   }
 
-  // Smooth: one shallow bass handoff. No mid scoop / air lift / extra duck.
-  const swap = smootherstep(x)
+  // Smooth: incoming starts with no low end. Bass follows the same out/in pair
+  // as faders, with incoming bass held until the mid-blend downbeat knee.
+  const { outU, inU } = handoffPair(x, params.intel)
+  const bass = complementaryBassDb(outU, { inU, incomingKnee: BASS_INCOMING_KNEE })
+  const mid = complementaryMidDb(outU, inU, params.intel?.vocalWeight ?? 0)
   return {
     outgoing: {
-      low: lerp(outBase.low, outBase.low - 8, swap),
-      mid: outBase.mid,
+      low: outBase.low + bass.out,
+      mid: outBase.mid + mid.out,
       high: outBase.high,
     },
     incoming: {
-      low: lerp(inBase.low - 6, inBase.low, swap),
-      mid: inBase.mid,
+      low: inBase.low + bass.inn,
+      mid: inBase.mid + mid.inn,
       high: inBase.high,
     },
   }

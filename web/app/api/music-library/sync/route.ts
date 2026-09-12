@@ -14,6 +14,11 @@ import {
   setCatalogSnapshot,
 } from '@/lib/music-library/catalog-snapshot-cache'
 import { persistedCreatedDateFields } from '@/lib/music-library/track-created-date'
+import {
+  CATALOG_METADATA_SELECT,
+  catalogMetadataFromRow,
+  stripCatalogMetadataAliases,
+} from '@/lib/music-library/catalog-metadata-projection'
 
 /** PostgREST default max-rows is typically 1000 — page past it on sync. */
 const SYNC_TRACK_PAGE_SIZE = 1000
@@ -580,9 +585,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const trackSelect = includeAnalysis
-      ? 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,genre,subgenre,tags,track_number,disc_number,created_at,date,date_created,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,metadata'
-      : 'id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,genre,subgenre,tags,track_number,disc_number,created_at,date,date_created,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,metadata'
+    // Never select the whole `metadata` jsonb here: analysis writers mirror
+    // sonic_dna/waveform_data into it, so a full-column read detoasts ~15MB across
+    // the catalog and Postgres cancels the statement. Sub-fields keep it ~150KB.
+    const trackSelect = `id,folder_id,audio_file_id,title,artist,duration,file_url,artwork_url,bpm,key_signature,energy_level,danceability,genre,subgenre,tags,track_number,disc_number,created_at,date,date_created,year,is_archived,archived_at,display_order,created_at_timestamp,updated_at,${CATALOG_METADATA_SELECT}`
 
     const fetchAllTracksPaged = async () => {
       const rows: any[] = []
@@ -600,7 +606,9 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query
         if (error) return { data: null as any[] | null, error }
         if (!data?.length) break
-        rows.push(...data)
+        for (const row of data as any[]) {
+          rows.push({ ...stripCatalogMetadataAliases({ ...row }), metadata: catalogMetadataFromRow(row) })
+        }
         if (data.length < SYNC_TRACK_PAGE_SIZE) break
         from += SYNC_TRACK_PAGE_SIZE
       }

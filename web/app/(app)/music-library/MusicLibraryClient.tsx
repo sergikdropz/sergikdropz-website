@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 'use client'
 
@@ -52,6 +53,8 @@ import {
   catalogItemMatchesCoverEvent,
   playerTrackMatchesCoverEvent,
   stampAllTrackArtwork,
+  applyCatalogTrackPatch,
+  catalogTrackPatchHasFields,
 } from '@/lib/catalog-sync'
 
 function importWithChunkRetry<T>(importer: () => Promise<{ default: T }>) {
@@ -429,6 +432,22 @@ function MusicLibraryMain({
 
   useEffect(() => {
     return subscribeCatalogSync((event) => {
+      if (event.entity === 'track' && catalogTrackPatchHasFields(event.patch)) {
+        const matches = (track: Track) =>
+          track.id === event.entityId ||
+          track.audioFileId === event.entityId ||
+          track.audio_file_id === event.entityId
+        const stamp = (track: Track) => (matches(track) ? applyCatalogTrackPatch(track, event.patch) : track)
+        setDisplayTracks((prev) => prev.map(stamp))
+        setLibraryData((prev) => {
+          if (!prev?.tracks) return prev
+          const tracks = prev.tracks.map(stamp)
+          if (tracks === prev.tracks) return prev
+          const next = { ...prev, tracks }
+          seedMusicLibraryCache(next, { persist: true })
+          return next
+        })
+      }
       if (!Object.prototype.hasOwnProperty.call(event.patch, 'artwork')) return
       const folderId = event.folderId
       const playlistId = event.playlistId

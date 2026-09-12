@@ -101,6 +101,63 @@ export function isUploadedFolderArtwork(url?: string | null): boolean {
   return false
 }
 
+/**
+ * True when the track carries unique cover art (not a stamped folder / crate cover).
+ * Folder systemic covers use `folder-{id}.*` filenames and should fall back to mosaics.
+ * EP release paths under `/unreleased/eps/` count as real artwork.
+ */
+export function trackHasOwnArtwork(track: {
+  artwork?: string | null
+  folderId?: string | null
+  folder_id?: string | null
+  folder?: string | null
+}): boolean {
+  const art = typeof track.artwork === 'string' ? track.artwork.trim() : ''
+  if (!art) return false
+  const path = stripArtworkCacheBust(resolveImageUrl(art) || art)
+  if (/\/unreleased\/eps\//i.test(path)) return true
+  const fromArt = collectionIdFromArtwork(art)
+  if (!fromArt) return true
+  const folderKey = normalizeCollectionId(
+    String(track.folderId || track.folder_id || track.folder || ''),
+  )
+  if (folderKey && normalizeCollectionId(fromArt) === folderKey) return false
+  // `folder-*` cover that doesn't match this track's folder — still treat as shared cover.
+  if (isUploadedFolderArtwork(art)) return false
+  return true
+}
+
+/** EP folders / release paths — never use crate mosaics for these. */
+export function trackLooksLikeEp(track: {
+  albumType?: string | null
+  folderId?: string | null
+  folder_id?: string | null
+  folder?: string | null
+  artwork?: string | null
+} | null | undefined): boolean {
+  if (!track) return false
+  if (String(track.albumType || '').toLowerCase() === 'ep') return true
+  const folder = String(track.folderId || track.folder_id || track.folder || '')
+  if (/unreleased-eps/i.test(folder)) return true
+  if (/collection-[^-]*-eps?-/i.test(folder)) return true
+  const art = typeof track.artwork === 'string' ? track.artwork : ''
+  if (/\/unreleased\/eps\//i.test(art)) return true
+  return false
+}
+
+/** EPs keep a single release cover; crates / bare tracks without own art use mosaics. */
+export function trackShouldUseCrateMosaic(track: {
+  artwork?: string | null
+  albumType?: string | null
+  folderId?: string | null
+  folder_id?: string | null
+  folder?: string | null
+} | null | undefined): boolean {
+  if (!track) return false
+  if (trackLooksLikeEp(track)) return false
+  return !trackHasOwnArtwork(track)
+}
+
 const IMAGE_FILE_EXT = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|webp)$/i
 const HEIC_EXT = /\.(heic|heif)$/i
 const HEIC_MIME = /image\/hei[cf]/i

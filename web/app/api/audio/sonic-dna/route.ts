@@ -163,13 +163,17 @@ function withPercent(payload: Record<string, unknown>, status?: string | null, s
   }
 }
 
-/** Completed DNA is stable enough for CDN SWR; processing/pending stay private. */
+/** Completed DNA with measured groove is stable enough for CDN SWR. */
 const DNA_COMPLETED_CACHE =
   'public, s-maxage=86400, stale-while-revalidate=604800'
 const DNA_NO_STORE = 'no-store'
 
-function dnaResponseCacheControl(status?: string | null): string {
-  return status === 'completed' ? DNA_COMPLETED_CACHE : DNA_NO_STORE
+function dnaResponseCacheControl(status?: string | null, sonicDna?: unknown): string {
+  if (status !== 'completed') return DNA_NO_STORE
+  // Stub encyclopedia ("Awaiting audio analysis") must not stick in the CDN for a day.
+  if (sonicDnaCompletenessPercent(status, sonicDna) <= 0) return DNA_NO_STORE
+  if (!hasDspMeasuredGroove(extractMeasured(sonicDna))) return DNA_NO_STORE
+  return DNA_COMPLETED_CACHE
 }
 
 export async function GET(request: Request) {
@@ -204,7 +208,7 @@ export async function GET(request: Request) {
           'completed',
           sonicDNA,
         ),
-        { headers: { 'Cache-Control': dnaResponseCacheControl('completed') } },
+        { headers: { 'Cache-Control': dnaResponseCacheControl('completed', sonicDNA) } },
       )
     }
 
@@ -257,7 +261,7 @@ export async function GET(request: Request) {
             'completed',
             sonicDNA,
           ),
-          { headers: { 'Cache-Control': dnaResponseCacheControl('completed') } },
+          { headers: { 'Cache-Control': dnaResponseCacheControl('completed', sonicDNA) } },
         )
       }
       return NextResponse.json(
@@ -332,7 +336,11 @@ export async function GET(request: Request) {
             track.sonic_dna_status || 'completed',
             sonicDNA,
           ),
-          { headers: { 'Cache-Control': dnaResponseCacheControl(track.sonic_dna_status || 'completed') } },
+          {
+            headers: {
+              'Cache-Control': dnaResponseCacheControl(track.sonic_dna_status || 'completed', sonicDNA),
+            },
+          },
         )
       }
       if (track.sonic_dna_json_url) {
@@ -358,7 +366,11 @@ export async function GET(request: Request) {
                 track.sonic_dna_status || 'completed',
                 sonicDNA,
               ),
-              { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } },
+              {
+                headers: {
+                  'Cache-Control': dnaResponseCacheControl(track.sonic_dna_status || 'completed', sonicDNA),
+                },
+              },
             )
           }
         } catch {
@@ -382,7 +394,7 @@ export async function GET(request: Request) {
         ),
         {
           headers: {
-            'Cache-Control': dnaResponseCacheControl(track.sonic_dna_status || 'completed'),
+            'Cache-Control': dnaResponseCacheControl(track.sonic_dna_status || 'completed', sonicDNA),
           },
         },
       )
@@ -436,7 +448,7 @@ export async function GET(request: Request) {
           'completed',
           sonicDNA,
         ),
-        { headers: { 'Cache-Control': dnaResponseCacheControl('completed') } },
+        { headers: { 'Cache-Control': dnaResponseCacheControl('completed', sonicDNA) } },
       )
     }
 

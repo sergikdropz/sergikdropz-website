@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 'use client'
 
@@ -6,6 +7,7 @@ import MusicPlayer from './MusicPlayer'
 import { useCallback } from 'react'
 import {
   fetchAllTracksSummaryForHydration,
+  fetchFolders,
   fetchPlaylists,
   fetchTracks,
   fetchTracksByIds,
@@ -15,8 +17,17 @@ import {
   type Track,
 } from '@/utils/musicLibraryApi'
 import {
+  collectReleaseFoldersFromTree,
+  getRecentPlayedReleaseIds,
+  getRecentPlayedTrackIds,
+  isOrderedReleaseRandomScope,
+  pickNextOrderedTracks,
+  pickRandomReleaseFolder,
   pickRandomUnusedTracks,
   readCatalogRandomSetting,
+  rememberPlayedReleaseId,
+  rememberPlayedTrackId,
+  sortTracksInReleaseOrder,
 } from '@/lib/audio/catalog-random'
 
 function collectTracksFromCachedLibrary(): Track[] {
@@ -44,6 +55,29 @@ async function resolveAllTracksFallback(): Promise<Track[]> {
   return fetchAllTracksSummaryForHydration({ includeArchived: false })
 }
 
+async function listReleaseFolders(): Promise<ReturnType<typeof collectReleaseFoldersFromTree>> {
+  const cached = peekCachedMusicLibrary()?.folders
+  if (cached?.length) {
+    const fromCache = collectReleaseFoldersFromTree(cached)
+    if (fromCache.length) return fromCache
+  }
+  try {
+    const flat = await fetchFolders(false)
+    return collectReleaseFoldersFromTree(
+      (flat || []).map((folder) => ({
+        id: folder.id,
+        type: folder.type,
+        name: folder.name,
+        parentId: folder.parentId ?? null,
+        hidden: !!(folder.hidden || folder.is_archived),
+        children: folder.children,
+      })),
+    )
+  } catch {
+    return []
+  }
+}
+
 export default function GlobalMusicPlayer() {
   const {
     currentTrack,
@@ -55,6 +89,7 @@ export default function GlobalMusicPlayer() {
     setQueue,
     setCurrentIndex,
     setCurrentTrack,
+    setCurrentSource,
     nextTrack: contextNextTrack,
     previousTrack,
     handleShuffle,
@@ -114,24 +149,66 @@ export default function GlobalMusicPlayer() {
     [],
   )
 
+  const jumpToRandomRelease = useCallback(async (): Promise<boolean> => {
+    const releases = await listReleaseFolders()
+    if (!releases.length) return false
+    const currentId = currentSource?.type === 'folder' ? currentSource.id : null
+    if (currentId) rememberPlayedReleaseId(currentId)
+    const nextRelease = pickRandomReleaseFolder(releases, {
+      keepExcluded: currentId ? [currentId] : [],
+      recentIds: getRecentPlayedReleaseIds(),
+    })
+    if (!nextRelease?.id) return false
+
+    const releaseTracks = sortTracksInReleaseOrder(await fetchTracks(nextRelease.id))
+    if (!releaseTracks.length) return false
+
+    rememberPlayedReleaseId(nextRelease.id)
+    const source = { type: 'folder' as const, id: nextRelease.id }
+    setCurrentSource(source)
+    setQueue(releaseTracks)
+    setCurrentIndex(0)
+    setCurrentTrack(releaseTracks[0])
+    return true
+  }, [
+    currentSource,
+    setCurrentSource,
+    setQueue,
+    setCurrentIndex,
+    setCurrentTrack,
+  ])
+
   const nextTrack = useCallback(async () => {
     if (queue.length > 0 && currentIndex >= queue.length - 1) {
       try {
+        const catalogRandom = readCatalogRandomSetting()
         const newTracks = await getTracksFromSource(currentSource)
         if (newTracks.length > 0) {
           const existingIds = new Set(queue.map((t) => t.id))
-          const unused = newTracks.filter((t) => !existingIds.has(t.id))
-          const tracksToAdd = readCatalogRandomSetting()
-            ? pickRandomUnusedTracks(
-                unused.length > 0 ? unused : newTracks,
-                existingIds,
-                1,
-                {
-                  allowReshuffle: true,
-                  keepExcluded: currentTrack ? [currentTrack.id] : [],
-                },
-              )
-            : unused
+          if (currentTrack?.id) rememberPlayedTrackId(currentTrack.id)
+
+          let tracksToAdd: Track[] = []
+          if (catalogRandom && isOrderedReleaseRandomScope(currentSource)) {
+            tracksToAdd = pickNextOrderedTracks(newTracks, existingIds, 1, {
+              preferAfterId: currentTrack?.id ?? null,
+            })
+            if (tracksToAdd.length === 0) {
+              if (await jumpToRandomRelease()) return
+            }
+          } else if (catalogRandom) {
+            tracksToAdd = pickRandomUnusedTracks(
+              unusedPool(newTracks, existingIds),
+              existingIds,
+              1,
+              {
+                allowReshuffle: true,
+                keepExcluded: currentTrack ? [currentTrack.id] : [],
+                recentIds: getRecentPlayedTrackIds(),
+              },
+            )
+          } else {
+            tracksToAdd = newTracks.filter((t) => !existingIds.has(t.id))
+          }
 
           if (tracksToAdd.length > 0) {
             const updatedQueue = [...queue, ...tracksToAdd]
@@ -141,6 +218,8 @@ export default function GlobalMusicPlayer() {
             setCurrentTrack(updatedQueue[nextIndex])
             return
           }
+        } else if (catalogRandom && isOrderedReleaseRandomScope(currentSource)) {
+          if (await jumpToRandomRelease()) return
         }
       } catch (error) {
         console.error('Error auto-queueing tracks:', error)
@@ -159,6 +238,7 @@ export default function GlobalMusicPlayer() {
     queue,
     currentSource,
     getTracksFromSource,
+    jumpToRandomRelease,
     setQueue,
     setCurrentIndex,
     setCurrentTrack,
@@ -175,6 +255,7 @@ export default function GlobalMusicPlayer() {
       queue={queue}
       currentSource={currentSource}
       getTracksFromSource={getTracksFromSource}
+      onRequestRandomRelease={jumpToRandomRelease}
       onTrackEnd={handleTrackEnd}
       onNext={nextTrack}
       onPrevious={previousTrack}
@@ -185,4 +266,9 @@ export default function GlobalMusicPlayer() {
       onRemoveFromQueue={removeFromQueue}
     />
   )
+}
+
+function unusedPool(newTracks: Track[], existingIds: Set<string>): Track[] {
+  const unused = newTracks.filter((t) => !existingIds.has(t.id))
+  return unused.length > 0 ? unused : newTracks
 }

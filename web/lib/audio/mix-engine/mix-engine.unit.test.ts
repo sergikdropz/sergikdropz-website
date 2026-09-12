@@ -8,12 +8,18 @@ import {
   bpmRateRatio,
   mixIncomingRateRatio,
   phaseAlignSeekDelta,
+  gridAlignSeekDelta,
   mixPocketAlignSeekDelta,
   resolveIncomingMixCue,
   beatPhaseErrorSec,
   snapToNearestPhraseBoundary,
   filterMixEqAtProgress,
   crossfadeDeckEqAtProgress,
+  complementaryBassDb,
+  BASS_KILL_DB,
+  BASS_INCOMING_KNEE,
+  handoffU,
+  type MixIntelligence,
   energyOverlapFactor,
   parseMixCues,
   cueByRole,
@@ -207,6 +213,56 @@ describe('deriveDeckCues / buildMixPlan', () => {
     expect(rel / phraseSec).toBeCloseTo(Math.round(rel / phraseSec), 5)
   })
 
+  it('maps beatCorrect grid onto plan flags', () => {
+    const grid = buildMixPlan({
+      outgoing,
+      incoming,
+      nowSec: 10,
+      phraseBars: 8,
+      style: 'crossfade',
+      beatCorrect: 'grid',
+    })
+    expect(grid).not.toBeNull()
+    expect(grid!.vinylBend).toBe(false)
+    expect(grid!.kickCorrect).toBe(false)
+    expect(grid!.gridAlign).toBe('beat')
+
+    const bar = buildMixPlan({
+      outgoing,
+      incoming,
+      nowSec: 10,
+      phraseBars: 8,
+      style: 'crossfade',
+      beatCorrect: 'grid-bar',
+    })
+    expect(bar!.gridAlign).toBe('bar')
+    expect(bar!.vinylBend).toBe(false)
+
+    const full = buildMixPlan({
+      outgoing,
+      incoming,
+      nowSec: 10,
+      phraseBars: 8,
+      style: 'crossfade',
+      beatCorrect: 'grid-phase',
+    })
+    expect(full!.gridAlign).toBe('beat')
+    expect(full!.vinylBend).toBe(true)
+    expect(full!.kickCorrect).toBe(false)
+
+    const gridKick = buildMixPlan({
+      outgoing,
+      incoming,
+      nowSec: 10,
+      phraseBars: 8,
+      style: 'crossfade',
+      beatCorrect: 'grid-kick',
+    })
+    expect(gridKick!.gridAlign).toBe('beat')
+    expect(gridKick!.vinylBend).toBe(false)
+    expect(gridKick!.kickCorrect).toBe(true)
+  })
+
   it('plans phrase-length overlap before track end', () => {
     const plan = buildMixPlan({
       outgoing,
@@ -385,6 +441,38 @@ describe('sync', () => {
     expect(bpmRateRatio(140, 90)).toBeLessThanOrEqual(1.12)
   })
 
+  it('gridAlignSeekDelta snaps incoming onto the outgoing beat grid', () => {
+    const beat = 0.5
+    const d = gridAlignSeekDelta({
+      outgoingTimeSec: 10,
+      outgoingBpm: 120,
+      incomingTimeSec: 2 + beat * 0.25,
+      incomingBpm: 120,
+      grid: 'beat',
+    })
+    expect(d).toBeCloseTo(0.125, 3)
+    const bar = gridAlignSeekDelta({
+      outgoingTimeSec: 8,
+      outgoingBpm: 120,
+      incomingTimeSec: 1.25,
+      incomingBpm: 120,
+      grid: 'bar',
+    })
+    expect(Number.isFinite(bar)).toBe(true)
+    expect(Math.abs(bar)).toBeLessThanOrEqual(2 + 1e-6)
+    const phrase4 = gridAlignSeekDelta({
+      outgoingTimeSec: 0,
+      outgoingBpm: 120,
+      incomingTimeSec: 1,
+      incomingBpm: 120,
+      grid: 'phrase',
+      phraseBars: 4,
+    })
+    expect(Number.isFinite(phrase4)).toBe(true)
+    // 4 bars @ 120bpm = 8s half-window max
+    expect(Math.abs(phrase4)).toBeLessThanOrEqual(8 + 1e-6)
+  })
+
   it('returns finite phase align delta within one beat', () => {
     const d = phaseAlignSeekDelta({
       outgoingTimeSec: 10,
@@ -456,16 +544,52 @@ describe('sync', () => {
 })
 
 describe('crossfadeDeckEqAtProgress', () => {
-  it('swaps outgoing bass mid-overlap on Smooth', () => {
-    const early = crossfadeDeckEqAtProgress({ progress: 0.15, style: 'crossfade' })
-    const mid = crossfadeDeckEqAtProgress({ progress: 0.55, style: 'crossfade' })
+  it('kills incoming bass at start and outgoing at end on one handoff u', () => {
+    const start = crossfadeDeckEqAtProgress({ progress: 0, style: 'crossfade' })
+    const mid = crossfadeDeckEqAtProgress({ progress: 0.5, style: 'crossfade' })
     const end = crossfadeDeckEqAtProgress({ progress: 1, style: 'crossfade' })
-    expect(mid.outgoing.low).toBeLessThan(early.outgoing.low)
-    expect(mid.incoming.low).toBeGreaterThan(early.incoming.low)
-    expect(end.outgoing.low).toBeCloseTo(-8, 5)
+    expect(start.incoming.low).toBeCloseTo(-BASS_KILL_DB, 5)
+    expect(start.outgoing.low).toBeCloseTo(0, 5)
+    expect(end.outgoing.low).toBeCloseTo(-BASS_KILL_DB, 5)
     expect(end.incoming.low).toBeCloseTo(0, 5)
+    // Incoming bass stays killed through the mid-blend knee — sum is quieter
+    // than −24 dB (a hole, not two kicks).
+    expect(mid.incoming.low).toBeCloseTo(-BASS_KILL_DB, 5)
+    expect(mid.outgoing.low + mid.incoming.low).toBeLessThan(-BASS_KILL_DB + 0.5)
     expect(mid.outgoing.mid).toBe(0)
     expect(mid.outgoing.high).toBe(0)
+  })
+
+  it('shares handoffU with complementary bass and incoming knee', () => {
+    const u = handoffU(0.4)
+    const bass = complementaryBassDb(u, { incomingKnee: BASS_INCOMING_KNEE })
+    const eq = crossfadeDeckEqAtProgress({ progress: 0.4, style: 'crossfade' })
+    expect(eq.outgoing.low).toBeCloseTo(bass.out, 5)
+    expect(eq.incoming.low).toBeCloseTo(bass.inn, 5)
+    expect(eq.incoming.low).toBeCloseTo(-BASS_KILL_DB, 5)
+  })
+
+  it('ducks complementary mids when vocals are present', () => {
+    const silent = crossfadeDeckEqAtProgress({ progress: 0.5, style: 'crossfade' })
+    const vocal = crossfadeDeckEqAtProgress({
+      progress: 0.5,
+      style: 'crossfade',
+      intel: { vocalWeight: 0.4, incomingDelay: 0, energyScale: 1 } as MixIntelligence,
+    })
+    expect(silent.outgoing.mid).toBe(0)
+    expect(vocal.outgoing.mid).toBeLessThan(-2)
+    expect(vocal.incoming.mid).toBeLessThan(-2)
+  })
+
+  it('delays incoming bass when a technique sets incomingDelay', () => {
+    const early = crossfadeDeckEqAtProgress({
+      progress: 0.12,
+      style: 'crossfade',
+      intel: { incomingDelay: 0.2, energyScale: 1 } as MixIntelligence,
+    })
+    const start = crossfadeDeckEqAtProgress({ progress: 0, style: 'crossfade' })
+    expect(early.incoming.low).toBeCloseTo(start.incoming.low, 5)
+    expect(early.outgoing.low).toBeLessThan(start.outgoing.low)
   })
 
   it('applies aggressive bass swap style', () => {
@@ -498,6 +622,30 @@ describe('labeled cues + section mix-in', () => {
     })
     expect(cueByRole(cues, 'mix-in')?.timeSec).toBe(32)
     expect(cueByRole(cues, 'drop')?.timeSec).toBe(64)
+  })
+
+  it('deriveDeckCues uses hot-cue-2 and memory-cue when asked', () => {
+    const track = {
+      id: 't',
+      file: '/t.mp3',
+      bpm: 120,
+      beat_grid_offset: 0,
+      duration: 200,
+      hotCues: [
+        { timeSec: 8, label: 'Hot 1' },
+        { timeSec: 24, label: 'Hot 2' },
+      ],
+      memoryCueSec: 12,
+      sonic_dna: { measured: { bpm: 120, bpmConfidence: 0.9 } },
+    }
+    const hot2 = deriveDeckCues(track, 8, 8, 0, 'hot-cue-2', 'hold', false, {
+      blendQuantize: 'beat',
+    })
+    expect(hot2.mixInSec).toBeCloseTo(24, 1)
+    const mem = deriveDeckCues(track, 8, 8, 0, 'memory-cue', 'hold', false, {
+      blendQuantize: 'beat',
+    })
+    expect(mem.mixInSec).toBeCloseTo(12, 1)
   })
 
   it('deriveDeckCues prefers labeled mix-in', () => {

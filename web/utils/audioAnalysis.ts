@@ -20,7 +20,7 @@ export interface PeakData {
 /**
  * Generate peak + DSP band envelopes from audio file using Web Audio API.
  */
-export async function generatePeakData(audioFile: string, samples: number = 2000): Promise<PeakData> {
+export async function generatePeakData(audioFile: string, samples: number = 4096): Promise<PeakData> {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
   try {
     const response = await fetch(audioFile, {

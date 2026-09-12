@@ -3,6 +3,7 @@
  * Handles fetching library data from API with JSON fallback
  */
 
+import { coerceLibraryApiTrack } from '@/lib/music-library/track-list-fields'
 import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
@@ -254,12 +255,13 @@ function withCatalogVersion(url: string, version: number): string {
 }
 
 async function fetchLibrary(url: string, init?: RequestInit): Promise<Response> {
+  const requestInit: RequestInit = { credentials: 'same-origin', ...init, cache: 'no-store' }
   // Version is already attached by callers that need it; avoid a second round-trip.
   if (/[?&]v=/.test(url)) {
-    return fetch(url, { ...init, cache: 'no-store' })
+    return fetch(url, requestInit)
   }
   const version = await fetchCatalogPublishVersion()
-  return fetch(withCatalogVersion(url, version), { ...init, cache: 'no-store' })
+  return fetch(withCatalogVersion(url, version), requestInit)
 }
 
 /** In-place: Supabase vault objects are MP3; rewrite stale .wav URLs from old caches. */
@@ -877,13 +879,7 @@ export async function fetchAllTracksSummaryForHydration(
 ): Promise<Track[]> {
   const includeArchived = options?.includeArchived ?? false
   const key = includeArchived ? 'arch' : 'live'
-  // Reuse in-flight only when caller didn't pass a custom pause/abort controller
-  if (
-    hydrationInFlight &&
-    hydrationInFlightKey === key &&
-    !options?.signal &&
-    !options?.shouldPause
-  ) {
+  if (hydrationInFlight && hydrationInFlightKey === key) {
     return hydrationInFlight
   }
 
@@ -1102,7 +1098,10 @@ export async function updateTrack(
 
     if (response.ok) {
       const data = await response.json()
-      return data.track
+      const track = coerceLibraryApiTrack(data.track) as Track | null
+      if (track && data.folderId && !track.folderId) track.folderId = data.folderId
+      if (track) normalizeTrackMedia(track)
+      return track
     }
 
     const error = await response.json()

@@ -16,8 +16,52 @@ export type MixQualityHistoryEntry = {
   samples: number
   outgoingTitle?: string
   incomingTitle?: string
+  outgoingTrackId?: string
+  incomingTrackId?: string
   syncMode?: string
   reason?: string
+}
+
+const HISTORY_GRADES: MixQualityGrade[] = ['excellent', 'good', 'fair', 'poor', 'unknown']
+
+export function parseMixQualityHistory(raw: unknown): MixQualityHistoryEntry[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((e): e is Record<string, unknown> => Boolean(e) && typeof e === 'object')
+    .filter((e) => typeof e.at === 'number' && HISTORY_GRADES.includes(e.grade as MixQualityGrade))
+    .map((e) => ({
+      at: e.at as number,
+      grade: e.grade as MixQualityGrade,
+      label: typeof e.label === 'string' ? e.label : String(e.grade),
+      phaseRmsSec: Number(e.phaseRmsSec) || 0,
+      kickResidualRmsMs: Number(e.kickResidualRmsMs) || 0,
+      samples: Number(e.samples) || 0,
+      outgoingTitle: typeof e.outgoingTitle === 'string' ? e.outgoingTitle : undefined,
+      incomingTitle: typeof e.incomingTitle === 'string' ? e.incomingTitle : undefined,
+      outgoingTrackId: typeof e.outgoingTrackId === 'string' ? e.outgoingTrackId : undefined,
+      incomingTrackId: typeof e.incomingTrackId === 'string' ? e.incomingTrackId : undefined,
+      syncMode: typeof e.syncMode === 'string' ? e.syncMode : undefined,
+      reason: typeof e.reason === 'string' ? e.reason : undefined,
+    }))
+    .slice(0, MIX_QUALITY_HISTORY_MAX)
+}
+
+/** Union local + cloud by `at`, newest first. */
+export function mergeMixQualityHistory(
+  local: MixQualityHistoryEntry[],
+  cloud: MixQualityHistoryEntry[],
+): MixQualityHistoryEntry[] {
+  const byAt = new Map<number, MixQualityHistoryEntry>()
+  for (const e of [...cloud, ...local]) {
+    if (!byAt.has(e.at)) byAt.set(e.at, e)
+  }
+  return [...byAt.values()].sort((a, b) => b.at - a.at).slice(0, MIX_QUALITY_HISTORY_MAX)
+}
+
+export function extractMixQualityHistoryFromSettings(raw: unknown): MixQualityHistoryEntry[] {
+  if (!raw || typeof raw !== 'object') return []
+  const o = raw as Record<string, unknown>
+  return parseMixQualityHistory(o._mixQualityHistory ?? o.mixQualityHistory)
 }
 
 export function readMixQualityHistory(): MixQualityHistoryEntry[] {
@@ -40,6 +84,8 @@ export function pushMixQualityHistory(
   meta?: {
     outgoingTitle?: string
     incomingTitle?: string
+    outgoingTrackId?: string
+    incomingTrackId?: string
     syncMode?: string
     reason?: string
   },
@@ -53,6 +99,8 @@ export function pushMixQualityHistory(
     samples: snap.samples,
     outgoingTitle: meta?.outgoingTitle,
     incomingTitle: meta?.incomingTitle,
+    outgoingTrackId: meta?.outgoingTrackId,
+    incomingTrackId: meta?.incomingTrackId,
     syncMode: meta?.syncMode,
     reason: meta?.reason,
   }
@@ -77,4 +125,16 @@ export function clearMixQualityHistory(): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Leading streak of fair/poor grades (newest first). */
+export function consecutiveWeakMixCount(
+  history: Array<{ grade: MixQualityGrade }>,
+): number {
+  let n = 0
+  for (const e of history) {
+    if (e.grade === 'poor' || e.grade === 'fair') n += 1
+    else break
+  }
+  return n
 }

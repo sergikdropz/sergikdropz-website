@@ -21,6 +21,9 @@
  * nest a full URL inside `/audio/...` (that caused CORS 404s on prod).
  */
 
+import { alternateVaultRelativePaths } from '@/lib/audio/vault-audio-extensions'
+import { isEdgePlaybackUrl, isStaleTunnelUrl } from '@/lib/audio/edge-playback-url'
+
 const STORAGE_MARKER = '/object/public/audio-files/'
 const AUDIO_PREFIX = '/audio/'
 /** Must be tested before AUDIO_PREFIX — it contains "/audio/" as a substring. */
@@ -113,18 +116,30 @@ export function extractVaultRelativePath(
   return preferMp3 ? value.replace(/\.wav$/i, '.mp3') : value
 }
 
-/** Swap .mp3 ↔ .wav on a same-origin vault URL (for local file probing). */
+/** Next same-origin vault URL with a sibling extension (mp3/m4a/wav/aac). */
 export function alternateAudioExtensionUrl(url: string): string | null {
   if (!url || typeof url !== 'string') return null
   const [path, query = ''] = url.split('?')
   const q = query ? `?${query}` : ''
-  if (/\.mp3$/i.test(path)) return `${path.replace(/\.mp3$/i, '.wav')}${q}`
-  if (/\.wav$/i.test(path)) return `${path.replace(/\.wav$/i, '.mp3')}${q}`
+  const rel = extractVaultRelativePath(path, { preferMp3: false })
+  if (!rel) return null
+  const altRel = alternateVaultRelativePaths(rel)[0]
+  if (!altRel) return null
+  const encoded = altRel.split('/').map((s) => encodeURIComponent(s)).join('/')
+  if (path.includes(MEDIA_PROXY_PREFIX)) return `${MEDIA_PROXY_PREFIX}${encoded}${q}`
+  if (path.startsWith(AUDIO_PREFIX)) return `${AUDIO_PREFIX}${encoded}${q}`
   return null
 }
 
 function encodePath(rel: string): string {
   return rel.split('/').map((s) => encodeURIComponent(s)).join('/')
+}
+
+/** Same-origin play URL. Required while R2 presign has no CORS for the audio element. */
+export function toSameOriginMediaUrl(urlOrPath: string): string | null {
+  const rel = extractVaultRelativePath(urlOrPath)
+  if (!rel) return null
+  return `/api/audio/media/${encodePath(rel)}`
 }
 
 /** Same-origin URL the browser should play: CDN, static file locally, or proxy fallback. */
@@ -154,13 +169,17 @@ export function vaultUpstreamUrl(rel: string): string | null {
     /\/+$/,
     '',
   )
-  if (!base) return null
+  if (!base || !/^https?:\/\//i.test(base)) return null
+  if (isStaleTunnelUrl(base) || /^r2:\/\//i.test(base)) return null
   return `${base}/audio/${encodePath(rel)}`
 }
 
 export function normalizeVaultAudioUrl(urlOrPath: string): string {
   if (!urlOrPath || typeof urlOrPath !== 'string') return urlOrPath
   if (urlOrPath.startsWith('blob:')) return urlOrPath
+  // Presigned / public R2 URLs must keep their query string. Rewriting them
+  // to /api/audio/media would send every byte through Vercel.
+  if (isEdgePlaybackUrl(urlOrPath)) return urlOrPath
 
   const useLocal =
     process.env.NEXT_PUBLIC_LOCAL_AUDIO === '1' ||

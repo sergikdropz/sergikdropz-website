@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Fetch only the fields we need (avoid statement timeouts)
     const { data: audioFiles, error: audioError } = await supabase
       .from('audio_files')
-      .select('id, title, artist, file_path, file_url, created_at, bpm, key_signature, energy_level, danceability, duration_seconds, artwork_url, metadata, format, file_name, date, year')
+      .select('id, title, artist, file_path, file_url, created_at, bpm, key_signature, energy_level, danceability, duration_seconds, artwork_url, metadata, format, file_name, date, year, sonic_dna')
       .order('created_at', { ascending: false })
 
     if (audioError) {
@@ -257,7 +257,9 @@ export async function POST(request: NextRequest) {
           artwork_url: audioFile.artwork_url || null,
           bpm: audioFile.bpm || null,
           key_signature: audioFile.key_signature || null,
-          sonic_dna: null, // sonic_dna is now in storage, not in database
+          // Keep library DNA in sync with audio_files so /api/audio/sonic-dna can resolve
+          // without depending on gitignored knowledge/library-analysis files on Vercel.
+          sonic_dna: audioFile.sonic_dna || null,
           waveform: null, // peaks live in the audio-analysis bucket (waveform_json_url)
           energy_level: audioFile.energy_level || null,
           danceability: audioFile.danceability || null,

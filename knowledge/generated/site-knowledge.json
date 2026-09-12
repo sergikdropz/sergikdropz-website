@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-09-05T19:14:08.642Z",
+    "generatedAt": "2026-09-11T21:05:07.022Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,22 +15,22 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 80,
-      "appRouterRouteHandlers": 230,
-      "componentsTsx": 139,
-      "libTs": 330
+      "appRouterPages": 82,
+      "appRouterRouteHandlers": 239,
+      "componentsTsx": 149,
+      "libTs": 422
     },
     "pagesByCategory": {
       "fan": 5,
       "music_library": 2,
-      "public": 13,
+      "public": 15,
       "debug": 1,
       "tooling": 1,
       "shop": 9,
       "admin": 39,
       "studio": 10
     },
-    "contentHash": "41b678b24749e0de"
+    "contentHash": "0bb8cd72e8856bc4"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -416,6 +416,16 @@
         "urlPath": "/admin/videos",
         "file": "web/app/admin/(protected)/videos/page.tsx",
         "category": "admin"
+      },
+      {
+        "urlPath": "/embed/[token]",
+        "file": "web/app/embed/[token]/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/s/[token]",
+        "file": "web/app/s/[token]/page.tsx",
+        "category": "public"
       },
       {
         "urlPath": "/studio/catalog/import",
@@ -810,6 +820,16 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/videos/import",
+        "file": "web/app/api/admin/videos/import/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/videos/lookup",
+        "file": "web/app/api/admin/videos/lookup/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/videos",
         "file": "web/app/api/admin/videos/route.ts",
         "category": "api"
@@ -910,8 +930,18 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/audio/static-waveform",
+        "file": "web/app/api/audio/static-waveform/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/audio/update-all-enhanced",
         "file": "web/app/api/audio/update-all-enhanced/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/audio/update-beat-grid",
+        "file": "web/app/api/audio/update-beat-grid/route.ts",
         "category": "api"
       },
       {
@@ -1375,6 +1405,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/oembed",
+        "file": "web/app/api/oembed/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/printful/webhook",
         "file": "web/app/api/printful/webhook/route.ts",
         "category": "api"
@@ -1392,6 +1427,21 @@
       {
         "urlPath": "/api/scan-library",
         "file": "web/app/api/scan-library/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shares/[token]",
+        "file": "web/app/api/shares/[token]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shares/artwork-proxy",
+        "file": "web/app/api/shares/artwork-proxy/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shares",
+        "file": "web/app/api/shares/route.ts",
         "category": "api"
       },
       {
@@ -1592,6 +1642,11 @@
       {
         "urlPath": "/api/supabase-check",
         "file": "web/app/api/supabase-check/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/videos",
+        "file": "web/app/api/videos/route.ts",
         "category": "api"
       },
       {

@@ -7,7 +7,7 @@
  * spectral mix, instrument usage, drum family, and listener heuristics.
  */
 
-import { BARS_PER_PHRASE, STEPS_PER_BAR } from '@/lib/audio/beat-grid'
+import { absoluteDownbeatSec, beatPeriodSec, BARS_PER_PHRASE, STEPS_PER_BAR } from '@/lib/audio/beat-grid'
 import { ensurePhraseSteps, expandBarStepsToPhrase } from '@/lib/audio/sonic-dna-mix'
 import { extractMeasured, parseSonicDna } from '@/lib/audio/sonic-dna-quality'
 
@@ -236,7 +236,19 @@ export function profileFromSonicDna(sonicDna: unknown): WaveformIntelligenceProf
     stepsPerBar: ensured.stepsPerBar || stepsPerBar,
     phraseBars: ensured.phraseBars || phraseBars,
     swingPercent: typeof swingRaw === 'number' && Number.isFinite(swingRaw) ? swingRaw : null,
-    gridOffsetSec: Number.isFinite(gridRaw) && gridRaw >= 0 ? gridRaw : 0,
+    gridOffsetSec:
+      Number.isFinite(gridRaw) && gridRaw >= 0
+        ? absoluteDownbeatSec(
+            gridRaw,
+            beatPeriodSec(
+              (typeof measured.bpm === 'number' && measured.bpm > 0
+                ? measured.bpm
+                : typeof measured.effectiveBpm === 'number' && measured.effectiveBpm > 0
+                  ? measured.effectiveBpm
+                  : 120),
+            ) || 0.5,
+          )
+        : 0,
     fourRatio: Number.isFinite(fourRaw) ? fourRaw : null,
     centroidHz: Number.isFinite(centroidRaw) && centroidRaw > 0 ? centroidRaw : null,
     crest: Number.isFinite(crestRaw) && crestRaw > 0 ? crestRaw : null,

@@ -639,7 +639,7 @@ export async function PUT(request: NextRequest) {
       .from('music_library_tracks')
       .update(dbUpdates)
       .eq('id', id)
-      .select()
+      .select('*, music_library_folders(name, type, artwork_url)')
       .single()
 
     if (error) {
@@ -703,8 +703,13 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    const folderRaw = data?.music_library_folders
+    const folder = Array.isArray(folderRaw) ? folderRaw[0] : folderRaw
     return NextResponse.json({
-      track: data,
+      track: {
+        ...mapLibraryTrackToListItem(data, { folder, includeFullMetadata: true }),
+        sonic_dna: data?.sonic_dna,
+      },
       folderId: systemic?.folderId || currentTrack?.folder_id || null,
       playlistId: systemic?.playlistId || null,
       tracksUpdated: systemic?.tracksUpdated || 0,

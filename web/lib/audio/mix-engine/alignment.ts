@@ -4,11 +4,16 @@
  * Doctrine (see knowledge/DJ_SYNC_DOCTRINE.md):
  * - Phase is computed in *media time* with *base BPM* (never bpm × playbackRate).
  * - One AlignmentState is produced and consumed; consumers must not re-snap unless conf drops.
+ * - Phrase-1 IN sits at the same bar/beat of the 8-bar cell as outgoing.
  * - Snare pocket only when both decks are four-on-the-floor (groove-aware).
  * - Kick + snare/clap onset residuals always micro-nudge (±20 ms) when series exist.
  */
 
 import { resolveIncomingMixCue, beatPhaseErrorSec } from './sync'
+import {
+  clampToPhrase1,
+  incomingCueAtOutgoingPhrase,
+} from './phrase-lattice'
 import { resolveKickOnsetSec, resolveSnareClapOnsetSec } from './kick-onsets'
 import {
   dualOnsetResidualNudgeSec,
@@ -25,7 +30,11 @@ export type AlignmentWeights = {
 }
 
 export type AlignmentState = {
-  /** Incoming media cue (seconds) after fusion */
+  /**
+   * Incoming media cue (seconds) after fusion.
+   * Hosts must stamp this onto MixPlan.resolvedIncomingSec and not overwrite
+   * with memory cue / 0 unless Creative mode exits canonical phrase cues.
+   */
   incomingCueSec: number
   /** Planned cue before pocket/transient (for diagnostics) */
   plannedIncomingSec: number
@@ -93,8 +102,8 @@ export function solveAlignmentState(params: {
   dnaConfidence?: number
   phraseLock?: boolean
   /**
-   * Cap cue displacement to ±½ beat from plannedIncomingSec (phrase-1 doctrine).
-   * Pocket/kick may micro-nudge only — never leave the first phrase.
+   * Cap cue to phrase 1 (first 8-bar cell). Pocket/kick may micro-nudge
+   * inside that cell so incoming matches outgoing's bar in the phrase.
    */
   phrase1Lock?: boolean
 }): AlignmentState {
@@ -124,7 +133,17 @@ export function solveAlignmentState(params: {
   if (phraseLock) sources.push('phrase')
   if (snareLock) sources.push('snare')
 
-  const planned = Math.max(0, params.plannedIncomingSec)
+  const phraseBars = params.phraseBars ?? 8
+  const phrase1Lock = params.phrase1Lock !== false
+  const phraseMatched = incomingCueAtOutgoingPhrase({
+    outgoingTimeSec: params.outgoingTimeSec,
+    outgoingBpm: params.outgoingBpm,
+    outgoingOffsetSec: params.outgoingOffsetSec,
+    incomingBpm: params.incomingBpm,
+    incomingOffsetSec: params.incomingOffsetSec,
+    phraseBars,
+  })
+  const planned = phrase1Lock ? phraseMatched : Math.max(0, params.plannedIncomingSec)
   let cue = resolveIncomingMixCue({
     plannedIncomingSec: planned,
     outgoingTimeSec: params.outgoingTimeSec,
@@ -134,9 +153,10 @@ export function solveAlignmentState(params: {
     incomingBpm: params.incomingBpm,
     incomingOffsetSec: params.incomingOffsetSec,
     incomingSonicDna: params.incomingSonicDna,
-    phraseBars: phraseLock ? params.phraseBars ?? 8 : 8,
+    phraseBars: phraseLock ? phraseBars : 8,
     snareLock,
   })
+  if (phrase1Lock) sources.push('phrase-phase')
 
   // Kick + snare/clap onset residual (micro only) — runs even under phrase1Lock.
   if (phraseLock && confidence >= 0.4) {
@@ -205,15 +225,11 @@ export function solveAlignmentState(params: {
     }
   }
 
-  // Phrase-1 doctrine: never leave the planned first-phrase cue by more than ½ beat.
-  if (params.phrase1Lock) {
-    const bpm = params.incomingBpm > 0 ? params.incomingBpm : 120
-    const halfBeat = (60 / bpm) * 0.5
-    const delta = cue - planned
-    if (Math.abs(delta) > halfBeat) {
-      cue = planned + Math.sign(delta) * halfBeat
-      sources.push('phrase1-cap')
-    }
+  // Phrase-1 doctrine: stay in the first 8-bar cell, at outgoing's phrase position.
+  if (phrase1Lock) {
+    const folded = clampToPhrase1(cue, params.incomingBpm > 0 ? params.incomingBpm : 120, phraseBars)
+    if (Math.abs(folded - cue) > 0.0005) sources.push('phrase1-window')
+    cue = folded
   }
 
   const phaseErrSec = beatPhaseErrorSec({

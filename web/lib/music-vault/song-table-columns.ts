@@ -91,6 +91,9 @@ export const SONG_TABLE_DEFAULT_COLUMN_ORDER: SongTableReorderableColumn[] = [
 
 export const SONG_TABLE_COLUMNS_STORAGE_KEY = 'serg-browser-songs-visible-columns'
 export const LEGACY_SONG_TABLE_COLUMNS_STORAGE_KEY = 'itunes-browser-songs-visible-columns'
+export const SONG_TABLE_EP_COLUMNS_STORAGE_KEY = 'serg-browser-ep-songs-visible-columns'
+export const SONG_TABLE_EP_COLUMNS_VERSION_KEY = 'serg-browser-ep-songs-visible-columns-version'
+export const SONG_TABLE_EP_COLUMNS_VERSION = 'v1-artist-album-time-genre-subgenre'
 export const SONG_TABLE_COLUMN_ORDER_STORAGE_KEY = 'serg-browser-songs-column-order'
 export const SONG_TABLE_SORT_STORAGE_KEY = 'serg-browser-songs-sort'
 
@@ -111,17 +114,82 @@ export const COLUMN_SORT_FIELD: Partial<Record<SongTableReorderableColumn, SongT
   duration: 'duration',
 }
 
+export type SongTableColumnPreset = 'default' | 'ep'
+
+/** Default optional columns for EP tracklists (Title / # stay fixed). */
+export const SONG_TABLE_EP_DEFAULT_OPTIONAL_COLUMNS: SongTableOptionalColumn[] = [
+  'artist',
+  'album',
+  'duration',
+  'genre',
+  'subgenre',
+]
+
+export function defaultSongTableOptionalColumns(
+  preset: SongTableColumnPreset = 'default',
+): SongTableOptionalColumn[] {
+  return preset === 'ep'
+    ? [...SONG_TABLE_EP_DEFAULT_OPTIONAL_COLUMNS]
+    : [...SONG_TABLE_OPTIONAL_COLUMNS]
+}
+
+export function songTableColumnsStorageKey(preset: SongTableColumnPreset = 'default'): string {
+  return preset === 'ep' ? SONG_TABLE_EP_COLUMNS_STORAGE_KEY : SONG_TABLE_COLUMNS_STORAGE_KEY
+}
+
+export function saveSongTableColumnVisibility(
+  visible: Set<SongTableOptionalColumn>,
+  preset: SongTableColumnPreset = 'default',
+): void {
+  try {
+    localStorage.setItem(
+      songTableColumnsStorageKey(preset),
+      JSON.stringify(SONG_TABLE_OPTIONAL_COLUMNS.filter((k) => visible.has(k))),
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
 const ALL_REORDERABLE = new Set<SongTableReorderableColumn>(SONG_TABLE_DEFAULT_COLUMN_ORDER)
 
-export function loadSongTableColumnVisibility(): Set<SongTableOptionalColumn> {
-  if (typeof window === 'undefined') return new Set(SONG_TABLE_OPTIONAL_COLUMNS)
+export function loadSongTableColumnVisibility(
+  preset: SongTableColumnPreset = 'default',
+): Set<SongTableOptionalColumn> {
+  const defaults = defaultSongTableOptionalColumns(preset)
+  if (typeof window === 'undefined') return new Set(defaults)
   try {
+    if (preset === 'ep') {
+      const version = localStorage.getItem(SONG_TABLE_EP_COLUMNS_VERSION_KEY)
+      if (version !== SONG_TABLE_EP_COLUMNS_VERSION) {
+        const seeded = new Set(defaults)
+        saveSongTableColumnVisibility(seeded, 'ep')
+        try {
+          localStorage.setItem(SONG_TABLE_EP_COLUMNS_VERSION_KEY, SONG_TABLE_EP_COLUMNS_VERSION)
+        } catch {
+          /* ignore */
+        }
+        return seeded
+      }
+      const raw = localStorage.getItem(SONG_TABLE_EP_COLUMNS_STORAGE_KEY)
+      if (!raw) return new Set(defaults)
+      const parsed = JSON.parse(raw) as unknown
+      if (!Array.isArray(parsed)) return new Set(defaults)
+      const next = new Set<SongTableOptionalColumn>()
+      for (const k of parsed) {
+        if (typeof k === 'string' && SONG_TABLE_OPTIONAL_COLUMNS.includes(k as SongTableOptionalColumn)) {
+          next.add(k as SongTableOptionalColumn)
+        }
+      }
+      return next.size > 0 ? next : new Set(defaults)
+    }
+
     const raw =
       localStorage.getItem(SONG_TABLE_COLUMNS_STORAGE_KEY) ??
       localStorage.getItem(LEGACY_SONG_TABLE_COLUMNS_STORAGE_KEY)
-    if (!raw) return new Set(SONG_TABLE_OPTIONAL_COLUMNS)
+    if (!raw) return new Set(defaults)
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return new Set(SONG_TABLE_OPTIONAL_COLUMNS)
+    if (!Array.isArray(parsed)) return new Set(defaults)
     const next = new Set<SongTableOptionalColumn>()
     for (const k of parsed) {
       if (typeof k === 'string' && SONG_TABLE_OPTIONAL_COLUMNS.includes(k as SongTableOptionalColumn)) {
@@ -131,13 +199,10 @@ export function loadSongTableColumnVisibility(): Set<SongTableOptionalColumn> {
     for (const k of ['year', 'date', 'date_created'] as const) {
       if (!parsed.includes(k)) next.add(k)
     }
-    localStorage.setItem(
-      SONG_TABLE_COLUMNS_STORAGE_KEY,
-      JSON.stringify(SONG_TABLE_OPTIONAL_COLUMNS.filter((k) => next.has(k)))
-    )
-    return next.size > 0 ? next : new Set(SONG_TABLE_OPTIONAL_COLUMNS)
+    saveSongTableColumnVisibility(next, 'default')
+    return next.size > 0 ? next : new Set(defaults)
   } catch {
-    return new Set(SONG_TABLE_OPTIONAL_COLUMNS)
+    return new Set(defaults)
   }
 }
 

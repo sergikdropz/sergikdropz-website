@@ -66,6 +66,7 @@ describe('fan CRM vault unlock mapping', () => {
     expect(isSyntheticFanEmail('e2e-autodj-1778000000000@example.com')).toBe(true)
     expect(isSyntheticFanEmail('e2e-vault-1@example.com')).toBe(true)
     expect(isSyntheticFanEmail('vault-probe-test@example.com')).toBe(true)
+    expect(isSyntheticFanEmail('verify-sidebar-mosaic-1788640821070@example.com')).toBe(true)
     expect(isSyntheticFanEmail('carrascojanis1@gmail.com')).toBe(false)
   })
 

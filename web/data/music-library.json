@@ -9709,7 +9709,7 @@
                   "artist": "SERGIK",
                   "duration": 230,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/Playlists/Funktioneers/SERGIK%20-%20Para%20Papa.mp3",
-                  "bpm": 125,
+                  "bpm": 123,
                   "sonic_dna": {
                     "genres": {
                       "primaryGenres": [
@@ -9725,7 +9725,13 @@
                       "subgenre": "Deep n Funky"
                     },
                     "measured": {
-                      "gridLocked": true,
+                      "bpm": 123.05,
+                      "bpmConfidence": 0.664,
+                      "effectiveBpm": 123,
+                      "timingFeel": "full-time",
+                      "drumFamily": "four-on-the-floor",
+                      "fourRatio": 0.267,
+                      "gridLocked": false,
                       "gridLockScore": 0.7486241757719626,
                       "genre": {
                         "primary": "Funky House",
@@ -9733,7 +9739,7 @@
                         "confidence": 0.55
                       }
                     },
-                    "gridLocked": true
+                    "gridLocked": false
                   },
                   "waveform": {
                     "hasData": true,

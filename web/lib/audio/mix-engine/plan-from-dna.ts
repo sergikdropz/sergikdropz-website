@@ -8,15 +8,21 @@
  */
 
 import { BARS_PER_PHRASE } from '@/lib/audio/beat-grid'
-import type { CuePriority, EnergyCurve, MixLengthBias } from '@/lib/audio/auto-dj-preferences'
-import { mixLengthBiasFactor } from '@/lib/audio/auto-dj-preferences'
+import type {
+  BeatCorrect,
+  BlendQuantize,
+  CuePriority,
+  EnergyCurve,
+  MixLengthBias,
+} from '@/lib/audio/auto-dj-preferences'
+import { beatCorrectFlags, mixLengthBiasFactor } from '@/lib/audio/auto-dj-preferences'
 import {
   quantizeToDnaGrid,
   resolvePlaybackBpm,
   secondsToNextPhraseBoundary,
 } from '@/lib/audio/sonic-dna-mix'
 import { mixIncomingRateRatio } from './sync'
-import { cueByRole, parseMixCues } from './cues'
+import { cueByRole, parseMixCues, resolveHotCueTime } from './cues'
 import { harmonicPitchSemitones } from './harmonic-pitch'
 import { readPairBpmConfidence } from './alignment'
 import { normalizeDjOverlapBars, PHRASE_CELL_BARS } from './phrase-mix-doctrine'
@@ -133,8 +139,8 @@ function snapToKickPocket(params: {
 }
 
 /**
- * Snap mix cues to mathematical 8-bar grid (then ±½-beat kick), optionally to a
- * larger section (16 / 24 / 32). Skips snap when phraseBars is 0.
+ * Snap mix cues to mathematical phrase / bar / beat lattice, optionally with
+ * a ±½-beat kick nudge. Skips snap when phraseBars is 0.
  */
 export function snapToMixPhraseBoundary(params: {
   timeSec: number
@@ -148,6 +154,8 @@ export function snapToMixPhraseBoundary(params: {
   maxSec?: number
   /** When true, skip DNA kick nudge (pure bar math). */
   mathOnly?: boolean
+  /** Lattice size for the snap (default phrase = 8 bars). */
+  quantize?: BlendQuantize
 }): number {
   if (params.phraseBars === 0) {
     return clampTimeSec(params.timeSec, params.minSec, params.maxSec)
@@ -156,9 +164,36 @@ export function snapToMixPhraseBoundary(params: {
   const bpm = params.bpm > 0 ? params.bpm : 120
   const beat = 60 / bpm
   const barSec = beat * 4
-  const offset = Number.isFinite(params.offsetSec) ? Math.max(0, params.offsetSec!) : 0
+  const offset = toPhaseOnlyOffsetSec(
+    Number.isFinite(params.offsetSec) ? Math.max(0, params.offsetSec!) : 0,
+    beat,
+  )
+  const quantize: BlendQuantize =
+    params.quantize === 'bar' || params.quantize === 'beat' ? params.quantize : 'phrase'
+  const dna = params.mathOnly || quantize === 'beat' ? undefined : params.sonicDna
+
+  if (quantize === 'bar' || quantize === 'beat') {
+    const cell = quantize === 'bar' ? barSec : beat
+    const t = Math.max(0, params.timeSec)
+    const rel = Math.max(0, t - offset)
+    const idx = params.preferEarlier ? Math.floor(rel / cell + 1e-9) : Math.round(rel / cell)
+    let snapped = offset + Math.max(0, idx) * cell
+    if (params.preferEarlier && snapped > t + beat * 0.25 && idx > 0) {
+      snapped = offset + (idx - 1) * cell
+    }
+    if (dna && quantize === 'bar') {
+      snapped = snapToKickPocket({
+        timeSec: snapped,
+        bpm,
+        offsetSec: offset,
+        sonicDna: dna,
+        preferEarlier: true,
+      })
+    }
+    return clampTimeSec(snapped, params.minSec, params.maxSec)
+  }
+
   const sectionBars = resolveOutPhraseBars(params.sectionBars ?? (params.phraseBars as OutPhraseBars))
-  const dna = params.mathOnly ? undefined : params.sonicDna
 
   // Prefer section math when section > 8, else 8-bar — then optional kick nudge.
   if (sectionBars > ALIGN_PHRASE_BARS) {
@@ -298,7 +333,17 @@ export function deriveDeckCues(
    * Ignores creative outroStartRatio / intro mid-cues (labeled mix-in/out still win when present).
    */
   canonicalPhraseCues: boolean = true,
+  opts?: {
+    blendQuantize?: BlendQuantize
+    /** When false, skip DNA kick nudge on cue snaps. */
+    kickCueNudge?: boolean
+  },
 ): DeckCues {
+  const blendQuantize: BlendQuantize =
+    opts?.blendQuantize === 'bar' || opts?.blendQuantize === 'beat'
+      ? opts.blendQuantize
+      : 'phrase'
+  const mathOnly = canonicalPhraseCues || opts?.kickCueNudge === false
   const bpm = resolvePlaybackBpm(track) || (typeof track.bpm === 'number' ? track.bpm : null)
   const useBpmEarly = bpm && bpm > 0 ? bpm : 120
   const beatEarly = 60 / useBpmEarly
@@ -391,25 +436,44 @@ export function deriveDeckCues(
   if (labeledIn) mixInSec = labeledIn.timeSec
   if (labeledOut) mixOutSec = labeledOut.timeSec
 
-  if (cuePriority === 'first-downbeat' || canonicalPhraseCues) {
+  const hotCueSlot =
+    cuePriority === 'hot-cue-1'
+      ? 1
+      : cuePriority === 'hot-cue-2'
+        ? 2
+        : cuePriority === 'hot-cue-3'
+          ? 3
+          : cuePriority === 'hot-cue-4'
+            ? 4
+            : null
+  if (cuePriority === 'first-downbeat') {
     if (!labeledIn) mixInSec = grid
-  } else if (cuePriority === 'hot-cue-1') {
-    const first = labeled.find((c) => c.role === 'generic') ?? labeled[0]
-    if (first) mixInSec = first.timeSec
-    else {
-      const hotCue =
-        track.sonic_dna &&
-        typeof track.sonic_dna === 'object' &&
-        (track.sonic_dna as Record<string, unknown>).hotCues &&
-        Array.isArray((track.sonic_dna as Record<string, unknown>).hotCues)
-          ? Number(((track.sonic_dna as Record<string, unknown>).hotCues as unknown[])[0])
-          : NaN
-      if (Number.isFinite(hotCue) && hotCue >= 0) {
-        mixInSec = hotCue
-      }
+  } else if (hotCueSlot != null) {
+    const hot = resolveHotCueTime(track.sonic_dna, track.hotCues, hotCueSlot)
+    if (hot != null) mixInSec = hot
+  } else if (cuePriority === 'memory-cue') {
+    const mem = Number(track.memoryCueSec)
+    if (Number.isFinite(mem) && mem >= 0) mixInSec = mem
+  } else if (cuePriority === 'mix-in') {
+    if (labeledIn) mixInSec = labeledIn.timeSec
+  } else if (cuePriority === 'drop') {
+    if (labeledDrop) mixInSec = labeledDrop.timeSec
+    else if (segments && Number.isFinite(segments.dropStartSec) && segments.dropStartSec! > 0) {
+      mixInSec = segments.dropStartSec!
     }
+  } else if (cuePriority === 'loop-in') {
+    const loop = cueByRole(labeled, 'loop-in')
+    if (loop) mixInSec = loop.timeSec
+  } else if (canonicalPhraseCues && cuePriority === 'dna-intro') {
+    if (!labeledIn) mixInSec = grid
   }
 
+  const placedCue =
+    hotCueSlot != null ||
+    cuePriority === 'memory-cue' ||
+    cuePriority === 'drop' ||
+    cuePriority === 'loop-in' ||
+    cuePriority === 'mix-in'
   mixInSec = snapToMixPhraseBoundary({
     timeSec: mixInSec,
     bpm: useBpm,
@@ -417,9 +481,15 @@ export function deriveDeckCues(
     phraseBars: resolvedInBars,
     sonicDna: track.sonic_dna,
     preferEarlier: true,
-    minSec: grid,
-    maxSec: duration != null ? Math.max(grid, duration * 0.25) : undefined,
-    mathOnly: canonicalPhraseCues,
+    minSec: placedCue ? 0 : grid,
+    maxSec:
+      duration != null
+        ? placedCue
+          ? Math.max(grid, duration - beat)
+          : Math.max(grid, duration * 0.25)
+        : undefined,
+    mathOnly,
+    quantize: blendQuantize,
   })
   mixOutSec = snapToMixPhraseBoundary({
     timeSec: mixOutSec,
@@ -432,7 +502,8 @@ export function deriveDeckCues(
     preferEarlier: true,
     minSec: grid,
     maxSec: duration != null ? Math.max(grid, duration - beat) : undefined,
-    mathOnly: canonicalPhraseCues,
+    mathOnly,
+    quantize: blendQuantize,
   })
   if (duration != null && duration - mixOutSec < alignPhraseSec * 0.45) {
     mixOutSec = snapToMixPhraseBoundary({
@@ -445,7 +516,8 @@ export function deriveDeckCues(
       preferEarlier: true,
       minSec: grid,
       maxSec: duration - beat,
-      mathOnly: canonicalPhraseCues,
+      mathOnly,
+      quantize: blendQuantize,
     })
   }
 
@@ -495,9 +567,23 @@ export function buildMixPlan(params: {
   canonicalPhraseCues?: boolean
   /** Exact N×8 overlap (no energy/bias stretch). Default = canonical. */
   exactOverlap?: boolean
+  /** Snap OUT/IN cues to phrase / bar / beat. Default phrase. */
+  blendQuantize?: BlendQuantize
+  /** Live BeatSync corrections. Default phase-kick. */
+  beatCorrect?: BeatCorrect
 }): MixPlan | null {
   const canonical = params.canonicalPhraseCues !== false
   const exactOverlap = params.exactOverlap ?? canonical
+  const blendQuantize: BlendQuantize =
+    params.blendQuantize === 'bar' || params.blendQuantize === 'beat'
+      ? params.blendQuantize
+      : 'phrase'
+  const beatCorrect: BeatCorrect = params.beatCorrect ?? 'phase-kick'
+  const correct = beatCorrectFlags(beatCorrect)
+  const kickCueNudge = correct.kickCorrect
+  const vinylBend = correct.vinylBend
+  const kickCorrect = correct.kickCorrect
+  const gridAlign = correct.gridAlign ?? undefined
   const overlapBars = exactOverlap
     ? normalizeDjOverlapBars(params.overlapBars ?? params.phraseBars ?? DEFAULT_PHRASE_BARS)
     : (params.overlapBars ?? params.phraseBars ?? DEFAULT_PHRASE_BARS)
@@ -506,14 +592,14 @@ export function buildMixPlan(params: {
   let inPhraseBars: InPhraseBars = canonical
     ? PHRASE_CELL_BARS
     : resolveInPhraseBars(params.inPhraseBars)
-  const cuePriority = canonical
-    ? 'first-downbeat'
-    : (params.cuePriority ?? 'dna-intro')
+  const cuePriority = params.cuePriority ?? (canonical ? 'first-downbeat' : 'dna-intro')
+  const phrase1Lock = canonical && cuePriority === 'first-downbeat'
   const energyCurve = exactOverlap ? 'hold' : (params.energyCurve ?? 'hold')
   // Honest confidence: missing measured.bpmConfidence → low (not 0.7).
   const bpmConf = readPairBpmConfidence(params.outgoing.sonic_dna, params.incoming.sonic_dna)
   const phraseLock = bpmConf >= 0.45 && inPhraseBars !== 0
   if (!phraseLock && !canonical) inPhraseBars = 0
+  const cueOpts = { blendQuantize, kickCueNudge }
   const outCues = deriveDeckCues(
     params.outgoing,
     overlapBars,
@@ -522,6 +608,7 @@ export function buildMixPlan(params: {
     'dna-intro',
     energyCurve,
     canonical,
+    cueOpts,
   )
   const inCues = deriveDeckCues(
     params.incoming,
@@ -531,6 +618,7 @@ export function buildMixPlan(params: {
     cuePriority,
     energyCurve,
     canonical,
+    cueOpts,
   )
   const bpmOut = outCues.bpm || 120
   const bpmIn = inCues.bpm || bpmOut
@@ -541,6 +629,8 @@ export function buildMixPlan(params: {
 
   const duration = outCues.durationSec
   if (duration == null || duration <= 0) return null
+
+  const mathOnly = canonical || !kickCueNudge
 
   // Prefer last-phrase OUT; fall back if cues invalid.
   let mixOut = outCues.mixOutSec
@@ -559,7 +649,8 @@ export function buildMixPlan(params: {
       preferEarlier: true,
       minSec: outCues.gridOffsetSec,
       maxSec: duration - beat,
-      mathOnly: canonical,
+      mathOnly,
+      quantize: blendQuantize,
     })
   }
 
@@ -569,7 +660,7 @@ export function buildMixPlan(params: {
       timeSec: params.nowSec,
       bpm: bpmOut,
       offsetSec: outCues.gridOffsetSec,
-      phraseBars: ALIGN_PHRASE_BARS,
+      phraseBars: blendQuantize === 'beat' ? 1 / 4 : blendQuantize === 'bar' ? 1 : ALIGN_PHRASE_BARS,
       beatsPerBar: 4,
     })
     startAt = params.nowSec + toBoundary
@@ -591,7 +682,8 @@ export function buildMixPlan(params: {
     preferEarlier: params.nowSec <= startAt,
     minSec: Math.max(outCues.gridOffsetSec, params.nowSec - 0.05),
     maxSec: duration - beat * 0.5,
-    mathOnly: canonical,
+    mathOnly,
+    quantize: blendQuantize,
   })
 
   const remainingAfterStart = Math.max(0.5, duration - startAt)
@@ -617,23 +709,26 @@ export function buildMixPlan(params: {
   // Lead-in is prepare-only — never shift the audible OUT / markers.
   const prepareLeadInSec = Math.max(0, params.leadInSec ?? 0)
 
-  // IN = first 8-bar phrase on incoming grid (phrase 1), never mid-intro DNA.
+  // Phrase-1 lock stays on the incoming grid; other cue priorities use mixInSec.
   const incomingStartSec =
     inPhraseBars === 0
       ? Math.max(0, inCues.gridOffsetSec)
       : snapToMixPhraseBoundary({
-          timeSec: canonical ? inCues.gridOffsetSec : inCues.mixInSec,
+          timeSec: inCues.mixInSec,
           bpm: bpmIn,
           offsetSec: inCues.gridOffsetSec,
           phraseBars: PHRASE_CELL_BARS,
           sonicDna: params.incoming.sonic_dna,
           preferEarlier: true,
-          minSec: inCues.gridOffsetSec,
+          minSec: phrase1Lock ? inCues.gridOffsetSec : 0,
           maxSec:
             inCues.durationSec != null
-              ? Math.max(inCues.gridOffsetSec, inCues.durationSec * 0.12)
+              ? phrase1Lock
+                ? Math.max(inCues.gridOffsetSec, inCues.durationSec * 0.12)
+                : Math.max(inCues.gridOffsetSec, inCues.durationSec - beat)
               : inCues.gridOffsetSec + overlapPhraseSec,
-          mathOnly: canonical,
+          mathOnly,
+          quantize: blendQuantize,
         })
 
   const rateRatio = mixIncomingRateRatio({
@@ -672,9 +767,13 @@ export function buildMixPlan(params: {
     echoSend: false,
     harmonicSemitones,
     holdBeatmatch: true,
+    vinylBend,
+    kickCorrect,
+    gridAlign,
+    blendQuantize,
     prepareLeadInSec,
     masterTempoHandoff: canonical,
-    phrase1Lock: canonical,
+    phrase1Lock,
     blendFromOut: canonical,
     exactOverlap,
     reason:
@@ -683,7 +782,9 @@ export function buildMixPlan(params: {
         : `Late entry · ${outPhraseBars}-bar snap · ${overlapBars}-bar blend · IN phrase 1`) +
       (needsOutroLoop ? ' · 8-bar loop' : '') +
       (phraseLock ? '' : ' · BPM?') +
-      (bpmConf < 0.5 ? ' · DNA?' : ''),
+      (bpmConf < 0.5 ? ' · DNA?' : '') +
+      (blendQuantize !== 'phrase' ? ` · q=${blendQuantize}` : '') +
+      (beatCorrect !== 'phase-kick' ? ` · correct=${beatCorrect}` : ''),
   }
 }
 

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { deckFiltersAtProgress } from './filters'
-import { buildMixIntelligence, suggestMixStyle } from './mix-intelligence'
+import {
+  applyQualityRecoveryToIntelligence,
+  buildMixIntelligence,
+  resolveAutoDjMixIntelligence,
+  suggestMixStyle,
+} from './mix-intelligence'
 import { resolveStretchPolicy } from './stretch-policy'
 
 describe('stretch-policy', () => {
@@ -44,9 +49,52 @@ describe('mix-intelligence', () => {
   it('keeps Smooth filters and duck off', () => {
     const intel = buildMixIntelligence({ outgoing: out, incoming: inn, style: 'crossfade' })
     expect(intel.filterIntensity).toBe(0)
-    expect(intel.incomingDelay).toBe(0)
+    expect(intel.incomingDelay).toBeGreaterThan(0)
+    expect(intel.incomingDelay).toBeLessThanOrEqual(0.12)
     expect(intel.lowDuckDb).toBe(0)
     expect(intel.softTailStart).toBeCloseTo(0.88, 2)
+  })
+
+  it('boosts vinyl-bend chase after a poor mix', () => {
+    const intel = buildMixIntelligence({ outgoing: out, incoming: inn, style: 'crossfade' })
+    const recovered = applyQualityRecoveryToIntelligence(intel, 'poor')
+    expect(recovered.microStrength).toBeGreaterThan(intel.microStrength)
+    expect(applyQualityRecoveryToIntelligence(intel, 'excellent')).toBe(intel)
+  })
+
+  it('honors Auto DJ techniques on the live intelligence path', () => {
+    const locked = resolveAutoDjMixIntelligence({
+      outgoing: out,
+      incoming: inn,
+      style: 'crossfade',
+      mixStyle: 'crossfade',
+      mixTechniques: ['phrase-lock'],
+      energyCurve: 'hold',
+    })
+    const plain = resolveAutoDjMixIntelligence({
+      outgoing: out,
+      incoming: inn,
+      style: 'crossfade',
+      mixStyle: 'crossfade',
+      mixTechniques: ['standard'],
+      energyCurve: 'hold',
+    })
+    expect(locked.microStrength).toBeGreaterThan(plain.microStrength)
+    expect(plain.filterIntensity).toBe(0)
+    expect(plain.lowDuckDb).toBe(0)
+  })
+
+  it('keeps echo-out send when the engine style is Filter', () => {
+    const intel = resolveAutoDjMixIntelligence({
+      outgoing: out,
+      incoming: inn,
+      style: 'filter-eq',
+      mixStyle: 'echo-out',
+      mixTechniques: ['standard'],
+      energyCurve: 'hold',
+    })
+    expect(intel.echoSend).toBeGreaterThan(0)
+    expect(intel.filterIntensity).toBeGreaterThan(0)
   })
 })
 
@@ -60,6 +108,12 @@ describe('deckFiltersAtProgress', () => {
     expect(early.hpfHz).toBe(20)
     expect(outMid.hpfHz).toBe(20)
     expect(outMid.lpfHz).toBe(20000)
+  })
+
+  it('opens Filter LPF toward the last bar settle', () => {
+    const late = deckFiltersAtProgress({ progress: 0.85, style: 'filter-eq', role: 'incoming' })
+    const end = deckFiltersAtProgress({ progress: 0.99, style: 'filter-eq', role: 'incoming' })
+    expect(end.lpfHz).toBeGreaterThan(late.lpfHz)
   })
 
   it('opens incoming LPF through a Filter mix', () => {

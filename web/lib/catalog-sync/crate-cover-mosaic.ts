@@ -63,7 +63,7 @@ export function collectLibraryCoverPool(urls: Array<string | null | undefined>):
   return out
 }
 
-/** Unique covers for one crate. Never repeats; may be fewer than 9. */
+/** Unique covers for one crate tile. Fills up to 9 without repeating inside that tile. */
 export function crateMosaicCovers(
   pool: string[],
   crateId: string,
@@ -74,35 +74,13 @@ export function crateMosaicCovers(
   return shuffleInPlace([...unique], crateId).slice(0, Math.min(size, unique.length))
 }
 
-/**
- * Deal the cover pool across crate tiles with no repeats in the group.
- * Each image is used at most once; leftover cells stay empty.
- */
+/** Each crate tile gets its own shuffle of the full pool; uniqueness is per tile only. */
 export function assignCrateMosaicCovers(
   pool: string[],
   crateIds: string[],
   size = CRATE_MOSAIC_SIZE,
 ): Record<string, string[]> {
   const assigned: Record<string, string[]> = {}
-  for (const id of crateIds) assigned[id] = []
-  if (!crateIds.length) return assigned
-
-  const unique = shuffleInPlace(collectLibraryCoverPool(pool), `crates:${crateIds.join('|')}`)
-  let cursor = 0
-  for (const url of unique) {
-    let placed = false
-    for (let n = 0; n < crateIds.length; n += 1) {
-      const id = crateIds[(cursor + n) % crateIds.length]
-      if (assigned[id].length >= size) continue
-      assigned[id].push(url)
-      cursor = (cursor + n + 1) % crateIds.length
-      placed = true
-      break
-    }
-    if (!placed) break
-  }
-  for (const id of crateIds) {
-    assigned[id] = shuffleInPlace(assigned[id], id)
-  }
+  for (const id of crateIds) assigned[id] = crateMosaicCovers(pool, id, size)
   return assigned
 }

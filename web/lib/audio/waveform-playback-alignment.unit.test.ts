@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fetchStaticWaveformTape,
   looksLikeSyntheticPeaks,
+  parseStaticWaveformJson,
+  staticWaveformJsonUrl,
+  staticWaveformRelPath,
   storedWaveformLikelyStale,
   waveformAnalysisUrls,
 } from './waveform-playback-alignment'
@@ -39,6 +43,53 @@ describe('looksLikeSyntheticPeaks', () => {
       )
     })
     expect(looksLikeSyntheticPeaks(peaks)).toBe(true)
+  })
+})
+
+describe('staticWaveformJsonUrl', () => {
+  it('maps m4a and wav masters to the mp3 tape JSON path', () => {
+    expect(staticWaveformRelPath('unreleased/Playlists/Feelin Sendy/SERGIK - Bender.m4a')).toBe(
+      'unreleased/Playlists/Feelin Sendy/SERGIK - Bender.json',
+    )
+    expect(staticWaveformJsonUrl('unreleased/Playlists/Feelin Sendy/SERGIK - Bender.m4a')).toBe(
+      '/waveforms/unreleased/Playlists/Feelin%20Sendy/SERGIK%20-%20Bender.json',
+    )
+    expect(staticWaveformJsonUrl('unreleased/eps/SERGIK - FTP/SERGIK - FTP.wav')).toBe(
+      '/waveforms/unreleased/eps/SERGIK%20-%20FTP/SERGIK%20-%20FTP.json',
+    )
+  })
+})
+
+describe('fetchStaticWaveformTape', () => {
+  it('uses the API and treats available:false as a miss', async () => {
+    const originalFetch = globalThis.fetch
+    const calls: string[] = []
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      calls.push(url)
+      return new Response(JSON.stringify({ available: false }), { status: 200 })
+    }) as typeof fetch
+    try {
+      const tape = await fetchStaticWaveformTape('unreleased/Playlists/Feelin Sendy/SERGIK - Bender.m4a')
+      expect(tape).toBeNull()
+      expect(calls[0]).toContain('/api/audio/static-waveform?')
+      expect(calls[0]).not.toContain('/waveforms/')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
+
+describe('parseStaticWaveformJson', () => {
+  it('reads compact deploy tapes', () => {
+    const tape = parseStaticWaveformJson({ d: [0.2, 0.4], e: [[0.4, 0.2, 0.1, 0.2, 0.3]] })
+    expect(tape?.data).toEqual([0.2, 0.4])
+    expect(tape?.envelopes?.[0]).toEqual({ peak: 0.4, rms: 0.2, low: 0.1, mid: 0.2, high: 0.3 })
+  })
+
+  it('returns null for empty bodies', () => {
+    expect(parseStaticWaveformJson({})).toBeNull()
+    expect(parseStaticWaveformJson(null)).toBeNull()
   })
 })
 

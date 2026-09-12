@@ -13,6 +13,7 @@ import {
   normalizeWaveformColorMode,
   playheadLeftPercent,
   quantizeWindowToHalfBeats,
+  timeToXPercent,
   resolveWaveformColor,
   sharpenBandWeights,
   softNormalizeEnergies,
@@ -20,8 +21,8 @@ import {
   buildTimedSamplesInWindow,
   clampVisibleBars,
   scaleVisibleBars,
+  splitWheelAxes,
   stepVisibleBars,
-  timeToXPercent,
   wheelDeltaToZoomFactor,
   upsampleWaveformSamples,
   usesMultiBandLayers,
@@ -52,7 +53,7 @@ describe('quantizeWindowToHalfBeats', () => {
 })
 
 describe('getVisibleTimeWindow + playhead', () => {
-  it('keeps playhead centered in follow mode when zoomed', () => {
+  it('keeps playhead centered in follow mode when zoomed mid-track', () => {
     const duration = 100
     const sampleCount = 1000
     const currentTime = 40
@@ -73,9 +74,82 @@ describe('getVisibleTimeWindow + playhead', () => {
       startSec: window.startSec,
       endSec: window.endSec,
     })
-    expect(left).toBe(50)
+    expect(left).toBeCloseTo(timeToXPercent(currentTime, window.startSec, window.endSec), 5)
+    expect(left).toBeCloseTo(50, 0)
     expect(currentTime).toBeGreaterThan(window.startSec)
     expect(currentTime).toBeLessThan(window.endSec)
+  })
+
+  it('keeps playhead on true time at the start instead of faking 50%', () => {
+    const window = getVisibleTimeWindow({
+      durationSec: 100,
+      sampleCount: 1000,
+      visibleBars: 8,
+      offsetIndex: 0,
+      follow: true,
+      currentTimeSec: 0.4,
+      beatDurationSec: 0.5,
+      beatsPerBar: 4,
+    })
+    const left = playheadLeftPercent({
+      currentTimeSec: 0.4,
+      durationSec: 100,
+      visibleBars: 8,
+      follow: true,
+      startSec: window.startSec,
+      endSec: window.endSec,
+    })
+    expect(left).not.toBe(50)
+    expect(left).toBeCloseTo(timeToXPercent(0.4, window.startSec, window.endSec), 5)
+    expect(left).toBeGreaterThanOrEqual(0)
+    expect(left).toBeLessThan(20)
+  })
+
+  it('hides the playhead when it is outside the zoomed window', () => {
+    const window = getVisibleTimeWindow({
+      durationSec: 80,
+      sampleCount: 800,
+      visibleBars: 8,
+      offsetIndex: 0,
+      follow: false,
+      currentTimeSec: 60,
+      beatDurationSec: 0.5,
+      beatsPerBar: 4,
+    })
+    expect(window.endSec).toBeLessThan(60)
+    expect(
+      playheadLeftPercent({
+        currentTimeSec: 60,
+        durationSec: 80,
+        visibleBars: 8,
+        follow: false,
+        startSec: window.startSec,
+        endSec: window.endSec,
+      }),
+    ).toBe(-1)
+  })
+
+  it('stays on true time when zoomed into a region that is not centered', () => {
+    const window = getVisibleTimeWindow({
+      durationSec: 80,
+      sampleCount: 800,
+      visibleBars: 8,
+      offsetIndex: 200,
+      follow: false,
+      currentTimeSec: 22,
+      beatDurationSec: 0.5,
+      beatsPerBar: 4,
+    })
+    const left = playheadLeftPercent({
+      currentTimeSec: 22,
+      durationSec: 80,
+      visibleBars: 8,
+      follow: false,
+      startSec: window.startSec,
+      endSec: window.endSec,
+    })
+    expect(left).toBeCloseTo(timeToXPercent(22, window.startSec, window.endSec), 5)
+    expect(left).not.toBe(50)
   })
 
   it('maps playhead with the same time transform as the window', () => {
@@ -178,8 +252,8 @@ describe('normalizeWaveformColorMode', () => {
     expect(normalizeWaveformColorMode('simple')).toBe('mono')
     expect(normalizeWaveformColorMode('ableton')).toBe('channel')
     expect(normalizeWaveformColorMode('ollin')).toBe('channel')
-    expect(normalizeWaveformColorMode('nope')).toBe('energy')
-    expect(normalizeWaveformColorMode(null)).toBe('energy')
+    expect(normalizeWaveformColorMode('nope')).toBe('drums')
+    expect(normalizeWaveformColorMode(null)).toBe('drums')
   })
 })
 
@@ -339,7 +413,7 @@ describe('usesMultiBandLayers + layer layout', () => {
     expect(normalizeWaveformLayerLayout('overlay')).toBe('overlay')
     expect(normalizeWaveformLayerLayout('stacked')).toBe('overlay')
     expect(normalizeWaveformLayerLayout('classic')).toBe('merged')
-    expect(normalizeWaveformLayerLayout(null)).toBe('merged')
+    expect(normalizeWaveformLayerLayout(null)).toBe('overlay')
   })
 })
 
@@ -373,6 +447,7 @@ describe('elementSpectralColor', () => {
   it('exports legend palette matching SERGIK spec', () => {
     expect(SERGIK_ELEMENT_COLORS.drums).toEqual([232, 63, 51])
     expect(SERGIK_ELEMENT_COLORS.kicks).toEqual([158, 206, 230])
+    expect(SERGIK_ELEMENT_COLORS.snares).toEqual([255, 140, 48])
     expect(SERGIK_ELEMENT_COLORS.claps).toEqual([115, 238, 71])
     expect(SERGIK_ELEMENT_COLORS.hats).toEqual([101, 219, 238])
     expect(SERGIK_ELEMENT_COLORS.bass).toEqual([248, 240, 114])
@@ -401,12 +476,15 @@ describe('buildFilledEnvelopePath', () => {
 
 
 describe('bar-based zoom ladder', () => {
-  it('steps through 4/8/16… and out to full track', () => {
+  it('steps through 1/2/4/8/16… and out to full track', () => {
     expect(stepVisibleBars(0, 1)).toBe(32)
     expect(stepVisibleBars(32, 1)).toBe(24)
     expect(stepVisibleBars(16, 1)).toBe(8)
     expect(stepVisibleBars(8, 1)).toBe(4)
-    expect(stepVisibleBars(4, 1)).toBe(4)
+    expect(stepVisibleBars(4, 1)).toBe(2)
+    expect(stepVisibleBars(2, 1)).toBe(1)
+    expect(stepVisibleBars(1, 1)).toBe(1)
+    expect(stepVisibleBars(1, -1)).toBe(2)
     expect(stepVisibleBars(4, -1)).toBe(8)
     expect(stepVisibleBars(8, -1)).toBe(16)
     expect(stepVisibleBars(128, -1)).toBe(0)
@@ -420,7 +498,7 @@ describe('bar-based zoom ladder', () => {
     const inFactor = wheelDeltaToZoomFactor(-40)
     expect(inFactor).toBeLessThan(1)
     expect(scaleVisibleBars(32, inFactor)).toBeLessThan(32)
-    expect(scaleVisibleBars(32, inFactor)).toBeGreaterThan(4)
+    expect(scaleVisibleBars(32, inFactor)).toBeGreaterThan(1)
     // zoom out past max → full overview
     expect(scaleVisibleBars(128, 1.2)).toBe(0)
     // enter from full
@@ -428,6 +506,14 @@ describe('bar-based zoom ladder', () => {
     // hard stop: further zoom-out while already full stays full
     expect(scaleVisibleBars(0, 1.2)).toBe(0)
     expect(scaleVisibleBars(0, 2)).toBe(0)
+  })
+
+  it('applies zoom and pan from the same wheel event', () => {
+    expect(splitWheelAxes(30, -40)).toEqual({ zoomDelta: -40, panDelta: 30 })
+    expect(splitWheelAxes(0.2, -40)).toEqual({ zoomDelta: -40, panDelta: 0 })
+    expect(splitWheelAxes(30, -40, { pinch: true })).toEqual({ zoomDelta: -40, panDelta: 0 })
+    expect(splitWheelAxes(4, 40, { shift: true })).toEqual({ zoomDelta: 0, panDelta: 40 })
+    expect(splitWheelAxes(40, 4, { shift: true })).toEqual({ zoomDelta: 0, panDelta: 40 })
   })
 
   it('stops zoom-out once the bar window covers the full track', () => {

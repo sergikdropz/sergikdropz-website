@@ -9,7 +9,12 @@ import {
   STEPS_PER_PHRASE,
   beatPeriodSec,
 } from '@/lib/audio/beat-grid'
+
+/** 16-bar section markers on the painted waveform grid. */
+const BARS_PER_SECTION = BARS_PER_PHRASE * 2
 import { extractMeasured, type SonicDnaMeasured } from '@/lib/audio/sonic-dna-quality'
+import { displayTrackBpm } from '@/lib/audio/track-display'
+import { readCatalogOverrides } from '@/lib/catalog-lock'
 import { KEY_TRANSITIONS, getCompatibleKeys } from '@/types/sergik-data'
 
 export type DnaMixTrack = {
@@ -21,6 +26,7 @@ export type DnaMixTrack = {
   genre?: string | null
   sonic_dna?: unknown
   beat_grid_offset?: number | null
+  metadata?: Record<string, unknown> | null
 }
 
 export type MixingRecommendations = {
@@ -176,22 +182,40 @@ export function ensureKickOnsetSec(measured: SonicDnaMeasured): SonicDnaMeasured
   }
 }
 
-/** Felt pulse for grids / AutoDJ — honors half-time effectiveBpm. */
+/** Admin-locked BPM from Settings overrides — not a stale catalog integer. */
+function readLockedCatalogBpm(track: DnaMixTrack | unknown): number | null {
+  if (!track || typeof track !== 'object' || Array.isArray(track)) return null
+  const raw = readCatalogOverrides((track as DnaMixTrack).metadata)?.bpm
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Felt pulse for grids / AutoDJ.
+ * Admin catalog_overrides.bpm wins. Otherwise measured BPM wins when catalog
+ * is more than ~1% off (e.g. Para Papa 125 vs 123.05). Nearby rounding stays catalog.
+ */
 export function resolvePlaybackBpm(
   trackOrDna: DnaMixTrack | unknown,
   uiBpm?: number | null
 ): number | null {
+  const isTrack =
+    trackOrDna && typeof trackOrDna === 'object' && !Array.isArray(trackOrDna)
   const sonic =
-    trackOrDna && typeof trackOrDna === 'object' && 'sonic_dna' in (trackOrDna as object)
+    isTrack && 'sonic_dna' in (trackOrDna as object)
       ? (trackOrDna as DnaMixTrack).sonic_dna
       : trackOrDna
   const catalogBpm =
-    trackOrDna && typeof trackOrDna === 'object' && 'bpm' in (trackOrDna as object)
+    isTrack && 'bpm' in (trackOrDna as object)
       ? Number((trackOrDna as DnaMixTrack).bpm)
       : NaN
   const measured = extractMeasured(sonic)
   const ui = typeof uiBpm === 'number' && uiBpm > 0 ? uiBpm : null
-  const cat = Number.isFinite(catalogBpm) && catalogBpm > 0 ? catalogBpm : null
+  const locked = isTrack ? readLockedCatalogBpm(trackOrDna) : null
+  const cat =
+    locked ||
+    (Number.isFinite(catalogBpm) && catalogBpm > 0 ? catalogBpm : null) ||
+    (isTrack ? displayTrackBpm(trackOrDna as DnaMixTrack) : null)
 
   if (measured) {
     const feel = String(measured.timingFeel || '').toLowerCase()
@@ -200,20 +224,22 @@ export function resolvePlaybackBpm(
       typeof measured.effectiveBpm === 'number' && measured.effectiveBpm > 0
         ? measured.effectiveBpm
         : null
-    const conf = typeof measured.bpmConfidence === 'number' ? measured.bpmConfidence : 0.55
 
     if (feel.includes('half') && effective && dnaBpm && Math.abs(effective - dnaBpm) / dnaBpm >= 0.35) {
       return effective
     }
+    if (locked) return locked
+    const conf = typeof measured.bpmConfidence === 'number' ? measured.bpmConfidence : 0.55
     if (dnaBpm && conf >= 0.45) {
-      const anchor = ui || cat || dnaBpm
-      const rel = Math.abs(dnaBpm - anchor) / anchor
-      if (rel < 0.08 || (conf >= 0.7 && rel < 0.15)) return dnaBpm
+      if (cat && Math.abs(cat - dnaBpm) / dnaBpm <= 0.01) return cat
+      return dnaBpm
     }
-    if (effective && (!ui || Math.abs(effective - ui) / ui < 0.12)) return effective
+    if (cat) return cat
+    if (ui) return ui
+    if (effective) return effective
   }
 
-  return ui || cat || null
+  return cat || ui || null
 }
 
 function jaccard(a: number[], b: number[]): number {
@@ -436,16 +462,87 @@ export function deriveMixingRecommendations(track: DnaMixTrack): MixingRecommend
   }
 }
 
+export type DnaGridSnapMode =
+  | 'sixteenth'
+  | 'half-beat'
+  | 'beat'
+  | 'bar'
+  | 'phrase'
+  | 'section'
+  | 'kick'
+  | 'step'
+
+export type VisibleGridSnapMode =
+  | 'none'
+  | 'sixteenth'
+  | 'half-beat'
+  | 'beat'
+  | 'bar'
+  | 'phrase'
+  | 'section'
+
+/**
+ * Coarser snap as the tape zooms out — matches painted grid ticks.
+ * Fully zoomed in (1 bar): free pointer (no snap).
+ * ≤8 bars: 16ths; ≤32: half-beats; ≤64: bars; else phrases.
+ */
+export function quantizeModeForVisibleBars(visibleBars: number): VisibleGridSnapMode {
+  if (!Number.isFinite(visibleBars) || visibleBars <= 0) return 'section'
+  // Max zoom-in — exact click / scrub position, no lattice.
+  if (visibleBars <= 1) return 'none'
+  if (visibleBars <= 8) return 'sixteenth'
+  if (visibleBars <= 32) return 'half-beat'
+  if (visibleBars <= 64) return 'bar'
+  return 'phrase'
+}
+
+/**
+ * Pointer / cue snap for the current waveform window.
+ * Full-track overview picks the closer of phrase vs 16-bar section.
+ * Max zoom-in returns the raw time (free-form).
+ */
+export function quantizePointerToVisibleGrid(params: {
+  timeSec: number
+  bpm: number
+  offsetSec?: number
+  visibleBars: number
+  beatsPerBar?: number
+  durationSec?: number
+  sonicDna?: unknown
+}): number {
+  const { timeSec, durationSec } = params
+  const clamp = (t: number) => {
+    if (durationSec != null && durationSec > 0 && Number.isFinite(durationSec)) {
+      return Math.max(0, Math.min(durationSec, t))
+    }
+    return Math.max(0, t)
+  }
+  if (!Number.isFinite(timeSec)) return 0
+  if (!Number.isFinite(params.bpm) || params.bpm <= 0) return clamp(timeSec)
+
+  const bars = params.visibleBars
+  if (!Number.isFinite(bars) || bars <= 0) {
+    const phrase = quantizeToDnaGrid({ ...params, mode: 'phrase' })
+    const section = quantizeToDnaGrid({ ...params, mode: 'section' })
+    const pick =
+      Math.abs(phrase - timeSec) <= Math.abs(section - timeSec) ? phrase : section
+    return clamp(pick)
+  }
+  const mode = quantizeModeForVisibleBars(bars)
+  if (mode === 'none') return clamp(timeSec)
+  return clamp(quantizeToDnaGrid({ ...params, mode }))
+}
+
 /**
  * Snap time to nearest DNA grid point.
- * mode: beat | bar | phrase | kick (nearest kick step on phrase grid)
+ * mode: beat | bar | phrase | section | kick (nearest kick step on phrase grid)
  */
 export function quantizeToDnaGrid(params: {
   timeSec: number
   bpm: number
   offsetSec?: number
   sonicDna?: unknown
-  mode?: 'beat' | 'bar' | 'phrase' | 'kick' | 'step'
+  mode?: DnaGridSnapMode
   beatsPerBar?: number
 }): number {
   const { timeSec, bpm } = params
@@ -456,6 +553,16 @@ export function quantizeToDnaGrid(params: {
   const barSec = beat * beatsPerBar
   const mode = params.mode || 'beat'
 
+  if (mode === 'sixteenth') {
+    const step = beat / 4
+    const n = Math.round((timeSec - offset) / step)
+    return Math.max(0, offset + n * step)
+  }
+  if (mode === 'half-beat') {
+    const half = beat / 2
+    const n = Math.round((timeSec - offset) / half)
+    return Math.max(0, offset + n * half)
+  }
   if (mode === 'beat') {
     const n = Math.round((timeSec - offset) / beat)
     return Math.max(0, offset + n * beat)
@@ -468,6 +575,11 @@ export function quantizeToDnaGrid(params: {
     const phraseSec = barSec * BARS_PER_PHRASE
     const n = Math.round((timeSec - offset) / phraseSec)
     return Math.max(0, offset + n * phraseSec)
+  }
+  if (mode === 'section') {
+    const sectionSec = barSec * BARS_PER_SECTION
+    const n = Math.round((timeSec - offset) / sectionSec)
+    return Math.max(0, offset + n * sectionSec)
   }
 
   // kick / step — nearest active kick on phrase grid (or every 16th if no DNA)

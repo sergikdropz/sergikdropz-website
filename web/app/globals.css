@@ -142,6 +142,68 @@
 .mosaic-tile-motion-6 { animation-name: mosaic-kb-6; animation-duration: 25s; }
 .mosaic-tile-motion-7 { animation-name: mosaic-kb-7; animation-duration: 18s; }
 
+/* EP release stage: per-album Ken Burns paths (pick via .ep-release-cover-drift-N) */
+@keyframes ep-release-cover-drift-0 {
+  0% { transform: scale(1.16) translate(0%, 0%); }
+  35% { transform: scale(1.32) translate(-6%, 5%); }
+  70% { transform: scale(1.22) translate(4%, -3%); }
+  100% { transform: scale(1.16) translate(0%, 0%); }
+}
+@keyframes ep-release-cover-drift-1 {
+  0% { transform: scale(1.2) translate(0%, 0%); }
+  40% { transform: scale(1.36) translate(6%, -4%); }
+  75% { transform: scale(1.24) translate(-3%, 5%); }
+  100% { transform: scale(1.2) translate(0%, 0%); }
+}
+@keyframes ep-release-cover-drift-2 {
+  0% { transform: scale(1.18) translate(0%, 0%); }
+  30% { transform: scale(1.28) translate(-5%, -6%); }
+  65% { transform: scale(1.34) translate(5%, 2%); }
+  100% { transform: scale(1.18) translate(0%, 0%); }
+}
+@keyframes ep-release-cover-drift-3 {
+  0% { transform: scale(1.22) translate(0%, 0%); }
+  45% { transform: scale(1.38) translate(5%, 6%); }
+  80% { transform: scale(1.2) translate(-4%, -2%); }
+  100% { transform: scale(1.22) translate(0%, 0%); }
+}
+@keyframes ep-release-cover-drift-4 {
+  0% { transform: scale(1.28) translate(-3%, 2%); }
+  50% { transform: scale(1.14) translate(4%, -5%); }
+  100% { transform: scale(1.28) translate(-3%, 2%); }
+}
+@keyframes ep-release-cover-drift-5 {
+  0% { transform: scale(1.3) translate(4%, -3%); }
+  40% { transform: scale(1.15) translate(-5%, 4%); }
+  100% { transform: scale(1.3) translate(4%, -3%); }
+}
+@keyframes ep-release-cover-drift-6 {
+  0% { transform: scale(1.17) translate(0%, 3%); }
+  33% { transform: scale(1.35) translate(6%, -2%); }
+  66% { transform: scale(1.22) translate(-4%, -5%); }
+  100% { transform: scale(1.17) translate(0%, 3%); }
+}
+@keyframes ep-release-cover-drift-7 {
+  0% { transform: scale(1.24) translate(-2%, -4%); }
+  50% { transform: scale(1.12) translate(3%, 5%); }
+  100% { transform: scale(1.24) translate(-2%, -4%); }
+}
+
+.ep-release-cover-drift {
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+.ep-release-cover-drift-0 { animation-name: ep-release-cover-drift-0; animation-duration: 28s; }
+.ep-release-cover-drift-1 { animation-name: ep-release-cover-drift-1; animation-duration: 34s; }
+.ep-release-cover-drift-2 { animation-name: ep-release-cover-drift-2; animation-duration: 24s; }
+.ep-release-cover-drift-3 { animation-name: ep-release-cover-drift-3; animation-duration: 31s; }
+.ep-release-cover-drift-4 { animation-name: ep-release-cover-drift-4; animation-duration: 36s; }
+.ep-release-cover-drift-5 { animation-name: ep-release-cover-drift-5; animation-duration: 26s; }
+.ep-release-cover-drift-6 { animation-name: ep-release-cover-drift-6; animation-duration: 30s; }
+.ep-release-cover-drift-7 { animation-name: ep-release-cover-drift-7; animation-duration: 22s; }
+
 /* Background mosaic: sharp tiles only — no CSS blur on cover art / gallery photos */
 .site-background-mosaic img {
   filter: none !important;
@@ -175,7 +237,16 @@
   .mosaic-tile-motion-4,
   .mosaic-tile-motion-5,
   .mosaic-tile-motion-6,
-  .mosaic-tile-motion-7 {
+  .mosaic-tile-motion-7,
+  .ep-release-cover-drift,
+  .ep-release-cover-drift-0,
+  .ep-release-cover-drift-1,
+  .ep-release-cover-drift-2,
+  .ep-release-cover-drift-3,
+  .ep-release-cover-drift-4,
+  .ep-release-cover-drift-5,
+  .ep-release-cover-drift-6,
+  .ep-release-cover-drift-7 {
     animation: none !important;
     will-change: auto !important;
     transform: none !important;
@@ -196,6 +267,15 @@
   .mosaic-tile-motion-5,
   .mosaic-tile-motion-6,
   .mosaic-tile-motion-7,
+  .ep-release-cover-drift,
+  .ep-release-cover-drift-0,
+  .ep-release-cover-drift-1,
+  .ep-release-cover-drift-2,
+  .ep-release-cover-drift-3,
+  .ep-release-cover-drift-4,
+  .ep-release-cover-drift-5,
+  .ep-release-cover-drift-6,
+  .ep-release-cover-drift-7,
   .animate-pulse-glow {
     animation: none !important;
     will-change: auto !important;
@@ -621,6 +701,24 @@ textarea,
   font-weight: 400;
   text-transform: uppercase;
   font-stretch: 75%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Inline SERGIK letters inside mixed titles — slightly taller than caps, 2× horizontal. */
+.font-sergik-brand-letter {
+  display: inline-block;
+  font-family: var(--font-six-caps), 'Six Caps', Impact, sans-serif;
+  font-size: 1.06em;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  transform: scaleX(2);
+  transform-origin: center bottom;
+  /* Half of the scaled overflow, tightened so letters sit closer. */
+  margin-inline: 0.18em;
+  vertical-align: baseline;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

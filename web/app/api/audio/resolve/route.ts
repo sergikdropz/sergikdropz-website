@@ -24,24 +24,54 @@ const RESOLVE_CACHE_HEADERS = {
 // Force dynamic rendering since we use request.url
 export const dynamic = 'force-dynamic';
 
+async function resolveOne(filePath: string) {
+  const vaultPlayback = await resolveVaultPlaybackUrl(filePath)
+  if (vaultPlayback && vaultPlayback.source !== 'normalized') {
+    return {
+      path: filePath,
+      url: vaultPlayback.url,
+      fallbackUrl: vaultPlayback.fallbackUrl,
+      source: vaultPlayback.source,
+      expiresIn: vaultPlayback.expiresIn,
+    }
+  }
+  return null
+}
+
 export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const filePath = searchParams.get('path')
+    const filePaths = [
+      ...searchParams.getAll('path'),
+      ...(searchParams.get('paths') || '').split(',').map((p) => p.trim()),
+    ].filter(Boolean)
 
-    if (!filePath) {
+    if (!filePaths.length) {
       return NextResponse.json(
         { error: 'Missing path parameter' },
         { status: 400 }
       )
     }
 
-    const vaultPlayback = await resolveVaultPlaybackUrl(filePath)
-    if (vaultPlayback && vaultPlayback.source !== 'normalized') {
+    if (filePaths.length > 1) {
+      const limited = filePaths.slice(0, 8)
+      const results = await Promise.all(limited.map((path) => resolveOne(path)))
+      return NextResponse.json(
+        {
+          results: results.filter(Boolean),
+        },
+        { headers: RESOLVE_CACHE_HEADERS },
+      )
+    }
+
+    const filePath = filePaths[0]
+    const vaultPlayback = await resolveOne(filePath)
+    if (vaultPlayback) {
       return NextResponse.json(
         {
           url: vaultPlayback.url,
+          fallbackUrl: vaultPlayback.fallbackUrl,
           source: vaultPlayback.source,
           expiresIn: vaultPlayback.expiresIn,
         },

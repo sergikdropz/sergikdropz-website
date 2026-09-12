@@ -1,11 +1,9 @@
 /**
- * Waveform tape paint.
+ * Waveform tape paint — CDJ / MiniMeters style.
  *
- * Zoomed-out (overview): SoundCloud-style continuous silhouette with real
- * peak/valley dynamics (not a solid wall).
- *
- * Zoomed-in (detail): same 1px continuous language, smoothstep-interpolated
- * along time so zoom stays consistent (not blocky stairs).
+ * Dual envelope: RMS body + Peak/flux hairlines (never bake into one blend).
+ * Drums/Elements: kick · snare · clap · hat lanes (or overlay).
+ * Overview vs zoom budgets drive density, peak spikes, and onset ticks.
  */
 import {
   CHANNEL_LANE_RGB,
@@ -27,6 +25,10 @@ import {
   usesOverlayMergedLayout,
 } from '@/lib/audio/waveform-view'
 import type { WaveformDrawBudget } from '@/lib/audio/waveform-draw-budget'
+import {
+  dualEnvelopeAmps,
+  interpolateDualEnvelope,
+} from '@/lib/audio/waveform-dsp-envelope'
 import {
   classifyBeatIndex,
   forEachBeatInWindow,
@@ -145,9 +147,10 @@ function paintOverlayMergedStack<K extends string>(
   const shares = softNormalizeEnergies(p.energies, { minShare: 0.08, threshold: 0.028 })
   const half = p.totalAmp
   let [br, bg, bb] = p.classicRgb ?? mixAdditiveRgb(p.layers, shares)
-  ;[br, bg, bb] = boostRgbSaturation(br, bg, bb, 1.75)
+  ;[br, bg, bb] = boostRgbSaturation(br, bg, bb, 1.55)
 
-  ctx.fillStyle = rgba(br, bg, bb, p.past ? 0.74 : 0.3)
+  // Keep silhouette on black — avoid washed/white body fill
+  ctx.fillStyle = rgba(br * 0.82, bg * 0.82, bb * 0.82, p.past ? 0.58 : 0.24)
   ctx.fillRect(p.x, p.midY - half, p.fw, half * 2)
 
   const sorted = [...p.layers].sort(
@@ -163,10 +166,10 @@ function paintOverlayMergedStack<K extends string>(
     if (layerHalf < 0.5) continue
 
     const opacityBase = p.past ? layer.opacityPast : layer.opacityFuture
-    const alpha = Math.min(0.88, opacityBase * (0.34 + energy * 0.42 + forward * 0.32))
+    const alpha = Math.min(0.78, opacityBase * (0.3 + energy * 0.38 + forward * 0.28))
     let [r, g, b] = [...layer.rgb] as [number, number, number]
-    ;[r, g, b] = boostRgbSaturation(r, g, b, 2.05 + forward * 0.65)
-    const lift = 1 + forward * 0.22
+    ;[r, g, b] = boostRgbSaturation(r, g, b, 1.85 + forward * 0.45)
+    const lift = 1 + forward * 0.12
     r = Math.min(255, r * lift)
     g = Math.min(255, g * lift)
     b = Math.min(255, b * lift)
@@ -174,16 +177,11 @@ function paintOverlayMergedStack<K extends string>(
     ctx.fillStyle = rgba(r, g, b, alpha)
     ctx.fillRect(p.x, p.midY - layerHalf, p.fw, layerHalf * 2)
 
-    if (forward >= 0.62 && energy > 0.18) {
-      const accentHalf = Math.max(0.45, layerHalf * (0.28 + forward * 0.22))
+    if (forward >= 0.62 && energy > 0.22) {
+      const accentHalf = Math.max(0.45, layerHalf * (0.22 + forward * 0.16))
       const accentY = p.midY - half
-      const accentAlpha = Math.min(0.96, alpha * (0.72 + forward * 0.35))
-      ctx.fillStyle = rgba(
-        Math.min(255, r * 1.12),
-        Math.min(255, g * 1.12),
-        Math.min(255, b * 1.12),
-        accentAlpha,
-      )
+      const accentAlpha = Math.min(0.72, alpha * (0.55 + forward * 0.25))
+      ctx.fillStyle = rgba(r, g, b, accentAlpha)
       ctx.fillRect(p.x, accentY, p.fw, accentHalf * 2)
     }
   }
@@ -289,6 +287,7 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
       beatsPerBar: p.beatsPerBar,
       beatGridEmphasis: p.beatGridEmphasis,
       halfBeats: p.budget.halfBeats,
+      sixteenths: p.budget.sixteenths,
       beatLines: p.budget.beatLines,
       toX,
       height,
@@ -322,6 +321,7 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
         interpolate: !p.budget.overview,
         intelligenceProfile: p.intelligenceProfile,
         stackMode: 'lanes',
+        peakSpikes: p.budget.peakSpikes,
       })
     } else {
       paintDrumsMultiBand(ctx, {
@@ -334,6 +334,7 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
         interpolate: !p.budget.overview,
         intelligenceProfile: p.intelligenceProfile,
         stackMode: 'lanes',
+        peakSpikes: p.budget.peakSpikes,
       })
     }
   } else if (usesOverlayMergedLayout(p.colorMode, p.layerLayout ?? 'merged')) {
@@ -348,6 +349,7 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
         interpolate: !p.budget.overview,
         intelligenceProfile: p.intelligenceProfile,
         stackMode: 'overlay',
+        peakSpikes: p.budget.peakSpikes,
       })
     } else {
       paintDrumsMultiBand(ctx, {
@@ -360,6 +362,7 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
         interpolate: !p.budget.overview,
         intelligenceProfile: p.intelligenceProfile,
         stackMode: 'overlay',
+        peakSpikes: p.budget.peakSpikes,
       })
     }
   } else if (p.budget.overview) {
@@ -370,6 +373,7 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
       playX,
       width,
       colorMode: p.colorMode,
+      peakSpikes: p.budget.peakSpikes,
     })
   } else {
     // Same continuous 1px silhouette as overview — interpolated so zoom stays smooth
@@ -381,6 +385,19 @@ export function paintWaveformFrame(p: PaintWaveformFrameParams): void {
       playX,
       width,
       colorMode: p.colorMode,
+      peakSpikes: p.budget.peakSpikes,
+    })
+  }
+
+  if (p.budget.onsetTicks) {
+    paintOnsetTransientTicks(ctx, {
+      startSec: p.startSec,
+      endSec: p.endSec,
+      height,
+      playX,
+      toX,
+      profile: p.intelligenceProfile,
+      zoomed: !p.budget.overview,
     })
   }
 
@@ -397,6 +414,7 @@ function paintBeatGrid(
     beatsPerBar: number
     beatGridEmphasis: boolean
     halfBeats: boolean
+    sixteenths: boolean
     beatLines: boolean
     toX: (t: number) => number
     height: number
@@ -404,8 +422,12 @@ function paintBeatGrid(
 ): void {
   const beat = p.beatDurationSec
   const half = beat / 2
+  const sixteenth = beat / 4
   const { toX, height } = p
   const offset = p.beatGridOffsetSec
+  const bar = Math.max(1, Math.floor(p.beatsPerBar) || 4)
+  const barSec = beat * bar
+  const phraseSec = barSec * 8
 
   const strokeAt = (t: number, stroke: string, lw: number) => {
     // Device-pixel snap keeps grid from looking soft / drifted vs playhead
@@ -416,6 +438,17 @@ function paintBeatGrid(
     ctx.moveTo(x, 0)
     ctx.lineTo(x, height)
     ctx.stroke()
+  }
+
+  if (p.sixteenths && p.beatGridEmphasis) {
+    const n0 = Math.ceil((p.startSec - offset) / sixteenth - 1e-9)
+    for (let n = n0; ; n++) {
+      const t = offset + n * sixteenth
+      if (t > p.endSec + 1e-9) break
+      if (n % 2 === 0) continue // half / full beats drawn below
+      if (t < p.startSec - 1e-9) continue
+      strokeAt(t, 'rgba(255,255,255,0.035)', 1)
+    }
   }
 
   if (p.halfBeats && p.beatGridEmphasis) {
@@ -429,8 +462,16 @@ function paintBeatGrid(
     }
   }
 
+  // Dual-clock CDJ paint:
+  // - Beat / bar lines follow beat-grid phase (offset + k·beat)
+  // - Phrase / section markers stay on the file-start lattice (doctrine)
   forEachBeatInWindow(p.startSec, p.endSec, offset, beat, (t, beatIndex) => {
     const kind = classifyBeatIndex(beatIndex, p.beatsPerBar)
+    if (kind === 'phrase' || kind === 'section') {
+      // Lattice markers drawn below; keep a bar-weight line on phase beats.
+      strokeAt(t, 'rgba(255,255,255,0.12)', 1)
+      return
+    }
     if (kind === 'beat') {
       if (!p.beatLines) return
       if (!p.beatGridEmphasis) return
@@ -439,23 +480,30 @@ function paintBeatGrid(
     }
     if (kind === 'bar') {
       strokeAt(t, 'rgba(255,255,255,0.12)', 1)
-      return
     }
-    if (kind === 'phrase') {
+  })
+
+  // File-start phrase / section lattice (independent of within-beat phase).
+  const phrase0 = Math.ceil(p.startSec / phraseSec - 1e-9)
+  for (let n = Math.max(0, phrase0); ; n++) {
+    const t = n * phraseSec
+    if (t > p.endSec + 1e-9) break
+    if (t < p.startSec - 1e-9) continue
+    const isSection = n % 2 === 0 // 16 bars = 2 × 8-bar phrases
+    if (isSection) {
+      strokeAt(
+        t,
+        p.beatGridEmphasis ? 'rgba(255, 180, 40, 0.48)' : 'rgba(255,255,255,0.2)',
+        1.5,
+      )
+    } else {
       strokeAt(
         t,
         p.beatGridEmphasis ? 'rgba(255, 210, 80, 0.34)' : 'rgba(255,255,255,0.16)',
-        1.25
+        1.25,
       )
-      return
     }
-    // 16-bar section
-    strokeAt(
-      t,
-      p.beatGridEmphasis ? 'rgba(255, 180, 40, 0.48)' : 'rgba(255,255,255,0.2)',
-      1.5
-    )
-  })
+  }
 }
 
 /** Draw DNA kick/snare accents on the beat grid (phrase-aware). */
@@ -492,7 +540,8 @@ function paintDnaPocketAccents(
   const phraseBars = profile.phraseBars || 8
   const stepSec = barSec / stepsPerBar
   const phraseSec = stepSec * stepsPerBar * phraseBars
-  const offset = p.beatGridOffsetSec
+  // DNA phrase steps are on the file-start lattice (dual-clock doctrine).
+  const latticeOrigin = 0
 
   const mark = (t: number, color: string, hFrac: number) => {
     if (t < p.startSec - 1e-6 || t > p.endSec + 1e-6) return
@@ -503,10 +552,10 @@ function paintDnaPocketAccents(
     ctx.fillRect(x - 0.75, y0, 1.5, h)
   }
 
-  const phrase0 = Math.floor((p.startSec - offset) / phraseSec) - 1
-  const phrase1 = Math.ceil((p.endSec - offset) / phraseSec) + 1
+  const phrase0 = Math.floor((p.startSec - latticeOrigin) / phraseSec) - 1
+  const phrase1 = Math.ceil((p.endSec - latticeOrigin) / phraseSec) + 1
   for (let ph = phrase0; ph <= phrase1; ph++) {
-    const base = offset + ph * phraseSec
+    const base = latticeOrigin + ph * phraseSec
     for (const s of kicks) mark(base + s * stepSec, 'rgba(80, 220, 160, 0.55)', 0.55)
     for (const s of snares) mark(base + s * stepSec, 'rgba(255, 190, 70, 0.45)', 0.4)
     for (const s of claps) mark(base + s * stepSec, 'rgba(245, 248, 255, 0.4)', 0.36)
@@ -515,46 +564,122 @@ function paintDnaPocketAccents(
 }
 
 type DrumBandCol = {
+  body: number
   peak: number
+  flux: number
   kick: number
+  snare: number
   clap: number
   hat: number
 }
 
-function shapedSampleAmp(s: TimedWaveformSample): number {
-  const peakLin = Math.max(s.positive, s.negative)
-  const rmsLin = s.rms ?? peakLin * 0.7
-  return rmsLin * 0.72 + peakLin * 0.28
-}
-
-/** Map L/M/H (+ element labels) → kick / clap / hat energy for layered drums mode. */
-function sampleDrumBands(s: TimedWaveformSample): { kick: number; clap: number; hat: number } {
+/** Map L/M/H (+ element labels) → kick / snare / clap / hat for layered drums mode. */
+function sampleDrumBands(s: TimedWaveformSample): {
+  kick: number
+  snare: number
+  clap: number
+  hat: number
+} {
   const bands = s.bands
-  let kick = bands?.low ?? Math.max(s.positive, s.negative) * 0.55
-  let clap = bands?.mid ?? Math.max(s.positive, s.negative) * 0.4
-  let hat = bands?.high ?? Math.max(s.positive, s.negative) * 0.3
+  const peak = Math.max(s.positive, s.negative)
+  let kick = bands?.low ?? peak * 0.55
+  let snare = (bands?.mid ?? peak * 0.4) * 0.7
+  let clap = (bands?.mid ?? peak * 0.35) * 0.35 + (bands?.high ?? peak * 0.25) * 0.4
+  let hat = bands?.high ?? peak * 0.3
   const conf = s.elementConfidence ?? 0
   if (s.elementType && conf > 0.28) {
     const boost = 0.35 + conf * 0.65
     if (s.elementType === 'kick') kick = Math.max(kick, boost)
-    else if (s.elementType === 'snare') clap = Math.max(clap, boost * 0.82)
+    else if (s.elementType === 'snare') snare = Math.max(snare, boost)
     else if (s.elementType === 'clap') clap = Math.max(clap, boost)
     else if (s.elementType === 'hihat') hat = Math.max(hat, boost)
   }
-  return { kick, clap, hat }
+  const flux = typeof s.flux === 'number' ? s.flux : 0
+  if (flux > 0.35) {
+    hat = Math.max(hat, hat + flux * 0.35)
+    clap = Math.max(clap, clap + flux * 0.18)
+  }
+  return { kick, snare, clap, hat }
 }
 
-type ElementBandCol = ElementBandEnergies & { peak: number }
+/** CDJ onset ticks — absolute kick/snare/clap/hat times on the tape. */
+function paintOnsetTransientTicks(
+  ctx: CanvasRenderingContext2D,
+  p: {
+    startSec: number
+    endSec: number
+    height: number
+    playX: number
+    toX: (t: number) => number
+    profile?: WaveformIntelligenceProfile | null
+    zoomed: boolean
+  },
+): void {
+  const profile = p.profile
+  if (!profile) return
+  const kicks = profile.kickOnsetSec || []
+  const snares = profile.snareClapOnsetSec || []
+  if (!kicks.length && !snares.length) return
+
+  const mark = (t: number, rgbaBase: string, hFrac: number, yBias: number) => {
+    if (t < p.startSec - 1e-6 || t > p.endSec + 1e-6) return
+    const x = Math.round(p.toX(t)) + 0.5
+    const past = x <= p.playX
+    const h = p.height * hFrac * (p.zoomed ? 1 : 0.72)
+    const y0 = p.height * yBias - h / 2
+    const alpha = past ? (p.zoomed ? 0.85 : 0.55) : p.zoomed ? 0.4 : 0.22
+    ctx.fillStyle = rgbaBase.replace(/[\d.]+\)$/, `${alpha})`)
+    ctx.fillRect(x - (p.zoomed ? 0.75 : 0.5), y0, p.zoomed ? 1.5 : 1, h)
+  }
+
+  for (const t of kicks) {
+    mark(t, 'rgba(255, 72, 8, 0.85)', p.zoomed ? 0.42 : 0.28, 0.72)
+  }
+  for (let i = 0; i < snares.length; i++) {
+    const t = snares[i]!
+    if (i % 2 === 0) mark(t, 'rgba(255, 140, 48, 0.8)', p.zoomed ? 0.34 : 0.22, 0.5)
+    else mark(t, 'rgba(255, 230, 90, 0.75)', p.zoomed ? 0.3 : 0.2, 0.38)
+  }
+}
+
+function paintPeakFluxHairline(
+  ctx: CanvasRenderingContext2D,
+  p: {
+    x: number
+    fw: number
+    midY: number
+    bodyAmp: number
+    peakAmp: number
+    flux: number
+    past: boolean
+  },
+): void {
+  // Only true attacks — avoid washing the silhouette white/grey
+  const crest = Math.max(0, p.peakAmp - p.bodyAmp * 0.92)
+  if (crest < 1.4 && p.flux < 0.45) return
+  const spike = Math.max(crest * 0.55, p.flux * p.peakAmp * 0.28)
+  if (spike < 1.1) return
+  const [r, g, b] = DRUM_SPECTRAL_COLORS.flux
+  const alpha = Math.min(
+    0.55,
+    (p.past ? 0.42 : 0.18) * (0.35 + p.flux * 0.45),
+  )
+  ctx.fillStyle = rgba(r, g, b, alpha)
+  const half = Math.min(p.peakAmp, p.bodyAmp + spike)
+  ctx.fillRect(p.x, p.midY - half, 1, half * 2)
+}
+
+type ElementBandCol = ElementBandEnergies & { body: number; peak: number; flux: number }
 
 function sampleElementBandsFromTimed(
   s: TimedWaveformSample,
-  profile?: WaveformIntelligenceProfile | null
+  profile?: WaveformIntelligenceProfile | null,
 ): ElementBandEnergies {
   return sampleElementBands(s, profile)
 }
 
 /**
- * SERGIK Elements mode — 8-layer instrument palette (kicks, claps, hats, bass, synths, vocals…).
+ * SERGIK Elements mode — kicks, snares, claps, hats, bass, synths, vocals.
  */
 function paintElementsMultiBand(
   ctx: CanvasRenderingContext2D,
@@ -568,7 +693,8 @@ function paintElementsMultiBand(
     interpolate: boolean
     intelligenceProfile?: WaveformIntelligenceProfile | null
     stackMode?: 'lanes' | 'overlay'
-  }
+    peakSpikes?: boolean
+  },
 ): void {
   const { samples, midY, height, playX, width, intelligenceProfile } = p
   const stackMode = p.stackMode ?? 'lanes'
@@ -579,9 +705,12 @@ function paintElementsMultiBand(
   const peaks = new Array<ElementBandCol>(cols)
   for (let c = 0; c < cols; c++) {
     peaks[c] = {
+      body: 0,
       peak: 0,
+      flux: 0,
       drums: 0,
       kicks: 0,
+      snares: 0,
       claps: 0,
       hats: 0,
       percussion: 0,
@@ -591,10 +720,17 @@ function paintElementsMultiBand(
     }
   }
 
-  const mergeElementCol = (col: ElementBandCol, e: ElementBandEnergies, peak: number) => {
-    if (peak > col.peak) col.peak = peak
+  const mergeElementCol = (
+    col: ElementBandCol,
+    e: ElementBandEnergies,
+    dual: ReturnType<typeof dualEnvelopeAmps>,
+  ) => {
+    if (dual.peak > col.peak) col.peak = dual.peak
+    if (dual.body > col.body) col.body = dual.body
+    if (dual.flux > col.flux) col.flux = dual.flux
     if (e.drums > col.drums) col.drums = e.drums
     if (e.kicks > col.kicks) col.kicks = e.kicks
+    if (e.snares > col.snares) col.snares = e.snares
     if (e.claps > col.claps) col.claps = e.claps
     if (e.hats > col.hats) col.hats = e.hats
     if (e.percussion > col.percussion) col.percussion = e.percussion
@@ -616,18 +752,18 @@ function paintElementsMultiBand(
       let u = (xCenter - xa) / Math.max(1e-6, xb - xa)
       u = Math.max(0, Math.min(1, u))
       const s = u * u * (3 - 2 * u)
-      const ampA = shapedSampleAmp(a)
-      const ampB = shapedSampleAmp(b)
-      const lerped = ampA + (ampB - ampA) * s
-      const peaked = Math.max(ampA, ampB)
+      const dual = interpolateDualEnvelope(dualEnvelopeAmps(a), dualEnvelopeAmps(b), u)
       const ea = sampleElementBandsFromTimed(a, intelligenceProfile)
       const eb = sampleElementBandsFromTimed(b, intelligenceProfile)
       peaks[c] = {
-        peak: lerped * 0.75 + peaked * 0.25,
+        body: dual.body,
+        peak: dual.peak,
+        flux: dual.flux,
         drums: ea.drums + (eb.drums - ea.drums) * s,
-        kicks: ea.kicks + (eb.kicks - ea.kicks) * s,
-        claps: ea.claps + (eb.claps - ea.claps) * s,
-        hats: ea.hats + (eb.hats - ea.hats) * s,
+        kicks: Math.max(ea.kicks, eb.kicks),
+        snares: Math.max(ea.snares, eb.snares),
+        claps: Math.max(ea.claps, eb.claps),
+        hats: Math.max(ea.hats, eb.hats),
         percussion: ea.percussion + (eb.percussion - ea.percussion) * s,
         bass: ea.bass + (eb.bass - ea.bass) * s,
         synths: ea.synths + (eb.synths - ea.synths) * s,
@@ -641,62 +777,64 @@ function paintElementsMultiBand(
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i]
       const c = Math.min(cols - 1, Math.max(0, Math.floor(((s.timeSec - t0) / span) * cols)))
-      const shaped = shapedSampleAmp(s)
-      const e = sampleElementBandsFromTimed(s, intelligenceProfile)
-      mergeElementCol(peaks[c], e, shaped)
+      mergeElementCol(peaks[c], sampleElementBandsFromTimed(s, intelligenceProfile), dualEnvelopeAmps(s))
     }
   }
 
-  const sorted = peaks.map((col) => col.peak).filter((v) => v > 0.001).sort((a, b) => a - b)
+  const sorted = peaks.map((c) => c.body).filter((v) => v > 0.001).sort((a, b) => a - b)
   const ref =
     sorted.length > 0
       ? Math.max(0.08, sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.92))] || 1)
       : 1
 
-  type ElementLayerKey = Exclude<keyof ElementBandEnergies, 'drums'>
-  const laneLayers: Array<LaneLayerSpec<ElementLayerKey>> = [
-    { key: 'bass', rgb: SERGIK_ELEMENT_COLORS.bass, yStart: 0.78, yEnd: 1, anchor: 'bottom', opacityPast: 0.88, opacityFuture: 0.34 },
-    { key: 'kicks', rgb: SERGIK_ELEMENT_COLORS.kicks, yStart: 0.58, yEnd: 0.82, anchor: 'bottom', opacityPast: 0.9, opacityFuture: 0.36 },
-    { key: 'claps', rgb: SERGIK_ELEMENT_COLORS.claps, yStart: 0.42, yEnd: 0.62, anchor: 'center', opacityPast: 0.88, opacityFuture: 0.34 },
-    { key: 'percussion', rgb: SERGIK_ELEMENT_COLORS.percussion, yStart: 0.3, yEnd: 0.5, anchor: 'center', opacityPast: 0.86, opacityFuture: 0.32 },
-    { key: 'synths', rgb: SERGIK_ELEMENT_COLORS.synths, yStart: 0.18, yEnd: 0.38, anchor: 'center', opacityPast: 0.86, opacityFuture: 0.32 },
-    { key: 'vocals', rgb: SERGIK_ELEMENT_COLORS.vocals, yStart: 0.08, yEnd: 0.24, anchor: 'center', opacityPast: 0.84, opacityFuture: 0.3 },
-    { key: 'hats', rgb: SERGIK_ELEMENT_COLORS.hats, yStart: 0, yEnd: 0.16, anchor: 'top', opacityPast: 0.9, opacityFuture: 0.36 },
+  type ElemKey = keyof ElementBandEnergies
+  const laneLayers: Array<LaneLayerSpec<ElemKey>> = [
+    { key: 'bass', rgb: SERGIK_ELEMENT_COLORS.bass, yStart: 0.62, yEnd: 1, anchor: 'bottom', opacityPast: 0.78, opacityFuture: 0.3 },
+    { key: 'kicks', rgb: SERGIK_ELEMENT_COLORS.kicks, yStart: 0.52, yEnd: 0.88, anchor: 'bottom', opacityPast: 0.9, opacityFuture: 0.36 },
+    { key: 'snares', rgb: SERGIK_ELEMENT_COLORS.snares, yStart: 0.36, yEnd: 0.7, anchor: 'center', opacityPast: 0.88, opacityFuture: 0.34 },
+    { key: 'claps', rgb: SERGIK_ELEMENT_COLORS.claps, yStart: 0.28, yEnd: 0.58, anchor: 'center', opacityPast: 0.86, opacityFuture: 0.34 },
+    { key: 'hats', rgb: SERGIK_ELEMENT_COLORS.hats, yStart: 0, yEnd: 0.38, anchor: 'top', opacityPast: 0.9, opacityFuture: 0.4 },
+    { key: 'synths', rgb: SERGIK_ELEMENT_COLORS.synths, yStart: 0.22, yEnd: 0.55, anchor: 'center', opacityPast: 0.55, opacityFuture: 0.22 },
+    { key: 'vocals', rgb: SERGIK_ELEMENT_COLORS.vocals, yStart: 0.18, yEnd: 0.5, anchor: 'center', opacityPast: 0.5, opacityFuture: 0.2 },
   ]
-  const overlayLayers: Array<OverlayLayerSpec<ElementLayerKey>> = [
-    { key: 'bass', rgb: SERGIK_ELEMENT_COLORS.bass, weight: 0.96, opacityPast: 0.9, opacityFuture: 0.36, forwardBias: 0.12 },
-    { key: 'kicks', rgb: SERGIK_ELEMENT_COLORS.kicks, weight: 1, opacityPast: 0.92, opacityFuture: 0.38, forwardBias: 0.32 },
-    { key: 'claps', rgb: SERGIK_ELEMENT_COLORS.claps, weight: 0.94, opacityPast: 0.94, opacityFuture: 0.4, forwardBias: 0.78 },
-    { key: 'percussion', rgb: SERGIK_ELEMENT_COLORS.percussion, weight: 0.88, opacityPast: 0.9, opacityFuture: 0.38, forwardBias: 0.68 },
-    { key: 'synths', rgb: SERGIK_ELEMENT_COLORS.synths, weight: 0.92, opacityPast: 0.92, opacityFuture: 0.4, forwardBias: 0.82 },
-    { key: 'vocals', rgb: SERGIK_ELEMENT_COLORS.vocals, weight: 0.9, opacityPast: 0.9, opacityFuture: 0.38, forwardBias: 0.88 },
-    { key: 'hats', rgb: SERGIK_ELEMENT_COLORS.hats, weight: 0.8, opacityPast: 0.98, opacityFuture: 0.46, forwardBias: 1 },
+  const overlayLayers: Array<OverlayLayerSpec<ElemKey>> = [
+    { key: 'bass', rgb: SERGIK_ELEMENT_COLORS.bass, weight: 0.9, opacityPast: 0.7, opacityFuture: 0.28, forwardBias: 0.05 },
+    { key: 'kicks', rgb: SERGIK_ELEMENT_COLORS.kicks, weight: 1, opacityPast: 0.92, opacityFuture: 0.38, forwardBias: 0.22 },
+    { key: 'snares', rgb: SERGIK_ELEMENT_COLORS.snares, weight: 0.95, opacityPast: 0.9, opacityFuture: 0.36, forwardBias: 0.55 },
+    { key: 'claps', rgb: SERGIK_ELEMENT_COLORS.claps, weight: 0.9, opacityPast: 0.88, opacityFuture: 0.36, forwardBias: 0.72 },
+    { key: 'hats', rgb: SERGIK_ELEMENT_COLORS.hats, weight: 0.82, opacityPast: 1, opacityFuture: 0.48, forwardBias: 1 },
+    { key: 'synths', rgb: SERGIK_ELEMENT_COLORS.synths, weight: 0.55, opacityPast: 0.55, opacityFuture: 0.22, forwardBias: 0.6 },
+    { key: 'vocals', rgb: SERGIK_ELEMENT_COLORS.vocals, weight: 0.5, opacityPast: 0.5, opacityFuture: 0.2, forwardBias: 0.65 },
   ]
 
   const colW = width / cols
   for (let c = 0; c < cols; c++) {
     const col = peaks[c]
-    const lin = Math.min(1, col.peak / ref)
+    const bodyLin = Math.min(1, col.body / ref)
+    const peakLin = Math.min(1, col.peak / ref)
     const x = c * colW
     const past = x + colW * 0.5 <= playX
     const fw = Math.max(1, Math.ceil(colW))
 
-    if (lin <= 0.015) {
-      const [r, g, b] = SERGIK_ELEMENT_COLORS.drums
-      ctx.fillStyle = rgba(r, g, b, past ? 0.22 : 0.1)
+    if (bodyLin <= 0.012 && peakLin <= 0.02) {
+      const [r, g, b] = SERGIK_ELEMENT_COLORS.kicks
+      ctx.fillStyle = rgba(r, g, b, past ? 0.18 : 0.08)
       ctx.fillRect(x, midY - 0.5, fw, 1)
       continue
     }
 
-    const totalAmp = Math.max(1.25, overviewAmp(lin) * ampScale)
-    const energies = {
+    const totalAmp = Math.max(1.25, overviewAmp(bodyLin) * ampScale)
+    const peakAmp = Math.max(totalAmp, overviewAmp(peakLin) * ampScale)
+    const energies: ElementBandEnergies = {
+      drums: col.drums,
+      kicks: col.kicks,
+      snares: col.snares,
+      claps: col.claps,
+      hats: col.hats,
+      percussion: col.percussion,
       bass: col.bass,
       synths: col.synths,
       vocals: col.vocals,
-      percussion: col.percussion,
-      kicks: col.kicks,
-      claps: col.claps,
-      hats: col.hats,
     }
     if (stackMode === 'overlay') {
       paintOverlayMergedStack(ctx, {
@@ -714,19 +852,29 @@ function paintElementsMultiBand(
         fw,
         height,
         midY,
-        peakLin: lin,
+        peakLin,
         totalAmp,
         past,
         layers: laneLayers,
         energies,
       })
     }
+    if (p.peakSpikes !== false) {
+      paintPeakFluxHairline(ctx, {
+        x,
+        fw,
+        midY,
+        bodyAmp: totalAmp,
+        peakAmp,
+        flux: col.flux,
+        past,
+      })
+    }
   }
 }
 
 /**
- * Layered drums mode: kick (sub/low) body, clap/snare mid punch, hats/air on top —
- * plus spectral range hues from DRUM_SPECTRAL_COLORS.
+ * Layered drums mode: kick / snare / clap / hat — CDJ dual envelope + flux accents.
  */
 function paintDrumsMultiBand(
   ctx: CanvasRenderingContext2D,
@@ -740,7 +888,8 @@ function paintDrumsMultiBand(
     interpolate: boolean
     intelligenceProfile?: WaveformIntelligenceProfile | null
     stackMode?: 'lanes' | 'overlay'
-  }
+    peakSpikes?: boolean
+  },
 ): void {
   const { samples, midY, height, playX, width } = p
   const stackMode = p.stackMode ?? 'lanes'
@@ -749,13 +898,14 @@ function paintDrumsMultiBand(
   const bias = p.intelligenceProfile?.spectralBias
   const kickBias = 1 + (bias?.kicks ?? 0) * 1.4
   const hatBias = 1 + (bias?.hats ?? 0) * 1.3
-  const clapBias = 1 + (bias?.percussion ?? 0) * 1.1
+  const snareBias = 1 + (bias?.percussion ?? 0) * 1.15
+  const clapBias = 1 + (bias?.percussion ?? 0) * 0.95
 
   const cols = Math.max(64, Math.floor(width))
   const ampScale = height * 0.34
   const peaks = new Array<DrumBandCol>(cols)
   for (let c = 0; c < cols; c++) {
-    peaks[c] = { peak: 0, kick: 0, clap: 0, hat: 0 }
+    peaks[c] = { body: 0, peak: 0, flux: 0, kick: 0, snare: 0, clap: 0, hat: 0 }
   }
 
   if (p.interpolate && p.toX && samples.length >= 2) {
@@ -770,18 +920,17 @@ function paintDrumsMultiBand(
       const xb = p.toX(b.timeSec)
       let u = (xCenter - xa) / Math.max(1e-6, xb - xa)
       u = Math.max(0, Math.min(1, u))
-      const s = u * u * (3 - 2 * u)
-      const ampA = shapedSampleAmp(a)
-      const ampB = shapedSampleAmp(b)
-      const lerped = ampA + (ampB - ampA) * s
-      const peaked = Math.max(ampA, ampB)
+      const dual = interpolateDualEnvelope(dualEnvelopeAmps(a), dualEnvelopeAmps(b), u)
       const da = sampleDrumBands(a)
       const db = sampleDrumBands(b)
       peaks[c] = {
-        peak: lerped * 0.75 + peaked * 0.25,
-        kick: (da.kick + (db.kick - da.kick) * s) * kickBias,
-        clap: (da.clap + (db.clap - da.clap) * s) * clapBias,
-        hat: (da.hat + (db.hat - da.hat) * s) * hatBias,
+        body: dual.body,
+        peak: dual.peak,
+        flux: dual.flux,
+        kick: Math.max(da.kick, db.kick) * kickBias,
+        snare: Math.max(da.snare, db.snare) * snareBias,
+        clap: Math.max(da.clap, db.clap) * clapBias,
+        hat: Math.max(da.hat, db.hat) * hatBias,
       }
     }
   } else {
@@ -791,53 +940,62 @@ function paintDrumsMultiBand(
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i]
       const c = Math.min(cols - 1, Math.max(0, Math.floor(((s.timeSec - t0) / span) * cols)))
-      const shaped = shapedSampleAmp(s)
+      const dual = dualEnvelopeAmps(s)
       const d = sampleDrumBands(s)
       const col = peaks[c]
-      if (shaped > col.peak) col.peak = shaped
+      if (dual.peak > col.peak) col.peak = dual.peak
+      if (dual.body > col.body) col.body = dual.body
+      if (dual.flux > col.flux) col.flux = dual.flux
       const k = d.kick * kickBias
+      const sn = d.snare * snareBias
       const cl = d.clap * clapBias
       const h = d.hat * hatBias
       if (k > col.kick) col.kick = k
+      if (sn > col.snare) col.snare = sn
       if (cl > col.clap) col.clap = cl
       if (h > col.hat) col.hat = h
     }
   }
 
-  const sorted = peaks.map((c) => c.peak).filter((v) => v > 0.001).sort((a, b) => a - b)
+  const sorted = peaks.map((c) => c.body).filter((v) => v > 0.001).sort((a, b) => a - b)
   const ref =
     sorted.length > 0
       ? Math.max(0.08, sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.92))] || 1)
       : 1
 
-  const laneLayers: Array<LaneLayerSpec<'kick' | 'clap' | 'hat'>> = [
-    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, yStart: 0.52, yEnd: 1, anchor: 'bottom', opacityPast: 0.9, opacityFuture: 0.38 },
-    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, yStart: 0.32, yEnd: 0.68, anchor: 'center', opacityPast: 0.88, opacityFuture: 0.36 },
-    { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, yStart: 0, yEnd: 0.42, anchor: 'top', opacityPast: 0.9, opacityFuture: 0.4 },
+  type DrumKey = 'kick' | 'snare' | 'clap' | 'hat'
+  const laneLayers: Array<LaneLayerSpec<DrumKey>> = [
+    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, yStart: 0.55, yEnd: 1, anchor: 'bottom', opacityPast: 0.9, opacityFuture: 0.38 },
+    { key: 'snare', rgb: DRUM_SPECTRAL_COLORS.snare, yStart: 0.36, yEnd: 0.7, anchor: 'center', opacityPast: 0.88, opacityFuture: 0.36 },
+    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, yStart: 0.26, yEnd: 0.56, anchor: 'center', opacityPast: 0.86, opacityFuture: 0.34 },
+    { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, yStart: 0, yEnd: 0.4, anchor: 'top', opacityPast: 0.9, opacityFuture: 0.4 },
   ]
-  const overlayLayers: Array<OverlayLayerSpec<'kick' | 'clap' | 'hat'>> = [
-    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, weight: 1, opacityPast: 0.92, opacityFuture: 0.38, forwardBias: 0.18 },
-    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, weight: 0.92, opacityPast: 0.96, opacityFuture: 0.42, forwardBias: 0.76 },
+  const overlayLayers: Array<OverlayLayerSpec<DrumKey>> = [
+    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, weight: 1, opacityPast: 0.92, opacityFuture: 0.38, forwardBias: 0.15 },
+    { key: 'snare', rgb: DRUM_SPECTRAL_COLORS.snare, weight: 0.95, opacityPast: 0.9, opacityFuture: 0.36, forwardBias: 0.55 },
+    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, weight: 0.9, opacityPast: 0.92, opacityFuture: 0.4, forwardBias: 0.78 },
     { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, weight: 0.82, opacityPast: 1, opacityFuture: 0.48, forwardBias: 1 },
   ]
 
   const colW = width / cols
   for (let c = 0; c < cols; c++) {
     const col = peaks[c]
-    const lin = Math.min(1, col.peak / ref)
+    const bodyLin = Math.min(1, col.body / ref)
+    const peakLin = Math.min(1, col.peak / ref)
     const x = c * colW
     const past = x + colW * 0.5 <= playX
     const fw = Math.max(1, Math.ceil(colW))
 
-    if (lin <= 0.015) {
+    if (bodyLin <= 0.012 && peakLin <= 0.02) {
       const [r, g, b] = DRUM_SPECTRAL_COLORS.sub
       ctx.fillStyle = rgba(r, g, b, past ? 0.22 : 0.1)
       ctx.fillRect(x, midY - 0.5, fw, 1)
       continue
     }
 
-    const totalAmp = Math.max(1.25, overviewAmp(lin) * ampScale)
-    const energies = { kick: col.kick, clap: col.clap, hat: col.hat }
+    const totalAmp = Math.max(1.25, overviewAmp(bodyLin) * ampScale)
+    const peakAmp = Math.max(totalAmp, overviewAmp(peakLin) * ampScale)
+    const energies = { kick: col.kick, snare: col.snare, clap: col.clap, hat: col.hat }
     if (stackMode === 'overlay') {
       paintOverlayMergedStack(ctx, {
         x,
@@ -854,19 +1012,29 @@ function paintDrumsMultiBand(
         fw,
         height,
         midY,
-        peakLin: lin,
+        peakLin,
         totalAmp,
         past,
         layers: laneLayers,
         energies,
       })
     }
+    if (p.peakSpikes !== false) {
+      paintPeakFluxHairline(ctx, {
+        x,
+        fw,
+        midY,
+        bodyAmp: totalAmp,
+        peakAmp,
+        flux: col.flux,
+        past,
+      })
+    }
   }
 }
 
 /**
- * SoundCloud overview: dense columns, but heights follow real dynamics.
- * No RMS underlay, no valley-lift power curve, percentile-normalized.
+ * SoundCloud / CDJ overview: RMS body + Peak/flux hairlines (dual envelope).
  */
 function paintSoundCloudOverview(
   ctx: CanvasRenderingContext2D,
@@ -877,6 +1045,7 @@ function paintSoundCloudOverview(
     playX: number
     width: number
     colorMode: WaveformColorMode
+    peakSpikes?: boolean
   }
 ): void {
   const { samples, midY, height, playX, width, colorMode } = p
@@ -885,9 +1054,10 @@ function paintSoundCloudOverview(
     colorMode === 'mono' ? [255, 85, 0] : colorMode === 'channel' ? [...CHANNEL_LANE_RGB] : [255, 85, 0]
 
   const cols = Math.max(64, Math.floor(width))
-  // Headroom so peaks don't fill the entire lane
   const ampScale = height * 0.34
-  const peaks = new Float32Array(cols)
+  const bodies = new Float32Array(cols)
+  const crests = new Float32Array(cols)
+  const fluxes = new Float32Array(cols)
   const colors: Array<[number, number, number]> = new Array(cols)
 
   for (let c = 0; c < cols; c++) {
@@ -901,21 +1071,19 @@ function paintSoundCloudOverview(
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i]
     const c = Math.min(cols - 1, Math.max(0, Math.floor(((s.timeSec - t0) / span) * cols)))
-    // Prefer RMS for overview body shape (less "always maxed"); take mild peak influence
-    const peakLin = Math.max(s.positive, s.negative)
-    const rmsLin = s.rms ?? peakLin * 0.7
-    const shaped = rmsLin * 0.72 + peakLin * 0.28
-    if (shaped > peaks[c]) peaks[c] = shaped
+    const dual = dualEnvelopeAmps(s)
+    if (dual.body > bodies[c]) bodies[c] = dual.body
+    if (dual.peak > crests[c]) crests[c] = dual.peak
+    if (dual.flux > fluxes[c]) fluxes[c] = dual.flux
     if (!solid) {
       colors[c] = parseRgb(s.color)
     } else {
-      const bright = 0.45 + shaped * 0.55
+      const bright = 0.45 + dual.body * 0.55
       colors[c] = [solidRgb[0] * bright, solidRgb[1] * bright, solidRgb[2] * bright]
     }
   }
 
-  // 92nd-percentile normalize — loudest hits near full; median stays much lower
-  const sorted = Array.from(peaks).filter((v) => v > 0.001).sort((a, b) => a - b)
+  const sorted = Array.from(bodies).filter((v) => v > 0.001).sort((a, b) => a - b)
   const ref =
     sorted.length > 0
       ? Math.max(0.08, sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.92))] || 1)
@@ -923,28 +1091,39 @@ function paintSoundCloudOverview(
 
   const colW = width / cols
   for (let c = 0; c < cols; c++) {
-    const lin = Math.min(1, peaks[c] / ref)
+    const bodyLin = Math.min(1, bodies[c] / ref)
+    const peakLin = Math.min(1, crests[c] / ref)
     const x = c * colW
     const past = x + colW * 0.5 <= playX
     const [r, g, b] = colors[c]
     const fw = Math.max(1, Math.ceil(colW))
 
-    if (lin <= 0.015) {
-      const hair = 1
+    if (bodyLin <= 0.012 && peakLin <= 0.02) {
       ctx.fillStyle = rgba(r, g, b, past ? 0.22 : 0.1)
-      ctx.fillRect(x, midY - hair / 2, fw, hair)
+      ctx.fillRect(x, midY - 0.5, fw, 1)
       continue
     }
 
-    const amp = Math.max(1.25, overviewAmp(lin) * ampScale)
+    const bodyAmp = Math.max(1.25, overviewAmp(bodyLin) * ampScale)
+    const peakAmp = Math.max(bodyAmp, overviewAmp(peakLin) * ampScale)
     ctx.fillStyle = rgba(r, g, b, past ? 0.92 : 0.36)
-    ctx.fillRect(x, midY - amp, fw, amp * 2)
+    ctx.fillRect(x, midY - bodyAmp, fw, bodyAmp * 2)
+    if (p.peakSpikes !== false) {
+      paintPeakFluxHairline(ctx, {
+        x,
+        fw,
+        midY,
+        bodyAmp,
+        peakAmp,
+        flux: fluxes[c],
+        past,
+      })
+    }
   }
 }
 
 /**
- * Zoomed-in detail: same visual language as overview (1px columns + valley dig),
- * but amplitude/color are smoothly interpolated along time so zoom never looks blocky.
+ * Zoomed-in detail: dual envelope with peak-hold interpolation (no transient smear).
  */
 function paintContinuousDetail(
   ctx: CanvasRenderingContext2D,
@@ -956,11 +1135,20 @@ function paintContinuousDetail(
     playX: number
     width: number
     colorMode: WaveformColorMode
+    peakSpikes?: boolean
   }
 ): void {
   const { samples, toX, midY, height, playX, width, colorMode } = p
   if (samples.length < 2) {
-    paintSoundCloudOverview(ctx, { samples, midY, height, playX, width, colorMode })
+    paintSoundCloudOverview(ctx, {
+      samples,
+      midY,
+      height,
+      playX,
+      width,
+      colorMode,
+      peakSpikes: p.peakSpikes,
+    })
     return
   }
 
@@ -970,23 +1158,15 @@ function paintContinuousDetail(
 
   const cols = Math.max(64, Math.floor(width))
   const ampScale = height * 0.34
-  const peaks = new Float32Array(cols)
+  const bodies = new Float32Array(cols)
+  const crests = new Float32Array(cols)
+  const fluxes = new Float32Array(cols)
   const colors: Array<[number, number, number]> = new Array(cols)
 
-  // Build sorted time anchors (tape slice is already time-ordered)
   const n = samples.length
-  const shapedAmp = (s: TimedWaveformSample) => {
-    const peakLin = Math.max(s.positive, s.negative)
-    const rmsLin = s.rms ?? peakLin * 0.7
-    return rmsLin * 0.72 + peakLin * 0.28
-  }
-
-  // For each pixel, find surrounding samples and smoothstep-lerp (no fat rects)
   let j = 0
   for (let c = 0; c < cols; c++) {
     const xCenter = (c + 0.5) * (width / cols)
-    // Invert toX: binary search by comparing toX(sample.time)
-    // Walk j forward — samples are monotonic in time
     while (j < n - 2 && toX(samples[j + 1].timeSec) < xCenter) j++
 
     const a = samples[j]
@@ -996,18 +1176,15 @@ function paintContinuousDetail(
     const denom = Math.max(1e-6, xb - xa)
     let u = (xCenter - xa) / denom
     u = Math.max(0, Math.min(1, u))
-    // Smoothstep — removes stair-steps between sparse source peaks
     const s = u * u * (3 - 2 * u)
 
-    const ampA = shapedAmp(a)
-    const ampB = shapedAmp(b)
-    // Prefer a slight peak bias so transients don't disappear when lerping
-    const lerped = ampA + (ampB - ampA) * s
-    const peaked = Math.max(ampA, ampB)
-    peaks[c] = lerped * 0.75 + peaked * 0.25
+    const dual = interpolateDualEnvelope(dualEnvelopeAmps(a), dualEnvelopeAmps(b), u)
+    bodies[c] = dual.body
+    crests[c] = dual.peak
+    fluxes[c] = dual.flux
 
     if (solid) {
-      const bright = 0.45 + peaks[c] * 0.55
+      const bright = 0.45 + dual.body * 0.55
       colors[c] = [solidRgb[0] * bright, solidRgb[1] * bright, solidRgb[2] * bright]
     } else {
       const ca = parseRgb(a.color)
@@ -1020,7 +1197,7 @@ function paintContinuousDetail(
     }
   }
 
-  const sorted = Array.from(peaks).filter((v) => v > 0.001).sort((a, b) => a - b)
+  const sorted = Array.from(bodies).filter((v) => v > 0.001).sort((a, b) => a - b)
   const ref =
     sorted.length > 0
       ? Math.max(0.08, sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.92))] || 1)
@@ -1028,22 +1205,34 @@ function paintContinuousDetail(
 
   const colW = width / cols
   for (let c = 0; c < cols; c++) {
-    const lin = Math.min(1, peaks[c] / ref)
+    const bodyLin = Math.min(1, bodies[c] / ref)
+    const peakLin = Math.min(1, crests[c] / ref)
     const x = c * colW
     const past = x + colW * 0.5 <= playX
     const [r, g, b] = colors[c]
     const fw = Math.max(1, Math.ceil(colW))
 
-    if (lin <= 0.015) {
-      const hair = 1
+    if (bodyLin <= 0.012 && peakLin <= 0.02) {
       ctx.fillStyle = rgba(r, g, b, past ? 0.22 : 0.1)
-      ctx.fillRect(x, midY - hair / 2, fw, hair)
+      ctx.fillRect(x, midY - 0.5, fw, 1)
       continue
     }
 
-    const amp = Math.max(1.25, overviewAmp(lin) * ampScale)
+    const bodyAmp = Math.max(1.25, overviewAmp(bodyLin) * ampScale)
+    const peakAmp = Math.max(bodyAmp, overviewAmp(peakLin) * ampScale)
     ctx.fillStyle = rgba(r, g, b, past ? 0.92 : 0.36)
-    ctx.fillRect(x, midY - amp, fw, amp * 2)
+    ctx.fillRect(x, midY - bodyAmp, fw, bodyAmp * 2)
+    if (p.peakSpikes !== false) {
+      paintPeakFluxHairline(ctx, {
+        x,
+        fw,
+        midY,
+        bodyAmp,
+        peakAmp,
+        flux: fluxes[c],
+        past,
+      })
+    }
   }
 }
 

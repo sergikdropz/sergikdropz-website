@@ -32,27 +32,27 @@ export type MixTechnique =
   | 'long-blend'
 
 export const MIX_STYLE_PRESETS: Array<{ id: MixStylePreset; label: string; hint: string }> = [
-  { id: 'crossfade', label: 'Smooth', hint: 'Equal-power crossfade' },
-  { id: 'filter-eq', label: 'Filter', hint: 'HPF/LPF + EQ sweep' },
-  { id: 'cutout-filter', label: 'Cut', hint: 'Late punch cut' },
-  { id: 'bass-swap', label: 'Bass swap', hint: 'Low-end exchange' },
-  { id: 'echo-out', label: 'Echo out', hint: 'Thin outgoing, tail feel' },
-  { id: 'strip-tease', label: 'Strip tease', hint: 'Long incoming filter open' },
-  { id: 'backspin', label: 'Backspin', hint: 'Outgoing hangs, late bite' },
+  { id: 'crossfade', label: 'Smooth', hint: 'One handoff curve · incoming bass killed' },
+  { id: 'filter-eq', label: 'Filter', hint: 'HPF/LPF + EQ sweep on shared progress' },
+  { id: 'cutout-filter', label: 'Cut', hint: 'Late punch cut, then open incoming' },
+  { id: 'bass-swap', label: 'Bass swap', hint: 'Aggressive low-end exchange' },
+  { id: 'echo-out', label: 'Echo out', hint: 'Thin outgoing + synced echo tail' },
+  { id: 'strip-tease', label: 'Strip tease', hint: 'Incoming waits, then filter opens' },
+  { id: 'backspin', label: 'Backspin', hint: 'Outgoing hangs, late incoming bite' },
 ]
 
 export const MIX_TECHNIQUES: Array<{ id: MixTechnique; label: string; hint: string }> = [
-  { id: 'auto', label: 'DNA auto', hint: 'Sonic DNA picks technique' },
-  { id: 'standard', label: 'Standard', hint: 'No extra modifier' },
-  { id: 'phrase-lock', label: 'Phrase lock', hint: 'Stronger kick/clap sync' },
-  { id: 'vocal-blend', label: 'Vocal blend', hint: 'Vocal-aware EQ + timing' },
-  { id: 'bass-swap', label: 'Bass swap', hint: 'Aggressive low exchange' },
-  { id: 'filter-sweep', label: 'Filter sweep', hint: 'Deep HPF/LPF ride' },
-  { id: 'strip-tease', label: 'Strip tease', hint: 'Delay incoming fade' },
-  { id: 'echo-tail', label: 'Echo tail', hint: 'Outgoing air + mid scoop' },
+  { id: 'auto', label: 'DNA auto', hint: 'Sonic DNA picks phrase-lock / energy-build' },
+  { id: 'standard', label: 'Standard', hint: 'Style only — one handoff curve' },
+  { id: 'phrase-lock', label: 'Phrase lock', hint: 'Stronger vinyl-bend / kick lock' },
+  { id: 'vocal-blend', label: 'Vocal blend', hint: 'Incoming waits so vocals do not collide' },
+  { id: 'bass-swap', label: 'Bass swap', hint: 'Force aggressive low exchange' },
+  { id: 'filter-sweep', label: 'Filter sweep', hint: 'Deep HPF/LPF ride (Filter engine)' },
+  { id: 'strip-tease', label: 'Strip tease', hint: 'Delay incoming fade + filter open' },
+  { id: 'echo-tail', label: 'Echo tail', hint: 'Outgoing echo send on the handoff' },
   { id: 'drop-cut', label: 'Drop cut', hint: 'Short late cut' },
-  { id: 'energy-build', label: 'Energy build', hint: 'Longer overlap build' },
-  { id: 'long-blend', label: 'Long blend', hint: 'Extended overlap feel' },
+  { id: 'energy-build', label: 'Energy build', hint: 'Incoming rises faster on the same curve' },
+  { id: 'long-blend', label: 'Long blend', hint: 'Incoming stays quieter longer' },
 ]
 
 /** Legacy transition mode persisted alongside mix presets (Auto DJ + DJ Mixer). */
@@ -111,6 +111,26 @@ export function isFourOnFloorPocket(sonicDna: unknown): boolean {
   return false
 }
 
+const BROKEN_GROOVE_FAMILIES = [
+  'breakbeat',
+  'half-time',
+  'halftime',
+  'one-drop',
+  'onedrop',
+  'boom-bap',
+  'boombap',
+]
+
+/** Breakbeat / half-time / one-drop — BeatSync kick-chase will flam. Use TempoSync. */
+export function isBrokenGroovePocket(sonicDna: unknown): boolean {
+  const measured = extractMeasured(sonicDna)
+  if (!measured) return false
+  const family = String(measured.drumFamily || '').toLowerCase()
+  if (BROKEN_GROOVE_FAMILIES.some((name) => family.includes(name))) return true
+  const feel = String(measured.timingFeel || '').toLowerCase()
+  return feel.includes('half')
+}
+
 /** Resolve DNA auto techniques (phrase-lock, energy-build) from track pair quality. */
 export function resolveEffectiveMixTechniques(
   techniques: MixTechnique[],
@@ -136,10 +156,11 @@ export function resolveEffectiveMixTechniques(
   return resolved
 }
 
-/** Resolve engine style from preset + technique(s) + optional transition mode. */
+/** Resolve engine style from preset + technique(s). transitionMode is legacy-only. */
 export function resolveEffectiveMixStyle(
   preset: MixStylePreset,
   technique: MixTechnique | MixTechnique[],
+  /** @deprecated Ignored unless techniques are auto/standard with no style override. */
   transitionMode?: TransitionMode,
 ): MixStyle {
   const techniques = Array.isArray(technique) ? technique : [technique]

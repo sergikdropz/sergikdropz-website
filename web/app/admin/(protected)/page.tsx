@@ -456,7 +456,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Videos Manager',
-      description: 'Manage YouTube videos and video metadata',
+      description: 'Curate the YouTube catalog on /videos',
       href: '/admin/videos-manager',
       icon: '📹',
       color: 'from-red-600 to-orange-600',

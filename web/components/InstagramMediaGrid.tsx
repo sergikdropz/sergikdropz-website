@@ -20,6 +20,8 @@ interface InstagramMediaGridProps {
   className?: string
   /** Tailwind grid column classes. Default responsive 2/3/4. */
   gridClassName?: string
+  /** Wait until this block is near the viewport before hitting the Instagram API. */
+  deferUntilVisible?: boolean
 }
 
 const PLACEHOLDER_PATHS = new Set(['/logo.svg', '/images/gallery/logo.png'])
@@ -42,14 +44,17 @@ export default function InstagramMediaGrid({
   maxPosts = 100, // Show all by default
   className = '',
   gridClassName = 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
+  deferUntilVisible = false,
 }: InstagramMediaGridProps) {
   const [media, setMedia] = useState<InstagramMedia[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!deferUntilVisible)
   const [error, setError] = useState<string | null>(null)
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set())
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set())
   const expandedRef = useRef<HTMLDivElement>(null)
+  const sectionRef = useRef<HTMLDivElement>(null)
+  const [sectionVisible, setSectionVisible] = useState(!deferUntilVisible)
 
   // Extract username from URL if it's a full URL
   const cleanUsername = username.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '').replace('@', '')
@@ -106,8 +111,32 @@ export default function InstagramMediaGrid({
   }, [fetchMedia])
 
   useEffect(() => {
+    if (!deferUntilVisible) {
+      setSectionVisible(true)
+      return
+    }
+    const node = sectionRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setSectionVisible(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setSectionVisible(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '80px 0px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [deferUntilVisible])
+
+  useEffect(() => {
+    if (!sectionVisible) return
     fetchMedia()
-  }, [fetchMedia])
+  }, [fetchMedia, sectionVisible])
 
   // Lazy load videos when they become visible
   useEffect(() => {
@@ -164,6 +193,16 @@ export default function InstagramMediaGrid({
   )
 
   const skeletonCount = Math.min(maxPosts, 12)
+
+  if (deferUntilVisible && !sectionVisible) {
+    return (
+      <div
+        ref={sectionRef}
+        className={`min-h-[12rem] ${className}`}
+        aria-hidden
+      />
+    )
+  }
 
   if (isLoading) {
     return (

@@ -7,6 +7,7 @@ interface InstagramEmbedProps {
   className?: string
   maxPosts?: number
   gridClassName?: string
+  deferUntilVisible?: boolean
 }
 
 export default function InstagramEmbed({ 
@@ -14,6 +15,7 @@ export default function InstagramEmbed({
   className = '',
   maxPosts = 100,
   gridClassName,
+  deferUntilVisible = false,
 }: InstagramEmbedProps) {
 
   return (
@@ -23,6 +25,7 @@ export default function InstagramEmbed({
         maxPosts={maxPosts}
         className="w-full"
         gridClassName={gridClassName}
+        deferUntilVisible={deferUntilVisible}
       />
     </div>
   )

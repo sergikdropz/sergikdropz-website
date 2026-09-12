@@ -34,6 +34,13 @@ describe('route-policy', () => {
     expect(findRoutePolicy('/api/supabase-check', 'GET')?.access).toBe('admin_read')
   })
 
+  it('registers public share resolve and admin share create policies', () => {
+    expect(findRoutePolicy('/api/shares', 'POST')?.access).toBe('admin_write')
+    expect(findRoutePolicy('/api/shares/[token]', 'GET')?.access).toBe('public')
+    expect(findRoutePolicy('/api/shares/[token]', 'DELETE')?.access).toBe('admin_write')
+    expect(findRoutePolicy('/api/oembed', 'GET')?.access).toBe('public')
+  })
+
   it('requireAdminApi denies missing or non-admin sessions with 401', async () => {
     vi.mocked(getServerSession).mockResolvedValueOnce(null)
     const denied = await requireAdminApi()

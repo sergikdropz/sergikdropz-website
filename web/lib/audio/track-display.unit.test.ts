@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applySonicDnaAnalysisToTrack, displayTrackBpm, displayTrackDrumStyle, displayTrackGenre, displayTrackKey, displayTrackSubgenre, keySignatureFromSonicDnaReport } from '@/lib/audio/track-display'
+import { applyAdminBpmToTrack, applySonicDnaAnalysisToTrack, displayTrackBpm, displayTrackDrumStyle, displayTrackGenre, displayTrackKey, displayTrackSubgenre, keySignatureFromSonicDnaReport } from '@/lib/audio/track-display'
 
 describe('displayTrackGenre', () => {
   it('prefers saved catalog genre over stale DNA labels', () => {
@@ -112,5 +112,20 @@ describe('applySonicDnaAnalysisToTrack', () => {
     expect(displayTrackBpm(next)).toBe(126)
     expect(displayTrackKey(next)).toBe('F# minor')
     expect(displayTrackGenre(next)).toBe('Tech House')
+  })
+})
+
+describe('applyAdminBpmToTrack', () => {
+  it('overrides a conflicting catalog lock and measured DNA', () => {
+    const next = applyAdminBpmToTrack(
+      {
+        bpm: 124,
+        metadata: { catalog_overrides: { bpm: 125 } },
+        sonic_dna: { measured: { bpm: 124 } },
+      },
+      128,
+    )
+    expect(displayTrackBpm(next)).toBe(128)
+    expect((next.metadata as { catalog_overrides?: { bpm?: number } }).catalog_overrides?.bpm).toBe(128)
   })
 })

@@ -76,6 +76,25 @@ export type MixPlan = {
   /** When true, keep BeatSync lock later in the overlap (match-outgoing) */
   holdBeatmatch?: boolean
   /**
+   * Incoming-only vinyl bend / drift chase during the overlap.
+   * Default true when BeatSync is held.
+   */
+  vinylBend?: boolean
+  /**
+   * Kick/clap pocket residual fused into the phase chase.
+   * Default true when BeatSync is held.
+   */
+  kickCorrect?: boolean
+  /**
+   * Discrete seek-snap onto the outgoing beat / bar / phrase lattice.
+   * Complements vinyl bend; used by Beat correct → Grid modes.
+   */
+  gridAlign?: 'beat' | 'bar' | 'phrase'
+  /** Phrase length (bars) when gridAlign === 'phrase'. Default 8. */
+  gridPhraseBars?: 4 | 8 | 16
+  /** How OUT/IN cues were quantized for this plan */
+  blendQuantize?: 'phrase' | 'bar' | 'beat'
+  /**
    * Dual-deck master tempo handoff: both decks follow masterBpm → incoming native.
    * Default true for Auto DJ doctrine.
    */
@@ -84,7 +103,7 @@ export type MixPlan = {
    * Keep incoming cue on phrase 1 (±½ beat only). Default true for Auto DJ.
    */
   phrase1Lock?: boolean
-  /** Force audible blend from progress 0 (no incomingDelay). */
+  /** Audible blend from OUT. Cut zeros incomingDelay; Smooth keeps a small delay. */
   blendFromOut?: boolean
   /** Keep overlap at exact N×8 master bars (Auto DJ doctrine). */
   exactOverlap?: boolean
@@ -117,6 +136,8 @@ export type MixTrackRef = {
   /** 0–1 normalized energy (DB or DNA) — overlap shaping */
   energy_level?: number | null
   hotCues?: Array<{ timeSec: number; label?: string }>
+  /** iDJ SET / CUE memory point (seconds) */
+  memoryCueSec?: number | null
   waveformPeaks?: Array<number | { positive?: number; negative?: number; rms?: number }>
   waveformDurationSec?: number
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { findAudioFile } from '@/lib/findAudioFile'
+import { displayTrackBpm } from '@/lib/audio/track-display'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
       track = await findAudioFile(supabase, {
         path: filePath,
         trackId,
-        select: 'bpm, original_bpm, file_path, file_name, title',
+        select: 'id, bpm, original_bpm, file_path, file_name, title, metadata',
       })
     } catch (queryError: any) {
       console.warn('Database query error (returning null BPM for fallback):', queryError.message)
@@ -46,9 +47,29 @@ export async function GET(request: Request) {
     if (!track) {
       return NextResponse.json({ bpm: null, searchedPath: filePath })
     }
-    
-    // Return BPM (prefer bpm over original_bpm, but use original_bpm if bpm is null)
-    const bpm = track.bpm ?? track.original_bpm ?? null
+
+    let libraryLock: { bpm?: number | null; metadata?: unknown } | null = null
+    if (track.id) {
+      try {
+        const { data: libRows } = await supabase
+          .from('music_library_tracks')
+          .select('bpm, metadata')
+          .eq('audio_file_id', track.id)
+          .limit(1)
+        libraryLock = Array.isArray(libRows) ? libRows[0] || null : libRows
+      } catch {
+        libraryLock = null
+      }
+    }
+
+    const bpm =
+      displayTrackBpm({
+        bpm: libraryLock?.bpm ?? track.bpm,
+        metadata: libraryLock?.metadata ?? track.metadata,
+      }) ??
+      track.bpm ??
+      track.original_bpm ??
+      null
     
     if (bpm === null || bpm <= 0) {
       // Return 200 with null BPM to avoid console errors - client will handle fallback

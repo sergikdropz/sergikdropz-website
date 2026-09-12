@@ -106,7 +106,7 @@ function isAudioContextUnavailableError(err: unknown): boolean {
  * Generate peak data from audio file using Web Worker
  * Falls back to main thread if worker is unavailable
  */
-export async function generatePeakData(audioFile: string, samples: number = 2000): Promise<PeakData> {
+export async function generatePeakData(audioFile: string, samples: number = 4096): Promise<PeakData> {
   if (!canAnalyzeAudioWaveform()) {
     throw new Error('AudioContext is not supported in this environment')
   }
@@ -185,7 +185,7 @@ export async function detectBPM(audioFile: string): Promise<number | null> {
 /**
  * Fallback: Generate peak data on main thread
  */
-async function generatePeakDataMainThread(audioFile: string, samples: number = 2000): Promise<PeakData> {
+async function generatePeakDataMainThread(audioFile: string, samples: number = 4096): Promise<PeakData> {
   // Import the original function dynamically to avoid circular dependencies
   const { generatePeakData: originalGeneratePeakData } = await import('./audioAnalysis')
   return originalGeneratePeakData(audioFile, samples)

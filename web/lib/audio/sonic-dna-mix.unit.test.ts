@@ -4,6 +4,8 @@ import {
   ensurePhraseSteps,
   expandBarStepsToPhrase,
   quantizeToDnaGrid,
+  quantizeModeForVisibleBars,
+  quantizePointerToVisibleGrid,
   rankDnaTracks,
   resolvePlaybackBpm,
   scoreDnaCompatibility,
@@ -67,16 +69,26 @@ describe('resolvePlaybackBpm', () => {
     expect(bpm).toBe(70)
   })
 
-  it('prefers confident DNA BPM near UI tempo', () => {
+  it('prefers admin catalog override over nearby DNA so decks stay aligned', () => {
     expect(
       resolvePlaybackBpm(
         {
-          bpm: 120,
+          bpm: 125,
+          metadata: { catalog_overrides: { bpm: 125 } },
           sonic_dna: { measured: { bpm: 124, bpmConfidence: 0.85 } },
         },
-        120
+        124
       )
-    ).toBe(124)
+    ).toBe(125)
+  })
+
+  it('uses measured BPM when catalog is stale (Para Papa 125 vs 123.05)', () => {
+    expect(
+      resolvePlaybackBpm({
+        bpm: 125,
+        sonic_dna: { measured: { bpm: 123.05, bpmConfidence: 0.66 } },
+      }),
+    ).toBeCloseTo(123.05, 5)
   })
 })
 
@@ -220,6 +232,74 @@ describe('quantize / phrase boundary', () => {
       },
     })
     expect(t).toBeCloseTo(0, 2)
+  })
+
+  it('snaps to 16-bar section lines', () => {
+    // 120 BPM → bar 2s, section 32s
+    expect(quantizeToDnaGrid({ timeSec: 10, bpm: 120, offsetSec: 0, mode: 'section' })).toBeCloseTo(0, 5)
+    expect(quantizeToDnaGrid({ timeSec: 20, bpm: 120, offsetSec: 0, mode: 'section' })).toBeCloseTo(32, 5)
+  })
+
+  it('picks coarser snap modes as the tape zooms out', () => {
+    expect(quantizeModeForVisibleBars(1)).toBe('none')
+    expect(quantizeModeForVisibleBars(4)).toBe('sixteenth')
+    expect(quantizeModeForVisibleBars(8)).toBe('sixteenth')
+    expect(quantizeModeForVisibleBars(16)).toBe('half-beat')
+    expect(quantizeModeForVisibleBars(32)).toBe('half-beat')
+    expect(quantizeModeForVisibleBars(48)).toBe('bar')
+    expect(quantizeModeForVisibleBars(96)).toBe('phrase')
+    expect(quantizeModeForVisibleBars(0)).toBe('section')
+  })
+
+  it('snaps pointer to the nearest visible grid line at each zoom', () => {
+    const free = quantizePointerToVisibleGrid({
+      timeSec: 0.083,
+      bpm: 120,
+      offsetSec: 0,
+      visibleBars: 1,
+    })
+    expect(free).toBeCloseTo(0.083, 5)
+
+    const sixteenth = quantizePointerToVisibleGrid({
+      timeSec: 0.08,
+      bpm: 120,
+      offsetSec: 0,
+      visibleBars: 4,
+    })
+    // 120 BPM → beat 0.5s → 16th = 0.125s
+    expect(sixteenth).toBeCloseTo(0.125, 5)
+
+    const half = quantizePointerToVisibleGrid({
+      timeSec: 0.2,
+      bpm: 120,
+      offsetSec: 0,
+      visibleBars: 16,
+    })
+    expect(half).toBeCloseTo(0.25, 5)
+
+    const bar = quantizePointerToVisibleGrid({
+      timeSec: 1.1,
+      bpm: 120,
+      offsetSec: 0,
+      visibleBars: 48,
+    })
+    expect(bar).toBeCloseTo(2, 5)
+
+    const phrase = quantizePointerToVisibleGrid({
+      timeSec: 10,
+      bpm: 120,
+      offsetSec: 0,
+      visibleBars: 96,
+    })
+    expect(phrase).toBeCloseTo(16, 5)
+
+    const overview = quantizePointerToVisibleGrid({
+      timeSec: 10,
+      bpm: 120,
+      offsetSec: 0,
+      visibleBars: 0,
+    })
+    expect(overview).toBeCloseTo(16, 5)
   })
 
   it('computes time to next phrase boundary from offset', () => {

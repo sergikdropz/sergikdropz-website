@@ -28,7 +28,7 @@ export function buildWaveformTapeCache(params: {
 
   const targetCount = Math.max(
     samples.length,
-    params.targetCount ?? Math.min(8192, Math.max(2400, samples.length * 3))
+    params.targetCount ?? Math.min(8192, Math.max(4096, samples.length * 2))
   )
 
   const remesured = remesureTimedSamples(
@@ -94,6 +94,7 @@ export function sliceTapeWindow(
     let maxLow = 0
     let maxMid = 0
     let maxHigh = 0
+    let maxFlux = 0
     let peak = slice[a]
     let tSum = 0
     for (let j = a; j < b; j++) {
@@ -104,6 +105,7 @@ export function sliceTapeWindow(
       }
       if (s.negative > maxNeg) maxNeg = s.negative
       if ((s.rms ?? 0) > maxRms) maxRms = s.rms ?? 0
+      if ((s.flux ?? 0) > maxFlux) maxFlux = s.flux ?? 0
       if (s.bands) {
         if (s.bands.low > maxLow) maxLow = s.bands.low
         if (s.bands.mid > maxMid) maxMid = s.bands.mid
@@ -121,6 +123,7 @@ export function sliceTapeWindow(
       positive: maxPos,
       negative: maxNeg,
       rms: maxRms > 0 ? maxRms : peak.rms,
+      flux: maxFlux > 0 ? maxFlux : peak.flux,
       bands,
       timeSec: mid?.timeSec ?? tSum / Math.max(1, b - a),
     })

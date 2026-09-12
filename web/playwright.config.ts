@@ -33,7 +33,7 @@ export default defineConfig({
     : [
         {
           name: 'chromium-guest',
-          testMatch: /(admin-guest|admin-api|admin-audit|admin-a11y|fan-public|auto-dj-player)\.spec\.ts/,
+          testMatch: /(admin-guest|admin-api|admin-audit|admin-a11y|fan-public|auto-dj-player|idj-player|playback-edge-url|playback-health)\.spec\.ts/,
           use: { ...chrome },
         },
         ...(e2eAuth

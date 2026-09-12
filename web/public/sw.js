@@ -9,7 +9,7 @@
 const CACHE_NAME = 'sergik-audio-cache-v2'
 const MAX_CACHE_SIZE = 1024 * 1024 * 1024 // ~1GB
 const MAX_CACHE_ITEMS = 100 // Maximum number of cached tracks
-const PRELOAD_COUNT = 5 // Number of next tracks to preload
+const PRELOAD_COUNT = 3 // Keep in sync with MusicPlayer queue prefetch (CDN URLs only)
 
 // Public API JSON cache (music library structure, waveform/bpm, sonic-dna reads)
 // v2: Cleared stale sonic-dna responses after data enhancement (2026-01-30)

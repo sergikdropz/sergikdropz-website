@@ -259,3 +259,45 @@ export function applySonicDnaAnalysisToTrack<T extends TrackDisplaySource>(
     metadata,
   }
 }
+
+/** Stamp an admin BPM onto sonic DNA so mix + display read the same pulse. */
+export function applyAdminBpmToSonicDna(sonicDna: unknown, bpm: number): Record<string, unknown> | null {
+  if (!sonicDna || typeof sonicDna !== 'object' || Array.isArray(sonicDna)) return null
+  const root = { ...(sonicDna as Record<string, unknown>) }
+  const technical =
+    root.technical && typeof root.technical === 'object'
+      ? { ...(root.technical as Record<string, unknown>) }
+      : {}
+  root.technical = { ...technical, bpm }
+  if (root.measured && typeof root.measured === 'object') {
+    const measured = { ...(root.measured as Record<string, unknown>) }
+    measured.bpm = bpm
+    measured.bpmConfidence = Math.max(Number(measured.bpmConfidence) || 0, 0.95)
+    measured.bpmSource = 'admin'
+    root.measured = measured
+  }
+  const comprehensive = root.comprehensive
+  if (comprehensive && typeof comprehensive === 'object') {
+    const comp = { ...(comprehensive as Record<string, unknown>) }
+    if (comp.measured && typeof comp.measured === 'object') {
+      comp.measured = { ...(comp.measured as Record<string, unknown>), bpm }
+    }
+    root.comprehensive = comp
+  }
+  return root
+}
+
+/**
+ * Admin ORIG edit: lock catalog BPM so the badge, decks, and mix engine
+ * all read the same value after save (not just the current session).
+ */
+export function applyAdminBpmToTrack<T extends TrackDisplaySource>(track: T, bpm: number): T {
+  const metadata = stampCatalogOverrides(track.metadata, { bpm })
+  const sonic = applyAdminBpmToSonicDna(track.sonic_dna, bpm)
+  return {
+    ...track,
+    bpm,
+    metadata,
+    ...(sonic ? { sonic_dna: sonic } : {}),
+  }
+}

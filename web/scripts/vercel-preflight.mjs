@@ -68,6 +68,15 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
 if (isVercel && siteUrl && !/^https:\/\//.test(siteUrl)) {
   problems.push('NEXT_PUBLIC_SITE_URL should be an https URL on Vercel')
 }
+if (
+  isVercel &&
+  siteUrl &&
+  /^(https?:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/i.test(siteUrl)
+) {
+  problems.push(
+    'NEXT_PUBLIC_SITE_URL must be the public domain on Vercel (not localhost / 127.0.0.1). Set it to https://sergikdropz.com and redeploy.',
+  )
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 if (supabaseUrl && !/^https:\/\/.+\.supabase\.co/.test(supabaseUrl)) {

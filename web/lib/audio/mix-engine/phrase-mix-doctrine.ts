@@ -4,12 +4,12 @@
  * Rules:
  * - Phrase cell = 8 bars (always the snap / lock grid).
  * - OUT = last outDepth on outgoing 8-bar lines.
- * - IN  = first 8-bar phrase of incoming (grid origin).
- * - Overlap = exact N×8 bars on the master (outgoing) bar clock.
+ * - IN  = first 8-bar phrase of incoming, matched to outgoing's current bar.
+ * - Overlap = exact N×8 bars on the master (outgoing) bar clock (16 when ΔBPM/drop).
  * - Tempo Master = outgoing for the whole overlap.
  * - BeatSync only when both grids are locked (else TempoSync).
- * - EQ / gain / tempo unlock share one progress 0→1 (phrase-quantized knees).
- * - Residual seeks capped to ±½ beat; larger → no seek (micro or TempoSync).
+ * - EQ / gain sit on outgoing bar lines; tempo uses continuous lattice 0→1.
+ * - Residual: incoming-only vinyl bend; seeks capped to ±½ beat.
  */
 
 import type {
@@ -24,6 +24,7 @@ import { isGridLocked } from './kick-onsets'
 import { BARS_PER_PHRASE } from '@/lib/audio/beat-grid'
 import type { MixQualityGrade } from './mix-quality'
 import type { InPhraseBars, OutPhraseBars, PhraseBars } from './types'
+import { preferLongSmoothOverlap } from './blend-smooth'
 
 /** Fixed 8-bar DNA phrase cell. */
 export const PHRASE_CELL_BARS = BARS_PER_PHRASE as PhraseBars
@@ -37,11 +38,17 @@ export const PLAN_FREEZE_SEC = 4
 /** Pre-arm / cue idle this many bars before OUT (1 phrase). */
 export const PREARM_PHRASE_BARS = PHRASE_CELL_BARS
 
+/** Soft-pass BPM window — prefer pairs inside this relative delta. */
+export const BPM_SOFT_REL = 0.04
+
 /** Max BPM relative delta for BeatSync-compatible queue picks. */
 export const BPM_COMPAT_REL = 0.06
 
 /** Phrase knees for EQ/gain (quarters of the overlap). */
 export const PHRASE_EQ_STEPS = 4
+
+/** Consecutive fair/poor mixes that force TempoSync instead of recovery. */
+export const QUALITY_GATE_TEMPO_SYNC_STREAK = 2
 
 export type ResolvedPhraseMix = {
   outPhraseBars: OutPhraseBars
@@ -77,12 +84,22 @@ export function resolvePhraseMixSettings(
     | 'cuePriority'
     | 'energyCurve'
     | 'mixLengthBias'
+    | 'creativeMode'
   >,
   opts?: {
-    /** When last mix graded poor, force safer defaults */
+    /** When last mix graded poor/fair, recover (shorter blend + stronger bend) */
     qualityGate?: MixQualityGrade | null
+    /** Consecutive fair/poor mixes — 2+ forces TempoSync when grids are unsafe */
+    consecutiveWeak?: number
+    /** Both decks have a usable grid — keep BeatSync even after a weak streak */
+    gridsReady?: boolean
+    /** |ΔBPM| / master — stretch Smooth to 16 bars when > ~4% */
+    bpmRelDelta?: number
+    /** Outgoing section at OUT — drop prefers a 16-bar blend */
+    outgoingSection?: string | null
   },
 ): ResolvedPhraseMix {
+  const creative = config.creativeMode === true
   const outPhraseBars =
     config.outPhraseBars === 16 || config.outPhraseBars === 24 || config.outPhraseBars === 32
       ? config.outPhraseBars
@@ -96,13 +113,51 @@ export function resolvePhraseMixSettings(
       : 'match-outgoing'
 
   const gate = opts?.qualityGate
-  if (gate === 'poor' || gate === 'fair') {
-    syncMode = 'tempo-sync'
+  const weak =
+    typeof opts?.consecutiveWeak === 'number' && Number.isFinite(opts.consecutiveWeak)
+      ? Math.max(0, Math.floor(opts.consecutiveWeak))
+      : gate === 'poor' || gate === 'fair'
+        ? 1
+        : 0
+  const qualityGated = gate === 'poor' || gate === 'fair'
+  if (qualityGated) {
     overlapBars = 8
     bpmStrategy = 'match-outgoing'
+    // First miss: keep BeatSync and chase harder. Two in a row: TempoSync
+    // only when grids are unlocked — a locked pair still needs the chase.
+    if (weak >= QUALITY_GATE_TEMPO_SYNC_STREAK && opts?.gridsReady !== true) {
+      syncMode = 'tempo-sync'
+    }
+  } else if (
+    preferLongSmoothOverlap({
+      bpmRelDelta: opts?.bpmRelDelta,
+      outgoingSection: opts?.outgoingSection,
+      qualityGated: false,
+    })
+  ) {
+    overlapBars = 16
   }
 
-  // Doctrine: always phrase-1 IN, exact overlap, first-downbeat.
+  if (creative) {
+    const inBars = config.inPhraseBars === 0 ? 0 : 8
+    return {
+      outPhraseBars,
+      inPhraseBars: inBars,
+      overlapBars,
+      syncMode,
+      bpmStrategy,
+      cuePriority: config.cuePriority ?? 'first-downbeat',
+      energyCurve: config.energyCurve ?? 'hold',
+      mixLengthBias: config.mixLengthBias ?? 'normal',
+      exactOverlap: false,
+      canonicalPhraseCues: false,
+      summary: `Creative · OUT last ${outPhraseBars} · blend ${overlapBars} · ${
+        syncMode === 'beat-sync' ? 'BeatSync' : 'TempoSync'
+      }`,
+    }
+  }
+
+  // Doctrine: exact overlap + phrase-1 IN unless creative mode.
   return {
     outPhraseBars,
     inPhraseBars: 8,
@@ -128,13 +183,17 @@ export function doctrineSummaryLine(params: {
   overlapBars: PhraseBars
   syncMode: SyncMode
   bpmStrategy?: BpmStrategy
+  mixStyleLabel?: string
+  techniquesLabel?: string
 }): string {
   const sync = params.syncMode === 'beat-sync' ? 'BeatSync' : 'TempoSync'
   const bpm =
     params.bpmStrategy === 'manual'
       ? 'glide → slider'
       : 'master → incoming BPM'
-  return `OUT last ${params.outPhraseBars} · blend ${params.overlapBars} · IN phrase 1 @ OUT · ${sync} · ${bpm}`
+  const style = params.mixStyleLabel ? ` · ${params.mixStyleLabel}` : ''
+  const tech = params.techniquesLabel ? ` · ${params.techniquesLabel}` : ''
+  return `OUT last ${params.outPhraseBars} · blend ${params.overlapBars} · IN phrase 1 @ OUT · ${sync} · ${bpm}${style}${tech}`
 }
 
 /** True when both decks have a locked grid or a persisted beat-grid offset. */
@@ -215,6 +274,15 @@ export function clampResidualSeekSec(params: {
   return Math.max(-halfBeat, Math.min(halfBeat, err))
 }
 
+/**
+ * Keep the planned 8/16-bar overlap. Late fire must not compress the lattice
+ * (that smears EQ knees and the tempo glide).
+ */
+export function exactOverlapDurationSec(plannedSec: number, maxSec = 48): number {
+  if (!Number.isFinite(plannedSec) || plannedSec <= 0) return 0.25
+  return Math.max(0.25, Math.min(maxSec, plannedSec))
+}
+
 /** Media seconds to pre-arm before OUT (1 phrase @ master BPM). */
 export function prearmLeadSec(bpm: number, phraseBars = PREARM_PHRASE_BARS): number {
   const use = bpm > 0 ? bpm : 120
@@ -224,4 +292,12 @@ export function prearmLeadSec(bpm: number, phraseBars = PREARM_PHRASE_BARS): num
 /** Whether a poor mix quality should force safer next-mix defaults. */
 export function shouldApplyQualityGate(grade: MixQualityGrade | null | undefined): boolean {
   return grade === 'poor' || grade === 'fair'
+}
+
+/** True when recovery should boost vinyl bend (first fair/poor, still BeatSync). */
+export function shouldBoostBendRecovery(
+  grade: MixQualityGrade | null | undefined,
+  consecutiveWeak = 1,
+): boolean {
+  return shouldApplyQualityGate(grade) && consecutiveWeak < QUALITY_GATE_TEMPO_SYNC_STREAK
 }

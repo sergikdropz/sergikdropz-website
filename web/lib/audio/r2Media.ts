@@ -87,6 +87,19 @@ export async function presignR2ObjectUrl(
   }
 }
 
+export async function r2ObjectExists(relativePath: string): Promise<boolean> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) return false
+  const Key = r2ObjectKey(relativePath)
+  try {
+    await clientFor(cfg).send(new HeadObjectCommand({ Bucket: cfg.bucket, Key }))
+    return true
+  } catch (error: any) {
+    if (error?.$metadata?.httpStatusCode === 404) return false
+    return false
+  }
+}
+
 export async function fetchR2Object(
   relativePath: string,
   options: { method: 'GET' | 'HEAD'; range?: string | null },

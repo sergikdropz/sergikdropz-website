@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import {
   extractVaultRelativePath,
   normalizeVaultAudioUrl,
+  toSameOriginMediaUrl,
   vaultUpstreamUrl,
 } from '@/utils/normalizeVaultAudioUrl'
 
@@ -136,6 +137,29 @@ describe('normalizeVaultAudioUrl', () => {
     ).toBe(
       '/api/audio/media/unreleased/Playlists/Happy%20Camper/SERGIK%20-%20Innah%20Peace%20v2.mp3',
     )
+  })
+
+  it('maps vault and presigned paths to the same-origin media proxy', () => {
+    const signed =
+      'https://sergik-vault.e7b3fe976b079a994da8533ba6274a5d.r2.cloudflarestorage.com/audio/unreleased/a.mp3?X-Amz-Signature=abc'
+    expect(toSameOriginMediaUrl(signed)).toBe('/api/audio/media/unreleased/a.mp3')
+    expect(toSameOriginMediaUrl('unreleased/eps/SERGIK - FTP/SERGIK - FTP.mp3')).toBe(
+      '/api/audio/media/unreleased/eps/SERGIK%20-%20FTP/SERGIK%20-%20FTP.mp3',
+    )
+  })
+
+  it('leaves presigned R2 URLs untouched so playback skips the Vercel proxy', () => {
+    process.env.NEXT_PUBLIC_AUDIO_BASE_URL = 'https://tunnel.trycloudflare.com'
+    const signed =
+      'https://sergik-vault.e7b3fe976b079a994da8533ba6274a5d.r2.cloudflarestorage.com/audio/unreleased/a.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc'
+    expect(normalizeVaultAudioUrl(signed)).toBe(signed)
+  })
+
+  it('vaultUpstreamUrl ignores r2:// and tunnel sentinels', () => {
+    process.env.NEXT_PUBLIC_AUDIO_BASE_URL = 'r2://sergik-vault'
+    expect(vaultUpstreamUrl('unreleased/a.mp3')).toBeNull()
+    process.env.NEXT_PUBLIC_AUDIO_BASE_URL = 'https://dead.trycloudflare.com'
+    expect(vaultUpstreamUrl('unreleased/a.mp3')).toBeNull()
   })
 
   it('vaultUpstreamUrl builds the absolute origin URL for server-side fetches', () => {

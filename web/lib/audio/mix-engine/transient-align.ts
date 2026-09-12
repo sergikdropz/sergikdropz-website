@@ -9,8 +9,8 @@ function nearestOnsetResidualLocal(
   timeSec: number,
   onsetsSec: number[] | null | undefined,
   windowSec = 0.028,
-): number {
-  if (!onsetsSec?.length || !Number.isFinite(timeSec)) return 0
+): number | null {
+  if (!onsetsSec?.length || !Number.isFinite(timeSec)) return null
   const window = Math.max(0.012, Math.min(0.05, windowSec))
   let best = 0
   let bestAbs = window + 1
@@ -23,7 +23,7 @@ function nearestOnsetResidualLocal(
       best = d
     }
   }
-  return bestAbs <= window ? best : 0
+  return bestAbs <= window ? best : null
 }
 
 function sampleAmp(s: MixPeakSample): number {
@@ -92,7 +92,66 @@ export function transientPocketNudgeSec(params: {
 /**
  * Dual-grid residual: kick (downbeat) + snare/clap (backbeat).
  * Positive = incoming is early vs outgoing pocket (seek incoming forward).
+ * `null` = no paired onset in the window (do not treat as a 0 lock).
  */
+export type OnsetPocketResidual = {
+  kickSec: number | null
+  clapSec: number | null
+}
+
+function pairOnsetResidual(
+  outgoingTimeSec: number,
+  incomingTimeSec: number,
+  outgoingOnsets: number[] | null | undefined,
+  incomingOnsets: number[] | null | undefined,
+  windowSec: number,
+): number | null {
+  const out = nearestOnsetResidualLocal(outgoingTimeSec, outgoingOnsets, windowSec)
+  const inn = nearestOnsetResidualLocal(incomingTimeSec, incomingOnsets, windowSec)
+  if (out == null || inn == null) return null
+  return out - inn
+}
+
+export function measureOnsetPocketResidual(params: {
+  outgoingTimeSec: number
+  incomingTimeSec: number
+  outgoingKickOnsets?: number[] | null
+  incomingKickOnsets?: number[] | null
+  outgoingSnareOnsets?: number[] | null
+  incomingSnareOnsets?: number[] | null
+  kickWindowSec?: number
+  clapWindowSec?: number
+}): OnsetPocketResidual {
+  const kickWindow = params.kickWindowSec ?? 0.032
+  const clapWindow = params.clapWindowSec ?? 0.036
+  const hasKick =
+    (params.outgoingKickOnsets?.length ?? 0) >= 4 ||
+    (params.incomingKickOnsets?.length ?? 0) >= 4
+  const hasClap =
+    (params.outgoingSnareOnsets?.length ?? 0) >= 4 ||
+    (params.incomingSnareOnsets?.length ?? 0) >= 4
+  return {
+    kickSec: hasKick
+      ? pairOnsetResidual(
+          params.outgoingTimeSec,
+          params.incomingTimeSec,
+          params.outgoingKickOnsets,
+          params.incomingKickOnsets,
+          kickWindow,
+        )
+      : null,
+    clapSec: hasClap
+      ? pairOnsetResidual(
+          params.outgoingTimeSec,
+          params.incomingTimeSec,
+          params.outgoingSnareOnsets,
+          params.incomingSnareOnsets,
+          clapWindow,
+        )
+      : null,
+  }
+}
+
 export function dualOnsetResidualNudgeSec(params: {
   outgoingTimeSec: number
   incomingTimeSec: number
@@ -105,49 +164,22 @@ export function dualOnsetResidualNudgeSec(params: {
   windowSec?: number
   maxAbsSec?: number
 }): number {
-  const window = params.windowSec ?? 0.028
   const maxAbs = params.maxAbsSec ?? 0.02
   const snareW = Math.max(0, Math.min(1, params.snareWeight ?? 0.35))
   const kickW = 1 - snareW * 0.55
-
-  const outKick = nearestOnsetResidualLocal(
-    params.outgoingTimeSec,
-    params.outgoingKickOnsets,
-    window,
-  )
-  const inKick = nearestOnsetResidualLocal(
-    params.incomingTimeSec,
-    params.incomingKickOnsets,
-    window,
-  )
-  const kickNudge = outKick - inKick
-
-  const outSnare = nearestOnsetResidualLocal(
-    params.outgoingTimeSec,
-    params.outgoingSnareOnsets,
-    window,
-  )
-  const inSnare = nearestOnsetResidualLocal(
-    params.incomingTimeSec,
-    params.incomingSnareOnsets,
-    window,
-  )
-  const snareNudge = outSnare - inSnare
-
-  const hasKick =
-    (params.outgoingKickOnsets?.length ?? 0) >= 4 ||
-    (params.incomingKickOnsets?.length ?? 0) >= 4
-  const hasSnare =
-    (params.outgoingSnareOnsets?.length ?? 0) >= 4 ||
-    (params.incomingSnareOnsets?.length ?? 0) >= 4
+  const pocket = measureOnsetPocketResidual({
+    ...params,
+    kickWindowSec: params.windowSec,
+    clapWindowSec: params.windowSec,
+  })
 
   let nudge = 0
-  if (hasKick && hasSnare) {
-    nudge = kickNudge * kickW + snareNudge * snareW
-  } else if (hasKick) {
-    nudge = kickNudge
-  } else if (hasSnare) {
-    nudge = snareNudge
+  if (pocket.kickSec != null && pocket.clapSec != null) {
+    nudge = pocket.kickSec * kickW + pocket.clapSec * snareW
+  } else if (pocket.kickSec != null) {
+    nudge = pocket.kickSec
+  } else if (pocket.clapSec != null) {
+    nudge = pocket.clapSec
   }
   return Math.max(-maxAbs, Math.min(maxAbs, nudge))
 }

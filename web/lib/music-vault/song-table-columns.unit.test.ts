@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  defaultSongTableOptionalColumns,
   reorderColumns,
   sortSongTableTracks,
+  SONG_TABLE_EP_DEFAULT_OPTIONAL_COLUMNS,
   visibleColumnOrder,
   visibleSelectionRangeIds,
   type SongTableReorderableColumn,
@@ -30,6 +32,19 @@ describe('visibleColumnOrder', () => {
     const visible = new Set(['artist'] as const)
     expect(visibleColumnOrder(order, visible, false)).toEqual(['title', 'artist'])
     expect(visibleColumnOrder(order, visible, true)).toEqual(['title', 'dna', 'artist'])
+  })
+})
+
+describe('EP column defaults', () => {
+  it('defaults EP optional columns to Artist, Album, Time, Genre, Subgenre', () => {
+    expect(SONG_TABLE_EP_DEFAULT_OPTIONAL_COLUMNS).toEqual([
+      'artist',
+      'album',
+      'duration',
+      'genre',
+      'subgenre',
+    ])
+    expect(defaultSongTableOptionalColumns('ep')).toEqual(SONG_TABLE_EP_DEFAULT_OPTIONAL_COLUMNS)
   })
 })
 

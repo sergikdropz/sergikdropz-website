@@ -67,6 +67,7 @@ export function isSyntheticFanEmail(email: string | null | undefined): boolean {
   if (SYNTHETIC_FAN_EMAILS.has(e)) return true
   if (/(^|[.+_-])(autodj|auto-dj|auto_dj)([.+_-]|$)/.test(e.split('@')[0])) return true
   if (/^e2e[-_.]/.test(e) && e.endsWith('@example.com')) return true
+  if (/^verify[-_.]/.test(e) && e.endsWith('@example.com')) return true
   if (/^(qa-fan-|vault-crm-verify-|vault-probe-|probe\d+-)/.test(e) && e.endsWith('@example.com')) return true
   return false
 }

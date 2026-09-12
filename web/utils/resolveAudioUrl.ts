@@ -6,7 +6,17 @@
  */
 
 import { getCachedUrl, setCachedUrl } from './audioCache'
-import { alternateAudioExtensionUrl, normalizeVaultAudioUrl } from './normalizeVaultAudioUrl'
+import {
+  isDirectPlayableUrl,
+  isEdgePlaybackUrl,
+  isR2BrowserPlayEnabled,
+  shouldPreferResolveOverProxy,
+} from '@/lib/audio/edge-playback-url'
+import {
+  alternateAudioExtensionUrl,
+  normalizeVaultAudioUrl,
+  toSameOriginMediaUrl,
+} from './normalizeVaultAudioUrl'
 
 const DEBUG_INGEST =
   process.env.NODE_ENV !== 'production' && !!process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGGING
@@ -68,25 +78,60 @@ async function preferExistingLocalAudio(url: string): Promise<string> {
  * @param filePath - The local file path (e.g., "/audio/unreleased/eps/...")
  * @returns Promise<string> - The resolved URL (Supabase URL in production, or local path in dev)
  */
-export async function resolveAudioUrl(filePath: string): Promise<string> {
-  const normalizedInput = normalizeVaultAudioUrl(filePath)
+function rememberUrl(filePath: string, url: string, ttlMs?: number) {
+  setCachedUrl(filePath, url, ttlMs)
+  setCachedUrl(url, url, ttlMs)
+}
 
-  // Already same-origin media proxy or absolute http(s) — skip resolve + existence HEAD
-  if (
-    normalizedInput.startsWith('/api/audio/media/') ||
-    normalizedInput.startsWith('http://') ||
-    normalizedInput.startsWith('https://')
-  ) {
-    setCachedUrl(filePath, normalizedInput)
-    setCachedUrl(normalizedInput, normalizedInput)
+function browserPlayUrl(filePath: string, candidate?: string | null): string | null {
+  return (
+    toSameOriginMediaUrl(candidate || '') ||
+    toSameOriginMediaUrl(filePath) ||
+    (candidate && isDirectPlayableUrl(candidate) ? candidate : null)
+  )
+}
+
+function playUrlFromResolve(
+  filePath: string,
+  data: { url?: unknown; source?: unknown; fallbackUrl?: unknown },
+): string | null {
+  const raw = data.url != null ? String(data.url) : ''
+  const source = data.source != null ? String(data.source) : ''
+  if ((source === 'presigned' || source === 'cdn') && raw && isR2BrowserPlayEnabled()) {
+    // Keep the signature intact — do not run through toSameOriginMediaUrl.
+    if (isEdgePlaybackUrl(raw) || /^https?:\/\//i.test(raw)) return raw
+  }
+  return (
+    browserPlayUrl(filePath, raw) ||
+    (raw && isDirectPlayableUrl(raw) ? raw : null) ||
+    (data.fallbackUrl ? browserPlayUrl(filePath, String(data.fallbackUrl)) : null)
+  )
+}
+
+export async function resolveAudioUrl(filePath: string): Promise<string> {
+  const sameOrigin = browserPlayUrl(filePath, filePath)
+  if (sameOrigin) {
+    rememberUrl(filePath, sameOrigin)
+    return sameOrigin
+  }
+
+  const normalizedInput = normalizeVaultAudioUrl(filePath)
+  if (isDirectPlayableUrl(normalizedInput)) {
+    rememberUrl(filePath, normalizedInput)
+    rememberUrl(normalizedInput, normalizedInput)
     return normalizedInput
   }
 
-  // Check cache first (NEW - safe addition)
-  const cached = getCachedUrl(normalizedInput)
-  if (cached) {
-    return normalizeVaultAudioUrl(cached)
+  const cached = getCachedUrl(filePath) || getCachedUrl(normalizedInput)
+  if (cached && isDirectPlayableUrl(cached)) {
+    return cached
   }
+
+  const proxyFallback = shouldPreferResolveOverProxy(normalizedInput)
+    ? normalizedInput
+    : normalizedInput.startsWith('/api/audio/media/')
+      ? normalizedInput
+      : null
 
   // Always try Supabase resolution (works in both dev and production)
   if (typeof window !== 'undefined') {
@@ -114,39 +159,51 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
         // In production, always use Supabase URL (even if null, API will construct it)
         // In development, use Supabase URL if found, otherwise fall back to local
         if (data.url) {
-          const out = normalizeVaultAudioUrl(data.url)
+          const raw = String(data.url)
+          const out =
+            playUrlFromResolve(filePath, data) ||
+            (isDirectPlayableUrl(raw) ? raw : normalizeVaultAudioUrl(raw))
           const ttlMs =
             typeof data.expiresIn === 'number' && data.expiresIn > 60
               ? Math.max(60_000, (data.expiresIn - 60) * 1000)
               : undefined
-          setCachedUrl(normalizedInput, out, ttlMs)
+          rememberUrl(filePath, out, ttlMs)
+          rememberUrl(normalizedInput, out, ttlMs)
           return out
         } else if (!isDevelopment) {
-          // In production, if API returns null, check if it's a configuration error
+          if (proxyFallback) {
+            rememberUrl(filePath, proxyFallback)
+            return proxyFallback
+          }
           if (data.error) {
             console.error('Supabase configuration error:', data.error)
             throw new Error(`Supabase not configured: ${data.error}`)
           }
-          // In production, if API returns null, that's an error - don't fall back to local
           console.error('Audio file not found in Supabase:', normalizedInput)
           throw new Error(`Audio file not found: ${normalizedInput}`)
         }
       }
     } catch (error: any) {
+      if (proxyFallback) {
+        rememberUrl(filePath, proxyFallback)
+        return proxyFallback
+      }
       if (!isDevelopment) {
-        // In production, don't fall back to local files
         console.error('Failed to resolve audio URL from Supabase:', error)
         throw error
       }
-      // In development, fall through to local path
       console.warn('Failed to resolve audio URL from Supabase, using local path:', error)
     }
   }
 
-  // Fallback: local path — pick the extension that actually exists (wav-only playlist drops).
+  // Fallback: same-origin proxy if we already have one, else local path.
+  if (proxyFallback) {
+    rememberUrl(filePath, proxyFallback)
+    return proxyFallback
+  }
   const result = await preferExistingLocalAudio(normalizedInput)
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    setCachedUrl(normalizedInput, result)
+    rememberUrl(normalizedInput, result)
   }
   return result
 }
@@ -158,17 +215,33 @@ export async function resolveAudioUrl(filePath: string): Promise<string> {
  */
 export async function resolveAudioUrls(filePaths: string[]): Promise<Map<string, string>> {
   const resolved = new Map<string, string>()
-  
-  // Resolve all in parallel
-  const promises = filePaths.map(async (path) => {
-    const url = await resolveAudioUrl(path)
-    return [path, url] as [string, string]
-  })
-  
-  const results = await Promise.all(promises)
-  results.forEach(([path, url]) => {
-    resolved.set(path, url)
-  })
-  
+  const unique = [...new Set(filePaths.filter(Boolean))]
+  if (typeof window !== 'undefined' && unique.length > 1) {
+    try {
+      const qs = unique.map((path) => `path=${encodeURIComponent(path)}`).join('&')
+      const response = await fetch(`/api/audio/resolve?${qs}`)
+      if (response.ok) {
+        const data = await response.json()
+        const items = Array.isArray(data.results) ? data.results : null
+        if (items) {
+          for (const item of items) {
+            if (!item?.path || !item?.url) continue
+            const raw = String(item.url)
+            const out =
+              playUrlFromResolve(item.path, item) ||
+              (isDirectPlayableUrl(raw) ? raw : normalizeVaultAudioUrl(raw))
+            rememberUrl(item.path, out, item.expiresIn > 60 ? (item.expiresIn - 60) * 1000 : undefined)
+            resolved.set(item.path, out)
+          }
+        }
+      }
+    } catch {
+      /* fall through to per-path */
+    }
+  }
+
+  const missing = unique.filter((path) => !resolved.has(path))
+  const results = await Promise.all(missing.map(async (path) => [path, await resolveAudioUrl(path)] as const))
+  results.forEach(([path, url]) => resolved.set(path, url))
   return resolved
 }

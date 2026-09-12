@@ -14,7 +14,12 @@ describe('waveformDrawBudget', () => {
   it('densifies phrase zooms and enables half-beats', () => {
     expect(waveformDrawBudget(8).columns).toBeGreaterThan(700)
     expect(waveformDrawBudget(8).halfBeats).toBe(true)
+    expect(waveformDrawBudget(8).sixteenths).toBe(true)
     expect(waveformDrawBudget(8).overview).toBe(false)
+    expect(waveformDrawBudget(8).peakSpikes).toBe(true)
+    expect(waveformDrawBudget(8).onsetTicks).toBe(true)
+    expect(waveformDrawBudget(16).sixteenths).toBe(false)
+    expect(waveformDrawBudget(16).halfBeats).toBe(true)
     expect(waveformDrawBudget(64).overview).toBe(true)
   })
 
@@ -24,7 +29,7 @@ describe('waveformDrawBudget', () => {
     expect(narrow.columns).toBeLessThan(1000)
 
     const retina = waveformDrawBudget(8, { cssWidth: 800, dpr: 2 })
-    expect(retina.columns).toBe(Math.ceil(800 * 2 * 1.2))
+    expect(retina.columns).toBe(Math.ceil(800 * 2 * 1.35))
     expect(retina.columns).toBeLessThanOrEqual(WAVEFORM_COLUMNS_HARD_MAX)
   })
 

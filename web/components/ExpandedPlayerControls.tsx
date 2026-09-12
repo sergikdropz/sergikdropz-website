@@ -4,26 +4,36 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import DeckChannelStrip, {
+  DeckEqDials,
+  DeckTempoControls,
+  DeckTransportControls,
   formatEqGain,
   type DeckChannelConfig,
   type DeckChannelId,
   type EqBand,
 } from '@/components/music/DeckChannelStrip'
 import MixCrossfader from '@/components/music/MixCrossfader'
-import MixSessionLog from '@/components/music/MixSessionLog'
-import type { MixQualityHistoryEntry } from '@/lib/audio/mix-engine/mix-quality-history'
 import { formatTapTempoButtonLabel } from '@/lib/audio/beat-count'
 import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
+import { layoutEqPopupBoxes } from '@/lib/ui/eq-popup-layout'
+import { matchDeckTempoRate } from '@/lib/audio/mix-engine/tempo-match'
+import type { HotCueSlot, HotCueSlots } from '@/lib/audio/hot-cues'
+import type { IDJActiveCue } from '@/lib/audio/idj-preferences'
+import type { DeckJumpCue } from '@/lib/audio/mix-engine/cues'
 
 interface ExpandedPlayerControlsProps {
   decks: { a: DeckChannelConfig; b: DeckChannelConfig }
   deckWaveforms?: { a?: ReactNode; b?: ReactNode }
+  /** Stacked Deck A/B phase meters — sits above the mixer crossfader, full width. */
+  phaseMeters?: ReactNode
+  onPhaseMetersContextMenu?: (deck: DeckChannelId, e: React.MouseEvent) => void
   audioContext?: AudioContext | null
   sourceNode?: MediaElementAudioSourceNode | null
   analyserNode?: AnalyserNode | null
@@ -35,7 +45,7 @@ interface ExpandedPlayerControlsProps {
   getTempoPercentage: (rate: number) => number
   getAdjustedBPM: (originalBPM: number | null, rate: number) => number | null
   rateToTempoValue: (rate: number) => number
-  onBPMUpdate?: (deck: DeckChannelId, bpm: number) => void
+  onBPMUpdate?: (deck: DeckChannelId, bpm: number) => Promise<void> | void
   /** Allow editing original BPM (persists to library on admin routes). */
   canEditOrigBpm?: boolean
   onDeckEqGains?: (deck: DeckChannelId, gains: { low: number; mid: number; high: number }) => void
@@ -46,13 +56,46 @@ interface ExpandedPlayerControlsProps {
   onPrevious?: () => void
   onNext?: () => void
   onTogglePlay?: () => void
+  onDeckPrevious?: (deck: DeckChannelId) => void
+  onDeckNext?: (deck: DeckChannelId) => void
   /** Auto DJ blend position 0→1 (null = idle). */
   mixProgress?: number | null
   mixCrossfadeActive?: boolean
-  /** Countdown / blend line under deck chrome. */
-  autoDjStatusLine?: string | null
-  mixSessionEntries?: MixQualityHistoryEntry[]
-  autoDjStatusMessage?: string | null
+  /** Manual iDJ — SET/CUE + both-deck play + user XF. */
+  idjActive?: boolean
+  /** Auto DJ — same compact mixer strip layout; XF is a blend meter only. */
+  autoDjActive?: boolean
+  onIdjCrossfade?: (progress: number) => void
+  /** Auto DJ on, but user owns XF. */
+  autoDjXfUnlocked?: boolean
+  /** Take XF while Auto DJ keeps running. */
+  onUnlockCrossfaderFromAutoDj?: () => void
+  /** Give XF back to Auto DJ automation. */
+  onRelockCrossfaderToAutoDj?: () => void
+  onSetCue?: (deck: DeckChannelId) => void
+  onClearCue?: (deck: DeckChannelId) => void
+  onLaunchCue?: (deck: DeckChannelId) => void
+  deckHotCues?: { a: HotCueSlots; b: HotCueSlots }
+  onLaunchDeckHotCue?: (deck: DeckChannelId, slot: HotCueSlot) => void
+  onSetDeckHotCue?: (deck: DeckChannelId, slot: HotCueSlot) => void
+  onClearDeckHotCue?: (deck: DeckChannelId, slot: HotCueSlot) => void
+  onClearAllDeckHotCues?: (deck: DeckChannelId) => void
+  deckMemoryCueSec?: { a: number | null; b: number | null }
+  deckTrackCues?: { a: DeckJumpCue[]; b: DeckJumpCue[] }
+  onJumpDeckTrackCue?: (deck: DeckChannelId, timeSec: number) => void
+  deckActiveCues?: { a: IDJActiveCue | null; b: IDJActiveCue | null }
+  onSelectDeckActiveCue?: (deck: DeckChannelId, cue: IDJActiveCue) => void
+  deckHasCue?: { a: boolean; b: boolean }
+  deckPlaying?: { a: boolean; b: boolean }
+  onToggleDeckPlay?: (deck: DeckChannelId) => void
+  deckContinuousPlay?: { a: boolean; b: boolean }
+  onToggleDeckContinuousPlay?: (deck: DeckChannelId) => void
+  cueJumpPlay?: boolean
+  /** Drop library tracks onto the cue (non-live) deck. */
+  onCueDeckLibraryDrop?: (
+    trackIds: string[],
+    tracks: Array<{ id: string; [key: string]: unknown }>,
+  ) => void
 }
 
 type ActiveDial = null | {
@@ -61,12 +104,36 @@ type ActiveDial = null | {
   anchorRect?: DOMRect | null
 }
 
+type OpenEqFader = {
+  deck: DeckChannelId
+  band: EqBand
+  el: HTMLElement
+  /** Opened by a dial drag — closes again when the drag releases. */
+  transient?: boolean
+}
+
+const EQ_BAND_META = {
+  low: { label: 'Low', accent: 'red' as const },
+  mid: { label: 'Mid', accent: 'amber' as const },
+  high: { label: 'High', accent: 'sky' as const },
+} as const
+
 function anchorTempoPopupStyle(rect: DOMRect) {
   const centerX = rect.left + rect.width / 2
   const clampedX = Math.max(88, Math.min(window.innerWidth - 88, centerX))
   return {
     left: clampedX,
     top: rect.top - 6,
+    transform: 'translate(-50%, -100%)',
+  } as const
+}
+
+function anchorEqPopupStyle(rect: DOMRect) {
+  const centerX = rect.left + rect.width / 2
+  const clampedX = Math.max(56, Math.min(window.innerWidth - 56, centerX))
+  return {
+    left: clampedX,
+    top: Math.max(12, rect.top - 6),
     transform: 'translate(-50%, -100%)',
   } as const
 }
@@ -370,6 +437,8 @@ function VerticalFader({
 export default function ExpandedPlayerControls({
   decks,
   deckWaveforms,
+  phaseMeters,
+  onPhaseMetersContextMenu,
   onTapTempo,
   onTempoChange,
   onChangePlaybackRate,
@@ -386,18 +455,50 @@ export default function ExpandedPlayerControls({
   onPrevious,
   onNext,
   onTogglePlay,
+  onDeckPrevious,
+  onDeckNext,
   mixProgress = null,
   mixCrossfadeActive = false,
-  autoDjStatusLine = null,
-  mixSessionEntries = [],
-  autoDjStatusMessage = null,
+  idjActive = false,
+  autoDjActive = false,
+  onIdjCrossfade,
+  autoDjXfUnlocked = false,
+  onUnlockCrossfaderFromAutoDj,
+  onRelockCrossfaderToAutoDj,
+  onSetCue,
+  onClearCue,
+  onLaunchCue,
+  deckHotCues,
+  onLaunchDeckHotCue,
+  onSetDeckHotCue,
+  onClearDeckHotCue,
+  onClearAllDeckHotCues,
+  deckMemoryCueSec,
+  deckTrackCues,
+  onJumpDeckTrackCue,
+  deckActiveCues,
+  onSelectDeckActiveCue,
+  deckHasCue,
+  deckPlaying,
+  onToggleDeckPlay,
+  deckContinuousPlay,
+  onToggleDeckContinuousPlay,
+  cueJumpPlay = false,
+  onCueDeckLibraryDrop,
 }: ExpandedPlayerControlsProps) {
+  /** Shared CDJ strip: ORIG/ADJ · SET/CUE · EQ · XF (iDJ interactive XF; Auto DJ meter). */
+  const mixerStripActive = idjActive || autoDjActive
+
   const [editingDeck, setEditingDeck] = useState<DeckChannelId | null>(null)
   const [editingBPM, setEditingBPM] = useState<string>('')
   const [isSavingBPM, setIsSavingBPM] = useState(false)
   const [activeDial, setActiveDial] = useState<ActiveDial>(null)
   const [focusedEqBand, setFocusedEqBand] = useState<EqBand>('mid')
+  const [openEqFaders, setOpenEqFaders] = useState<OpenEqFader[]>([])
+  const [eqFaderTick, setEqFaderTick] = useState(0)
   const [portalReady, setPortalReady] = useState(false)
+  /** Mobile mixer strip: one deck's SET/CUE + EQ at a time. */
+  const [mobileMixerDeck, setMobileMixerDeck] = useState<DeckChannelId>('a')
   const tempoTitleId = useId()
   const eqTitleId = useId()
 
@@ -426,9 +527,25 @@ export default function ExpandedPlayerControls({
     return () => window.removeEventListener('keydown', onKey)
   }, [activeDial])
 
-  useLockBodyScroll(Boolean(activeDial))
+  useLockBodyScroll(Boolean(activeDial) && !mixerStripActive)
+
+  useEffect(() => {
+    if (!mixerStripActive) setOpenEqFaders([])
+  }, [mixerStripActive])
+
+  useEffect(() => {
+    if (!mixerStripActive || openEqFaders.length === 0) return
+    const bump = () => setEqFaderTick((n) => n + 1)
+    window.addEventListener('resize', bump)
+    window.addEventListener('scroll', bump, true)
+    return () => {
+      window.removeEventListener('resize', bump)
+      window.removeEventListener('scroll', bump, true)
+    }
+  }, [mixerStripActive, openEqFaders.length])
 
   const deckChromeRef = useRef<HTMLDivElement>(null)
+  const crossfaderRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = deckChromeRef.current
     if (!el) return
@@ -462,7 +579,9 @@ export default function ExpandedPlayerControls({
 
   const handleBPMEdit = (deck: DeckChannelId) => {
     setEditingDeck(deck)
-    setEditingBPM(decks[deck].detectedBPM?.toString() || '')
+    setEditingBPM(
+      (decks[deck].catalogBpm ?? decks[deck].detectedBPM)?.toString() || '',
+    )
   }
 
   const handleBPMCancel = () => {
@@ -508,9 +627,64 @@ export default function ExpandedPlayerControls({
     setActiveDial({ deck, dial: 'tempo', anchorRect })
   }, [])
 
-  const openEqDial = useCallback((deck: DeckChannelId, band: EqBand = 'mid') => {
+  /** Double-click the ADJ readout: beatmatch this deck to the other one. */
+  const peerTempoMatch = useCallback(
+    (deck: DeckChannelId) => {
+      const config = decks[deck]
+      const peer = decks[deck === 'a' ? 'b' : 'a']
+      return matchDeckTempoRate({
+        deckBpm: config.catalogBpm ?? config.detectedBPM,
+        peerBpm: getAdjustedBPM(peer.catalogBpm ?? peer.detectedBPM, peer.playbackRate),
+      })
+    },
+    [decks, getAdjustedBPM],
+  )
+
+  const matchPeerTempo = useCallback(
+    (deck: DeckChannelId) => {
+      const match = peerTempoMatch(deck)
+      if (!match) return
+      onChangePlaybackRate(deck, match.rate)
+    },
+    [onChangePlaybackRate, peerTempoMatch],
+  )
+
+  const openEqDial = useCallback((
+    deck: DeckChannelId,
+    band: EqBand = 'mid',
+    anchorEl?: HTMLElement | null,
+  ) => {
     setFocusedEqBand(band)
-    setActiveDial({ deck, dial: 'eq' })
+    if (mixerStripActive) {
+      setOpenEqFaders((prev) => {
+        const exists = prev.some((f) => f.deck === deck && f.band === band)
+        if (exists) return prev.filter((f) => !(f.deck === deck && f.band === band))
+        if (!anchorEl) return prev
+        return [...prev, { deck, band, el: anchorEl }]
+      })
+      return
+    }
+    const anchorRect = anchorEl?.getBoundingClientRect() ?? null
+    setActiveDial({ deck, dial: 'eq', anchorRect })
+  }, [mixerStripActive])
+
+  const beginEqDialDrag = useCallback(
+    (deck: DeckChannelId, band: EqBand, anchorEl: HTMLElement) => {
+      setFocusedEqBand(band)
+      if (!mixerStripActive) return
+      setOpenEqFaders((prev) =>
+        prev.some((f) => f.deck === deck && f.band === band)
+          ? prev
+          : [...prev, { deck, band, el: anchorEl, transient: true }],
+      )
+    },
+    [mixerStripActive],
+  )
+
+  const endEqDialDrag = useCallback((deck: DeckChannelId, band: EqBand) => {
+    setOpenEqFaders((prev) =>
+      prev.filter((f) => !(f.transient && f.deck === deck && f.band === band)),
+    )
   }, [])
 
   const setEqBandGain = useCallback(
@@ -533,10 +707,16 @@ export default function ExpandedPlayerControls({
   const dialTapTaps = activeDeckConfig?.tapTempoTaps ?? []
   const dialTapBpm = activeDeckConfig?.tapTempoBPM ?? null
   const dialTapSections = activeDeckConfig?.tapTempoSectionsCompleted ?? 0
-  const dialDetectedBpm = activeDeckConfig?.detectedBPM ?? null
+  const dialDetectedBpm = activeDeckConfig
+    ? activeDeckConfig.catalogBpm ?? activeDeckConfig.detectedBPM
+    : null
   const dialIsDetecting = activeDeckConfig?.isDetectingBPM ?? false
   const anchoredTempo =
     activeDial?.dial === 'tempo' &&
+    activeDial.anchorRect != null &&
+    activeDial.anchorRect.width > 0
+  const anchoredEq =
+    activeDial?.dial === 'eq' &&
     activeDial.anchorRect != null &&
     activeDial.anchorRect.width > 0
 
@@ -609,6 +789,68 @@ export default function ExpandedPlayerControls({
               />
               <span>−50%</span>
             </div>
+          </div>
+        ) : anchoredEq ? (
+          <div
+            className="fixed z-10 w-[5.5rem] rounded-xl border border-gray-700 bg-gray-950 px-2 pb-2 pt-2 shadow-2xl touch-manipulation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={eqTitleId}
+            data-allow-scroll-when-locked=""
+            style={anchorEqPopupStyle(activeDial.anchorRect!)}
+          >
+            {(() => {
+              const bandMeta = {
+                low: { label: 'Low', accent: 'red' as const },
+                mid: { label: 'Mid', accent: 'amber' as const },
+                high: { label: 'High', accent: 'sky' as const },
+              }[focusedEqBand]
+              return (
+                <>
+                  <div className="mb-1 flex w-full items-center justify-between gap-1">
+                    <span id={eqTitleId} className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                      {bandMeta.label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveDial(null)}
+                      className="rounded px-1 py-0.5 text-[10px] text-gray-400 hover:bg-gray-800 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div
+                    role="group"
+                    className="flex flex-col items-center gap-0.5"
+                  >
+                    <span className="text-[8px] text-gray-500">+12</span>
+                    <VerticalFader
+                      min={-40}
+                      max={12}
+                      step={0.1}
+                      value={activeEqGains[focusedEqBand]}
+                      onChange={(v) => setEqBandGain(dialDeck, focusedEqBand, v)}
+                      ariaLabel={`${bandMeta.label} EQ deck ${activeDeckConfig.deckLabel}`}
+                      accent={bandMeta.accent}
+                      size="compact"
+                    />
+                    <span className="text-[8px] text-gray-500">−∞</span>
+                    <button
+                      type="button"
+                      title={`Double-tap to reset ${bandMeta.label}`}
+                      onDoubleClick={(e) => {
+                        e.preventDefault()
+                        setEqBandGain(dialDeck, focusedEqBand, 0)
+                      }}
+                      className="font-mono text-xs font-bold text-white touch-manipulation"
+                    >
+                      {formatEqGain(activeEqGains[focusedEqBand])}
+                      {activeEqGains[focusedEqBand] > -39.5 ? 'dB' : ''}
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         ) : (
         <div
@@ -729,8 +971,12 @@ export default function ExpandedPlayerControls({
                       ) : canEditOrigBpm ? (
                         <button
                           type="button"
-                          className="group font-mono text-sm font-bold text-white transition-colors hover:text-blue-400"
-                          onClick={() => handleBPMEdit(dialDeck)}
+                          className="group relative z-10 font-mono text-sm font-bold text-white transition-colors hover:text-blue-400"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleBPMEdit(dialDeck)
+                          }}
                           title="Click to edit BPM"
                         >
                           {dialIsDetecting ? (
@@ -870,7 +1116,10 @@ export default function ExpandedPlayerControls({
   const renderDeckStrip = (deck: DeckChannelId) => {
     const config = decks[deck]
     const tempoPct = getTempoPercentage(config.playbackRate)
-    const adjustedBpm = getAdjustedBPM(config.detectedBPM, config.playbackRate)
+    const adjustedBpm = getAdjustedBPM(
+      config.catalogBpm ?? config.detectedBPM,
+      config.playbackRate,
+    )
     return (
       <DeckChannelStrip
         key={deck}
@@ -881,54 +1130,396 @@ export default function ExpandedPlayerControls({
         tempoDialOpen={activeDial?.deck === deck && activeDial.dial === 'tempo'}
         eqDialOpen={activeDial?.deck === deck && activeDial.dial === 'eq'}
         focusedEqBand={focusedEqBand}
+        openEqBands={openEqFaders.filter((f) => f.deck === deck).map((f) => f.band)}
         onOpenTempoDial={(opts) => openTempoDial(deck, opts?.anchorEl)}
-        onOpenEqDial={(band) => openEqDial(deck, band)}
+        onOpenEqDial={(band, opts) => openEqDial(deck, band, opts?.anchorEl)}
+        onSetEqGain={onDeckEqGains ? (band, gain) => setEqBandGain(deck, band, gain) : undefined}
+        onEqDragStart={(band, anchorEl) => beginEqDialDrag(deck, band, anchorEl)}
+        onEqDragEnd={(band) => endEqDialDrag(deck, band)}
         onTapTempo={() => onTapTempo(deck)}
+        onTempoChange={(pct) => onTempoChange(deck, pct)}
+        onTempoDragStart={(anchorEl) => openTempoDial(deck, anchorEl)}
         onBPMUpdate={canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate(deck, bpm) : undefined}
+        peerDeckLabel={decks[deck === 'a' ? 'b' : 'a'].deckLabel}
+        peerMatchBpm={peerTempoMatch(deck)?.matchedBpm ?? null}
+        onMatchPeerTempo={() => matchPeerTempo(deck)}
         canEditOrigBpm={canEditOrigBpm}
-        isPlaying={config.isLive ? isPlaying : Boolean(config.isArmed)}
+        isPlaying={
+          mixerStripActive
+            ? Boolean(deckPlaying?.[deck] ?? (config.isLive ? isPlaying : false))
+            : config.isLive
+              ? isPlaying
+              : Boolean(config.isArmed)
+        }
         isLoading={config.isLive ? isLoading : false}
         error={config.isLive ? error : null}
         canSkip={canSkip}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        onTogglePlay={onTogglePlay}
+        onPrevious={
+          mixerStripActive && onDeckPrevious ? () => onDeckPrevious(deck) : onPrevious
+        }
+        onNext={mixerStripActive && onDeckNext ? () => onDeckNext(deck) : onNext}
+        onTogglePlay={
+          mixerStripActive && onToggleDeckPlay ? () => onToggleDeckPlay(deck) : onTogglePlay
+        }
+        idjActive={mixerStripActive}
+        hasMemoryCue={Boolean(deckHasCue?.[deck])}
+        onSetCue={onSetCue ? () => onSetCue(deck) : undefined}
+        onLaunchCue={onLaunchCue ? () => onLaunchCue(deck) : undefined}
         waveform={deckWaveforms?.[deck]}
+        onLibraryTracksDrop={
+          !config.isLive && onCueDeckLibraryDrop ? onCueDeckLibraryDrop : undefined
+        }
+        onSelectForMixer={
+          mixerStripActive ? () => setMobileMixerDeck(deck) : undefined
+        }
       />
     )
   }
+
+  const renderDeckTransport = (deck: DeckChannelId, opts?: { compact?: boolean }) => {
+    const config = decks[deck]
+    return (
+      <DeckTransportControls
+        deckLabel={config.deckLabel}
+        idjActive
+        isLive={config.isLive}
+        trackTitle={config.trackTitle}
+        hasMemoryCue={Boolean(deckHasCue?.[deck])}
+        isPlaying={Boolean(deckPlaying?.[deck] ?? (config.isLive ? isPlaying : false))}
+        isLoading={config.isLive ? isLoading : false}
+        error={config.isLive ? error : null}
+        canSkip={canSkip}
+        onSetCue={onSetCue ? () => onSetCue(deck) : undefined}
+        onClearCue={onClearCue ? () => onClearCue(deck) : undefined}
+        onLaunchCue={onLaunchCue ? () => onLaunchCue(deck) : undefined}
+        onPrevious={onDeckPrevious ? () => onDeckPrevious(deck) : onPrevious}
+        onNext={onDeckNext ? () => onDeckNext(deck) : onNext}
+        onTogglePlay={onToggleDeckPlay ? () => onToggleDeckPlay(deck) : onTogglePlay}
+        continuousPlay={Boolean(deckContinuousPlay?.[deck])}
+        onToggleContinuousPlay={
+          idjActive && onToggleDeckContinuousPlay
+            ? () => onToggleDeckContinuousPlay(deck)
+            : undefined
+        }
+        cueJumpPlay={cueJumpPlay}
+        hotCues={deckHotCues?.[deck]}
+        onLaunchHotCue={
+          onLaunchDeckHotCue ? (slot) => onLaunchDeckHotCue(deck, slot) : undefined
+        }
+        onSetHotCue={onSetDeckHotCue ? (slot) => onSetDeckHotCue(deck, slot) : undefined}
+        onClearHotCue={onClearDeckHotCue ? (slot) => onClearDeckHotCue(deck, slot) : undefined}
+        onClearAllHotCues={
+          onClearAllDeckHotCues ? () => onClearAllDeckHotCues(deck) : undefined
+        }
+        memoryCueSec={deckMemoryCueSec?.[deck] ?? null}
+        trackCues={deckTrackCues?.[deck] ?? []}
+        onJumpTrackCue={
+          onJumpDeckTrackCue ? (timeSec) => onJumpDeckTrackCue(deck, timeSec) : undefined
+        }
+        activeCue={deckActiveCues?.[deck] ?? null}
+        onSelectActiveCue={
+          onSelectDeckActiveCue ? (cue) => onSelectDeckActiveCue(deck, cue) : undefined
+        }
+        compact={opts?.compact}
+      />
+    )
+  }
+
+  const renderDeckEq = (
+    deck: DeckChannelId,
+    opts?: { size?: 'default' | 'compact'; className?: string },
+  ) => (
+    <DeckEqDials
+      className={opts?.className ?? 'shrink-0'}
+      deckLabel={decks[deck].deckLabel}
+      eqGains={decks[deck].eqGains}
+      openEqBands={openEqFaders.filter((f) => f.deck === deck).map((f) => f.band)}
+      eqDialOpen={activeDial?.deck === deck && activeDial.dial === 'eq'}
+      focusedEqBand={focusedEqBand}
+      isMixing={Boolean(decks[deck].isMixing)}
+      mixRole={decks[deck].mixRole ?? null}
+      size={opts?.size}
+      onOpenEqDial={(band, o) => openEqDial(deck, band, o?.anchorEl)}
+      onSetEqGain={onDeckEqGains ? (band, gain) => setEqBandGain(deck, band, gain) : undefined}
+      onEqDragStart={(band, anchorEl) => beginEqDialDrag(deck, band, anchorEl)}
+      onEqDragEnd={(band) => endEqDialDrag(deck, band)}
+    />
+  )
+
+  const renderMixCrossfader = (className = '') => (
+    <MixCrossfader
+      className={className}
+      progress={mixProgress ?? 0}
+      active={idjActive || autoDjActive || mixCrossfadeActive}
+      interactive={idjActive || autoDjXfUnlocked}
+      lockedByAutoDj={autoDjActive && !idjActive && !autoDjXfUnlocked}
+      unlockedUnderAutoDj={autoDjActive && autoDjXfUnlocked && !idjActive}
+      onChange={idjActive || autoDjXfUnlocked ? onIdjCrossfade : undefined}
+      onUnlockFromAutoDj={
+        autoDjActive && !idjActive && !autoDjXfUnlocked
+          ? onUnlockCrossfaderFromAutoDj
+          : undefined
+      }
+      onRelockToAutoDj={
+        autoDjActive && autoDjXfUnlocked && !idjActive
+          ? onRelockCrossfaderToAutoDj
+          : undefined
+      }
+    />
+  )
+
+  const idjEqPopupPortal = useMemo(() => {
+    if (!portalReady || !mixerStripActive || openEqFaders.length === 0) return null
+    const connected = openEqFaders.filter((fader) => fader.el.isConnected)
+    const boxes = layoutEqPopupBoxes(
+      connected.map((fader) => {
+        const rect = fader.el.getBoundingClientRect()
+        return {
+          key: `${fader.deck}-${fader.band}`,
+          deck: fader.deck,
+          band: fader.band,
+          centerX: rect.left + rect.width / 2,
+          top: rect.top,
+        }
+      }),
+      typeof window === 'undefined' ? 1200 : window.innerWidth,
+    )
+    const boxByKey = new Map(boxes.map((box) => [box.key, box]))
+    return createPortal(
+      <div className="pointer-events-none fixed inset-0 z-[10050]" role="presentation">
+        {connected.map((fader) => {
+          const key = `${fader.deck}-${fader.band}`
+          const box = boxByKey.get(key)
+          if (!box) return null
+          const meta = EQ_BAND_META[fader.band]
+          const gain = decks[fader.deck].eqGains[fader.band]
+          const titleId = `idj-eq-${key}`
+          return (
+            <div
+              key={key}
+              className="pointer-events-auto fixed w-[5.5rem] rounded-xl border border-gray-700 bg-gray-950 px-2 pb-2 pt-2 shadow-2xl touch-manipulation"
+              role="dialog"
+              aria-labelledby={titleId}
+              data-allow-scroll-when-locked=""
+              style={{ left: box.left, top: box.top }}
+            >
+              <div className="mb-1 flex w-full items-center justify-between gap-1">
+                <span
+                  id={titleId}
+                  className="text-[9px] font-semibold uppercase tracking-wide text-gray-400"
+                >
+                  {decks[fader.deck].deckLabel} · {meta.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenEqFaders((prev) =>
+                      prev.filter((f) => !(f.deck === fader.deck && f.band === fader.band)),
+                    )
+                  }
+                  className="rounded px-1 py-0.5 text-[10px] text-gray-400 hover:bg-gray-800 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              <div role="group" className="flex flex-col items-center gap-0.5">
+                <span className="text-[8px] text-gray-500">+12</span>
+                <VerticalFader
+                  min={-40}
+                  max={12}
+                  step={0.1}
+                  value={gain}
+                  onChange={(v) => setEqBandGain(fader.deck, fader.band, v)}
+                  ariaLabel={`${meta.label} EQ deck ${decks[fader.deck].deckLabel}`}
+                  accent={meta.accent}
+                  size="compact"
+                />
+                <span className="text-[8px] text-gray-500">−∞</span>
+                <button
+                  type="button"
+                  title={`Double-tap to reset ${meta.label}`}
+                  onDoubleClick={(e) => {
+                    e.preventDefault()
+                    setEqBandGain(fader.deck, fader.band, 0)
+                  }}
+                  className="font-mono text-xs font-bold text-white touch-manipulation"
+                >
+                  {formatEqGain(gain)}
+                  {gain > -39.5 ? 'dB' : ''}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>,
+      document.body,
+    )
+  }, [portalReady, mixerStripActive, openEqFaders, eqFaderTick, decks, setEqBandGain])
 
   return (
     <div
       ref={deckChromeRef}
       className="w-full max-w-none border-t border-gray-800 px-3 py-2 sm:px-4 sm:py-2.5 overscroll-none"
     >
-      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        {renderDeckStrip('a')}
-        <div className="hidden md:flex flex-col items-center justify-center pt-6">
-          <MixCrossfader
-            progress={mixProgress ?? 0}
-            active={mixCrossfadeActive && mixProgress != null}
-          />
+      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
+        <div className="min-w-0 md:col-start-1 md:row-start-1">
+          {renderDeckStrip('a')}
         </div>
-        {renderDeckStrip('b')}
+
+        {phaseMeters ? (
+          <div
+            className="flex w-full flex-col gap-0.5 md:col-span-2 md:row-start-2"
+            data-phase-meter-stack=""
+            onContextMenu={
+              onPhaseMetersContextMenu
+                ? (e) => {
+                    const meter = (e.target as HTMLElement | null)?.closest<HTMLElement>(
+                      '[data-phase-meter]',
+                    )
+                    onPhaseMetersContextMenu(
+                      meter?.dataset.phaseMeter === 'b' ? 'b' : 'a',
+                      e,
+                    )
+                  }
+                : undefined
+            }
+          >
+            {phaseMeters}
+          </div>
+        ) : null}
+
+        <div className="min-w-0 md:col-start-2 md:row-start-1">
+          {renderDeckStrip('b')}
+        </div>
       </div>
 
-      {autoDjStatusLine && (
-        <p
-          className="mt-2 text-center text-[10px] leading-snug text-emerald-300/90 tabular-nums"
-          role="status"
-          aria-live="polite"
+      {mixerStripActive && (
+        <div
+          ref={crossfaderRef}
+          className="mt-2"
+          data-idj-crossfader=""
+          data-mixer-crossfader={idjActive ? 'idj' : 'auto-dj'}
         >
-          {autoDjStatusLine}
-        </p>
-      )}
+          {/* Mobile: one deck's transport+EQ via A/B toggle; XF full width above. */}
+          <div className="flex flex-col gap-1.5 md:hidden" data-mixer-mobile="">
+            <div className="w-full min-w-0">{renderMixCrossfader()}</div>
+            <div className="flex w-full items-center gap-2">
+              <div
+                className="flex shrink-0 overflow-hidden rounded-lg border border-gray-700 bg-gray-900/80"
+                role="group"
+                aria-label="Mixer deck"
+                data-mixer-deck-toggle=""
+              >
+                {(['a', 'b'] as const).map((deck) => {
+                  const selected = mobileMixerDeck === deck
+                  const live = Boolean(decks[deck].isLive)
+                  return (
+                    <button
+                      key={deck}
+                      type="button"
+                      onClick={() => setMobileMixerDeck(deck)}
+                      className={`min-h-[40px] min-w-[40px] px-2.5 text-[11px] font-semibold uppercase tracking-wide transition-colors touch-manipulation ${
+                        selected
+                          ? live
+                            ? 'bg-emerald-500/25 text-emerald-200'
+                            : 'bg-sky-500/25 text-sky-200'
+                          : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
+                      }`}
+                      aria-pressed={selected}
+                      aria-label={`Edit deck ${decks[deck].deckLabel}`}
+                    >
+                      {decks[deck].deckLabel}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex min-w-0 flex-1 items-center justify-center">
+                {renderDeckTransport(mobileMixerDeck, { compact: true })}
+              </div>
+              {renderDeckEq(mobileMixerDeck, { size: 'compact' })}
+            </div>
+          </div>
 
-      {(mixSessionEntries.length > 0 || autoDjStatusMessage) && (
-        <MixSessionLog entries={mixSessionEntries} liveStatus={autoDjStatusMessage} />
+          {/* Desktop / tablet: both decks + center XF */}
+          <div className="hidden w-full items-center gap-2 sm:gap-3 md:flex">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              <DeckTempoControls
+                className="shrink-0"
+                deckLabel={decks.a.deckLabel}
+                tempoPct={getTempoPercentage(decks.a.playbackRate)}
+                adjustedBpm={getAdjustedBPM(
+                  decks.a.catalogBpm ?? decks.a.detectedBPM,
+                  decks.a.playbackRate,
+                )}
+                origBpm={decks.a.catalogBpm ?? decks.a.detectedBPM}
+                isDetectingBPM={decks.a.isDetectingBPM}
+                tempoDialOpen={activeDial?.deck === 'a' && activeDial.dial === 'tempo'}
+                isMixing={Boolean(decks.a.isMixing)}
+                mixRole={decks.a.mixRole ?? null}
+                tapTempoTaps={decks.a.tapTempoTaps}
+                tapTempoBPM={decks.a.tapTempoBPM}
+                tapTempoSectionsCompleted={decks.a.tapTempoSectionsCompleted ?? 0}
+                canEditOrigBpm={canEditOrigBpm}
+                onBPMUpdate={
+                  canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate('a', bpm) : undefined
+                }
+                onOpenTempoDial={(opts) => openTempoDial('a', opts?.anchorEl)}
+                onTapTempo={() => onTapTempo('a')}
+                onTempoChange={(pct) => onTempoChange('a', pct)}
+                onTempoDragStart={(anchorEl) => openTempoDial('a', anchorEl)}
+                peerDeckLabel={decks.b.deckLabel}
+                peerMatchBpm={peerTempoMatch('a')?.matchedBpm ?? null}
+                onMatchPeerTempo={() => matchPeerTempo('a')}
+                forceDetails
+              />
+              <div className="flex min-w-0 flex-1 items-center justify-center">
+                {renderDeckTransport('a')}
+              </div>
+              {renderDeckEq('a')}
+            </div>
+            <div className="w-40 shrink-0">{renderMixCrossfader()}</div>
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              {renderDeckEq('b')}
+              <div className="flex min-w-0 flex-1 items-center justify-center">
+                {renderDeckTransport('b')}
+              </div>
+              <DeckTempoControls
+                className="shrink-0"
+                deckLabel={decks.b.deckLabel}
+                tempoPct={getTempoPercentage(decks.b.playbackRate)}
+                adjustedBpm={getAdjustedBPM(
+                  decks.b.catalogBpm ?? decks.b.detectedBPM,
+                  decks.b.playbackRate,
+                )}
+                origBpm={decks.b.catalogBpm ?? decks.b.detectedBPM}
+                isDetectingBPM={decks.b.isDetectingBPM}
+                tempoDialOpen={activeDial?.deck === 'b' && activeDial.dial === 'tempo'}
+                isMixing={Boolean(decks.b.isMixing)}
+                mixRole={decks.b.mixRole ?? null}
+                tapTempoTaps={decks.b.tapTempoTaps}
+                tapTempoBPM={decks.b.tapTempoBPM}
+                tapTempoSectionsCompleted={decks.b.tapTempoSectionsCompleted ?? 0}
+                canEditOrigBpm={canEditOrigBpm}
+                onBPMUpdate={
+                  canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate('b', bpm) : undefined
+                }
+                onOpenTempoDial={(opts) => openTempoDial('b', opts?.anchorEl)}
+                onTapTempo={() => onTapTempo('b')}
+                onTempoChange={(pct) => onTempoChange('b', pct)}
+                onTempoDragStart={(anchorEl) => openTempoDial('b', anchorEl)}
+                peerDeckLabel={decks.a.deckLabel}
+                peerMatchBpm={peerTempoMatch('b')?.matchedBpm ?? null}
+                onMatchPeerTempo={() => matchPeerTempo('b')}
+                forceDetails
+                reverse
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {dialPopup}
+      {idjEqPopupPortal}
     </div>
   )
 }

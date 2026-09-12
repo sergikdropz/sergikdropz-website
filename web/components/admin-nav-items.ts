@@ -17,6 +17,7 @@ export const adminNavItems: AdminNavItem[] = [
   { type: 'link', label: 'Music Vault', href: '/admin/music-vault' },
   { type: 'link', label: 'Music (Legacy)', href: '/admin/music' },
   { type: 'link', label: 'Gallery', href: '/admin/gallery' },
+  { type: 'link', label: 'Videos', href: '/admin/videos-manager' },
   { type: 'link', label: 'Purchases', href: '/admin/purchases' },
   {
     type: 'group',

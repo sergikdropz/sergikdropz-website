@@ -24,6 +24,7 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/audio/resolve', method: 'GET', access: 'public', reason: 'Public playback URL resolution' },
   { path: '/api/audio/bpm', method: 'GET', access: 'public', reason: 'Public BPM lookup for player' },
   { path: '/api/audio/waveform', method: 'GET', access: 'public', reason: 'Public waveform for player' },
+  { path: '/api/audio/waveform', method: 'POST', access: 'admin_write', reason: 'Persist rescanned waveform peaks' },
   { path: '/api/audio/sonic-dna', method: 'GET', access: 'public', reason: 'Public Sonic DNA display' },
 
   // Privileged audio / Sonic DNA
@@ -78,6 +79,13 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/music-library/play', method: 'POST', access: 'public', reason: 'Play tracking (rate-limited)' },
   { path: '/api/music-library/play', method: 'GET', access: 'fan', reason: 'Play history (vault)' },
   { path: '/api/supabase-check', method: 'GET', access: 'admin_read', reason: 'Supabase diagnostics' },
+
+  // SoundCloud-style share links + embeds
+  { path: '/api/shares', method: 'POST', access: 'admin_write', reason: 'Create/reuse music share link' },
+  { path: '/api/shares/[token]', method: 'GET', access: 'public', reason: 'Resolve share listen/embed payload' },
+  { path: '/api/shares/[token]', method: 'DELETE', access: 'admin_write', reason: 'Revoke share link' },
+  { path: '/api/shares/artwork-proxy', method: 'GET', access: 'public', reason: 'Same-origin artwork proxy for accent sampling and story canvas' },
+  { path: '/api/oembed', method: 'GET', access: 'public', reason: 'oEmbed for share listen URLs' },
 ] as const
 
 export function getPrivilegedAudioPolicies(): RoutePolicyEntry[] {

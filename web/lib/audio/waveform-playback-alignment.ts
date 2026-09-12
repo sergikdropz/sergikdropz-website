@@ -25,16 +25,78 @@ export function isAudioContextUnavailableError(err: unknown): boolean {
   return /audiocontext is not supported/i.test(msg)
 }
 
+const WAVEFORM_AUDIO_EXT = /\.(wav|m4a|aac|ogg|oga|opus|flac|aiff?|webm)$/i
+
+/** Vault-relative JSON path (unencoded) for a static tape. */
+export function staticWaveformRelPath(storageRel: string): string {
+  return storageRel.replace(WAVEFORM_AUDIO_EXT, '.mp3').replace(/\.mp3$/i, '.json')
+}
+
 /** Deployed static tape JSON under /public/waveforms (mp3 basename). */
 export function staticWaveformJsonUrl(storageRel: string): string {
-  const clean = storageRel.replace(/\.wav$/i, '.mp3').replace(/\.mp3$/i, '.json')
   return (
     '/waveforms/' +
-    clean
+    staticWaveformRelPath(storageRel)
       .split('/')
       .map((s) => encodeURIComponent(s))
       .join('/')
   )
+}
+
+export type StaticWaveformEnvelope = {
+  peak: number
+  rms: number
+  low: number
+  mid: number
+  high: number
+  flux?: number
+}
+
+export type StaticWaveformTape = {
+  data: number[]
+  envelopes?: StaticWaveformEnvelope[]
+}
+
+/** Compact deploy `{ d, e }` or legacy `{ data, envelopes }` — optional flux as 6th `e` column. */
+export function parseStaticWaveformJson(body: unknown): StaticWaveformTape | null {
+  if (!body || typeof body !== 'object') return null
+  const rec = body as Record<string, unknown>
+  const data: number[] | undefined = Array.isArray(rec.d)
+    ? rec.d
+    : Array.isArray(rec.data)
+      ? rec.data
+      : undefined
+  let envelopes: StaticWaveformEnvelope[] | undefined
+  if (Array.isArray(rec.e) && rec.e.length > 0 && Array.isArray(rec.e[0])) {
+    envelopes = rec.e.map((row: number[]) => ({
+      peak: row[0] ?? 0,
+      rms: row[1] ?? 0,
+      low: row[2] ?? 0,
+      mid: row[3] ?? 0,
+      high: row[4] ?? 0,
+      ...(typeof row[5] === 'number' ? { flux: row[5] } : {}),
+    }))
+  } else if (Array.isArray(rec.envelopes) && rec.envelopes.length > 0) {
+    envelopes = rec.envelopes as StaticWaveformEnvelope[]
+  }
+  if (!data?.length && !envelopes?.length) return null
+  return { data: data || [], envelopes }
+}
+
+/** Fetch a static tape via API so missing files return 200 instead of console 404s. */
+export async function fetchStaticWaveformTape(storageRel: string): Promise<StaticWaveformTape | null> {
+  if (!storageRel) return null
+  try {
+    const res = await fetch(`/api/audio/static-waveform?${new URLSearchParams({ rel: storageRel })}`, {
+      cache: 'force-cache',
+    })
+    if (!res.ok) return null
+    const body = await res.json()
+    if (body?.available === false) return null
+    return parseStaticWaveformJson(body)
+  } catch {
+    return null
+  }
 }
 
 /**

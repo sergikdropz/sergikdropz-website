@@ -3,8 +3,8 @@
  * Runs in a separate thread to avoid blocking the main UI
  */
 
-// Generate professional Peak+RMS+band envelopes from audio buffer (DAW/DJ/MiniMeters DSP)
-function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
+// Generate professional Peak+RMS+band+flux envelopes from audio buffer (DAW/DJ/MiniMeters DSP)
+function generatePeakDataFromBuffer(audioBuffer, samples = 4096) {
   const left = audioBuffer.getChannelData(0)
   const right = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null
   const n = left.length
@@ -16,9 +16,11 @@ function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
 
   let lpLow = 0
   let lpMid = 0
+  let prevHigh = 0
   const envelopes = []
   let maxPeak = 1e-8
   let maxBand = 1e-8
+  let maxFlux = 1e-8
 
   for (let b = 0; b < buckets; b++) {
     const start = b * block
@@ -28,6 +30,7 @@ function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
     let sumLow = 0
     let sumMid = 0
     let sumHigh = 0
+    let sumFlux = 0
     let count = 0
     for (let i = start; i < end; i++) {
       const l = left[i] || 0
@@ -39,11 +42,14 @@ function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
       const low = lpLow
       const mid = lpMid - lpLow
       const high = x - lpMid
+      const aHigh = Math.abs(high)
       peak = Math.max(peak, ax)
       sumSq += x * x
       sumLow += Math.abs(low)
       sumMid += Math.abs(mid)
-      sumHigh += Math.abs(high)
+      sumHigh += aHigh
+      sumFlux += Math.abs(aHigh - prevHigh)
+      prevHigh = aHigh
       count++
     }
     const c = Math.max(1, count)
@@ -53,12 +59,14 @@ function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
       low: sumLow / c,
       mid: sumMid / c,
       high: sumHigh / c,
+      flux: sumFlux / c,
     }
     if (env.peak > maxPeak) maxPeak = env.peak
     if (env.rms > maxPeak) maxPeak = env.rms
     if (env.low > maxBand) maxBand = env.low
     if (env.mid > maxBand) maxBand = env.mid
     if (env.high > maxBand) maxBand = env.high
+    if (env.flux > maxFlux) maxFlux = env.flux
     envelopes.push(env)
   }
 
@@ -69,6 +77,7 @@ function generatePeakDataFromBuffer(audioBuffer, samples = 2000) {
     e.low /= maxBand
     e.mid /= maxBand
     e.high /= maxBand
+    e.flux /= maxFlux
   }
 
   const data = envelopes.map((e) => e.rms * 0.7 + e.peak * 0.3)
@@ -276,7 +285,7 @@ function analyzeBPM(audioBuffer) {
 
 // Main worker message handler
 self.addEventListener('message', async (event) => {
-  const { id, type, audioUrl, samples = 2000 } = event.data
+  const { id, type, audioUrl, samples = 4096 } = event.data
   
   try {
     // Download and decode audio

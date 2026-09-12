@@ -8,6 +8,8 @@ export type MixPairHint = {
   bpmDeltaPct: number | null
   bpmHint: string | null
   keyHint: string | null
+  why?: string | null
+  beatSyncUnsafe?: string | null
 }
 
 function readKey(track: { sonic_dna?: unknown; trackKey?: string | null }): string | null {
@@ -39,8 +41,10 @@ export function buildMixPairHint(
 }
 
 export function formatMixPairHintLine(hint: MixPairHint): string | null {
-  const parts = [hint.bpmHint, hint.keyHint].filter(Boolean)
-  return parts.length ? parts.join(' · ') : null
+  const parts = hint.why
+    ? [hint.why, hint.beatSyncUnsafe]
+    : [hint.bpmHint, hint.keyHint, hint.beatSyncUnsafe]
+  return parts.filter(Boolean).join(' · ') || null
 }
 
 /** 0 = heavily filtered, 1 = fully open (for FIL indicator). */

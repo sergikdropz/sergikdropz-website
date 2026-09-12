@@ -3,6 +3,7 @@
  */
 
 import { smootherstep } from './curves'
+import { filterSettleTowardOpen } from './blend-smooth'
 import type { MixIntelligence } from './mix-intelligence'
 import type { MixStyle } from './types'
 
@@ -42,57 +43,67 @@ export function deckFiltersAtProgress(params: {
   const delay = params.role === 'incoming' ? (params.intel?.incomingDelay ?? 0) : 0
   const xd = params.role === 'incoming' ? Math.max(0, x - delay) / Math.max(1e-6, 1 - delay) : x
 
+  let swept: DeckFilterState
   if (params.role === 'outgoing') {
     switch (params.style) {
       case 'cut': {
         const close = smootherstep(Math.max(0, (x - 0.5) / 0.45))
-        return {
+        swept = {
           hpfHz: lerpHz(OPEN_HPF, 180 + 120 * intensity, smootherstep(x * 1.1)),
           lpfHz: lerpHz(OPEN_LPF, 900 + 400 * (1 - intensity), close),
         }
+        break
       }
       case 'filter-eq': {
         const hpf = smootherstep(Math.min(1, x / 0.42))
-        return {
+        swept = {
           hpfHz: lerpHz(OPEN_HPF, 220 + 180 * intensity, hpf),
           lpfHz: OPEN_LPF,
         }
+        break
       }
       case 'bass-swap': {
         const swap = smootherstep(Math.max(0, (x - 0.15) / 0.65))
-        return {
+        swept = {
           hpfHz: lerpHz(OPEN_HPF, 280 + 200 * intensity, swap),
           lpfHz: OPEN_LPF,
         }
+        break
+      }
+      default:
+        return OPEN_FILTERS
+    }
+  } else {
+    switch (params.style) {
+      case 'cut': {
+        const open = smootherstep(Math.max(0, (xd - 0.35) / 0.55))
+        swept = {
+          hpfHz: OPEN_HPF,
+          lpfHz: lerpHz(650 + 350 * intensity, OPEN_LPF, open),
+        }
+        break
+      }
+      case 'filter-eq': {
+        const open = smootherstep(Math.max(0, (xd - 0.28) / 0.65))
+        swept = {
+          hpfHz: OPEN_HPF,
+          lpfHz: lerpHz(480 + 320 * intensity, OPEN_LPF, open),
+        }
+        break
+      }
+      case 'bass-swap': {
+        const open = smootherstep(Math.max(0, (xd - 0.12) / 0.75))
+        swept = {
+          hpfHz: OPEN_HPF,
+          lpfHz: lerpHz(720 + 280 * intensity, OPEN_LPF, open),
+        }
+        break
       }
       default:
         return OPEN_FILTERS
     }
   }
 
-  switch (params.style) {
-    case 'cut': {
-      const open = smootherstep(Math.max(0, (xd - 0.35) / 0.55))
-      return {
-        hpfHz: OPEN_HPF,
-        lpfHz: lerpHz(650 + 350 * intensity, OPEN_LPF, open),
-      }
-    }
-    case 'filter-eq': {
-      const open = smootherstep(Math.max(0, (xd - 0.28) / 0.65))
-      return {
-        hpfHz: OPEN_HPF,
-        lpfHz: lerpHz(480 + 320 * intensity, OPEN_LPF, open),
-      }
-    }
-    case 'bass-swap': {
-      const open = smootherstep(Math.max(0, (xd - 0.12) / 0.75))
-      return {
-        hpfHz: OPEN_HPF,
-        lpfHz: lerpHz(720 + 280 * intensity, OPEN_LPF, open),
-      }
-    }
-    default:
-      return OPEN_FILTERS
-  }
+  const settled = filterSettleTowardOpen({ ...swept, progress: x })
+  return { lpfHz: settled.lpfHz, hpfHz: settled.hpfHz }
 }

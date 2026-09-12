@@ -3,12 +3,12 @@
  * Mirrors MusicPlayer peak resolution without React state.
  */
 
-import { peaksOrEnvelopesToWaveformSamples } from '@/lib/audio/waveform-dsp-envelope'
+import { peaksOrEnvelopesToWaveformSamples, DEFAULT_WAVEFORM_BUCKETS } from '@/lib/audio/waveform-dsp-envelope'
 import {
   waveformAnalysisUrls,
   vaultRelativePath,
   canAnalyzeAudioWaveform,
-  staticWaveformJsonUrl,
+  fetchStaticWaveformTape,
 } from '@/lib/audio/waveform-playback-alignment'
 import {
   getPlaybackWaveformCache,
@@ -31,9 +31,18 @@ export function getCachedWaveformSamples(trackId: string) {
   return memCache.get(trackId) || null
 }
 
+export function clearCachedWaveformSamples(trackId?: string) {
+  if (!trackId) {
+    memCache.clear()
+    return
+  }
+  memCache.delete(trackId)
+}
+
 export async function loadWaveformSamplesForTrack(
   track: TrackLike,
-  knownUrl?: string | null
+  knownUrl?: string | null,
+  options?: { allowFullDecode?: boolean },
 ): Promise<{ samples: WaveformSample[]; durationSec: number } | null> {
   const hit = memCache.get(track.id)
   if (hit?.samples.length) return hit
@@ -43,49 +52,39 @@ export async function loadWaveformSamplesForTrack(
 
   const tryPeaks = (
     peaks: number[],
-    envelopes?: { peak: number; rms: number; low: number; mid: number; high: number }[] | null
+    envelopes?: {
+      peak: number
+      rms: number
+      low: number
+      mid: number
+      high: number
+      flux?: number
+    }[] | null,
   ) => {
-    const samples = peaksOrEnvelopesToWaveformSamples(peaks, envelopes)
+    const samples = peaksOrEnvelopesToWaveformSamples(
+      peaks,
+      envelopes?.map((e) => ({
+        peak: e.peak,
+        rms: e.rms,
+        low: e.low,
+        mid: e.mid,
+        high: e.high,
+        flux: typeof e.flux === 'number' ? e.flux : 0,
+      })),
+    )
     if (!samples.length) return null
     const packed = { samples, durationSec }
     memCache.set(track.id, packed)
     return packed
   }
 
-  // Deployed JSON tape
+  // Deployed JSON tape (skipped when public/waveforms is empty — avoids console 404s)
   const storageRel = vaultRelativePath(knownUrl || '') || vaultRelativePath(track.file) || null
   if (storageRel) {
-    const jsonPath = staticWaveformJsonUrl(storageRel)
-    try {
-      const res = await fetch(jsonPath, { cache: 'force-cache' })
-      if (res.ok) {
-        const body = await res.json()
-        const data: number[] | undefined = Array.isArray(body?.d)
-          ? body.d
-          : Array.isArray(body?.data)
-            ? body.data
-            : undefined
-        let envelopes:
-          | { peak: number; rms: number; low: number; mid: number; high: number }[]
-          | undefined
-        if (Array.isArray(body?.e) && body.e.length && Array.isArray(body.e[0])) {
-          envelopes = body.e.map((row: number[]) => ({
-            peak: row[0] ?? 0,
-            rms: row[1] ?? 0,
-            low: row[2] ?? 0,
-            mid: row[3] ?? 0,
-            high: row[4] ?? 0,
-          }))
-        } else if (Array.isArray(body?.envelopes)) {
-          envelopes = body.envelopes
-        }
-        if (data?.length) {
-          const packed = tryPeaks(data, envelopes)
-          if (packed) return packed
-        }
-      }
-    } catch {
-      /* continue */
+    const tape = await fetchStaticWaveformTape(storageRel)
+    if (tape?.data.length) {
+      const packed = tryPeaks(tape.data, tape.envelopes)
+      if (packed) return packed
     }
   }
 
@@ -113,10 +112,12 @@ export async function loadWaveformSamplesForTrack(
       if (packed) return packed
     }
   }
+  if (!options?.allowFullDecode) return null
+
   for (const u of candidates) {
     if (!canAnalyzeAudioWaveform()) break
     try {
-      const peakData = await generatePeakData(u, 1600)
+      const peakData = await generatePeakData(u, DEFAULT_WAVEFORM_BUCKETS)
       if (!peakData?.data?.length) continue
       setPlaybackWaveformCache(u, peakData)
       const packed = tryPeaks(peakData.data, peakData.envelopes)

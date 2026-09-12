@@ -12,9 +12,45 @@ export type EnergyCurve = 'hold' | 'build' | 'drop'
 export type BpmStrategy = 'match-outgoing' | 'native' | 'manual'
 /** BeatSync = phase lock + hold; TempoSync = rate match only (earlier unlock). */
 export type SyncMode = 'beat-sync' | 'tempo-sync'
-export type CuePriority = 'dna-intro' | 'first-downbeat' | 'hot-cue-1'
+export type CuePriority =
+  | 'dna-intro'
+  | 'first-downbeat'
+  | 'mix-in'
+  | 'hot-cue-1'
+  | 'hot-cue-2'
+  | 'hot-cue-3'
+  | 'hot-cue-4'
+  | 'memory-cue'
+  | 'drop'
+  | 'loop-in'
 export type MixLengthBias = 'short' | 'normal' | 'long'
 export type AutoDJLookahead = 1 | 2 | 3 | 4
+/** How Auto DJ snaps blend OUT/IN cues on the grid. */
+export type BlendQuantize = 'phrase' | 'bar' | 'beat'
+/**
+ * Live BeatSync corrections during the overlap.
+ * - off: no vinyl bend / kick pocket / grid seek
+ * - grid / grid-bar / grid-phrase: seek-snap incoming onto the outgoing lattice
+ * - phase: grid phase vinyl bend only
+ * - phase-kick: phase + kick/clap pocket residual
+ * - grid-phase: beat-grid snap plus vinyl-bend residual
+ * - grid-kick / grid-bar-kick / grid-phrase-kick: lattice snap + kick pocket
+ * - grid-phase-kick: beat-grid snap + vinyl bend + kick
+ */
+export type BeatCorrect =
+  | 'off'
+  | 'grid'
+  | 'grid-bar'
+  | 'grid-phrase'
+  | 'grid-kick'
+  | 'grid-bar-kick'
+  | 'grid-phrase-kick'
+  | 'phase'
+  | 'phase-kick'
+  | 'grid-phase'
+  | 'grid-phase-kick'
+
+export type GridAlignMode = 'beat' | 'bar' | 'phrase'
 
 export type AutoDJConfig = {
   enabled: boolean
@@ -22,6 +58,10 @@ export type AutoDJConfig = {
   mixStyle: MixStylePreset
   /** Multi-select techniques; `auto` is exclusive. */
   mixTechniques: MixTechnique[]
+  /**
+   * @deprecated Kept for stored settings back-compat. Canonical drivers are
+   * `mixStyle` + `mixTechniques` (see `resolveEffectiveMixStyle`).
+   */
   transitionMode: AutoDJTransitionMode
   outPhraseBars: OutPhraseBars
   inPhraseBars: InPhraseBars
@@ -35,6 +75,19 @@ export type AutoDJConfig = {
   syncMode: SyncMode
   cuePriority: CuePriority
   mixLengthBias: MixLengthBias
+  /** Suggest mix style from outgoing section; user Smooth is the auto cap. */
+  sectionStyle: boolean
+  /** Snap blend cues to phrase / bar / beat lattice. */
+  blendQuantize: BlendQuantize
+  /** Auto phase / kick corrections while BeatSync is held. */
+  beatCorrect: BeatCorrect
+  /** After fair/poor mixes, shorten blend and escalate to TempoSync. */
+  autoCorrectWeakMixes: boolean
+  /**
+   * Creative mode exits Phrase Mix Doctrine — honors energy/length/bar-in/cue knobs.
+   * Off (default) = canonical phrase-1 + exact 8/16 overlap.
+   */
+  creativeMode: boolean
 }
 
 export const AUTO_DJ_STORAGE_KEY = 'autoDJSettings'
@@ -90,20 +143,195 @@ export const SYNC_MODE_OPTIONS: Array<{ id: SyncMode; label: string; hint: strin
   {
     id: 'beat-sync',
     label: 'BeatSync',
-    hint: 'Phase-lock kick/grid through most of the overlap (Serato/Traktor-style)',
+    hint: 'Incoming-only vinyl bend + shared master BPM for the whole overlap',
   },
   {
     id: 'tempo-sync',
     label: 'TempoSync',
-    hint: 'Match BPM only; unlock phase earlier for freer blends',
+    hint: 'Match BPM only; unlock phase at the tempo glide',
   },
 ]
 
+export const BLEND_QUANTIZE_OPTIONS: Array<{ id: BlendQuantize; label: string; hint: string }> = [
+  {
+    id: 'phrase',
+    label: 'Phrase',
+    hint: 'Snap OUT/IN to 8-bar phrase lines (DJ doctrine)',
+  },
+  {
+    id: 'bar',
+    label: 'Bar',
+    hint: 'Snap blend cues to 1-bar lines',
+  },
+  {
+    id: 'beat',
+    label: 'Beat',
+    hint: 'Snap blend cues to the beat grid',
+  },
+]
+
+export const BEAT_CORRECT_OPTIONS: Array<{ id: BeatCorrect; label: string; hint: string }> = [
+  {
+    id: 'off',
+    label: 'Off',
+    hint: 'No mid-blend vinyl bend, kick pocket, or grid seek',
+  },
+  {
+    id: 'grid',
+    label: 'Grid',
+    hint: 'Seek-snap incoming onto the outgoing beat grid',
+  },
+  {
+    id: 'grid-bar',
+    label: 'Bar grid',
+    hint: 'Seek-snap incoming onto outgoing 1-bar lines',
+  },
+  {
+    id: 'grid-phrase',
+    label: 'Phrase grid',
+    hint: 'Seek-snap incoming onto outgoing 8-bar phrase lines',
+  },
+  {
+    id: 'grid-kick',
+    label: 'Grid + kick',
+    hint: 'Beat-grid snap plus kick/clap pocket residual',
+  },
+  {
+    id: 'grid-bar-kick',
+    label: 'Bar grid + kick',
+    hint: 'Bar-line snap plus kick/clap pocket residual',
+  },
+  {
+    id: 'grid-phrase-kick',
+    label: 'Phrase grid + kick',
+    hint: 'Phrase-line snap plus kick/clap pocket residual',
+  },
+  {
+    id: 'phase',
+    label: 'Phase',
+    hint: 'Vinyl-bend chase on grid phase only',
+  },
+  {
+    id: 'phase-kick',
+    label: 'Phase + kick',
+    hint: 'Phase chase plus kick/clap pocket residual',
+  },
+  {
+    id: 'grid-phase',
+    label: 'Grid + phase',
+    hint: 'Beat-grid snap, then vinyl-bend residual',
+  },
+  {
+    id: 'grid-phase-kick',
+    label: 'Grid + phase + kick',
+    hint: 'Beat-grid snap, vinyl-bend residual, and kick/clap pocket',
+  },
+]
+
+const BEAT_CORRECT_IDS = new Set(BEAT_CORRECT_OPTIONS.map((o) => o.id))
+
+export function isBeatCorrect(value: unknown): value is BeatCorrect {
+  return typeof value === 'string' && BEAT_CORRECT_IDS.has(value as BeatCorrect)
+}
+
+export function beatCorrectFlags(mode: BeatCorrect): {
+  vinylBend: boolean
+  kickCorrect: boolean
+  gridAlign: GridAlignMode | null
+} {
+  switch (mode) {
+    case 'off':
+      return { vinylBend: false, kickCorrect: false, gridAlign: null }
+    case 'grid':
+      return { vinylBend: false, kickCorrect: false, gridAlign: 'beat' }
+    case 'grid-bar':
+      return { vinylBend: false, kickCorrect: false, gridAlign: 'bar' }
+    case 'grid-phrase':
+      return { vinylBend: false, kickCorrect: false, gridAlign: 'phrase' }
+    case 'grid-kick':
+      return { vinylBend: false, kickCorrect: true, gridAlign: 'beat' }
+    case 'grid-bar-kick':
+      return { vinylBend: false, kickCorrect: true, gridAlign: 'bar' }
+    case 'grid-phrase-kick':
+      return { vinylBend: false, kickCorrect: true, gridAlign: 'phrase' }
+    case 'phase':
+      return { vinylBend: true, kickCorrect: false, gridAlign: null }
+    case 'grid-phase':
+      return { vinylBend: true, kickCorrect: false, gridAlign: 'beat' }
+    case 'grid-phase-kick':
+      return { vinylBend: true, kickCorrect: true, gridAlign: 'beat' }
+    case 'phase-kick':
+    default:
+      return { vinylBend: true, kickCorrect: true, gridAlign: null }
+  }
+}
+
+/**
+ * Rebuild a BeatCorrect id from vinyl/kick/grid flags (best-effort).
+ * Used when the phase meter forces a lattice while keeping chase prefs.
+ */
+export function beatCorrectFromFlags(flags: {
+  vinylBend: boolean
+  kickCorrect: boolean
+  gridAlign: GridAlignMode | null
+}): BeatCorrect {
+  const { vinylBend, kickCorrect, gridAlign } = flags
+  if (!vinylBend && !kickCorrect && !gridAlign) return 'off'
+  if (gridAlign === 'bar') {
+    if (vinylBend && kickCorrect) return 'grid-bar-kick' // no bar+phase+kick id — bar+kick
+    if (kickCorrect) return 'grid-bar-kick'
+    if (vinylBend) return 'grid-bar' // bar snap; vinyl still applied via plan override if needed
+    return 'grid-bar'
+  }
+  if (gridAlign === 'phrase') {
+    if (kickCorrect) return 'grid-phrase-kick'
+    return 'grid-phrase'
+  }
+  if (gridAlign === 'beat') {
+    if (vinylBend && kickCorrect) return 'grid-phase-kick'
+    if (vinylBend) return 'grid-phase'
+    if (kickCorrect) return 'grid-kick'
+    return 'grid'
+  }
+  if (vinylBend && kickCorrect) return 'phase-kick'
+  if (vinylBend) return 'phase'
+  return 'off'
+}
+
+/**
+ * Auto DJ BeatSync should follow the phase-meter window (beat / bar / phrase).
+ * Keeps vinyl-bend + kick prefs from the user's Beat correct setting.
+ */
+export function withPhaseMeterGridAlign(
+  beatCorrect: BeatCorrect,
+  gridAlign: GridAlignMode,
+): BeatCorrect {
+  if (beatCorrect === 'off') {
+    // Meter on + BeatSync still needs lattice snap
+    return gridAlign === 'bar' ? 'grid-bar' : gridAlign === 'phrase' ? 'grid-phrase' : 'grid'
+  }
+  const flags = beatCorrectFlags(beatCorrect)
+  return beatCorrectFromFlags({ ...flags, gridAlign })
+}
+
 export const CUE_PRIORITY_OPTIONS: Array<{ id: CuePriority; label: string; hint: string }> = [
   { id: 'dna-intro', label: 'DNA intro', hint: 'Labeled mix-in cue, else Sonic DNA intro' },
+  { id: 'mix-in', label: 'Mix-in cue', hint: 'Only the labeled mix-in marker' },
   { id: 'first-downbeat', label: 'First downbeat', hint: 'Grid origin / bar 1' },
-  { id: 'hot-cue-1', label: 'Hot cue 1', hint: 'Player / DNA hot cue; mix-in label wins when set' },
+  { id: 'hot-cue-1', label: 'Hot cue 1', hint: 'Player or DNA hot cue 1' },
+  { id: 'hot-cue-2', label: 'Hot cue 2', hint: 'Player or DNA hot cue 2' },
+  { id: 'hot-cue-3', label: 'Hot cue 3', hint: 'Player or DNA hot cue 3' },
+  { id: 'hot-cue-4', label: 'Hot cue 4', hint: 'Player or DNA hot cue 4' },
+  { id: 'memory-cue', label: 'Memory cue', hint: 'SET / CUE memory point on the incoming track' },
+  { id: 'drop', label: 'Drop', hint: 'Labeled drop, else DNA drop section' },
+  { id: 'loop-in', label: 'Loop in', hint: 'Labeled loop-in marker' },
 ]
+
+const CUE_PRIORITY_IDS = new Set(CUE_PRIORITY_OPTIONS.map((o) => o.id))
+
+export function isCuePriority(value: unknown): value is CuePriority {
+  return typeof value === 'string' && CUE_PRIORITY_IDS.has(value as CuePriority)
+}
 
 export const MIX_LENGTH_BIAS_OPTIONS: Array<{ id: MixLengthBias; label: string; hint: string }> = [
   { id: 'short', label: 'Short', hint: 'Tighter overlaps' },
@@ -158,6 +386,11 @@ export const DEFAULT_AUTO_DJ_CONFIG: AutoDJConfig = {
   syncMode: 'beat-sync',
   cuePriority: 'first-downbeat',
   mixLengthBias: 'normal',
+  sectionStyle: true,
+  blendQuantize: 'phrase',
+  beatCorrect: 'phase-kick',
+  autoCorrectWeakMixes: true,
+  creativeMode: false,
 }
 
 function isPhraseBars(n: unknown): n is PhraseBars {
@@ -329,16 +562,22 @@ export function parseAutoDJConfig(raw: unknown): AutoDJConfig {
         ? o.bpmStrategy
         : base.bpmStrategy,
     syncMode: o.syncMode === 'tempo-sync' || o.syncMode === 'beat-sync' ? o.syncMode : base.syncMode,
-    cuePriority:
-      o.cuePriority === 'dna-intro' ||
-      o.cuePriority === 'first-downbeat' ||
-      o.cuePriority === 'hot-cue-1'
-        ? o.cuePriority
-        : base.cuePriority,
+    cuePriority: isCuePriority(o.cuePriority) ? o.cuePriority : base.cuePriority,
     mixLengthBias:
       o.mixLengthBias === 'short' || o.mixLengthBias === 'normal' || o.mixLengthBias === 'long'
         ? o.mixLengthBias
         : base.mixLengthBias,
+    sectionStyle: typeof o.sectionStyle === 'boolean' ? o.sectionStyle : base.sectionStyle,
+    blendQuantize:
+      o.blendQuantize === 'phrase' || o.blendQuantize === 'bar' || o.blendQuantize === 'beat'
+        ? o.blendQuantize
+        : base.blendQuantize,
+    beatCorrect: isBeatCorrect(o.beatCorrect) ? o.beatCorrect : base.beatCorrect,
+    autoCorrectWeakMixes:
+      typeof o.autoCorrectWeakMixes === 'boolean'
+        ? o.autoCorrectWeakMixes
+        : base.autoCorrectWeakMixes,
+    creativeMode: typeof o.creativeMode === 'boolean' ? o.creativeMode : base.creativeMode,
   }
 }
 
