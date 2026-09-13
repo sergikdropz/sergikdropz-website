@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { AdminAiPageProvider } from '@/contexts/AdminAiPageContext'
+import { CatalogSyncProvider } from '@/contexts/CatalogSyncContext'
 import { MusicPlayerProvider } from '@/contexts/MusicPlayerContext'
 import AdminNav from './AdminNav'
 import DeferredAdminAiAssistant from './DeferredAdminAiAssistant'
@@ -56,10 +57,13 @@ export default function AdminLayoutClient({
   return (
     <AdminAiPageProvider surface="admin">
       {musicRoute ? (
-        // Provider must wrap page content — music-vault / music use useMusicPlayer().
-        <MusicPlayerProvider>
-          <AdminChrome withPlayer>{children}</AdminChrome>
-        </MusicPlayerProvider>
+        // CatalogSync was only on the public app plane — admin vault/SergBrowser need live version + SSE.
+        // MusicPlayerProvider must wrap page content — music-vault / music use useMusicPlayer().
+        <CatalogSyncProvider>
+          <MusicPlayerProvider>
+            <AdminChrome withPlayer>{children}</AdminChrome>
+          </MusicPlayerProvider>
+        </CatalogSyncProvider>
       ) : (
         <AdminChrome withPlayer={false}>{children}</AdminChrome>
       )}

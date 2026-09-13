@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import MusicLibraryQueryBridge from '@/components/MusicLibraryQueryBridge'
 
 /**
  * Global client providers. Admin/studio auth uses AdminAuthProvider in their
@@ -22,5 +23,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   )
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MusicLibraryQueryBridge />
+      {children}
+    </QueryClientProvider>
+  )
 }

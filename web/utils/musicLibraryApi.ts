@@ -126,9 +126,13 @@ const CATALOG_VERSION_TTL_MS = 10_000
 let catalogVersionCache: { value: number | null; fetchedAt: number } = { value: null, fetchedAt: 0 }
 let catalogVersionInFlight: Promise<number> | null = null
 
+/** Fired after module/localStorage catalog cache clears — RQ leaf queries subscribe via Providers. */
+export const MUSIC_LIBRARY_CACHE_INVALIDATED_EVENT = 'sergik:music-library-cache-invalidated'
+
 /**
  * Invalidate music library cache
- * Useful when schema changes or data is updated
+ * Useful when schema changes or data is updated.
+ * Does NOT own React Query — emits MUSIC_LIBRARY_CACHE_INVALIDATED_EVENT so leaf RQ keys stay in sync.
  */
 export function invalidateMusicLibraryCache(): void {
   musicLibraryCache = { data: null, expiresAt: 0, version: 0 }
@@ -145,6 +149,11 @@ export function invalidateMusicLibraryCache(): void {
       }
     }
     keys.forEach((key) => window.localStorage.removeItem(key))
+  } catch {
+    // Ignore errors
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(MUSIC_LIBRARY_CACHE_INVALIDATED_EVENT))
   } catch {
     // Ignore errors
   }

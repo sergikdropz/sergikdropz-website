@@ -75,3 +75,9 @@ describe('queryKeys.admin', () => {
     expect(queryKeys.adminPrefetch.paths().length).toBeLessThanOrEqual(5)
   })
 })
+
+describe('queryKeys.musicLibrary', () => {
+  it('shares root prefix with leaf keys', () => {
+    expect(queryKeys.musicLibrary.smartPlaylists(1)[0]).toBe(queryKeys.musicLibrary.root()[0])
+  })
+})

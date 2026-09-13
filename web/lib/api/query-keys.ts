@@ -14,6 +14,44 @@ export const queryKeys = {
     shopRollup: () => ['admin', 'shop-rollup'] as const,
     aiRuns: () => ['admin', 'ai', 'runs'] as const,
   },
+  /**
+   * Leaf catalog reads only — not the bootstrap/hydration tree.
+   * Include publishVersion in keys so a bump never serves a stale RQ entry.
+   * Full library snapshot stays in musicLibraryApi (memory + localStorage) until cutover.
+   */
+  musicLibrary: {
+    root: () => ['musicLibrary'] as const,
+    browse: (
+      publishVersion: number,
+      view: string,
+      opts: {
+        sort?: string
+        dir?: string
+        genre?: string | null
+        artist?: string | null
+        search?: string
+        limit?: number
+        offset?: number
+      } = {},
+    ) =>
+      [
+        'musicLibrary',
+        'browse',
+        publishVersion,
+        view,
+        opts.sort ?? '',
+        opts.dir ?? '',
+        opts.genre ?? '',
+        opts.artist ?? '',
+        opts.search ?? '',
+        opts.limit ?? 0,
+        opts.offset ?? 0,
+      ] as const,
+    playlists: (publishVersion: number, includeHidden: boolean, includeArchived = false) =>
+      ['musicLibrary', 'playlists', publishVersion, includeHidden, includeArchived] as const,
+    smartPlaylists: (publishVersion: number) =>
+      ['musicLibrary', 'smart-playlists', publishVersion] as const,
+  },
   /** Prefetch targets for nav hover — keep this list small. */
   adminPrefetch: {
     paths: () =>
