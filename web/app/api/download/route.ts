@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
 
+/**
+ * After Stripe verifies payment, redirect to the asset URL.
+ * Do NOT readFile() from process.cwd()/public — Next NFT packs public media
+ * into the serverless function and blows past Vercel's 250MB limit.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const sessionId = searchParams.get('session_id')
@@ -21,7 +24,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Verify the session with Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId)
 
     if (session.payment_status !== 'paid') {
@@ -31,7 +33,6 @@ export async function GET(request: Request) {
       )
     }
 
-    // Verify the track and format match
     if (session.metadata?.trackId !== trackId || session.metadata?.format !== format) {
       return NextResponse.json(
         { error: 'Invalid download request' },
@@ -39,10 +40,9 @@ export async function GET(request: Request) {
       )
     }
 
-    // Get track data
     const purchasableTracks = await import('@/data/purchasable-tracks.json')
     const track = purchasableTracks.tracks.find((t: any) => t.id === trackId)
-    
+
     if (!track) {
       return NextResponse.json(
         { error: 'Track not found' },
@@ -51,34 +51,20 @@ export async function GET(request: Request) {
     }
 
     const selectedFormat = track.formats.find((f: any) => f.type === format)
-    if (!selectedFormat) {
+    if (!selectedFormat?.file) {
       return NextResponse.json(
         { error: 'Format not found' },
         { status: 404 }
       )
     }
 
-    // Read the file
-    const filePath = join(process.cwd(), 'public', selectedFormat.file)
-    
-    try {
-      const fileBuffer = await readFile(filePath)
-      const fileName = `${track.title.replace(/[^a-z0-9]/gi, '_')}.${format.toLowerCase()}`
-
-      return new NextResponse(fileBuffer, {
-        headers: {
-          'Content-Type': format === 'MP3' ? 'audio/mpeg' : format === 'WAV' ? 'audio/wav' : 'audio/flac',
-          'Content-Disposition': `attachment; filename="${fileName}"`,
-          'Content-Length': fileBuffer.length.toString(),
-        },
-      })
-    } catch (fileError) {
-      console.error('File read error:', fileError)
-      return NextResponse.json(
-        { error: 'File not found on server' },
-        { status: 404 }
-      )
+    const file = String(selectedFormat.file)
+    if (/^https?:\/\//i.test(file)) {
+      return NextResponse.redirect(file, 302)
     }
+
+    const path = file.startsWith('/') ? file : `/${file}`
+    return NextResponse.redirect(new URL(path, request.url), 302)
   } catch (error: any) {
     console.error('Download error:', error)
     return NextResponse.json(
@@ -87,4 +73,3 @@ export async function GET(request: Request) {
     )
   }
 }
-

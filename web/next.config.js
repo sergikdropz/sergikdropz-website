@@ -43,6 +43,15 @@ const nextConfig = {
   compress: true, // Enable gzip compression
   experimental: {
     optimizePackageImports: ['react-icons', 'react-icons/fa', 'react-icons/lu'],
+    // Keep vault media out of serverless NFT traces (api/download hit 303MB on Vercel).
+    outputFileTracingExcludes: {
+      '*': [
+        './public/audio/**/*',
+        './public/waveforms/**/*',
+        './public/images/audio/**/*',
+      ],
+      '/api/download': ['./public/**/*'],
+    },
   },
   eslint: {
     ignoreDuringBuilds: false,
