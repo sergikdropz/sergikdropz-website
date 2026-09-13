@@ -9835,15 +9835,6 @@ function AlbumCatalog({
   )
 }
 
-function epCoverDriftSeed(name: string): number {
-  let h = 2166136261
-  for (let i = 0; i < name.length; i++) {
-    h ^= name.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
-
 function EpReleaseStage({
   album,
   tracks = [],
@@ -9861,9 +9852,6 @@ function EpReleaseStage({
   const artworkSrc = folderArtworkSrc(album, tracks)
   const fallbackSrc = catalogArtworkForRelease(album.name)
   const isBanner = variant === 'banner'
-  const driftSeed = epCoverDriftSeed(album.name || artworkSrc || 'ep')
-  const driftVariant = driftSeed % 8
-  const driftDelaySec = -((driftSeed >>> 3) % 28)
 
   return (
     <section
@@ -9875,20 +9863,15 @@ function EpReleaseStage({
         }`}
       >
         <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute inset-0 overflow-hidden">
-            <div
-              className={`ep-release-cover-drift ep-release-cover-drift-${driftVariant} absolute inset-0 brightness-[0.58]`}
-              style={{ animationDelay: `${driftDelaySec}s` }}
-            >
-              <CoverArt
-                src={artworkSrc}
-                fallbackSrc={fallbackSrc}
-                alt=""
-                sizes="100vw"
-                priority
-                objectFit="cover"
-              />
-            </div>
+          <div className={`absolute inset-0 brightness-[0.58] ${isBanner ? 'scale-110' : ''}`}>
+            <CoverArt
+              src={artworkSrc}
+              fallbackSrc={fallbackSrc}
+              alt=""
+              sizes="100vw"
+              priority
+              objectFit={isBanner ? 'cover' : 'contain'}
+            />
           </div>
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/58 to-black/72" />
         </div>
