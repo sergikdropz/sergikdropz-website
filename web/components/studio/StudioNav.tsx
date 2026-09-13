@@ -10,6 +10,8 @@ import {
   FaUpload,
   FaSatellite,
   FaFileImport,
+  FaCalendarAlt,
+  FaProjectDiagram,
 } from 'react-icons/fa'
 
 const links = [
@@ -19,6 +21,8 @@ const links = [
   { href: '/studio/catalog/import', label: 'Import', icon: FaFileImport },
   { href: '/studio/tracks/new', label: 'Upload', icon: FaUpload },
   { href: '/studio/releases/command-center', label: 'Command', icon: FaSatellite },
+  { href: '/studio/releases/pipeline', label: 'Pipeline', icon: FaProjectDiagram },
+  { href: '/studio/releases/calendar', label: 'Calendar', icon: FaCalendarAlt },
   { href: '/studio/soundexchange', label: 'SoundExchange', icon: FaDatabase },
 ]
 
@@ -30,7 +34,16 @@ export default function StudioNav() {
       {links.map(({ href, label, icon: Icon, exact }) => {
         const active = exact
           ? pathname === href
-          : pathname === href || pathname?.startsWith(`${href}/`)
+          : href === '/studio/releases'
+            ? pathname === '/studio/releases' ||
+              Boolean(
+                pathname?.match(/^\/studio\/releases\/[^/]+$/) &&
+                  !pathname?.includes('/new') &&
+                  !pathname?.includes('/pipeline') &&
+                  !pathname?.includes('/calendar') &&
+                  !pathname?.includes('/command-center')
+              )
+            : pathname === href || pathname?.startsWith(`${href}/`)
         return (
           <Link
             key={href}

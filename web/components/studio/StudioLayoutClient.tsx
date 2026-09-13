@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import AdminAiAssistant from '@/components/AdminAiAssistant'
+import DeferredAdminAiAssistant from '@/components/DeferredAdminAiAssistant'
 import { AdminAiPageProvider } from '@/contexts/AdminAiPageContext'
 import { AppShellWithCommands } from '@/components/shell/AppShellWithCommands'
 
@@ -25,7 +25,7 @@ export default function StudioLayoutClient({ children }: { children: React.React
           {children}
         </AppShellWithCommands>
       </main>
-      <AdminAiAssistant defaultOpen={false} />
+      <DeferredAdminAiAssistant defaultOpen={false} />
     </AdminAiPageProvider>
   )
 }

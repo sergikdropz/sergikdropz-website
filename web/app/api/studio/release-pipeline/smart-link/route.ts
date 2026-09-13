@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { requireSupabaseService } from '../../../nurturing/supabase-service'
-import fs from 'fs'
-import path from 'path'
-
-const SCHEDULE_PATH = path.join(process.cwd(), 'data', 'release-schedule.json')
-
-function readSchedule(): { schedule: any[] } {
-  const raw = fs.readFileSync(SCHEDULE_PATH, 'utf-8')
-  return JSON.parse(raw)
-}
+import { ensureLaunchHandoff, publicMusicDestinationUrl } from '@/lib/studio/launch-handoff'
+import { resolvePipelineRelease } from '@/lib/studio/schedule-bridge'
 
 /**
  * POST /api/studio/release-pipeline/smart-link
- * Auto-generates a release smart link for a scheduled release
+ * Auto-generates a release smart link (schedule JSON or distribution_releases).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -29,66 +22,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'release_id is required' }, { status: 400 })
     }
 
-    // Look up release in schedule
-    const { schedule } = readSchedule()
-    const release = schedule.find((r) => r.id === release_id)
-
-    if (!release) {
-      return NextResponse.json({ error: 'Release not found in schedule' }, { status: 404 })
-    }
-
     const supabaseService = requireSupabaseService()
     if (!supabaseService.ok) return supabaseService.response
     const supabase = supabaseService.supabase
 
-    // Check if smart link already exists for this release
-    const { data: existing } = await supabase
-      .from('smartlinks')
-      .select('id')
-      .eq('release_id', release_id)
-      .limit(1)
+    const release = await resolvePipelineRelease(supabase, release_id)
+    if (!release) {
+      return NextResponse.json({ error: 'Release not found' }, { status: 404 })
+    }
 
-    if (existing && existing.length > 0) {
+    const handoff = await ensureLaunchHandoff(supabase, {
+      releaseId: release_id,
+      title: release.title,
+      releaseDate: release.release_date || null,
+      destinationUrl: release.smart_link || publicMusicDestinationUrl(release_id),
+      createdBy: session.user?.id || null,
+      createCampaign: false,
+      createSmartLink: true,
+    })
+
+    if (!handoff.smartLink) {
       return NextResponse.json(
-        { error: 'A smart link already exists for this release' },
+        { error: handoff.errors[0] || 'Failed to create smart link' },
+        { status: 500 }
+      )
+    }
+
+    if (handoff.smartLink.reused) {
+      return NextResponse.json(
+        { error: 'A smart link already exists for this release', smart_link: handoff.smartLink },
         { status: 409 }
       )
     }
 
-    const slug = `presave-${release_id}`
-    const destinationUrl =
-      release.smart_link || `https://sergikdropz.com/music/${release_id}`
-
-    const { data, error } = await supabase
-      .from('smartlinks')
-      .insert([
-        {
-          slug,
-          title: `Pre-save: ${release.title}`,
-          destination_url: destinationUrl,
-          category: 'release',
-          release_id,
-          description: '',
-          metadata: {},
-          created_by: session.user?.id,
-        },
-      ])
-      .select()
-
-    if (error) {
-      if (error.code === '23505') {
-        return NextResponse.json({ error: 'Slug already exists' }, { status: 409 })
-      }
-      console.error('Error creating smart link:', error)
-      return NextResponse.json({ error: 'Failed to create smart link' }, { status: 500 })
-    }
-
-    return NextResponse.json(data[0], { status: 201 })
-  } catch (error: any) {
+    return NextResponse.json(handoff.smartLink, { status: 201 })
+  } catch (error: unknown) {
     console.error('Error creating release smart link:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to create release smart link' },
-      { status: 500 }
-    )
+    const message =
+      error instanceof Error ? error.message : 'Failed to create release smart link'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

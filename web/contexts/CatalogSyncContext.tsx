@@ -30,21 +30,24 @@ type CatalogSyncContextValue = {
 
 const CatalogSyncContext = createContext<CatalogSyncContextValue | null>(null)
 
-const POLL_MS = 12_000
+const POLL_MS = 20_000
+const SSE_RECONNECT_BASE_MS = 3_000
+const SSE_RECONNECT_MAX_MS = 60_000
 
+/** Only music catalog surfaces need live publish-version sync — not every admin page. */
 function shouldPollCatalogVersion(pathname: string | null): boolean {
   if (!pathname) return false
-  return (
-    pathname === '/music-library' ||
-    pathname.startsWith('/music-library/') ||
-    pathname.startsWith('/admin')
-  )
+  if (pathname === '/music-library' || pathname.startsWith('/music-library/')) return true
+  if (pathname.startsWith('/admin/music-library')) return true
+  if (pathname.startsWith('/admin/music-vault')) return true
+  if (pathname === '/admin/music' || pathname.startsWith('/admin/music/')) return true
+  if (pathname.startsWith('/admin/sonic-dna')) return true
+  return false
 }
 
 async function fetchPublishVersion(): Promise<number> {
   try {
     const res = await fetch('/api/music-library/catalog-version', {
-      // Allow short shared cache from the route's Cache-Control
       cache: 'default',
     })
     const data = await res.json().catch(() => ({}))
@@ -93,42 +96,71 @@ export function CatalogSyncProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    // One-shot version read site-wide; vault/admin use SSE instead of 12s polling.
+    // One-shot version read site-wide; catalog pages use SSE / backoff poll.
     void refreshVersion()
     if (!pollActive) return
 
     let es: EventSource | null = null
-    let timer: number | null = null
+    let pollTimer: number | null = null
+    let reconnectTimer: number | null = null
+    let backoffMs = SSE_RECONNECT_BASE_MS
+    let closed = false
 
-    try {
-      es = new EventSource('/api/music-library/catalog-version/stream')
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data || '{}')
-          const version = Number(data?.version) || 0
-          if (!version) return
-          const prev = seenVersion.current
-          if (prev && version !== prev) {
-            invalidateMusicLibraryCache()
-            notifyRemote(version)
-          }
-          seenVersion.current = version
-          setPublishVersion(version)
-        } catch {
-          /* ignore malformed */
-        }
+    const clearPoll = () => {
+      if (pollTimer != null) {
+        window.clearInterval(pollTimer)
+        pollTimer = null
       }
-      es.onerror = () => {
-        // Fall back to interval poll if SSE dies
-        es?.close()
-        es = null
-        if (timer == null) {
-          timer = window.setInterval(() => void refreshVersion(), POLL_MS)
-        }
-      }
-    } catch {
-      timer = window.setInterval(() => void refreshVersion(), POLL_MS)
     }
+
+    const startPollFallback = () => {
+      if (pollTimer != null || closed) return
+      pollTimer = window.setInterval(() => void refreshVersion(), POLL_MS)
+    }
+
+    const applyVersion = (version: number) => {
+      if (!version) return
+      const prev = seenVersion.current
+      if (prev && version !== prev) {
+        invalidateMusicLibraryCache()
+        notifyRemote(version)
+      }
+      seenVersion.current = version
+      setPublishVersion(version)
+    }
+
+    const connect = () => {
+      if (closed) return
+      try {
+        es?.close()
+        es = new EventSource('/api/music-library/catalog-version/stream')
+        es.onopen = () => {
+          backoffMs = SSE_RECONNECT_BASE_MS
+          clearPoll()
+        }
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data || '{}')
+            applyVersion(Number(data?.version) || 0)
+          } catch {
+            /* ignore malformed */
+          }
+        }
+        es.onerror = () => {
+          es?.close()
+          es = null
+          startPollFallback()
+          if (reconnectTimer != null) window.clearTimeout(reconnectTimer)
+          const wait = backoffMs
+          backoffMs = Math.min(SSE_RECONNECT_MAX_MS, Math.round(backoffMs * 1.8))
+          reconnectTimer = window.setTimeout(connect, wait)
+        }
+      } catch {
+        startPollFallback()
+      }
+    }
+
+    connect()
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') void refreshVersion()
@@ -136,8 +168,10 @@ export function CatalogSyncProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', onVisible)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
+      closed = true
       es?.close()
-      if (timer != null) window.clearInterval(timer)
+      clearPoll()
+      if (reconnectTimer != null) window.clearTimeout(reconnectTimer)
       window.removeEventListener('focus', onVisible)
       document.removeEventListener('visibilitychange', onVisible)
     }
@@ -179,7 +213,6 @@ export function CatalogSyncProvider({ children }: { children: ReactNode }) {
 export function useCatalogSync(): CatalogSyncContextValue {
   const ctx = useContext(CatalogSyncContext)
   if (!ctx) {
-    // Safe fallback when mounted outside provider (tests / isolated trees)
     return {
       publishVersion: 0,
       lastEvent: null,

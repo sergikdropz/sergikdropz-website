@@ -1,125 +1,121 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useNotifications } from '@/contexts/NotificationContext'
 import Link from 'next/link'
-import { 
-  FaUpload, 
-  FaCompactDisc, 
-  FaSync, 
-  FaCheckCircle, 
+import {
+  FaUpload,
+  FaCompactDisc,
+  FaSync,
+  FaCheckCircle,
   FaExclamationTriangle,
   FaClock,
   FaRocket,
   FaSearch,
   FaBolt,
-  FaDatabase
+  FaDatabase,
 } from 'react-icons/fa'
 import CommandPalette from '@/components/CommandPalette'
 import { ProductionStatsCompact } from '@/components/music/ProductionStats'
 import { invalidateMusicLibraryCache } from '@/utils/musicLibraryApi'
+import { useAdminDashboardData } from '@/hooks/useAdminDashboardData'
+
+function StatValue({
+  ready,
+  value,
+  className = '',
+}: {
+  ready: boolean
+  value: number | string
+  className?: string
+}) {
+  if (!ready) {
+    return <div className={`text-2xl font-bold text-zinc-600 ${className}`}>—</div>
+  }
+  const display = typeof value === 'number' ? value.toLocaleString() : value
+  return <div className={`text-2xl font-bold ${className}`}>{display}</div>
+}
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading } = useAdminAuth()
   const { showNotification } = useNotifications()
   const router = useRouter()
   const [showCommandPalette, setShowCommandPalette] = useState(false)
-  const [quickActions, setQuickActions] = useState<any[]>([])
-  const [healthStatus, setHealthStatus] = useState({
-    database: 'healthy',
-    storage: 'healthy',
-    apis: 'healthy',
-  })
-  const [pendingTasks, setPendingTasks] = useState({
-    tracksNeedingAnalysis: 0,
-    releasesPendingDistribution: 0,
-    failedUploads: 0,
-  })
-  const [recentActivity, setRecentActivity] = useState<any[]>([])
-  const [stats, setStats] = useState({
-    // Audio Files
-    totalTracks: 0,
-    purchasableTracks: 0,
-    analyzedTracks: 0,
-    sonicDNATracks: 0,
-    pendingAnalysis: 0,
-    processingAnalysis: 0,
-    // Purchases
-    totalPurchases: 0,
-    totalRevenue: 0,
-    // Instagram
-    instagramPosts: 0,
-    instagramActive: 0,
-    instagramImages: 0,
-    instagramVideos: 0,
-    // Music Library
-    libraryFolders: 0,
-    libraryFoldersVisible: 0,
-    libraryFoldersHidden: 0,
-    libraryTracks: 0,  // Unique tracks (deduplicated by audio_file_id)
-    libraryTracksEntries: 0,  // Total entries (includes duplicates in playlists)
-    // Gallery (legacy)
-    galleryImages: 0,
-    // Analytics
-    analyticsTotal: 0,
-    analyticsToday: 0,
-    // Activity Logs
-    activityLogsTotal: 0,
-    activityLogsToday: 0,
-    // Shop
-    activeMembers: 0,
-    monthlyRecurringRevenue: 0,
-    totalSubscribers: 0,
-    activeSubscribers: 0,
-    merchOrders: 0,
-    merchRevenue: 0,
-    totalTips: 0,
-    tipRevenue: 0,
-    totalLicenses: 0,
-    licenseRevenue: 0,
-    // Legacy
-    totalEvents: 0,
-    lastUpdated: null as string | null,
-    // Sonic DNA Coverage
-    sonicDnaCoverage: 0,
-    tracksWithSonicDna: 0,
-    tracksWithBpm: 0,
-    tracksWithKey: 0,
-    tracksWithWaveform: 0,
-    uniqueArtists: 0,
-    trackPlays: 0,
-  })
-  const [loadingStats, setLoadingStats] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [lastSyncResult, setLastSyncResult] = useState<any>(null)
 
-  useEffect(() => {
-    if (isAdmin) {
-      fetchStats()
-      fetchQuickActions()
-      fetchPendingTasks()
-      fetchRecentActivity()
-      checkHealthStatus()
-    }
-  }, [isAdmin])
+  const {
+    pendingTasks,
+    recentActivity,
+    healthStatus,
+    stats,
+    loadingStats,
+    statsReady,
+    refreshStats,
+    invalidateAll,
+  } = useAdminDashboardData(Boolean(isAdmin))
 
-  // Keyboard shortcut for command palette
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setShowCommandPalette(true)
+  async function handleSyncToProduction() {
+    if (
+      !confirm(
+        'Publish the admin catalog to the live site? Visitors will see current folders, EPs, albums, and visibility.'
+      )
+    ) {
+      return
+    }
+
+    try {
+      const res = await fetch('/api/admin/sync-production', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        invalidateMusicLibraryCache()
+        await invalidateAll()
+        const folders =
+          data.visibleFolders != null ? `${data.visibleFolders} folders` : 'catalog'
+        const tracks =
+          data.visibleTracks != null ? `, ${data.visibleTracks} tracks` : ''
+        showNotification(`Published to live site (${folders}${tracks}).`, 'success')
+      } else {
+        showNotification(data.error || 'Publish failed. Please try again.', 'error')
       }
+    } catch {
+      showNotification('Publish error. Please try again.', 'error')
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }
 
-  async function fetchQuickActions() {
-    const actions = []
-    
+  async function handleSyncAllStats() {
+    if (syncing) return
+
+    try {
+      setSyncing(true)
+      showNotification('Syncing all system statistics...', 'info')
+
+      const res = await fetch('/api/admin/sync-all-stats', { method: 'POST' })
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setLastSyncResult(data)
+        showNotification(
+          `Sync complete! Updated ${data.sync.sonicDna.updated} sonic DNA, ${data.sync.trackFields.updated} track fields, ${data.sync.folderCounts.updated} folders.`,
+          'success'
+        )
+        await refreshStats()
+        await invalidateAll()
+      } else {
+        showNotification(data.error || 'Sync failed. Please try again.', 'error')
+      }
+    } catch {
+      showNotification('Sync error. Please try again.', 'error')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const quickActions = useMemo(() => {
+    const actions: any[] = []
+
     if (pendingTasks.tracksNeedingAnalysis > 0) {
       actions.push({
         label: `Analyze ${pendingTasks.tracksNeedingAnalysis} Pending Tracks`,
@@ -156,260 +152,36 @@ export default function AdminDashboard() {
       {
         label: 'Sync All Stats',
         icon: FaDatabase,
-        action: handleSyncAllStats,
+        action: () => {
+          void handleSyncAllStats()
+        },
         color: 'from-cyan-600 to-teal-600',
       },
       {
         label: 'Sync to Production',
         icon: FaSync,
-        action: handleSyncToProduction,
+        action: () => {
+          void handleSyncToProduction()
+        },
         color: 'from-green-600 to-emerald-600',
       }
     )
 
-    setQuickActions(actions)
-  }
+    return actions
+  }, [pendingTasks, router, syncing])
 
-  async function fetchPendingTasks() {
-    try {
-      const res = await fetch('/api/admin/pending-tasks')
-      if (res.ok) {
-        const data = await res.json()
-        setPendingTasks(data)
-      }
-    } catch (error) {
-      console.error('Error fetching pending tasks:', error)
-    }
-  }
-
-  async function fetchRecentActivity() {
-    try {
-      const res = await fetch('/api/admin/recent-activity?limit=10')
-      if (res.ok) {
-        const data = await res.json()
-        setRecentActivity(data.activities || [])
-      }
-    } catch (error) {
-      console.error('Error fetching recent activity:', error)
-    }
-  }
-
-  async function checkHealthStatus() {
-    try {
-      const res = await fetch('/api/admin/health')
-      if (res.ok) {
-        const data = await res.json()
-        setHealthStatus(data)
-      }
-    } catch (error) {
-      console.error('Error checking health:', error)
-    }
-  }
-
-  async function handleSyncToProduction() {
-    if (!confirm('Publish the admin catalog to the live site? Visitors will see current folders, EPs, albums, and visibility.')) return
-    
-    try {
-      const res = await fetch('/api/admin/sync-production', { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok) {
-        invalidateMusicLibraryCache()
-        const folders = data.visibleFolders != null ? `${data.visibleFolders} folders` : 'catalog'
-        const tracks = data.visibleTracks != null ? `, ${data.visibleTracks} tracks` : ''
-        showNotification(`Published to live site (${folders}${tracks}).`, 'success')
-      } else {
-        showNotification(data.error || 'Publish failed. Please try again.', 'error')
-      }
-    } catch (error) {
-      showNotification('Publish error. Please try again.', 'error')
-    }
-  }
-
-  async function handleSyncAllStats() {
-    if (syncing) return
-    
-    try {
-      setSyncing(true)
-      showNotification('Syncing all system statistics...', 'info')
-      
-      const res = await fetch('/api/admin/sync-all-stats', { method: 'POST' })
-      const data = await res.json()
-      
-      if (res.ok && data.success) {
-        setLastSyncResult(data)
-        showNotification(`Sync complete! Updated ${data.sync.sonicDna.updated} sonic DNA, ${data.sync.trackFields.updated} track fields, ${data.sync.folderCounts.updated} folders.`, 'success')
-        // Refresh stats after sync
-        fetchStats()
-      } else {
-        showNotification(data.error || 'Sync failed. Please try again.', 'error')
-      }
-    } catch (error) {
-      showNotification('Sync error. Please try again.', 'error')
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  // Update quick actions when pending tasks change
   useEffect(() => {
-    if (isAdmin) {
-      fetchQuickActions()
-    }
-  }, [pendingTasks, isAdmin])
-
-  async function fetchStats() {
-    try {
-      setLoadingStats(true)
-      
-      // Fetch comprehensive stats from Supabase
-      const statsRes = await fetch('/api/admin/stats').catch(() => null)
-      
-      if (statsRes && statsRes.ok) {
-        const statsData = await statsRes.json()
-        const s = statsData.stats || {}
-        
-        setStats({
-          // Audio Files
-          totalTracks: s.audioFiles?.total || 0,
-          purchasableTracks: s.audioFiles?.purchasable || 0,
-          analyzedTracks: s.audioFiles?.analyzed || 0,
-          sonicDNATracks: s.audioFiles?.sonicDNACompleted || 0,
-          pendingAnalysis: s.audioFiles?.pending || 0,
-          processingAnalysis: s.audioFiles?.processing || 0,
-          // Purchases
-          totalPurchases: s.purchases?.total || 0,
-          totalRevenue: s.purchases?.totalRevenue || 0,
-          // Instagram
-          instagramPosts: s.instagram?.total || 0,
-          instagramActive: s.instagram?.active || 0,
-          instagramImages: s.instagram?.images || 0,
-          instagramVideos: s.instagram?.videos || 0,
-          // Music Library
-          libraryFolders: s.musicLibrary?.folders?.total || 0,
-          libraryFoldersVisible: s.musicLibrary?.folders?.visible || 0,
-          libraryFoldersHidden: s.musicLibrary?.folders?.hidden || 0,
-          libraryTracks: s.musicLibrary?.tracks || 0,  // Unique (deduplicated)
-          libraryTracksEntries: s.musicLibrary?.totalEntries || s.musicLibrary?.tracks || 0,
-          // Analytics
-          analyticsTotal: s.analytics?.totalEvents || 0,
-          analyticsToday: s.analytics?.eventsToday || 0,
-          // Activity Logs
-          activityLogsTotal: s.activityLogs?.total || 0,
-          activityLogsToday: s.activityLogs?.today || 0,
-          // Legacy (fallback)
-          galleryImages: 0,
-          totalEvents: s.analytics?.totalEvents || 0,
-          lastUpdated: statsData.timestamp || new Date().toISOString(),
-          // Sonic DNA Coverage
-          sonicDnaCoverage: s.sonicDnaCoverage?.percent || 0,
-          tracksWithSonicDna: s.musicLibrary?.tracksWithSonicDna || 0,
-          tracksWithBpm: s.musicLibrary?.tracksWithBpm || 0,
-          tracksWithKey: s.musicLibrary?.tracksWithKey || 0,
-          tracksWithWaveform: s.musicLibrary?.tracksWithWaveform || 0,
-          uniqueArtists: s.musicLibrary?.uniqueArtists || 0,
-          trackPlays: s.analytics?.trackPlays || 0,
-          // Shop & Monetization (populated by separate fetch below, except tips & licenses)
-          activeMembers: 0,
-          monthlyRecurringRevenue: 0,
-          totalSubscribers: 0,
-          activeSubscribers: 0,
-          merchOrders: 0,
-          merchRevenue: 0,
-          totalTips: s.tips?.total || 0,
-          tipRevenue: s.tips?.totalRevenue || 0,
-          totalLicenses: s.licenses?.total || 0,
-          licenseRevenue: s.licenses?.totalRevenue || 0,
-        })
-      } else {
-        // Fallback to legacy endpoints if new API fails
-        const [tracksRes, galleryRes, purchasesRes, analyticsRes] = await Promise.all([
-          fetch('/api/audio/list?limit=1&include_count=true').catch(() => null),
-          fetch('/api/gallery/list').catch(() => null),
-          fetch('/api/admin/purchases/stats').catch(() => null),
-          fetch('/api/analytics/stats').catch(() => null),
-        ])
-
-        if (tracksRes) {
-          const tracksData = await tracksRes.json()
-          setStats((prev) => ({ ...prev, totalTracks: tracksData.total || tracksData.files?.length || 0 }))
-        }
-
-        if (galleryRes) {
-          const galleryData = await galleryRes.json()
-          setStats((prev) => ({ ...prev, galleryImages: galleryData.images?.length || 0 }))
-        }
-
-        if (purchasesRes) {
-          const purchasesData = await purchasesRes.json()
-          setStats((prev) => ({
-            ...prev,
-            totalPurchases: purchasesData.summary?.totalPurchases || 0,
-            totalRevenue: purchasesData.summary?.totalRevenue || 0,
-          }))
-        }
-
-        if (analyticsRes) {
-          const analyticsData = await analyticsRes.json()
-          setStats((prev) => ({
-            ...prev,
-            totalEvents: analyticsData.summary?.totalEvents || 0,
-          }))
-        }
-
-        setStats((prev) => ({ ...prev, lastUpdated: new Date().toISOString() }))
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(true)
       }
-
-      // Fetch shop stats in parallel
-      try {
-        const [membershipsRes, subscribersRes, merchRes] = await Promise.allSettled([
-          fetch('/api/admin/memberships'),
-          fetch('/api/admin/subscribers'),
-          fetch('/api/admin/merch/orders'),
-        ])
-
-        if (membershipsRes.status === 'fulfilled' && membershipsRes.value.ok) {
-          const data = await membershipsRes.value.json()
-          const memberships = data.memberships || []
-          const active = memberships.filter((m: any) => m.status === 'active')
-          const planPrices: Record<string, number> = { supporter: 499, 'inner-circle': 1499 }
-          const mrr = active.reduce((sum: number, m: any) => sum + (planPrices[m.plan_id] || 0), 0)
-          setStats((prev) => ({
-            ...prev,
-            activeMembers: active.length,
-            monthlyRecurringRevenue: mrr / 100,
-          }))
-        }
-
-        if (subscribersRes.status === 'fulfilled' && subscribersRes.value.ok) {
-          const data = await subscribersRes.value.json()
-          const subs = data.subscribers || []
-          setStats((prev) => ({
-            ...prev,
-            totalSubscribers: subs.length,
-            activeSubscribers: subs.filter((s: any) => s.is_active).length,
-          }))
-        }
-
-        if (merchRes.status === 'fulfilled' && merchRes.value.ok) {
-          const data = await merchRes.value.json()
-          const orders = data.orders || []
-          setStats((prev) => ({
-            ...prev,
-            merchOrders: orders.length,
-            merchRevenue: orders.reduce((s: number, o: any) => s + (o.total || 0), 0) / 100,
-          }))
-        }
-      } catch (shopError) {
-        console.error('Error fetching shop stats:', shopError)
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error)
-    } finally {
-      setLoadingStats(false)
     }
-  }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
-  if (loading || loadingStats) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="text-white text-xl">Loading...</div>
@@ -784,10 +556,16 @@ export default function AdminDashboard() {
           {/* Audio Files Stats */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">🎵 Audio Files</h2>
+              <h2 className="text-xl font-semibold">
+                🎵 Audio Files
+                {loadingStats && (
+                  <span className="ml-3 text-xs font-normal text-zinc-500">Updating…</span>
+                )}
+              </h2>
               <button
-                onClick={fetchStats}
-                className="text-gray-400 hover:text-white text-sm transition"
+                onClick={() => void refreshStats()}
+                disabled={loadingStats}
+                className="text-gray-400 hover:text-white text-sm transition disabled:opacity-40"
               >
                 Refresh
               </button>
@@ -795,27 +573,27 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div>
                 <div className="text-gray-400 text-sm">Total Tracks</div>
-                <div className="text-2xl font-bold">{stats.totalTracks.toLocaleString()}</div>
+                <StatValue ready={statsReady} value={stats.totalTracks} />
               </div>
               <div>
                 <div className="text-gray-400 text-sm">Purchasable</div>
-                <div className="text-2xl font-bold text-green-400">{stats.purchasableTracks.toLocaleString()}</div>
+                <StatValue ready={statsReady} value={stats.purchasableTracks} className="text-green-400" />
               </div>
               <div>
                 <div className="text-gray-400 text-sm">Analyzed</div>
-                <div className="text-2xl font-bold text-blue-400">{stats.analyzedTracks.toLocaleString()}</div>
+                <StatValue ready={statsReady} value={stats.analyzedTracks} className="text-blue-400" />
               </div>
               <div>
                 <div className="text-gray-400 text-sm">Sonic DNA</div>
-                <div className="text-2xl font-bold text-purple-400">{stats.sonicDNATracks.toLocaleString()}</div>
+                <StatValue ready={statsReady} value={stats.sonicDNATracks} className="text-purple-400" />
               </div>
               <div>
                 <div className="text-gray-400 text-sm">Pending</div>
-                <div className="text-2xl font-bold text-yellow-400">{stats.pendingAnalysis.toLocaleString()}</div>
+                <StatValue ready={statsReady} value={stats.pendingAnalysis} className="text-yellow-400" />
               </div>
               <div>
                 <div className="text-gray-400 text-sm">Processing</div>
-                <div className="text-2xl font-bold text-orange-400">{stats.processingAnalysis.toLocaleString()}</div>
+                <StatValue ready={statsReady} value={stats.processingAnalysis} className="text-orange-400" />
               </div>
             </div>
           </div>
@@ -841,9 +619,10 @@ export default function AdminDashboard() {
               <div>
                 <div className="text-gray-400 text-sm">Coverage</div>
                 <div className={`text-2xl font-bold ${
+                  !statsReady ? 'text-zinc-600' :
                   stats.sonicDnaCoverage >= 80 ? 'text-green-400' :
                   stats.sonicDnaCoverage >= 50 ? 'text-yellow-400' : 'text-red-400'
-                }`}>{stats.sonicDnaCoverage}%</div>
+                }`}>{statsReady ? `${stats.sonicDnaCoverage}%` : '—'}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-sm">With Sonic DNA</div>
@@ -1039,9 +818,11 @@ export default function AdminDashboard() {
             <div className="flex justify-between items-center">
               <div className="text-gray-400 text-sm">Last Updated</div>
               <div className="text-sm font-medium">
-                {stats.lastUpdated
+                {statsReady && stats.lastUpdated
                   ? new Date(stats.lastUpdated).toLocaleString()
-                  : 'Never'}
+                  : loadingStats
+                    ? 'Updating…'
+                    : 'Waiting for first load'}
               </div>
             </div>
           </div>

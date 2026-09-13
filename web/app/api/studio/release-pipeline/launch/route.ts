@@ -6,20 +6,12 @@ import {
   normalizeIdempotencyKey,
 } from '@/lib/auth/idempotency'
 import { requireSupabaseService } from '../../../nurturing/supabase-service'
-import { RELEASE_CAMPAIGN_TEMPLATE } from '@/lib/campaign-builder'
-import fs from 'fs'
-import path from 'path'
-
-const SCHEDULE_PATH = path.join(process.cwd(), 'data', 'release-schedule.json')
-
-function readSchedule(): { schedule: any[] } {
-  const raw = fs.readFileSync(SCHEDULE_PATH, 'utf-8')
-  return JSON.parse(raw)
-}
+import { ensureLaunchHandoff, publicMusicDestinationUrl } from '@/lib/studio/launch-handoff'
+import { resolvePipelineRelease } from '@/lib/studio/schedule-bridge'
 
 /**
  * POST /api/studio/release-pipeline/launch
- * Idempotent launch of campaign + smart-link with partial-success reporting.
+ * Idempotent launch of campaign + smart-link (schedule or distribution release).
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAdminApi()
@@ -55,99 +47,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { schedule } = readSchedule()
-    const release = schedule.find((r) => r.id === releaseId)
-    if (!release) {
-      return NextResponse.json({ error: 'Release not found in schedule' }, { status: 404 })
-    }
-
     const supabaseService = requireSupabaseService()
     if (!supabaseService.ok) return supabaseService.response
     const supabase = supabaseService.supabase
 
+    const release = await resolvePipelineRelease(supabase, releaseId)
+    if (!release) {
+      return NextResponse.json({ error: 'Release not found' }, { status: 404 })
+    }
+
+    const handoff = await ensureLaunchHandoff(supabase, {
+      releaseId,
+      title: release.title,
+      releaseDate: release.release_date || null,
+      destinationUrl: release.smart_link || publicMusicDestinationUrl(releaseId),
+      createdBy: auth.session.user.id,
+      createCampaign,
+      createSmartLink,
+    })
+
     const results: Record<string, unknown> = {}
-    const errors: string[] = []
+    if (handoff.campaign) results.campaign = handoff.campaign
+    if (handoff.smartLink) results.smart_link = handoff.smartLink
 
-    if (createCampaign) {
-      const { data: existingCampaign } = await supabase
-        .from('campaigns')
-        .select('id, name, status')
-        .eq('release_id', releaseId)
-        .limit(1)
-
-      if (existingCampaign && existingCampaign.length > 0) {
-        results.campaign = { ...existingCampaign[0], reused: true }
-      } else {
-        const { data, error } = await supabase
-          .from('campaigns')
-          .insert([
-            {
-              name: `${release.title} - Release Campaign`,
-              release_id: releaseId,
-              description: RELEASE_CAMPAIGN_TEMPLATE.description,
-              scheduled_send_at: release.release_date,
-              status: 'draft',
-              created_by: auth.session.user.id,
-            },
-          ])
-          .select('id, name, status')
-
-        if (error || !data?.[0]) {
-          errors.push(error?.message || 'Failed to create campaign')
-        } else {
-          results.campaign = { ...data[0], reused: false }
-        }
-      }
-    }
-
-    if (createSmartLink) {
-      const { data: existingLink } = await supabase
-        .from('smartlinks')
-        .select('id, slug, total_clicks')
-        .eq('release_id', releaseId)
-        .limit(1)
-
-      if (existingLink && existingLink.length > 0) {
-        results.smart_link = { ...existingLink[0], reused: true }
-      } else {
-        const slug = `presave-${releaseId}`
-        const destinationUrl =
-          release.smart_link || `https://sergikdropz.com/music/${releaseId}`
-        const { data, error } = await supabase
-          .from('smartlinks')
-          .insert([
-            {
-              slug,
-              title: `Pre-save: ${release.title}`,
-              destination_url: destinationUrl,
-              category: 'release',
-              release_id: releaseId,
-              description: '',
-              metadata: {},
-              created_by: auth.session.user.id,
-            },
-          ])
-          .select('id, slug, total_clicks')
-
-        if (error || !data?.[0]) {
-          if (error?.code === '23505') {
-            errors.push('Smart link slug already exists')
-          } else {
-            errors.push(error?.message || 'Failed to create smart link')
-          }
-        } else {
-          results.smart_link = { ...data[0], reused: false }
-        }
-      }
-    }
-
-    const partial = errors.length > 0
+    const partial = handoff.errors.length > 0
     const responseBody = {
       success: !partial,
       partial,
       results,
-      errors: errors.length ? errors : undefined,
+      errors: handoff.errors.length ? handoff.errors : undefined,
       release_id: releaseId,
+      source: release.source,
     }
 
     await completeIdempotentOperation({
@@ -159,11 +89,10 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(responseBody, { status: partial ? 207 : 200 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error launching release pipeline:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to launch release pipeline' },
-      { status: 500 }
-    )
+    const message =
+      error instanceof Error ? error.message : 'Failed to launch release pipeline'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -98,11 +98,18 @@ export default function StudioDashboard() {
       gradient: 'from-fuchsia-600 to-pink-600',
     },
     {
-      href: '/studio/releases',
-      title: 'All releases',
-      desc: 'Pipeline and go-live',
+      href: '/studio/releases/pipeline',
+      title: 'Marketing pipeline',
+      desc: 'Campaigns + smart links for dated releases',
       icon: FaRocket,
       gradient: 'from-amber-600 to-orange-600',
+    },
+    {
+      href: '/studio/releases',
+      title: 'All releases',
+      desc: 'Drafts through go-live',
+      icon: FaCompactDisc,
+      gradient: 'from-zinc-600 to-zinc-800',
     },
   ]
 

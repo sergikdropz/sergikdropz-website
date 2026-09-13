@@ -25,7 +25,14 @@ function parsePublishVersion(value: unknown): number {
   return 0
 }
 
+/** Short process cache — SSE + pollers hit this often on vault pages. */
+let publishVersionCache: { value: number; expiresAt: number } | null = null
+
 export async function getMusicLibraryPublishVersion(): Promise<number> {
+  const now = Date.now()
+  if (publishVersionCache && publishVersionCache.expiresAt > now) {
+    return publishVersionCache.value
+  }
   try {
     const supabase = createSupabaseServerClient()
     const { data, error } = await supabase
@@ -33,15 +40,21 @@ export async function getMusicLibraryPublishVersion(): Promise<number> {
       .select('value')
       .eq('key', MUSIC_LIBRARY_PUBLISH_VERSION_KEY)
       .maybeSingle()
-    if (error || data == null) return 0
-    return parsePublishVersion(data.value)
+    if (error || data == null) {
+      publishVersionCache = { value: 0, expiresAt: now + 5_000 }
+      return 0
+    }
+    const value = parsePublishVersion(data.value)
+    publishVersionCache = { value, expiresAt: now + 5_000 }
+    return value
   } catch {
-    return 0
+    return publishVersionCache?.value ?? 0
   }
 }
 
 export async function bumpMusicLibraryPublishVersion(_updatedBy?: string): Promise<number> {
   const version = Date.now()
+  publishVersionCache = { value: version, expiresAt: Date.now() + 5_000 }
   const supabase = createSupabaseServerClient()
   // Live `settings` is key + value (+ updated_at). Do not send description/updated_by.
   const { error } = await supabase.from('settings').upsert(

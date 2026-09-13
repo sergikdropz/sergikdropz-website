@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { requireSupabaseService } from '../../../nurturing/supabase-service'
-import { RELEASE_CAMPAIGN_TEMPLATE } from '@/lib/campaign-builder'
-import fs from 'fs'
-import path from 'path'
-
-const SCHEDULE_PATH = path.join(process.cwd(), 'data', 'release-schedule.json')
-
-function readSchedule(): { schedule: any[] } {
-  const raw = fs.readFileSync(SCHEDULE_PATH, 'utf-8')
-  return JSON.parse(raw)
-}
+import { ensureLaunchHandoff, publicMusicDestinationUrl } from '@/lib/studio/launch-handoff'
+import { resolvePipelineRelease } from '@/lib/studio/schedule-bridge'
 
 /**
  * POST /api/studio/release-pipeline/campaign
- * Auto-generates a release campaign for a scheduled release
+ * Auto-generates a release campaign (schedule JSON or distribution_releases).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,60 +22,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'release_id is required' }, { status: 400 })
     }
 
-    // Look up release in schedule
-    const { schedule } = readSchedule()
-    const release = schedule.find((r) => r.id === release_id)
-
-    if (!release) {
-      return NextResponse.json({ error: 'Release not found in schedule' }, { status: 404 })
-    }
-
     const supabaseService = requireSupabaseService()
     if (!supabaseService.ok) return supabaseService.response
     const supabase = supabaseService.supabase
 
-    // Check if campaign already exists for this release
-    const { data: existing } = await supabase
-      .from('campaigns')
-      .select('id')
-      .eq('release_id', release_id)
-      .limit(1)
+    const release = await resolvePipelineRelease(supabase, release_id)
+    if (!release) {
+      return NextResponse.json({ error: 'Release not found' }, { status: 404 })
+    }
 
-    if (existing && existing.length > 0) {
+    const handoff = await ensureLaunchHandoff(supabase, {
+      releaseId: release_id,
+      title: release.title,
+      releaseDate: release.release_date || null,
+      destinationUrl: release.smart_link || publicMusicDestinationUrl(release_id),
+      createdBy: session.user?.id || null,
+      createCampaign: true,
+      createSmartLink: false,
+    })
+
+    if (!handoff.campaign) {
       return NextResponse.json(
-        { error: 'A campaign already exists for this release' },
+        { error: handoff.errors[0] || 'Failed to create campaign' },
+        { status: 500 }
+      )
+    }
+
+    if (handoff.campaign.reused) {
+      return NextResponse.json(
+        { error: 'A campaign already exists for this release', campaign: handoff.campaign },
         { status: 409 }
       )
     }
 
-    // Create campaign using template structure
-    const campaignName = `${release.title} - Release Campaign`
-
-    const { data, error } = await supabase
-      .from('campaigns')
-      .insert([
-        {
-          name: campaignName,
-          release_id,
-          description: RELEASE_CAMPAIGN_TEMPLATE.description,
-          scheduled_send_at: release.release_date,
-          status: 'draft',
-          created_by: session.user?.id,
-        },
-      ])
-      .select()
-
-    if (error) {
-      console.error('Error creating campaign:', error)
-      return NextResponse.json({ error: 'Failed to create campaign' }, { status: 500 })
-    }
-
-    return NextResponse.json(data[0], { status: 201 })
-  } catch (error: any) {
+    return NextResponse.json(handoff.campaign, { status: 201 })
+  } catch (error: unknown) {
     console.error('Error creating release campaign:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to create release campaign' },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : 'Failed to create release campaign'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

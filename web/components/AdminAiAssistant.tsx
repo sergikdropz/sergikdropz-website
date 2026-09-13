@@ -1126,10 +1126,11 @@ export default function AdminAiAssistant({
       }
     }
 
-    if (enabled) {
+    // Defer until the panel is actually open — don't compete with page navigation.
+    if (enabled && (open || isStandalone)) {
       void loadSkills()
     }
-  }, [enabled])
+  }, [enabled, open, isStandalone])
 
   useEffect(() => {
     async function loadChatProviders() {
@@ -1147,10 +1148,10 @@ export default function AdminAiAssistant({
         setProviderCatalog([])
       }
     }
-    if (enabled) {
+    if (enabled && (open || isStandalone)) {
       void loadChatProviders()
     }
-  }, [enabled])
+  }, [enabled, open, isStandalone])
 
   useEffect(() => {
     setPortalReady(true)
@@ -1164,9 +1165,18 @@ export default function AdminAiAssistant({
     }
 
     resolveFabAnchor()
-    const observer = new MutationObserver(resolveFabAnchor)
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => observer.disconnect()
+    // Prefer a one-shot + idle retry over a body-wide MutationObserver (expensive on admin).
+    const idleId =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? window.requestIdleCallback(() => resolveFabAnchor(), { timeout: 1500 })
+        : null
+    const timeoutId = window.setTimeout(resolveFabAnchor, 400)
+    return () => {
+      window.clearTimeout(timeoutId)
+      if (idleId != null && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+    }
   }, [portalReady])
 
   useEffect(() => {

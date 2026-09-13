@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import GlobalSearch from './GlobalSearch'
 import { adminNavItems, type AdminNavItem } from './admin-nav-items'
+import { prefetchAdminRoute } from '@/lib/admin-nav-prefetch'
 
 const ReactQueryDevtools =
   process.env.NODE_ENV === 'development'
@@ -24,6 +25,7 @@ const SHELL_NAV_COLLAPSED = '3.25rem'
 export default function AdminNav() {
   const { user, logout } = useAdminAuth()
   const pathname = usePathname()
+  const router = useRouter()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
@@ -109,6 +111,8 @@ export default function AdminNav() {
                   key={child.href}
                   href={child.href}
                   onClick={() => setIsMobileOpen(false)}
+                  onMouseEnter={() => prefetchAdminRoute(router, child.href)}
+                  onFocus={() => prefetchAdminRoute(router, child.href)}
                   className={`block px-3 py-1.5 rounded-md text-sm transition ${
                     isActive(child.href)
                       ? 'text-white bg-purple-600/20 font-medium'
@@ -129,6 +133,8 @@ export default function AdminNav() {
         key={item.href}
         href={item.href}
         onClick={() => setIsMobileOpen(false)}
+        onMouseEnter={() => prefetchAdminRoute(router, item.href)}
+        onFocus={() => prefetchAdminRoute(router, item.href)}
         className={`block px-3 py-2 rounded-md text-sm font-medium transition ${
           isActive(item.href)
             ? 'text-white bg-purple-600/20'

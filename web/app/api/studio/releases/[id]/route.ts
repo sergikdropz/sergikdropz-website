@@ -3,6 +3,8 @@ import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { autoCreateReleaseCampaign } from '@/lib/studio/auto-campaign'
+import { getLaunchHandoffStatus } from '@/lib/studio/launch-handoff'
+import { upsertScheduleFromDistribution } from '@/lib/studio/schedule-bridge'
 
 /**
  * GET /api/studio/releases/[id]
@@ -35,7 +37,7 @@ export async function GET(
     }
 
     // Get tracks for this release
-    const { data: tracks, error: tracksError } = await supabase
+    const { data: tracks } = await supabase
       .from('distribution_tracks')
       .select('*')
       .eq('release_id', params.id)
@@ -47,13 +49,17 @@ export async function GET(
       .select('*')
       .eq('release_id', params.id)
 
-    const copyright = await getSingleReleaseCopyrightReadiness(supabase, params.id)
+    const [copyright, handoff] = await Promise.all([
+      getSingleReleaseCopyrightReadiness(supabase, params.id),
+      getLaunchHandoffStatus(supabase, params.id),
+    ])
 
     return NextResponse.json({
       release,
       tracks: tracks || [],
       storeLinks: storeLinks || [],
       copyright,
+      handoff,
     })
   } catch (error: any) {
     console.error('Error in GET /api/studio/releases/[id]:', error)
@@ -142,6 +148,31 @@ export async function PUT(
     const newStatus: string = (data as { distributor_status?: string }).distributor_status ?? previousStatus
     if (newStatus === 'scheduled' && previousStatus !== 'scheduled') {
       void autoCreateReleaseCampaign(supabase, data as { id: string; title: string; release_date?: string | null })
+    }
+
+    // Keep calendar/pipeline in sync when date or live-facing fields change.
+    if (
+      'release_date' in updates ||
+      'title' in updates ||
+      'artwork_url' in updates ||
+      'genre' in updates ||
+      'status' in body ||
+      newStatus === 'live'
+    ) {
+      try {
+        upsertScheduleFromDistribution(data as {
+          id: string
+          title: string
+          type?: string | null
+          release_date?: string | null
+          artwork_url?: string | null
+          genre?: string | null
+          description?: string | null
+          distributor_status?: string | null
+        })
+      } catch (err) {
+        console.warn('[release PUT] schedule bridge failed', err)
+      }
     }
 
     return NextResponse.json({ release: data })

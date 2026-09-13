@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
-import fs from 'fs'
-import path from 'path'
-
-const SCHEDULE_PATH = path.join(process.cwd(), 'data', 'release-schedule.json')
-
-function readSchedule(): { schedule: any[] } {
-  const raw = fs.readFileSync(SCHEDULE_PATH, 'utf-8')
-  return JSON.parse(raw)
-}
-
-function writeSchedule(data: { schedule: any[] }) {
-  fs.writeFileSync(SCHEDULE_PATH, JSON.stringify(data, null, 2) + '\n')
-}
+import {
+  readReleaseSchedule,
+  writeReleaseSchedule,
+  type ScheduleRelease,
+} from '@/lib/studio/schedule-bridge'
 
 /**
  * GET /api/studio/release-schedule
@@ -25,14 +17,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const data = readSchedule()
+    const data = readReleaseSchedule()
     return NextResponse.json(data)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error reading release schedule:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to read schedule' },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : 'Failed to read schedule'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -57,14 +47,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const data = readSchedule()
+    const data = readReleaseSchedule()
 
-    const id = title
+    const id = String(title)
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
 
-    const newRelease = {
+    const newRelease: ScheduleRelease = {
       id,
       title,
       type,
@@ -76,18 +66,17 @@ export async function POST(request: NextRequest) {
       artwork: body.artwork || null,
       smart_link: body.smart_link || null,
       description: body.description || null,
+      source: 'schedule',
     }
 
     data.schedule.push(newRelease)
-    writeSchedule(data)
+    writeReleaseSchedule(data)
 
     return NextResponse.json({ release: newRelease }, { status: 201 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error adding to release schedule:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to add release' },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : 'Failed to add release'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -109,7 +98,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 })
     }
 
-    const data = readSchedule()
+    const data = readReleaseSchedule()
     const index = data.schedule.findIndex((r) => r.id === id)
 
     if (index === -1) {
@@ -119,16 +108,14 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    data.schedule[index] = { ...data.schedule[index], ...updates }
-    writeSchedule(data)
+    data.schedule[index] = { ...data.schedule[index]!, ...updates }
+    writeReleaseSchedule(data)
 
     return NextResponse.json({ release: data.schedule[index] })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating release schedule:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to update release' },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : 'Failed to update release'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -150,7 +137,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 })
     }
 
-    const data = readSchedule()
+    const data = readReleaseSchedule()
     const index = data.schedule.findIndex((r) => r.id === id)
 
     if (index === -1) {
@@ -161,14 +148,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     data.schedule.splice(index, 1)
-    writeSchedule(data)
+    writeReleaseSchedule(data)
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting from release schedule:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to delete release' },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : 'Failed to delete release'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -4,10 +4,15 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { validateSelfDistribute } from '@/lib/studio/self-distribute'
 import { logActivity } from '@/lib/activity-log'
+import {
+  ensureLaunchHandoff,
+  publicMusicDestinationUrl,
+} from '@/lib/studio/launch-handoff'
+import { upsertScheduleFromDistribution } from '@/lib/studio/schedule-bridge'
 
 /**
  * POST /api/studio/releases/[id]/go-live
- * Self-publish on SERGIK (no third-party aggregator required).
+ * Self-publish on SERGIK + ensure campaign/smartlink marketing handoff.
  */
 export async function POST(
   request: NextRequest,
@@ -21,6 +26,8 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}))
     const force = Boolean(body?.force)
+    const createCampaign = body?.create_campaign !== false
+    const createSmartLink = body?.create_smart_link !== false
 
     const supabase = createSupabaseServerClient()
 
@@ -37,6 +44,11 @@ export async function POST(
     const { data: tracks } = await supabase
       .from('distribution_tracks')
       .select('id, isrc_full')
+      .eq('release_id', params.id)
+
+    const { data: storeLinks } = await supabase
+      .from('distribution_store_links')
+      .select('store, url')
       .eq('release_id', params.id)
 
     const trackList = tracks || []
@@ -77,14 +89,49 @@ export async function POST(
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
+    // Bridge calendar + marketing pipeline so go-live appears in schedule/pipeline.
+    try {
+      upsertScheduleFromDistribution({
+        ...(updated || release),
+        distributor_status: 'live',
+      })
+    } catch (err) {
+      console.warn('[go-live] schedule bridge failed', err)
+    }
+
+    const handoff = await ensureLaunchHandoff(supabase, {
+      releaseId: params.id,
+      title: release.title,
+      releaseDate: release.release_date,
+      destinationUrl: publicMusicDestinationUrl(params.id, storeLinks),
+      createdBy: session.user?.id || null,
+      createCampaign,
+      createSmartLink,
+    })
+
     await logActivity({
       actionType: 'go_live_release',
       resourceType: 'release',
       resourceId: params.id,
-      details: { mode: 'self', upc },
+      details: {
+        mode: 'self',
+        upc,
+        campaignId: handoff.campaign?.id || null,
+        smartLinkSlug: handoff.smartLink?.slug || null,
+        handoffErrors: handoff.errors.length ? handoff.errors : undefined,
+      },
     })
 
-    return NextResponse.json({ release: updated, upc })
+    return NextResponse.json({
+      release: updated,
+      upc,
+      handoff: {
+        campaign: handoff.campaign,
+        smartLink: handoff.smartLink,
+        errors: handoff.errors.length ? handoff.errors : undefined,
+        partial: handoff.errors.length > 0,
+      },
+    })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to go live'
     return NextResponse.json({ error: message }, { status: 500 })

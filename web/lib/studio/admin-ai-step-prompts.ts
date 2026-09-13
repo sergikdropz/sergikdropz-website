@@ -84,8 +84,9 @@ export function getStudioStepAiPrompt(
         message: [
           `Release "${title}" (${releaseId}) — pre-launch check and go-to-market handoff.`,
           `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
-          'If ready, outline go-live blockers. Then `/plan` or `/exec draft_product_strategy_pack` for audit + calendar + conversion scaffold.',
-          'Switch agent to **growth_marketing** and plan `generate_campaign_draft` + `generate_smartlink_utm_plan` when you want rows/tasks in admin.',
+          'If ready, outline go-live blockers. Go-live now also creates campaign + smart link; use Launch step Ensure handoff if already live.',
+          'Then `/plan` or `/exec draft_product_strategy_pack` for audit + calendar + conversion scaffold.',
+          'Switch agent to **growth_marketing** and plan `generate_campaign_draft` + `generate_smartlink_utm_plan` when you want deeper rows/tasks in admin.',
         ].join('\n'),
       }
     default:

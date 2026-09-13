@@ -13,6 +13,14 @@ export function isAdminEmailAllowed(email: string | null | undefined): boolean {
   return adminEmails.includes(email.toLowerCase())
 }
 
+const ACCESS_CACHE_TTL_MS = 60_000
+const accessCache = new Map<string, { allowed: boolean; expiresAt: number }>()
+
+function tokenCacheKey(accessToken: string): string {
+  // Avoid storing full JWTs in the map key forever — use a stable slice + length.
+  return `${accessToken.length}:${accessToken.slice(0, 24)}:${accessToken.slice(-24)}`
+}
+
 /** Validate JWT with Supabase Auth (fetch-only, Edge compatible). */
 export async function fetchSupabaseUserEmail(
   accessToken: string
@@ -39,10 +47,27 @@ export async function fetchSupabaseUserEmail(
 
 /**
  * Lightweight gate: valid session + optional ADMIN_EMAILS allowlist.
+ * Cached ~60s per token so admin navigations don't hit Supabase Auth on every RSC.
  * Database `admins` table checks run in server layouts and API routes only.
  */
 export async function middlewareHasAdminAccess(accessToken: string): Promise<boolean> {
+  const key = tokenCacheKey(accessToken)
+  const now = Date.now()
+  const hit = accessCache.get(key)
+  if (hit && hit.expiresAt > now) {
+    return hit.allowed
+  }
+
   const email = await fetchSupabaseUserEmail(accessToken)
-  if (!email) return false
-  return isAdminEmailAllowed(email)
+  const allowed = Boolean(email) && isAdminEmailAllowed(email)
+  accessCache.set(key, { allowed, expiresAt: now + ACCESS_CACHE_TTL_MS })
+
+  // Bound memory in long-lived edge isolates
+  if (accessCache.size > 200) {
+    for (const [k, v] of accessCache) {
+      if (v.expiresAt <= now) accessCache.delete(k)
+    }
+  }
+
+  return allowed
 }

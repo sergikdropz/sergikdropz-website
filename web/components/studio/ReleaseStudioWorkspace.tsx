@@ -14,14 +14,16 @@ import {
   type WorkflowStepId,
 } from '@/lib/studio/constants'
 import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
+import type { LaunchHandoffStatus } from '@/lib/studio/launch-handoff'
 import WorkflowStepper from './WorkflowStepper'
 import CopyrightPanel from './CopyrightPanel'
 import CopywritingStudio from './CopywritingStudio'
 import DspDeliveryBoard, { type StoreLinkRow } from './DspDeliveryBoard'
 import ReleaseReadinessRing from './ReleaseReadinessRing'
-import AiField from '@/components/AiField'
 import TrackCatalogEditor from './TrackCatalogEditor'
-import { FaRocket, FaEdit, FaTrash, FaSave, FaTimes, FaBolt } from 'react-icons/fa'
+import MetadataPanel from './MetadataPanel'
+import LaunchPanel from './LaunchPanel'
+import { FaRocket, FaTrash, FaBolt } from 'react-icons/fa'
 
 type Release = {
   id: string
@@ -51,13 +53,14 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
   const [tracks, setTracks] = useState<any[]>([])
   const [storeLinks, setStoreLinks] = useState<StoreLinkRow[]>([])
   const [copyright, setCopyright] = useState<CopyrightReadiness | null>(null)
+  const [handoff, setHandoff] = useState<LaunchHandoffStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeStep, setActiveStep] = useState<WorkflowStepId>('catalog')
   const [marketingCopy, setMarketingCopy] = useState<MarketingCopy>({})
   const [targetStores, setTargetStores] = useState<DspStoreId[]>([])
   const [saving, setSaving] = useState(false)
   const [goingLive, setGoingLive] = useState(false)
-  const [editingMeta, setEditingMeta] = useState(false)
+  const [handoffLoading, setHandoffLoading] = useState(false)
   const [editForm, setEditForm] = useState({
     title: '',
     type: 'single',
@@ -79,6 +82,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
       setTracks(data.tracks || [])
       setStoreLinks(data.storeLinks || [])
       setCopyright(data.copyright || null)
+      setHandoff(data.handoff || null)
       setMarketingCopy((data.release.marketing_copy as MarketingCopy) || {})
       setTargetStores((data.release.target_stores as DspStoreId[]) || [])
       setEditForm({
@@ -102,18 +106,22 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
     load()
   }, [load])
 
+  const copyFilled = useMemo(
+    () => Object.values(marketingCopy).some((v) => v && String(v).length > 10),
+    [marketingCopy]
+  )
+
   const completedSteps = useMemo((): WorkflowStepId[] => {
     if (!copyright) return []
     const done: WorkflowStepId[] = []
     if (copyright.checks.has_tracks && copyright.checks.tracks_have_isrc) done.push('catalog')
     if (release?.artwork_url && release.genre) done.push('metadata')
     if (copyright.checks.ready_to_distribute) done.push('rights')
-    const copyFilled = Object.values(marketingCopy).some((v) => v && String(v).length > 10)
     if (copyFilled) done.push('copy')
     if (storeLinks.length > 0 || targetStores.length > 0) done.push('delivery')
     if (release?.distributor_status === 'live') done.push('launch')
     return done
-  }, [copyright, release, marketingCopy, storeLinks, targetStores])
+  }, [copyright, release, copyFilled, storeLinks, targetStores])
 
   useEffect(() => {
     if (!release || !copyright) {
@@ -146,7 +154,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
     setStudioRelease,
   ])
 
-  async function patchRelease(partial: Record<string, unknown>) {
+  async function patchRelease(partial: Record<string, unknown>, opts?: { silent?: boolean }) {
     setSaving(true)
     try {
       const res = await fetch(`/api/studio/releases/${releaseId}`, {
@@ -159,7 +167,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         throw new Error(err.error || 'Save failed')
       }
       await load()
-      showNotification('Saved', 'success')
+      if (!opts?.silent) showNotification('Saved', 'success')
     } catch (e: unknown) {
       showNotification(e instanceof Error ? e.message : 'Save failed', 'error')
     } finally {
@@ -186,7 +194,15 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
   }
 
   async function handleGoLive(force = false) {
-    if (!confirm(force ? 'Force go-live? Bypasses strict rights checks.' : 'Publish this release on SERGIK?')) return
+    if (
+      !confirm(
+        force
+          ? 'Force go-live? Bypasses strict rights checks. Also creates campaign + smart link.'
+          : 'Publish this release on SERGIK and create marketing handoff (campaign + smart link)?'
+      )
+    ) {
+      return
+    }
     setGoingLive(true)
     try {
       const res = await fetch(`/api/studio/releases/${releaseId}/go-live`, {
@@ -199,13 +215,46 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         const blockers = data.blockers?.join(' ') || data.error
         throw new Error(blockers)
       }
-      showNotification('Release is live on SERGIK', 'success')
+      const handoffNote = data.handoff?.partial
+        ? ` Live — marketing handoff partial: ${(data.handoff.errors || []).join('; ')}`
+        : data.handoff?.smartLink
+          ? ' Live with campaign + smart link.'
+          : ' Live on SERGIK.'
+      showNotification(`Release is live.${handoffNote}`, 'success')
       await load()
       setActiveStep('launch')
     } catch (e: unknown) {
       showNotification(e instanceof Error ? e.message : 'Go-live failed', 'error')
     } finally {
       setGoingLive(false)
+    }
+  }
+
+  async function ensureHandoff() {
+    setHandoffLoading(true)
+    try {
+      const res = await fetch('/api/studio/release-pipeline/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ release_id: releaseId }),
+      })
+      const data = await res.json()
+      if (!res.ok && res.status !== 207) {
+        throw new Error(data.error || 'Handoff failed')
+      }
+      if (data.partial) {
+        showNotification(
+          `Partial handoff: ${(data.errors || []).join('; ') || 'check campaigns/links'}`,
+          'error'
+        )
+      } else {
+        showNotification('Campaign + smart link ready', 'success')
+      }
+      await load()
+    } catch (e: unknown) {
+      showNotification(e instanceof Error ? e.message : 'Handoff failed', 'error')
+    } finally {
+      setHandoffLoading(false)
     }
   }
 
@@ -243,8 +292,6 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
   }
 
   const statusStyle = STATUS_STYLES[release.distributor_status] || STATUS_STYLES.draft
-  const inputClass =
-    'w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-violet-500'
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-16">
@@ -291,11 +338,11 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
           <div className="flex flex-wrap gap-2 mt-4">
             <button
               type="button"
-              onClick={() => setEditingMeta((v) => !v)}
-              className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+              onClick={() => setActiveStep('metadata')}
+              className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm"
               title="Edit metadata"
             >
-              <FaEdit />
+              Edit metadata
             </button>
             <button
               type="button"
@@ -348,76 +395,26 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         }}
       />
 
-      {editingMeta && (
-        <div
-          className="rounded-xl border border-violet-500/40 bg-zinc-900/60 p-6 space-y-4"
-          data-ai-scope={JSON.stringify({
-            entityType: 'distribution_release',
-            entityId: releaseId,
-            entityLabel: release.title,
-            formId: 'release_metadata',
-          })}
-        >
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-zinc-500">Title</label>
-              <AiField
-                fieldKey="release.title"
-                label="Release title"
-                entityType="distribution_release"
-                entityId={releaseId}
-                entityLabel={release.title}
-                formId="release_metadata"
-                className={inputClass}
-                value={editForm.title}
-                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-zinc-500">UPC</label>
-              <AiField
-                fieldKey="release.upc"
-                label="UPC"
-                entityType="distribution_release"
-                entityId={releaseId}
-                hint="Auto-generated on launch if empty"
-                formId="release_metadata"
-                className={inputClass}
-                value={editForm.upc}
-                onChange={(e) => setEditForm({ ...editForm, upc: e.target.value })}
-                placeholder="Auto-generated on launch if empty"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                await patchRelease(editForm)
-                setEditingMeta(false)
-              }}
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm"
-            >
-              <FaSave /> Save
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditingMeta(false)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-sm"
-            >
-              <FaTimes /> Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {activeStep === 'catalog' && (
         <TrackCatalogEditor
           tracks={tracks}
           releaseId={releaseId}
           releaseTitle={release.title}
           onUpdated={load}
+        />
+      )}
+
+      {activeStep === 'metadata' && (
+        <MetadataPanel
+          releaseId={releaseId}
+          artworkUrl={release.artwork_url}
+          form={editForm}
+          onFormChange={setEditForm}
+          saving={saving}
+          onSave={() => patchRelease(editForm)}
+          onArtworkUploaded={async (url) => {
+            await patchRelease({ artwork_url: url })
+          }}
         />
       )}
 
@@ -457,20 +454,25 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         />
       )}
 
-      {(activeStep === 'metadata' || activeStep === 'launch') && (
-        <div className="rounded-xl border border-zinc-800 p-6 text-zinc-400 text-sm">
-          {activeStep === 'metadata' && (
-            <p>
-              Use the edit button above for title, dates, genre, and UPC. Upload artwork via
-              Create Release flow or music library.
-            </p>
-          )}
-          {activeStep === 'launch' && release.distributor_status === 'live' && (
-            <p className="text-emerald-400">
-              This release is live on your public music page. Add store links in Delivery.
-            </p>
-          )}
-        </div>
+      {activeStep === 'launch' && (
+        <LaunchPanel
+          releaseId={releaseId}
+          title={release.title}
+          isLive={release.distributor_status === 'live'}
+          goingLive={goingLive}
+          copyright={copyright}
+          hasArtwork={Boolean(release.artwork_url)}
+          hasGenre={Boolean(release.genre)}
+          hasReleaseDate={Boolean(release.release_date)}
+          trackCount={tracks.length}
+          storeLinkCount={storeLinks.length}
+          targetStoreCount={targetStores.length}
+          copyFilled={copyFilled}
+          handoff={handoff}
+          onGoLive={handleGoLive}
+          onEnsureHandoff={ensureHandoff}
+          handoffLoading={handoffLoading}
+        />
       )}
     </div>
   )

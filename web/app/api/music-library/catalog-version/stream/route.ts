@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
             /* ignore tick errors */
           }
         })()
-      }, 5000)
+      }, 15_000)
 
       const abort = () => {
         closed = true
