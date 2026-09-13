@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { UAParser } from 'ua-parser-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
+let supabaseClient: SupabaseClient | null = null
+
+function getSupabase(): SupabaseClient {
+  if (supabaseClient) return supabaseClient
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  }
+  supabaseClient = createClient(url, key)
+  return supabaseClient
+}
 
 // GET /api/go/:slug
 // Redirect to destination URL and track the click
@@ -14,6 +22,7 @@ export async function GET(
   { params }: { params: { slug: string } }
 ) {
   try {
+    const supabase = getSupabase()
     const { slug } = params
 
     // Fetch the smart link
