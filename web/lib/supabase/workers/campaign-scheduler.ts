@@ -15,13 +15,21 @@
  * * * * * curl -X POST https://yourdomain.com/api/cron/campaigns-scheduler
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { sendEmail } from '@/lib/email'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
+let supabaseClient: SupabaseClient | null = null
+
+function getSupabase(): SupabaseClient {
+  if (supabaseClient) return supabaseClient
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  }
+  supabaseClient = createClient(url, key)
+  return supabaseClient
+}
 
 interface CampaignToSend {
   id: string
@@ -59,6 +67,7 @@ interface Fan {
  */
 export async function scheduleCampaignSends() {
   try {
+    const supabase = getSupabase()
     // 1. Find campaigns ready to send
     const { data: campaigns, error: campaignError } = await supabase
       .from('campaigns')
@@ -292,6 +301,7 @@ async function createCampaignSend(
  */
 export async function sendQueuedCampaignEmails(limit = 100) {
   try {
+    const supabase = getSupabase()
     // 1. Find pending sends ready to go
     const now = new Date().toISOString()
 
