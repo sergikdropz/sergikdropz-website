@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import {
   acquireVinylSpin,
   beginVinylScrub,
@@ -8,7 +8,6 @@ import {
   getVinylSpinAngle,
   releaseVinylSpin,
   setVinylAngle,
-  shortestAngleDelta,
   subscribeVinylSpin,
   vinylDegreesToSeconds,
   VINYL_33_RPM_MS,
@@ -18,10 +17,12 @@ import {
 
 export { VINYL_33_RPM_MS, VINYL_33_RPM_SEC, VINYL_RPM }
 
-/** Degrees of finger arc before a touch becomes a scrub (avoids accidental reverse). */
-const SCRUB_ARM_DEG = 10
-/** Ignore micro jitter under this many degrees per move sample. */
-const SCRUB_JITTER_DEG = 0.35
+/** px of finger travel before a touch becomes a scrub (avoids accidental grabs). */
+const SCRUB_ARM_PX = 8
+/** Ignore tiny movement samples under this many degrees. */
+const SCRUB_JITTER_DEG = 0.15
+/** Ignore samples too close to the spindle (unstable tangent). */
+const MIN_RADIUS_PX = 12
 
 type VinylDiscProps = {
   artwork?: string
@@ -37,18 +38,33 @@ type VinylDiscProps = {
   onScrubEnd?: () => void
 }
 
-function pointerAngleDeg(clientX: number, clientY: number, el: HTMLElement): number {
+type Point = { x: number; y: number }
+
+function centerOf(el: HTMLElement): Point {
   const rect = el.getBoundingClientRect()
-  const cx = rect.left + rect.width / 2
-  const cy = rect.top + rect.height / 2
-  return (Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+}
+
+/**
+ * Degrees of platter rotation for a finger move, using the 2D cross product
+ * against the radius vector (stable turntable math — works near the rim).
+ */
+function tangentialDeltaDeg(center: Point, from: Point, to: Point): number {
+  const rx = from.x - center.x
+  const ry = from.y - center.y
+  const r2 = rx * rx + ry * ry
+  if (r2 < MIN_RADIUS_PX * MIN_RADIUS_PX) return 0
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  // Positive cross = clockwise on screen (CSS rotate positive).
+  const cross = rx * dy - ry * dx
+  return (cross / r2) * (180 / Math.PI)
 }
 
 /**
  * Black vinyl platter with grooves + center label artwork.
- * Rotation uses a monotonic angle (no 0–360 wrap) so mobile WebKit never
- * reverse-snaps. Scrub arms only after a clear circular drag — taps/scrolls
- * do not pause or reverse the disc.
+ * Scrub uses native non-passive pointer listeners (iOS-safe) and paints the
+ * platter transform directly so React cannot freeze the art mid-drag.
  */
 export const VinylDisc = memo(function VinylDisc({
   artwork,
@@ -63,18 +79,13 @@ export const VinylDisc = memo(function VinylDisc({
   const labelPct = `${labelScale * 100}%`
   const rootRef = useRef<HTMLDivElement>(null)
   const platterRef = useRef<HTMLDivElement>(null)
-  /** True once pointer is down (may still be waiting for scrub arm threshold). */
   const trackingRef = useRef(false)
-  /** True only after circular drag exceeds SCRUB_ARM_DEG. */
   const scrubArmedRef = useRef(false)
-  const lastPointerAngleRef = useRef(0)
+  const lastPointRef = useRef<Point>({ x: 0, y: 0 })
   const lastMoveAtRef = useRef(0)
-  const armedAccumRef = useRef(0)
+  const armedTravelPxRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
-  /** Finger angle + platter angle at the moment scrub armed — absolute mapping. */
-  const scrubBasePlatterRef = useRef(0)
-  const scrubAccumDegRef = useRef(0)
-  const scrubLastPlatterRef = useRef(0)
+  const platterAngleRef = useRef(0)
   const onScrubStartRef = useRef(onScrubStart)
   const onScrubDeltaRef = useRef(onScrubDelta)
   const onScrubEndRef = useRef(onScrubEnd)
@@ -83,6 +94,7 @@ export const VinylDisc = memo(function VinylDisc({
   onScrubEndRef.current = onScrubEnd
 
   const paintPlatter = useCallback((angleDeg: number) => {
+    platterAngleRef.current = angleDeg
     const el = platterRef.current
     if (el) el.style.transform = `rotate(${angleDeg}deg)`
   }, [])
@@ -94,6 +106,8 @@ export const VinylDisc = memo(function VinylDisc({
     if (reduceMotion) return
 
     return subscribeVinylSpin((angleDeg) => {
+      // While finger-scrubbing, pointer handler owns the paint.
+      if (scrubArmedRef.current) return
       paintPlatter(angleDeg)
     })
   }, [paintPlatter])
@@ -110,119 +124,123 @@ export const VinylDisc = memo(function VinylDisc({
     }
   }, [spinning])
 
-  const endTracking = useCallback(() => {
-    if (!trackingRef.current) return
-    const wasArmed = scrubArmedRef.current
-    trackingRef.current = false
-    scrubArmedRef.current = false
-    armedAccumRef.current = 0
-    scrubAccumDegRef.current = 0
-    activePointerIdRef.current = null
-    lastMoveAtRef.current = 0
-    if (wasArmed) {
-      endVinylScrub()
-      onScrubEndRef.current?.()
+  // Native pointer listeners — React synthetic moves are flaky on iOS Safari.
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || !scrubEnabled) return
+
+    const endTracking = () => {
+      if (!trackingRef.current) return
+      const wasArmed = scrubArmedRef.current
+      trackingRef.current = false
+      scrubArmedRef.current = false
+      armedTravelPxRef.current = 0
+      activePointerIdRef.current = null
+      lastMoveAtRef.current = 0
+      if (wasArmed) {
+        endVinylScrub()
+        onScrubEndRef.current?.()
+      }
     }
-  }, [])
 
-  const onPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!scrubEnabled || event.button !== 0) return
-      const root = rootRef.current
-      if (!root) return
-
-      // Do NOT scrub/pause yet — wait for a clear circular drag.
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      event.preventDefault()
       trackingRef.current = true
       scrubArmedRef.current = false
-      armedAccumRef.current = 0
-      scrubAccumDegRef.current = 0
+      armedTravelPxRef.current = 0
       activePointerIdRef.current = event.pointerId
-      lastPointerAngleRef.current = pointerAngleDeg(event.clientX, event.clientY, root)
+      lastPointRef.current = { x: event.clientX, y: event.clientY }
       lastMoveAtRef.current = performance.now()
+      platterAngleRef.current = getVinylSpinAngle()
       try {
         root.setPointerCapture(event.pointerId)
       } catch {
         /* ignore */
       }
-    },
-    [scrubEnabled],
-  )
+    }
 
-  const onPointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
+    const onPointerMove = (event: PointerEvent) => {
       if (!trackingRef.current || activePointerIdRef.current !== event.pointerId) return
-      const root = rootRef.current
-      if (!root) return
+      event.preventDefault()
 
       const now = performance.now()
       const dtMs = Math.max(8, Math.min(64, now - (lastMoveAtRef.current || now)))
       lastMoveAtRef.current = now
 
-      const next = pointerAngleDeg(event.clientX, event.clientY, root)
-      const stepDeg = shortestAngleDelta(lastPointerAngleRef.current, next)
-      lastPointerAngleRef.current = next
-      if (Math.abs(stepDeg) < SCRUB_JITTER_DEG) return
+      const next: Point = { x: event.clientX, y: event.clientY }
+      const prev = lastPointRef.current
+      const travel = Math.hypot(next.x - prev.x, next.y - prev.y)
+      if (travel < 0.5) return
+
+      const center = centerOf(root)
+      const deltaDeg = tangentialDeltaDeg(center, prev, next)
+      lastPointRef.current = next
 
       if (!scrubArmedRef.current) {
-        armedAccumRef.current += Math.abs(stepDeg)
-        if (armedAccumRef.current < SCRUB_ARM_DEG) return
-        // Crossed threshold — finger owns the platter.
+        armedTravelPxRef.current += travel
+        if (armedTravelPxRef.current < SCRUB_ARM_PX) return
         scrubArmedRef.current = true
-        scrubBasePlatterRef.current = getVinylSpinAngle()
-        scrubAccumDegRef.current = 0
-        scrubLastPlatterRef.current = scrubBasePlatterRef.current
-        event.preventDefault()
+        platterAngleRef.current = getVinylSpinAngle()
         beginVinylScrub()
         onScrubStartRef.current?.()
       }
 
-      event.preventDefault()
-
-      // Accumulate stepped deltas so multi-turn scrubs stay continuous.
-      scrubAccumDegRef.current += stepDeg
-      const platterAngle = scrubBasePlatterRef.current + scrubAccumDegRef.current
-      const deltaDeg = platterAngle - scrubLastPlatterRef.current
-      scrubLastPlatterRef.current = platterAngle
-
-      setVinylAngle(platterAngle)
-      paintPlatter(platterAngle)
-
       if (Math.abs(deltaDeg) < SCRUB_JITTER_DEG) return
+
+      const nextAngle = platterAngleRef.current + deltaDeg
+      // Paint FIRST so the art never waits on audio/React.
+      paintPlatter(nextAngle)
+      setVinylAngle(nextAngle)
+
       onScrubDeltaRef.current?.({
         deltaDegrees: deltaDeg,
         deltaSeconds: vinylDegreesToSeconds(deltaDeg),
         dtMs,
       })
-    },
-    [paintPlatter],
-  )
+    }
 
-  const onPointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
+    const onPointerUp = (event: PointerEvent) => {
       if (activePointerIdRef.current !== event.pointerId) return
       try {
-        rootRef.current?.releasePointerCapture(event.pointerId)
+        root.releasePointerCapture(event.pointerId)
       } catch {
         /* already released */
       }
       endTracking()
-    },
-    [endTracking],
-  )
+    }
+
+    root.addEventListener('pointerdown', onPointerDown, { passive: false })
+    root.addEventListener('pointermove', onPointerMove, { passive: false })
+    root.addEventListener('pointerup', onPointerUp)
+    root.addEventListener('pointercancel', onPointerUp)
+    root.addEventListener('lostpointercapture', endTracking)
+
+    return () => {
+      root.removeEventListener('pointerdown', onPointerDown)
+      root.removeEventListener('pointermove', onPointerMove)
+      root.removeEventListener('pointerup', onPointerUp)
+      root.removeEventListener('pointercancel', onPointerUp)
+      root.removeEventListener('lostpointercapture', endTracking)
+      endTracking()
+    }
+  }, [scrubEnabled, paintPlatter])
 
   return (
     <div
       ref={rootRef}
-      className={`relative aspect-square ${scrubEnabled ? 'touch-none cursor-grab active:cursor-grabbing' : ''} ${className}`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      className={`relative aspect-square touch-none select-none ${
+        scrubEnabled ? 'cursor-grab active:cursor-grabbing' : ''
+      } ${className}`}
       role={scrubEnabled ? 'slider' : undefined}
-      aria-label={scrubEnabled ? 'Vinyl scrubber — drag in a circle to seek' : undefined}
+      aria-label={scrubEnabled ? 'Vinyl scrubber — drag to spin and seek' : undefined}
+      style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
     >
-      {/* Rotating vinyl body — transform is JS-only on this node (no React style wipe) */}
-      <div ref={platterRef} className="absolute inset-0 rounded-full will-change-transform [backface-visibility:hidden]">
+      {/* Transform is JS-only — never put `transform` in a React style object */}
+      <div
+        ref={platterRef}
+        className="absolute inset-0 rounded-full will-change-transform [backface-visibility:hidden] [transform:translateZ(0)]"
+      >
         <div
           className="absolute inset-0 rounded-full"
           style={{
@@ -244,7 +262,6 @@ export const VinylDisc = memo(function VinylDisc({
           }}
         />
 
-        {/* Fine grooves — opacity only, no mix-blend */}
         <div
           className="pointer-events-none absolute inset-[3.5%] rounded-full opacity-[0.55]"
           style={{
@@ -261,7 +278,6 @@ export const VinylDisc = memo(function VinylDisc({
           aria-hidden
         />
 
-        {/* Wider groove bands */}
         <div
           className="pointer-events-none absolute inset-[4%] rounded-full opacity-35"
           style={{
@@ -282,7 +298,6 @@ export const VinylDisc = memo(function VinylDisc({
           aria-hidden
         />
 
-        {/* Lead-out ring */}
         <div
           className="pointer-events-none absolute rounded-full"
           style={{
@@ -292,7 +307,6 @@ export const VinylDisc = memo(function VinylDisc({
           aria-hidden
         />
 
-        {/* Outer rim bevel */}
         <div
           className="pointer-events-none absolute inset-0 rounded-full"
           style={{
@@ -305,9 +319,8 @@ export const VinylDisc = memo(function VinylDisc({
           aria-hidden
         />
 
-        {/* Center label */}
         <div
-          className="absolute left-1/2 top-1/2 overflow-hidden rounded-full bg-zinc-900"
+          className="pointer-events-none absolute left-1/2 top-1/2 overflow-hidden rounded-full bg-zinc-900"
           style={{
             width: labelPct,
             height: labelPct,
@@ -324,7 +337,7 @@ export const VinylDisc = memo(function VinylDisc({
             <img
               src={artwork}
               alt=""
-              className="h-full w-full object-cover"
+              className="pointer-events-none h-full w-full object-cover"
               draggable={false}
               decoding="async"
               fetchPriority="high"
@@ -343,7 +356,6 @@ export const VinylDisc = memo(function VinylDisc({
         </div>
       </div>
 
-      {/* Soft fixed lamp sheen only — no conic streak (reads as reverse spin on phones) */}
       <div
         className="pointer-events-none absolute inset-0 rounded-full"
         style={{
@@ -414,7 +426,7 @@ function ShareVinylStage({
         </div>
 
         {sleeve ? (
-          <div className="absolute left-0 top-0 z-10 w-[72%]">
+          <div className="pointer-events-none absolute left-0 top-0 z-10 w-[72%]">
             <div className="relative aspect-square w-full overflow-hidden bg-zinc-900 shadow-[0_24px_80px_rgba(0,0,0,0.65)] ring-1 ring-white/15">
               {artwork ? (
                 // eslint-disable-next-line @next/next/no-img-element

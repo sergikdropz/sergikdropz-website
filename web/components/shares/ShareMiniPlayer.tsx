@@ -235,25 +235,31 @@ export default function ShareMiniPlayer({
       tickVinylScrub: (tick) => {
         const el = audioRef.current
         if (!el || !vinylScrubbingRef.current) return
-        const dur = el.duration || durationRef.current || Number.POSITIVE_INFINITY
-        const next = Math.max(
-          0,
-          Number.isFinite(dur) ? Math.min(dur, el.currentTime + tick.deltaSeconds) : el.currentTime + tick.deltaSeconds,
-        )
-        el.currentTime = next
-        currentTimeRef.current = next
-        // Avoid React re-renders on every pointer sample — they can wipe platter transforms.
-        const now = performance.now()
-        if (now - (scrubUiPaintAtRef.current || 0) > 80) {
-          scrubUiPaintAtRef.current = now
-          setCurrentTime(next)
+        try {
+          const dur = el.duration || durationRef.current || Number.POSITIVE_INFINITY
+          const next = Math.max(
+            0,
+            Number.isFinite(dur)
+              ? Math.min(dur, el.currentTime + tick.deltaSeconds)
+              : el.currentTime + tick.deltaSeconds,
+          )
+          el.currentTime = next
+          currentTimeRef.current = next
+          // Avoid React re-renders on every pointer sample — they can wipe platter transforms.
+          const now = performance.now()
+          if (now - (scrubUiPaintAtRef.current || 0) > 80) {
+            scrubUiPaintAtRef.current = now
+            setCurrentTime(next)
+          }
+          scrubAudioRef.current?.tick({
+            deltaSeconds: tick.deltaSeconds,
+            deltaDegrees: tick.deltaDegrees,
+            dtMs: tick.dtMs,
+            currentTime: next,
+          })
+        } catch {
+          /* seek can throw while media is still loading */
         }
-        scrubAudioRef.current?.tick({
-          deltaSeconds: tick.deltaSeconds,
-          deltaDegrees: tick.deltaDegrees,
-          dtMs: tick.dtMs,
-          currentTime: next,
-        })
       },
       endVinylScrub: (resume) => {
         const el = audioRef.current

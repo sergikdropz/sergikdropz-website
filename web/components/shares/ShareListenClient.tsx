@@ -233,8 +233,9 @@ export default function ShareListenClient({
                 )}
               </div>
             )}
-            {/* Keep disc mounted (hidden on cover) so the spin clock never remount-snaps */}
-            <div className={stageMode === 'cover' ? 'hidden' : 'contents'}>
+            {/* Keep disc mounted (hidden on cover) so the spin clock never remount-snaps.
+                Avoid `display:contents` — it breaks pointer capture on iOS Safari. */}
+            <div className={stageMode === 'cover' ? 'hidden' : 'block w-full'}>
               <ShareVinylStage
                 mode={stageMode === 'cover' ? 'vinyl' : stageMode}
                 artwork={artwork}
@@ -275,7 +276,7 @@ export default function ShareListenClient({
             </div>
             {stageMode === 'vinyl' && (
               <p className="mt-2 text-center text-[10px] uppercase tracking-[0.18em] text-white/35">
-                Drag in a circle to scrub
+                Drag to spin & scrub
               </p>
             )}
 
