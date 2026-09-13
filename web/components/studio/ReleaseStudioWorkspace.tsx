@@ -415,6 +415,10 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
           onArtworkUploaded={async (url) => {
             await patchRelease({ artwork_url: url })
           }}
+          onVaultImported={() => {
+            showNotification('Filled from Music Vault + Sonic DNA', 'success')
+            void load()
+          }}
         />
       )}
 
@@ -465,6 +469,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
           hasGenre={Boolean(release.genre)}
           hasReleaseDate={Boolean(release.release_date)}
           trackCount={tracks.length}
+          tracks={tracks}
           storeLinkCount={storeLinks.length}
           targetStoreCount={targetStores.length}
           copyFilled={copyFilled}

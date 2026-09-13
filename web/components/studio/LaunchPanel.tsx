@@ -3,9 +3,11 @@
 import Link from 'next/link'
 import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import type { LaunchHandoffStatus } from '@/lib/studio/launch-handoff'
+import { vaultSoftReadiness } from '@/lib/studio/vault-import'
 import {
   FaCheckCircle,
   FaExclamationTriangle,
+  FaInfoCircle,
   FaLink,
   FaEnvelope,
   FaRocket,
@@ -18,6 +20,7 @@ type PreflightItem = {
   label: string
   ok: boolean
   hint?: string
+  soft?: boolean
 }
 
 type Props = {
@@ -30,6 +33,11 @@ type Props = {
   hasGenre: boolean
   hasReleaseDate: boolean
   trackCount: number
+  tracks?: Array<{
+    music_library_track_id?: string | null
+    wav_url?: string | null
+    artwork_url?: string | null
+  }>
   storeLinkCount: number
   targetStoreCount: number
   copyFilled: boolean
@@ -49,6 +57,7 @@ export default function LaunchPanel({
   hasGenre,
   hasReleaseDate,
   trackCount,
+  tracks = [],
   storeLinkCount,
   targetStoreCount,
   copyFilled,
@@ -57,6 +66,8 @@ export default function LaunchPanel({
   onEnsureHandoff,
   handoffLoading,
 }: Props) {
+  const soft = vaultSoftReadiness(tracks, hasArtwork ? 'yes' : null)
+
   const checks: PreflightItem[] = [
     {
       id: 'tracks',
@@ -111,9 +122,26 @@ export default function LaunchPanel({
             ? `${targetStoreCount} target(s)`
             : undefined,
     },
+    {
+      id: 'vault',
+      label: 'Music Vault linked',
+      ok: soft.vaultLinked || trackCount === 0,
+      soft: true,
+      hint: soft.hints[0],
+    },
+    {
+      id: 'masters',
+      label: 'Master WAV (not vault stream)',
+      ok: !soft.needsMasterWav || trackCount === 0,
+      soft: true,
+      hint: soft.needsMasterWav
+        ? 'Replace streaming/pending URLs with distribution masters before DSP'
+        : 'Masters look like WAV or ready',
+    },
   ]
 
-  const blockers = checks.filter((c) => !c.ok)
+  const blockers = checks.filter((c) => !c.ok && !c.soft)
+  const softWarnings = checks.filter((c) => !c.ok && c.soft)
   const ready = blockers.length === 0
   const siteBase = (typeof window !== 'undefined'
     ? window.location.origin
@@ -130,7 +158,9 @@ export default function LaunchPanel({
               {isLive
                 ? `"${title}" is live on SERGIK.`
                 : ready
-                  ? 'All checks green — publish when ready.'
+                  ? softWarnings.length
+                    ? 'Hard checks green — soft vault/master hints remain.'
+                    : 'All checks green — publish when ready.'
                   : `${blockers.length} item(s) still open before a clean go-live.`}
             </p>
           </div>
@@ -155,11 +185,32 @@ export default function LaunchPanel({
               key={c.id}
               className="flex items-start gap-3 text-sm border-b border-zinc-800/80 py-2 last:border-0"
             >
-              <span className={c.ok ? 'text-emerald-400 mt-0.5' : 'text-amber-400 mt-0.5'}>
-                {c.ok ? <FaCheckCircle /> : <FaExclamationTriangle />}
+              <span
+                className={
+                  c.ok
+                    ? 'text-emerald-400 mt-0.5'
+                    : c.soft
+                      ? 'text-sky-400 mt-0.5'
+                      : 'text-amber-400 mt-0.5'
+                }
+              >
+                {c.ok ? (
+                  <FaCheckCircle />
+                ) : c.soft ? (
+                  <FaInfoCircle />
+                ) : (
+                  <FaExclamationTriangle />
+                )}
               </span>
               <div>
-                <p className={c.ok ? 'text-zinc-300' : 'text-zinc-200'}>{c.label}</p>
+                <p className={c.ok ? 'text-zinc-300' : 'text-zinc-200'}>
+                  {c.label}
+                  {c.soft ? (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-sky-500/80">
+                      soft
+                    </span>
+                  ) : null}
+                </p>
                 {c.hint && <p className="text-xs text-zinc-500 mt-0.5">{c.hint}</p>}
               </div>
             </li>

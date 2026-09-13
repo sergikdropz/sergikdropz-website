@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useNotifications } from '@/contexts/NotificationContext'
 import WizardStepBar, { type WizardStep } from './WizardStepBar'
+import VaultImportPanel from './VaultImportPanel'
 import { COPY_TEMPLATES, type MarketingCopy } from '@/lib/studio/constants'
 import { FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa'
 
@@ -124,6 +125,19 @@ export default function NewReleaseWizard() {
 
   return (
     <div>
+      <div className="mb-6">
+        <VaultImportPanel
+          onImported={({ releaseId, title, trackCount }) => {
+            showNotification(
+              `Imported “${title}” with ${trackCount} vault track(s)`,
+              'success',
+            )
+            router.push(`/studio/releases/${releaseId}`)
+          }}
+        />
+        <p className="text-center text-xs text-zinc-600 mt-3">— or build manually —</p>
+      </div>
+
       <WizardStepBar steps={WIZARD_STEPS} currentIndex={step} onStepClick={setStep} />
 
       {step === 0 && (

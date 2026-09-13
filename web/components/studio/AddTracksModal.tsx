@@ -10,6 +10,9 @@ type AvailableTrack = {
   isrc_full: string | null
   wav_url: string | null
   version?: string | null
+  source?: 'studio' | 'vault'
+  sonic_dna_status?: string | null
+  genre?: string | null
 }
 
 type Props = {
@@ -31,6 +34,7 @@ export default function AddTracksModal({
   excludeIds = [],
 }: Props) {
   const { showNotification } = useNotifications()
+  const [source, setSource] = useState<'studio' | 'vault'>('studio')
   const [tracks, setTracks] = useState<AvailableTrack[]>([])
   const [loading, setLoading] = useState(false)
   const [attaching, setAttaching] = useState(false)
@@ -42,8 +46,12 @@ export default function AddTracksModal({
   const loadAvailable = useCallback(async () => {
     setLoading(true)
     try {
+      const qs =
+        source === 'vault'
+          ? `available=true&source=vault`
+          : `available=true`
       const res = await fetch(
-        `/api/studio/releases/${encodeURIComponent(releaseId)}/tracks?available=true`
+        `/api/studio/releases/${encodeURIComponent(releaseId)}/tracks?${qs}`,
       )
       if (!res.ok) throw new Error('Failed to load tracks')
       const data = await res.json()
@@ -53,7 +61,7 @@ export default function AddTracksModal({
     } finally {
       setLoading(false)
     }
-  }, [releaseId, showNotification])
+  }, [releaseId, showNotification, source])
 
   useEffect(() => {
     if (open) {
@@ -72,7 +80,8 @@ export default function AddTracksModal({
         return (
           t.title.toLowerCase().includes(q) ||
           t.id.toLowerCase().includes(q) ||
-          (t.isrc_full || '').toLowerCase().includes(q)
+          (t.isrc_full || '').toLowerCase().includes(q) ||
+          (t.genre || '').toLowerCase().includes(q)
         )
       })
   }, [tracks, query, excludeSet])
@@ -90,20 +99,24 @@ export default function AddTracksModal({
     if (selected.size === 0) return
     setAttaching(true)
     try {
+      const body =
+        source === 'vault'
+          ? { vaultTrackIds: Array.from(selected) }
+          : { trackIds: Array.from(selected) }
       const res = await fetch(
         `/api/studio/releases/${encodeURIComponent(releaseId)}/tracks`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trackIds: Array.from(selected) }),
-        }
+          body: JSON.stringify(body),
+        },
       )
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add tracks')
 
       showNotification(
         `Added ${data.successful} track${data.successful !== 1 ? 's' : ''} to "${releaseTitle}"`,
-        data.failed ? 'warning' : 'success'
+        data.failed ? 'warning' : 'success',
       )
       onAttached()
       onClose()
@@ -141,20 +154,50 @@ export default function AddTracksModal({
           </button>
         </div>
 
-        <div className="p-4 border-b border-zinc-800">
+        <div className="p-4 border-b border-zinc-800 space-y-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSource('studio')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                source === 'studio'
+                  ? 'bg-violet-600 text-white'
+                  : 'bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              Studio catalog
+            </button>
+            <button
+              type="button"
+              onClick={() => setSource('vault')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                source === 'vault'
+                  ? 'bg-violet-600 text-white'
+                  : 'bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              Music Vault
+            </button>
+          </div>
           <div className="relative">
             <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-sm" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by title, ID, or ISRC…"
+              placeholder={
+                source === 'vault'
+                  ? 'Search vault tracks…'
+                  : 'Search by title, ID, or ISRC…'
+              }
               className="w-full pl-9 pr-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-violet-500"
               autoFocus
             />
           </div>
-          <p className="text-xs text-zinc-600 mt-2">
-            Showing unassigned catalog tracks only
+          <p className="text-xs text-zinc-600">
+            {source === 'vault'
+              ? 'Vault tracks not yet linked to a distribution track'
+              : 'Showing unassigned studio catalog tracks only'}
           </p>
         </div>
 
@@ -162,18 +205,22 @@ export default function AddTracksModal({
           {loading ? (
             <div className="flex items-center justify-center py-16 text-zinc-500">
               <FaSpinner className="animate-spin mr-2" />
-              Loading catalog…
+              Loading…
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 px-4 text-sm text-zinc-500">
               {tracks.length === 0 ? (
-                <>
-                  No unassigned tracks.{' '}
-                  <a href="/studio/tracks/new" className="text-violet-400 hover:underline">
-                    Upload a track
-                  </a>{' '}
-                  first.
-                </>
+                source === 'vault' ? (
+                  'No unlinked vault tracks found.'
+                ) : (
+                  <>
+                    No unassigned tracks.{' '}
+                    <a href="/studio/tracks/new" className="text-violet-400 hover:underline">
+                      Upload a track
+                    </a>{' '}
+                    first.
+                  </>
+                )
               ) : (
                 'No tracks match your search.'
               )}
@@ -200,13 +247,28 @@ export default function AddTracksModal({
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-white truncate">{track.title}</p>
                         <p className="text-xs text-zinc-500 font-mono mt-0.5">
-                          {track.isrc_full ? (
+                          {source === 'vault' ? (
+                            <>
+                              {track.genre && (
+                                <span className="text-zinc-400">{track.genre} · </span>
+                              )}
+                              <span
+                                className={
+                                  track.sonic_dna_status === 'complete'
+                                    ? 'text-emerald-400/90'
+                                    : 'text-zinc-500'
+                                }
+                              >
+                                DNA {track.sonic_dna_status || 'n/a'}
+                              </span>
+                            </>
+                          ) : track.isrc_full ? (
                             <span className="text-emerald-400/90">{track.isrc_full}</span>
                           ) : (
                             <span className="text-amber-400">No ISRC</span>
                           )}
                           {!track.wav_url && (
-                            <span className="text-amber-400"> · No WAV</span>
+                            <span className="text-amber-400"> · No audio</span>
                           )}
                         </p>
                       </div>
@@ -219,9 +281,7 @@ export default function AddTracksModal({
         </div>
 
         <div className="p-4 border-t border-zinc-800 flex items-center justify-between gap-3">
-          <span className="text-sm text-zinc-500">
-            {selected.size} selected
-          </span>
+          <span className="text-sm text-zinc-500">{selected.size} selected</span>
           <div className="flex gap-2">
             <button
               type="button"

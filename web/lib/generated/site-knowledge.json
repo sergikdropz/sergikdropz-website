@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-09-11T21:05:07.022Z",
+    "generatedAt": "2026-09-13T20:59:56.456Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -16,9 +16,9 @@
     },
     "counts": {
       "appRouterPages": 82,
-      "appRouterRouteHandlers": 239,
-      "componentsTsx": 153,
-      "libTs": 433
+      "appRouterRouteHandlers": 241,
+      "componentsTsx": 154,
+      "libTs": 436
     },
     "pagesByCategory": {
       "fan": 5,
@@ -30,7 +30,7 @@
       "admin": 39,
       "studio": 10
     },
-    "contentHash": "0bb8cd72e8856bc4"
+    "contentHash": "1b4e88414010b441"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -1585,6 +1585,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/from-vault",
+        "file": "web/app/api/studio/releases/from-vault/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/public",
         "file": "web/app/api/studio/releases/public/route.ts",
         "category": "api"
@@ -1637,6 +1642,11 @@
       {
         "urlPath": "/api/studio/upload/wav",
         "file": "web/app/api/studio/upload/wav/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/vault-folders",
+        "file": "web/app/api/studio/vault-folders/route.ts",
         "category": "api"
       },
       {

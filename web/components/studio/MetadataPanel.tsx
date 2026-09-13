@@ -5,6 +5,7 @@ import Image from 'next/image'
 import AiField from '@/components/AiField'
 import { generateInternalUpc } from '@/lib/studio/upc'
 import { FaImage, FaSpinner, FaMagic } from 'react-icons/fa'
+import VaultImportPanel from './VaultImportPanel'
 
 export type MetadataForm = {
   title: string
@@ -24,6 +25,8 @@ type Props = {
   onFormChange: (form: MetadataForm) => void
   onSave: () => Promise<void> | void
   onArtworkUploaded: (url: string) => Promise<void> | void
+  /** Called after vault import fills this release — parent should reload. */
+  onVaultImported?: () => void
   saving?: boolean
 }
 
@@ -56,6 +59,7 @@ export default function MetadataPanel({
   onFormChange,
   onSave,
   onArtworkUploaded,
+  onVaultImported,
   saving,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -118,6 +122,16 @@ export default function MetadataPanel({
           Cover, genre, dates, and UPC — required before a clean go-live.
         </p>
       </div>
+
+      {onVaultImported && (
+        <div className="px-5 pt-5">
+          <VaultImportPanel
+            releaseId={releaseId}
+            compact
+            onImported={() => onVaultImported()}
+          />
+        </div>
+      )}
 
       <div className="p-5 grid lg:grid-cols-[200px_1fr] gap-8">
         <div>

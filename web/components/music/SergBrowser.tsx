@@ -6,7 +6,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, use
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { FaPlay, FaMusic, FaCompactDisc, FaUser, FaTags, FaList, FaTh, FaBars, FaHistory, FaFire, FaStar, FaPlus, FaMinus, FaClock, FaChevronRight, FaChevronLeft, FaChevronUp, FaChevronDown, FaFolder, FaEdit, FaTrash, FaCopy, FaExternalLinkAlt, FaGripVertical, FaEye, FaEyeSlash, FaBolt, FaFileAlt, FaSync, FaImage, FaUpload, FaTimes, FaRandom, FaClone, FaSortAlphaDown, FaSortAmountDown, FaInfoCircle, FaLink, FaCode, FaInstagram } from 'react-icons/fa'
+import { FaPlay, FaMusic, FaCompactDisc, FaUser, FaTags, FaList, FaTh, FaBars, FaHistory, FaFire, FaStar, FaPlus, FaMinus, FaClock, FaChevronRight, FaChevronLeft, FaChevronUp, FaChevronDown, FaFolder, FaEdit, FaTrash, FaCopy, FaExternalLinkAlt, FaGripVertical, FaEye, FaEyeSlash, FaBolt, FaFileAlt, FaSync, FaImage, FaUpload, FaTimes, FaRandom, FaClone, FaSortAlphaDown, FaSortAmountDown, FaInfoCircle, FaLink, FaCode, FaInstagram, FaRocket } from 'react-icons/fa'
 import { copyShareEmbedHtml, copyShareListenLink, exportShareStorySnippet } from '@/lib/shares/client'
 import { createdDateFromTrack } from '@/lib/music-library/track-created-date'
 import StarRating from './StarRating'
@@ -4894,6 +4894,7 @@ function SongsTable({
       const result = await exportShareStorySnippet({
         kind: 'track',
         targetId: trackMenu.track.id,
+        layout: 'vinyl',
         onProgress: (phase, ratio) => {
           if (phase === 'recording' && typeof ratio === 'number') {
             setShareNotice(`Rendering Instagram Story… ${Math.round(ratio * 100)}%`)
@@ -7501,6 +7502,7 @@ function AdminFolderChrome({
         targetId: album.id,
         visibility: hidden ? 'unlisted' : 'public',
         trackId: orderedTracks?.[0]?.id || null,
+        layout: 'vinyl',
         onProgress: (phase, ratio) => {
           if (phase === 'recording' && typeof ratio === 'number') {
             setNotice(`Rendering Instagram Story… ${Math.round(ratio * 100)}%`)
@@ -8313,6 +8315,30 @@ function AdminPlaylistChrome({
     setArtPreviewBlob(null)
   }, [editOpen])
 
+  async function sendToReleaseStudio() {
+    if (!folderId) return
+    setBusy(true)
+    setError(null)
+    setMenu(null)
+    try {
+      const res = await fetch('/api/studio/releases/from-vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to send to Release Studio')
+      const releaseId = data.release?.id
+      if (!releaseId) throw new Error('No release id returned')
+      setNotice(`Opened in Release Studio: ${data.release?.title || releaseId}`)
+      window.open(`/studio/releases/${encodeURIComponent(releaseId)}`, '_blank', 'noopener,noreferrer')
+    } catch (e: any) {
+      setError(e?.message || 'Release Studio import failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const playlistCoverSrc = useMemo(() => {
     return firstArtworkSrc(draft.artwork, playlist.artwork, ...orderedTracks.map((t) => t.artwork))
   }, [draft.artwork, playlist.artwork, orderedTracks])
@@ -9019,6 +9045,24 @@ function AdminPlaylistChrome({
               <FaPlus className="h-3 w-3 text-gray-500" />
               New playlist
             </button>
+          )}
+
+          {folderId && (folderType === 'ep' || folderType === 'album' || folderType === 'single') && (
+            <>
+              <div className="my-1 border-t border-gray-800" />
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+                Release Studio
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-violet-200 hover:bg-violet-950/40 disabled:opacity-50"
+                onClick={() => void sendToReleaseStudio()}
+              >
+                <FaRocket className="h-3 w-3 text-violet-400" />
+                Send to Release Studio
+              </button>
+            </>
           )}
 
           <div className="my-1 border-t border-gray-800" />
@@ -9866,6 +9910,15 @@ function AlbumCatalog({
   )
 }
 
+function epCoverDriftSeed(name: string): number {
+  let h = 2166136261
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
 function EpReleaseStage({
   album,
   tracks = [],
@@ -9883,6 +9936,9 @@ function EpReleaseStage({
   const artworkSrc = folderArtworkSrc(album, tracks)
   const fallbackSrc = catalogArtworkForRelease(album.name)
   const isBanner = variant === 'banner'
+  const driftSeed = epCoverDriftSeed(album.name || artworkSrc || 'ep')
+  const driftVariant = driftSeed % 8
+  const driftDelaySec = -((driftSeed >>> 3) % 28)
 
   return (
     <section
@@ -9894,15 +9950,20 @@ function EpReleaseStage({
         }`}
       >
         <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className={`absolute inset-0 brightness-[0.58] ${isBanner ? 'scale-110' : ''}`}>
-            <CoverArt
-              src={artworkSrc}
-              fallbackSrc={fallbackSrc}
-              alt=""
-              sizes="100vw"
-              priority
-              objectFit={isBanner ? 'cover' : 'contain'}
-            />
+          <div className="absolute inset-0 overflow-hidden brightness-[0.58]">
+            <div
+              className={`ep-release-cover-drift ep-release-cover-drift-${driftVariant} absolute inset-0`}
+              style={{ animationDelay: `${driftDelaySec}s` }}
+            >
+              <CoverArt
+                src={artworkSrc}
+                fallbackSrc={fallbackSrc}
+                alt=""
+                sizes="100vw"
+                priority
+                objectFit="cover"
+              />
+            </div>
           </div>
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/58 to-black/72" />
         </div>

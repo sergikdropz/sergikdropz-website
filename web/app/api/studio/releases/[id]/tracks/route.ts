@@ -19,6 +19,7 @@ export async function GET(
 
     const { searchParams } = new URL(request.url)
     const available = searchParams.get('available') === 'true'
+    const source = searchParams.get('source') || 'studio'
 
     const supabase = createSupabaseServerClient()
 
@@ -35,9 +36,50 @@ export async function GET(
       return NextResponse.json({ tracks: data || [] })
     }
 
+    if (source === 'vault') {
+      const { data: linked } = await supabase
+        .from('distribution_tracks')
+        .select('music_library_track_id')
+        .not('music_library_track_id', 'is', null)
+
+      const linkedSet = new Set(
+        (linked || []).map((r) => r.music_library_track_id as string).filter(Boolean),
+      )
+
+      const { data: vaultTracks, error } = await supabase
+        .from('music_library_tracks')
+        .select(
+          'id, title, folder_id, file_url, artwork_url, duration, genre, subgenre, sonic_dna_status, is_archived',
+        )
+        .or('is_archived.is.null,is_archived.eq.false')
+        .order('title', { ascending: true })
+        .limit(500)
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      const tracks = (vaultTracks || [])
+        .filter((t) => !linkedSet.has(t.id))
+        .map((t) => ({
+          id: t.id,
+          title: t.title,
+          source: 'vault' as const,
+          folder_id: t.folder_id,
+          isrc_full: null,
+          wav_url: t.file_url,
+          artwork_url: t.artwork_url,
+          duration: t.duration,
+          genre: t.genre,
+          sonic_dna_status: t.sonic_dna_status,
+        }))
+
+      return NextResponse.json({ tracks })
+    }
+
     const { data, error } = await supabase
       .from('distribution_tracks')
-      .select('id, title, isrc_full, wav_url, version, release_id, created_at')
+      .select('id, title, isrc_full, wav_url, version, release_id, created_at, music_library_track_id')
       .is('release_id', null)
       .order('created_at', { ascending: false })
 
@@ -68,8 +110,15 @@ export async function POST(
 
     const body = await request.json()
     const trackIds = Array.isArray(body.trackIds) ? body.trackIds.map(String) : []
-    if (trackIds.length === 0) {
-      return NextResponse.json({ error: 'trackIds array is required' }, { status: 400 })
+    const vaultTrackIds = Array.isArray(body.vaultTrackIds)
+      ? body.vaultTrackIds.map(String)
+      : []
+
+    if (trackIds.length === 0 && vaultTrackIds.length === 0) {
+      return NextResponse.json(
+        { error: 'trackIds or vaultTrackIds array is required' },
+        { status: 400 },
+      )
     }
 
     const supabase = createSupabaseServerClient()
@@ -84,46 +133,116 @@ export async function POST(
       return NextResponse.json({ error: 'Release not found' }, { status: 404 })
     }
 
-    const { data: tracks, error: tracksError } = await supabase
-      .from('distribution_tracks')
-      .select('id, title, release_id')
-      .in('id', trackIds)
-
-    if (tracksError) {
-      return NextResponse.json({ error: tracksError.message }, { status: 500 })
-    }
-
-    const found = new Map((tracks || []).map((t) => [t.id, t]))
     const results: Array<{ track_id: string; status: 'ok' | 'error'; message?: string }> = []
 
-    for (const trackId of trackIds) {
-      const track = found.get(trackId)
-      if (!track) {
-        results.push({ track_id: trackId, status: 'error', message: 'Track not found' })
-        continue
+    if (vaultTrackIds.length) {
+      const { data: vaultTracks, error: vaultError } = await supabase
+        .from('music_library_tracks')
+        .select('id, title, file_url, artwork_url, duration')
+        .in('id', vaultTrackIds)
+
+      if (vaultError) {
+        return NextResponse.json({ error: vaultError.message }, { status: 500 })
       }
-      if (track.release_id && track.release_id !== params.id) {
-        results.push({
-          track_id: trackId,
-          status: 'error',
-          message: `Already on another release`,
+
+      const vaultById = new Map((vaultTracks || []).map((t) => [t.id, t]))
+      for (const vaultId of vaultTrackIds) {
+        const vt = vaultById.get(vaultId)
+        if (!vt) {
+          results.push({ track_id: vaultId, status: 'error', message: 'Vault track not found' })
+          continue
+        }
+        const { data: existing } = await supabase
+          .from('distribution_tracks')
+          .select('id, release_id')
+          .eq('music_library_track_id', vaultId)
+          .maybeSingle()
+
+        if (existing?.release_id && existing.release_id !== params.id) {
+          results.push({
+            track_id: vaultId,
+            status: 'error',
+            message: 'Already on another release',
+          })
+          continue
+        }
+        if (existing) {
+          const { error: upErr } = await supabase
+            .from('distribution_tracks')
+            .update({ release_id: params.id })
+            .eq('id', existing.id)
+          results.push(
+            upErr
+              ? { track_id: vaultId, status: 'error', message: upErr.message }
+              : { track_id: existing.id, status: 'ok' },
+          )
+          continue
+        }
+
+        const distId = `dtrack-${vaultId}-${Date.now().toString(36)}`.slice(0, 80)
+        const fileUrl = String(vt.file_url || '').trim() || `pending://vault/${vaultId}`
+        const { error: insErr } = await supabase.from('distribution_tracks').insert({
+          id: distId,
+          release_id: params.id,
+          music_library_track_id: vaultId,
+          title: vt.title,
+          duration: vt.duration,
+          wav_url: fileUrl,
+          artwork_url: vt.artwork_url,
+          contributors: [],
+          splits: [],
+          explicit: false,
+          language: 'en',
         })
-        continue
+        results.push(
+          insErr
+            ? { track_id: vaultId, status: 'error', message: insErr.message }
+            : { track_id: distId, status: 'ok' },
+        )
       }
-      if (track.release_id === params.id) {
-        results.push({ track_id: trackId, status: 'ok' })
-        continue
-      }
+    }
 
-      const { error: updateError } = await supabase
+    if (trackIds.length) {
+      const { data: tracks, error: tracksError } = await supabase
         .from('distribution_tracks')
-        .update({ release_id: params.id })
-        .eq('id', trackId)
+        .select('id, title, release_id')
+        .in('id', trackIds)
 
-      if (updateError) {
-        results.push({ track_id: trackId, status: 'error', message: updateError.message })
-      } else {
-        results.push({ track_id: trackId, status: 'ok' })
+      if (tracksError) {
+        return NextResponse.json({ error: tracksError.message }, { status: 500 })
+      }
+
+      const found = new Map((tracks || []).map((t) => [t.id, t]))
+
+      for (const trackId of trackIds) {
+        const track = found.get(trackId)
+        if (!track) {
+          results.push({ track_id: trackId, status: 'error', message: 'Track not found' })
+          continue
+        }
+        if (track.release_id && track.release_id !== params.id) {
+          results.push({
+            track_id: trackId,
+            status: 'error',
+            message: `Already on another release`,
+          })
+          continue
+        }
+        if (track.release_id === params.id) {
+          results.push({ track_id: trackId, status: 'ok' })
+          continue
+        }
+
+        const { error: updateError } = await supabase
+          .from('distribution_tracks')
+          .update({ release_id: params.id })
+          .eq('id', trackId)
+
+        if (updateError) {
+          results.push({ track_id: trackId, status: 'error', message: updateError.message })
+        } else {
+          results.push({ track_id: trackId, status: 'ok' })
+        }
       }
     }
 
@@ -132,7 +251,7 @@ export async function POST(
       actionType: 'attach_tracks_to_release',
       resourceType: 'release',
       resourceId: params.id,
-      details: { trackIds, successful: ok },
+      details: { trackIds, vaultTrackIds, successful: ok },
     })
 
     return NextResponse.json({
