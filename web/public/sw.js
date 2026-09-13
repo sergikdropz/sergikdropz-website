@@ -1,0 +1,517 @@
+/**
+ * Service Worker for audio file caching
+ * Implements smart caching strategy: Cache First for recent tracks, Network First for new tracks
+ */
+
+// Audio bytes cache (actual mp3/wav streams)
+// NOTE: Browsers may still evict storage under pressure, but these higher limits
+// let us retain more data for repeat listeners.
+const CACHE_NAME = 'sergik-audio-cache-v2'
+const MAX_CACHE_SIZE = 1024 * 1024 * 1024 // ~1GB
+const MAX_CACHE_ITEMS = 100 // Maximum number of cached tracks
+const PRELOAD_COUNT = 3 // Keep in sync with MusicPlayer queue prefetch (CDN URLs only)
+
+// Public API JSON cache (music library structure, waveform/bpm, sonic-dna reads)
+// v2: Cleared stale sonic-dna responses after data enhancement (2026-01-30)
+const API_CACHE_NAME = 'sergik-api-cache-v3'
+const API_MAX_ITEMS = 500 // High cap; browser may still evict
+
+// Track cache metadata
+const CACHE_METADATA_KEY = 'cache-metadata'
+
+// Get cache metadata from IndexedDB
+async function getCacheMetadata() {
+  try {
+    const cache = await caches.open(CACHE_NAME)
+    const response = await cache.match(CACHE_METADATA_KEY)
+    if (response) {
+      return await response.json()
+    }
+  } catch (error) {
+    console.error('Error getting cache metadata:', error)
+  }
+  return { items: [], totalSize: 0 }
+}
+
+// Save cache metadata to IndexedDB
+async function saveCacheMetadata(metadata) {
+  try {
+    const cache = await caches.open(CACHE_NAME)
+    await cache.put(CACHE_METADATA_KEY, new Response(JSON.stringify(metadata), {
+      headers: { 'Content-Type': 'application/json' }
+    }))
+  } catch (error) {
+    console.error('Error saving cache metadata:', error)
+  }
+}
+
+/**
+ * LRU bookkeeping used to be a metadata read + write on every audio request,
+ * which put two Cache Storage round-trips in front of each Range response.
+ * Batch the touches instead: eviction order only needs coarse recency.
+ */
+const pendingTouches = new Set()
+let touchFlushTimer = null
+
+function touchCacheItem(url) {
+  pendingTouches.add(url)
+  if (touchFlushTimer !== null) return
+  touchFlushTimer = setTimeout(async () => {
+    touchFlushTimer = null
+    const urls = [...pendingTouches]
+    pendingTouches.clear()
+    if (!urls.length) return
+    try {
+      const metadata = await getCacheMetadata()
+      const now = Date.now()
+      let changed = false
+      for (const item of metadata.items) {
+        if (urls.includes(item.url)) {
+          item.lastAccessed = now
+          changed = true
+        }
+      }
+      if (changed) await saveCacheMetadata(metadata)
+    } catch (error) {
+      console.debug('Cache touch flush failed:', error)
+    }
+  }, TOUCH_FLUSH_DELAY_MS)
+}
+
+const TOUCH_FLUSH_DELAY_MS = 30000
+
+// Get file size from response
+async function getResponseSize(response) {
+  const cloned = response.clone()
+  const blob = await cloned.blob()
+  return blob.size
+}
+
+// LRU eviction: Remove least recently used items
+async function evictLRU(targetSize) {
+  const metadata = await getCacheMetadata()
+  const cache = await caches.open(CACHE_NAME)
+  
+  // Sort by last accessed time (oldest first)
+  metadata.items.sort((a, b) => a.lastAccessed - b.lastAccessed)
+  
+  let currentSize = metadata.totalSize
+  const itemsToRemove = []
+  
+  for (const item of metadata.items) {
+    if (currentSize <= targetSize) break
+    
+    try {
+      await cache.delete(item.url)
+      blobCache.delete(item.url)
+      currentSize -= item.size
+      itemsToRemove.push(item.url)
+    } catch (error) {
+      console.error('Error deleting cache item:', error)
+    }
+  }
+  
+  // Update metadata
+  metadata.items = metadata.items.filter(item => !itemsToRemove.includes(item.url))
+  metadata.totalSize = currentSize
+  await saveCacheMetadata(metadata)
+}
+
+// Install event - cache static assets
+self.addEventListener('install', (event) => {
+  self.skipWaiting()
+})
+
+// Activate event - clean up old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          // Keep our caches; delete only old versions of our own caches.
+          .filter((name) => {
+            if (name === CACHE_NAME) return false
+            if (name === API_CACHE_NAME) return false
+            // Delete only old sergik caches, leave unrelated caches alone.
+            return name.startsWith('sergik-audio-cache-') || name.startsWith('sergik-api-cache-')
+          })
+          .map((name) => caches.delete(name))
+      )
+    })
+  )
+  self.clients.claim()
+})
+
+// Fetch event - implement caching strategy
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  
+  // Cache *public* API GET responses (stale-while-revalidate).
+  // We explicitly avoid admin/auth endpoints and anything with Authorization.
+  if (url.pathname.startsWith('/api/')) {
+    if (event.request.method !== 'GET') return
+    if (event.request.headers.get('Authorization')) return
+    if (url.pathname.startsWith('/api/admin')) return
+    if (url.pathname.startsWith('/api/analytics')) return
+
+    const isCacheableApi =
+      url.pathname.startsWith('/api/audio/waveform') ||
+      url.pathname.startsWith('/api/audio/bpm') ||
+      url.pathname.startsWith('/api/audio/sonic-dna')
+    // Do not cache /api/music-library/* — vault responses are cookie/session sensitive.
+
+    if (!isCacheableApi) return
+
+    event.respondWith(handleApiRequest(event.request))
+    return
+  }
+  
+  // Skip image files FIRST - let browser handle them directly
+  // This must happen before any other checks to prevent image interception
+  // Check both pathname and full URL to catch all image files
+  const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?|$)/i
+  const isImageFile = imageExtensions.test(url.pathname) || imageExtensions.test(url.href)
+  
+  if (isImageFile) {
+    return // Let browser handle image requests - NEVER intercept images
+  }
+  
+  // For Supabase URLs, explicitly skip images (double-check for safety)
+  if (url.hostname.includes('supabase.co') && isImageFile) {
+    return // Never intercept Supabase image files
+  }
+  
+  // Only handle actual audio files (not API endpoints, images, or other resources)
+  const hasAudioExtension = /\.(mp3|wav|m4a|flac|aac|ogg|wma|mp4|m4v)(\?|$)/i.test(url.pathname)
+  
+  // For Supabase URLs, only intercept if it has an audio file extension
+  // Don't intercept images or other file types from Supabase
+  if (url.hostname.includes('supabase.co')) {
+    if (!hasAudioExtension) {
+      return // Let browser handle non-audio Supabase requests (images, etc.)
+    }
+  }
+  
+  // For local paths, check if it's in /audio/ directory
+  const isAudioPath = url.pathname.includes('/audio/') && 
+                      !url.pathname.startsWith('/api/') &&
+                      !isImageFile
+  
+  const isAudioFile = hasAudioExtension || isAudioPath
+  
+  if (!isAudioFile) {
+    return // Let browser handle non-audio requests
+  }
+  
+  event.respondWith(handleAudioRequest(event.request))
+})
+
+// Handle cacheable public API requests with stale-while-revalidate
+async function handleApiRequest(request) {
+  const cache = await caches.open(API_CACHE_NAME)
+  const cached = await cache.match(request)
+
+  // Kick off a background refresh (best effort)
+  const refreshPromise = fetch(request)
+    .then(async (networkResponse) => {
+      // Only cache successful full responses
+      if (!networkResponse || !networkResponse.ok) return
+
+      // Respect explicit no-store/private signals
+      const cc = (networkResponse.headers.get('Cache-Control') || '').toLowerCase()
+      if (cc.includes('no-store') || cc.includes('private')) return
+
+      // Avoid caching huge API responses (keeps cache stable)
+      const cloned = networkResponse.clone()
+      const blob = await cloned.blob()
+      if (blob.size > 5 * 1024 * 1024) return // 5MB
+
+      await cache.put(request, networkResponse.clone())
+
+      // Simple cap: if we exceed max entries, delete oldest
+      const keys = await cache.keys()
+      if (keys.length > API_MAX_ITEMS) {
+        const toDelete = keys.slice(0, keys.length - API_MAX_ITEMS)
+        await Promise.all(toDelete.map((k) => cache.delete(k)))
+      }
+    })
+    .catch(() => {})
+
+  if (cached) {
+    // Return cached immediately; refresh continues in background.
+    refreshPromise.catch(() => {})
+    return cached
+  }
+
+  // No cache yet: fall back to network (and let refresh store it if ok)
+  const network = await fetch(request)
+  refreshPromise.catch(() => {})
+  return network
+}
+
+// Fetch with one retry after a short delay (handles transient network blips)
+async function fetchWithRetry(request, retries = 1, delay = 1000) {
+  try {
+    return await fetch(request)
+  } catch (err) {
+    if (retries <= 0) throw err
+    await new Promise(r => setTimeout(r, delay))
+    return fetchWithRetry(request, retries - 1, delay * 2)
+  }
+}
+
+/**
+ * HTMLMediaElement almost always requests media with Range. Returning a cached
+ * full-file 200 for those requests breaks progressive playback and causes stalls.
+ * Satisfy common "bytes=start-end" / "bytes=start-" / "bytes=-suffix" from cache.
+ */
+/**
+ * A media element issues many Range requests per track, and reading the cached
+ * body is what costs — `blob()` drains the whole response every time. Hold the
+ * last couple of tracks' bodies so slicing stays cheap. Blob.slice() is lazy, so
+ * only the requested window is materialized.
+ */
+const BLOB_CACHE_LIMIT = 3
+const blobCache = new Map()
+
+async function cachedBodyBlob(url, cachedResponse) {
+  const hit = blobCache.get(url)
+  if (hit) {
+    // Refresh recency.
+    blobCache.delete(url)
+    blobCache.set(url, hit)
+    return hit
+  }
+  const blob = await cachedResponse.clone().blob()
+  blobCache.set(url, blob)
+  while (blobCache.size > BLOB_CACHE_LIMIT) {
+    blobCache.delete(blobCache.keys().next().value)
+  }
+  return blob
+}
+
+async function rangeResponseFromCachedFullFile(request, cachedResponse) {
+  const rangeHeader = request.headers.get('Range')
+  if (!rangeHeader || !cachedResponse || !cachedResponse.ok) return null
+
+  const blob = await cachedBodyBlob(request.url, cachedResponse)
+  const size = blob.size
+  if (!size) return null
+
+  const trimmed = rangeHeader.trim()
+  const suffix = /^bytes=-(\d+)$/i.exec(trimmed)
+  if (suffix) {
+    const lastN = parseInt(suffix[1], 10)
+    if (Number.isNaN(lastN) || lastN <= 0) return null
+    const start = Math.max(0, size - lastN)
+    const end = size - 1
+    const sliced = blob.slice(start, size)
+    const ctype = cachedResponse.headers.get('Content-Type') || 'application/octet-stream'
+    return new Response(sliced, {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: {
+        'Content-Type': ctype,
+        'Content-Length': String(sliced.size),
+        'Content-Range': `bytes ${start}-${end}/${size}`,
+        'Accept-Ranges': 'bytes',
+      },
+    })
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(trimmed)
+  if (!match) return null
+
+  let start = match[1] === '' ? 0 : parseInt(match[1], 10)
+  let end = match[2] === '' ? size - 1 : parseInt(match[2], 10)
+  if (Number.isNaN(start) || Number.isNaN(end)) return null
+  if (start >= size) {
+    return new Response(null, {
+      status: 416,
+      statusText: 'Range Not Satisfiable',
+      headers: { 'Content-Range': `bytes */${size}` },
+    })
+  }
+  end = Math.min(end, size - 1)
+  if (start > end) return null
+
+  const sliced = blob.slice(start, end + 1)
+  const ctype = cachedResponse.headers.get('Content-Type') || 'application/octet-stream'
+  return new Response(sliced, {
+    status: 206,
+    statusText: 'Partial Content',
+    headers: {
+      'Content-Type': ctype,
+      'Content-Length': String(sliced.size),
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+      'Accept-Ranges': 'bytes',
+    },
+  })
+}
+
+// Handle audio request with smart caching
+async function handleAudioRequest(request) {
+  const url = request.url
+  const cache = await caches.open(CACHE_NAME)
+  
+  // Check if in cache
+  const cachedResponse = await cache.match(url)
+  
+  if (cachedResponse) {
+    const rangeHeader = request.headers.get('Range')
+    if (rangeHeader) {
+      const ranged = await rangeResponseFromCachedFullFile(request, cachedResponse)
+      if (ranged) {
+        touchCacheItem(url)
+        return ranged
+      }
+      return fetchWithRetry(request)
+    }
+    touchCacheItem(url)
+    return cachedResponse
+  }
+  
+  // Cache miss - fetch from network with retry
+  try {
+    const response = await fetchWithRetry(request)
+    
+    if (response.status === 404) {
+      return response
+    }
+    
+    if (!response.ok && response.status !== 206) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    // Don't cache partial/range responses
+    const isRangeRequest = request.headers.get('Range') !== null
+    if (response.status === 206 || isRangeRequest) {
+      return response
+    }
+    
+    // Cache full 200 responses
+    if (response.status === 200) {
+      const responseToCache = response.clone()
+      const size = await getResponseSize(responseToCache)
+      const metadata = await getCacheMetadata()
+      
+      const shouldCache = metadata.items.length < MAX_CACHE_ITEMS || 
+                         metadata.totalSize + size < MAX_CACHE_SIZE
+      
+      if (shouldCache) {
+        if (metadata.totalSize + size > MAX_CACHE_SIZE) {
+          await evictLRU(MAX_CACHE_SIZE - size)
+          const updatedMetadata = await getCacheMetadata()
+          metadata.items = updatedMetadata.items
+          metadata.totalSize = updatedMetadata.totalSize
+        }
+        
+        await cache.put(url, responseToCache)
+        blobCache.delete(url)
+        
+        metadata.items.push({
+          url,
+          size,
+          lastAccessed: Date.now(),
+          cachedAt: Date.now()
+        })
+        metadata.totalSize += size
+        await saveCacheMetadata(metadata)
+      }
+    }
+    
+    return response
+  } catch (error) {
+    const is404Error = error.message && error.message.includes('404')
+    
+    const staleCached = await cache.match(url)
+    if (staleCached) {
+      const rangeHeader = request.headers.get('Range')
+      if (rangeHeader) {
+        const ranged = await rangeResponseFromCachedFullFile(request, staleCached)
+        if (ranged) return ranged
+      }
+      return staleCached
+    }
+    
+    if (is404Error) {
+      return new Response('File not found', {
+        status: 404,
+        statusText: 'Not Found'
+      })
+    }
+    
+    return new Response('Network error and no cache available', {
+      status: 503,
+      statusText: 'Service Unavailable'
+    })
+  }
+}
+
+// Message handler for preloading tracks
+self.addEventListener('message', async (event) => {
+  if (event.data.type === 'PRELOAD_TRACKS') {
+    const tracks = event.data.tracks || []
+    const cache = await caches.open(CACHE_NAME)
+    
+    // Preload next tracks one at a time. Firing all of these at once put several
+    // whole-file downloads in flight alongside the track currently streaming,
+    // and they competed for the same connection budget — audible as stalls.
+    for (let i = 0; i < Math.min(tracks.length, PRELOAD_COUNT); i++) {
+      const trackUrl = tracks[i]
+      
+      // Check if already cached
+      const cached = await cache.match(trackUrl)
+      if (cached) continue
+      
+      try {
+        // Deliberately no Range header — we want the full file to cache.
+        const response = await fetch(trackUrl)
+        // Only cache full responses (200), not partial (206)
+        if (response.ok && response.status === 200) {
+          const metadata = await getCacheMetadata()
+          const size = await getResponseSize(response.clone())
+
+          // Only cache if we have space
+          if (metadata.items.length < MAX_CACHE_ITEMS &&
+              metadata.totalSize + size < MAX_CACHE_SIZE) {
+            await cache.put(trackUrl, response.clone())
+            blobCache.delete(trackUrl)
+
+            metadata.items.push({
+              url: trackUrl,
+              size,
+              lastAccessed: Date.now(),
+              cachedAt: Date.now(),
+              preloaded: true
+            })
+            metadata.totalSize += size
+            await saveCacheMetadata(metadata)
+          }
+        }
+      } catch (error) {
+        // Silently fail preload
+        console.debug('Preload failed:', error)
+      }
+    }
+  } else if (event.data.type === 'CLEAR_CACHE') {
+    // Clear all cached audio
+    const cache = await caches.open(CACHE_NAME)
+    const keys = await cache.keys()
+    await Promise.all(keys.map(key => cache.delete(key)))
+    blobCache.clear()
+    await saveCacheMetadata({ items: [], totalSize: 0 })
+    
+    event.ports[0].postMessage({ success: true })
+  } else if (event.data.type === 'GET_CACHE_INFO') {
+    // Return cache information
+    const metadata = await getCacheMetadata()
+    event.ports[0].postMessage({
+      itemCount: metadata.items.length,
+      totalSize: metadata.totalSize,
+      maxSize: MAX_CACHE_SIZE,
+      maxItems: MAX_CACHE_ITEMS
+    })
+  }
+})
+

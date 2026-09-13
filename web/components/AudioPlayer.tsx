@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { FaPlay, FaPause, FaVolumeUp, FaVolumeMute } from 'react-icons/fa'
+import { resolveAudioUrl } from '@/utils/resolveAudioUrl'
 
 interface AudioPlayerProps {
   src: string
@@ -15,23 +16,54 @@ export default function AudioPlayer({ src, title, autoPlay = false }: AudioPlaye
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Resolve audio URL when src changes
+  useEffect(() => {
+    resolveAudioUrl(src).then(url => {
+      setResolvedUrl(url)
+    }).catch(err => {
+      console.error('Failed to resolve audio URL:', err)
+      setResolvedUrl(src) // Fallback to original
+    })
+  }, [src])
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !resolvedUrl) return
+
+    // Update src when resolved URL changes
+    audio.src = resolvedUrl
+    audio.load()
 
     const updateTime = () => setCurrentTime(audio.currentTime)
     const updateDuration = () => setDuration(audio.duration)
 
+    const handleError = () => {
+      const isDevelopment = process.env.NODE_ENV === 'development'
+      
+      // In production, don't fall back to local paths (they don't exist)
+      // In development, allow fallback to local path
+      if (isDevelopment && resolvedUrl.startsWith('http') && src !== resolvedUrl) {
+        console.log('Falling back to local path:', src)
+        audio.src = src
+        audio.load()
+      } else {
+        console.error('Failed to load audio from Supabase:', resolvedUrl)
+      }
+    }
+
     audio.addEventListener('timeupdate', updateTime)
     audio.addEventListener('loadedmetadata', updateDuration)
+    audio.addEventListener('error', handleError)
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime)
       audio.removeEventListener('loadedmetadata', updateDuration)
+      audio.removeEventListener('error', handleError)
     }
-  }, [])
+  }, [resolvedUrl, src])
 
   const togglePlay = () => {
     const audio = audioRef.current
@@ -40,7 +72,12 @@ export default function AudioPlayer({ src, title, autoPlay = false }: AudioPlaye
     if (isPlaying) {
       audio.pause()
     } else {
-      audio.play()
+      audio.play().catch((err) => {
+        // Ignore AbortError - it's expected when play() is interrupted by pause()
+        if (err.name !== 'AbortError') {
+          console.error('Audio play failed:', err)
+        }
+      })
     }
     setIsPlaying(!isPlaying)
   }
@@ -88,7 +125,6 @@ export default function AudioPlayer({ src, title, autoPlay = false }: AudioPlaye
     <div className="bg-gray-900 rounded-lg p-4">
       <audio
         ref={audioRef}
-        src={src}
         preload="metadata"
         onEnded={() => setIsPlaying(false)}
       />
@@ -118,7 +154,7 @@ export default function AudioPlayer({ src, title, autoPlay = false }: AudioPlaye
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           <button
             onClick={toggleMute}
             className="text-gray-400 hover:text-white transition-colors"

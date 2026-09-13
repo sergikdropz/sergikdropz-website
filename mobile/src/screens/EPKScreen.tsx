@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import artistData from '../data/artist.json';
 import releasesData from '../data/releases.json';
@@ -7,13 +7,20 @@ import venuesData from '../data/venues.json';
 import socialProofData from '../data/social-proof.json';
 
 export default function EPKScreen() {
-  const openLink = (url: string) => {
-    Linking.openURL(url);
-  };
+  // Memoize data to prevent unnecessary re-renders
+  const releases = useMemo(() => releasesData.releases, []);
+  const festivals = useMemo(() => eventsData.festivals, []);
+  const venues = useMemo(() => venuesData.venues, []);
+  const sharedBilling = useMemo(() => socialProofData.shared_billing, []);
 
-  const openEmail = () => {
+  // Memoize callbacks to prevent re-renders
+  const openLink = useCallback((url: string) => {
+    Linking.openURL(url);
+  }, []);
+
+  const openEmail = useCallback(() => {
     Linking.openURL(`mailto:${artistData.contact.email}?subject=Press Assets Request`);
-  };
+  }, []);
 
   return (
     <ScrollView style={styles.container}>
@@ -54,7 +61,7 @@ export default function EPKScreen() {
         {/* Music */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Releases</Text>
-          {releasesData.releases.map((release) => (
+          {releases.map((release) => (
             <View key={release.id} style={styles.releaseItem}>
               <View style={styles.releaseHeader}>
                 <Text style={styles.releaseTitle}>{release.title}</Text>
@@ -73,13 +80,13 @@ export default function EPKScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Performance History</Text>
           <Text style={styles.subsectionTitle}>Festivals</Text>
-          {eventsData.festivals.map((festival) => (
+          {festivals.map((festival) => (
             <Text key={festival.id} style={styles.listItem}>
               {festival.name} ({festival.year}) • {festival.location}
             </Text>
           ))}
           <Text style={styles.subsectionTitle}>Notable Venues</Text>
-          {venuesData.venues.map((venue) => (
+          {venues.map((venue) => (
             <Text key={venue.id} style={styles.listItem}>
               {venue.name} • {venue.city} ({venue.type})
             </Text>
@@ -90,7 +97,7 @@ export default function EPKScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Shared Billing</Text>
           <View style={styles.tagContainer}>
-            {socialProofData.shared_billing.map((artist) => (
+            {sharedBilling.map((artist) => (
               <View key={artist} style={styles.artistTag}>
                 <Text style={styles.artistTagText}>{artist}</Text>
               </View>

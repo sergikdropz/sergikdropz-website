@@ -1,0 +1,5514 @@
+{
+  "generated_at": "2026-01-30T21:10:20.739Z",
+  "total_files_scanned": 684,
+  "matched_to_database": 227,
+  "pending_upload": 457,
+  "tracks": [
+    {
+      "title": "Lucidic",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2018-10-26",
+      "year": 2018,
+      "filename": "Lucidic.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Lucidic.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "SERGIC x NAM x Mateo Haze",
+      "artist": "Fly Aliens",
+      "collaborators": [
+        "NAM",
+        "Mateo"
+      ],
+      "version": null,
+      "creation_date": "2018-11-15",
+      "year": 2018,
+      "filename": "Fly Aliens - SERGIC x NAM x Mateo Haze.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Fly Aliens - SERGIC x NAM x Mateo Haze.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "baked turkey",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2019-02-01",
+      "year": 2019,
+      "filename": "baked turkey.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/baked turkey.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Lucy Lights",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2019-02-23",
+      "year": 2019,
+      "filename": "Lucy Lights.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Lucy Lights.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Chasing the sun to Tokyo",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2019-03-12",
+      "year": 2019,
+      "filename": "Chasing the sun to Tokyo.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Chasing the sun to Tokyo.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "These times",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2020-06-03",
+      "year": 2020,
+      "filename": "These times.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/These times.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "SnoopCat",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2020-06-04",
+      "year": 2020,
+      "filename": "SnoopCat.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SnoopCat.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "This is the sound",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-05-04",
+      "year": 2021,
+      "filename": "This is the sound.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/This is the sound.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Realm Transfer",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-07-26",
+      "year": 2021,
+      "filename": "Realm Transfer.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Realm Transfer.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Chasing the sun to Tokyo (Mastered)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-08-07",
+      "year": 2021,
+      "filename": "SERGIK - Chasing the sun to Tokyo (Mastered).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Chasing the sun to Tokyo (Mastered).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Recuperate",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-08-07",
+      "year": 2021,
+      "filename": "Sergik - Recuperate.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Recuperate.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Freaky Up In Here",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-08-27",
+      "year": 2021,
+      "filename": "Sergik - Freaky Up In Here.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Freaky Up In Here.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Motions",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-08-28",
+      "year": 2021,
+      "filename": "SERGIK - Motions.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Motions.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tell Me",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-08",
+      "year": 2021,
+      "filename": "Sergik - Tell Me.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Tell Me.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dumb",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-09",
+      "year": 2021,
+      "filename": "SERGIK - Dumb.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dumb.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "GET ON MY VIBE",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-09",
+      "year": 2021,
+      "filename": "SERGIK - GET ON MY VIBE.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - GET ON MY VIBE.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "I Like the way",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-09",
+      "year": 2021,
+      "filename": "SERGIK - I Like the way.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - I Like the way.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "This is the sound",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-09",
+      "year": 2021,
+      "filename": "SERGIK - This is the sound.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - This is the sound.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "House Girls",
+      "artist": "SERGIK x Cafe Caderas",
+      "collaborators": [
+        "Cafe"
+      ],
+      "version": null,
+      "creation_date": "2021-09-09",
+      "year": 2021,
+      "filename": "SERGIK x Cafe Caderas - House Girls.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Cafe Caderas - House Girls.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Do You",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-09",
+      "year": 2021,
+      "filename": "Sergik - Do You.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Do You.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Its Your turn",
+      "artist": "Sergik x DJ Dalle",
+      "collaborators": [
+        "DJ"
+      ],
+      "version": null,
+      "creation_date": "2021-09-20",
+      "year": 2021,
+      "filename": "Sergik x DJ Dalle - Its Your turn.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x DJ Dalle - Its Your turn.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Atlantis",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-21",
+      "year": 2021,
+      "filename": "SERGIK - Atlantis.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Atlantis.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Leveled",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-21",
+      "year": 2021,
+      "filename": "SERGIK - Leveled.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Leveled.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Lucid",
+      "artist": "SERGIK x MEUGEN",
+      "collaborators": [
+        "MEUGEN"
+      ],
+      "version": null,
+      "creation_date": "2021-09-21",
+      "year": 2021,
+      "filename": "SERGIK x MEUGEN - Lucid .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x MEUGEN - Lucid .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Fall Leafs",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-22",
+      "year": 2021,
+      "filename": "SERGIK - Fall Leafs.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Fall Leafs.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Let the music",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-23",
+      "year": 2021,
+      "filename": "SERGIK - Let the music.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Let the music.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Birth of a planet",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-09-27",
+      "year": 2021,
+      "filename": "SERGIK - Birth of a planet.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Birth of a planet.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Let Me",
+      "artist": "SERGIK x Francisco Josue",
+      "collaborators": [
+        "Francisco"
+      ],
+      "version": null,
+      "creation_date": "2021-10-01",
+      "year": 2021,
+      "filename": "SERGIK x Francisco Josue - Let Me.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Francisco Josue - Let Me.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Let Me.2",
+      "artist": "SERGIK x Francisco Josue",
+      "collaborators": [
+        "Francisco"
+      ],
+      "version": null,
+      "creation_date": "2021-10-02",
+      "year": 2021,
+      "filename": "SERGIK x Francisco Josue - Let Me.2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Francisco Josue - Let Me.2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "No Time",
+      "artist": "Sergik x DJ Epidemik x 1200Runway",
+      "collaborators": [
+        "DJ",
+        "1200Runway"
+      ],
+      "version": null,
+      "creation_date": "2021-10-03",
+      "year": 2021,
+      "filename": "Sergik x DJ Epidemik x 1200Runway - No Time.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x DJ Epidemik x 1200Runway - No Time.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Oh My",
+      "artist": "Sergik x Grund",
+      "collaborators": [
+        "Grund"
+      ],
+      "version": null,
+      "creation_date": "2021-10-04",
+      "year": 2021,
+      "filename": "Sergik x Grund - Oh My.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Grund - Oh My.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bouncy Bop",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-10-05",
+      "year": 2021,
+      "filename": "SERGIK - Bouncy Bop.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Bouncy Bop.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wiggly",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-10-06",
+      "year": 2021,
+      "filename": "SERGIK - Wiggly.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Wiggly.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "HUSTLE",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-10-08",
+      "year": 2021,
+      "filename": "SERGIK - HUSTLE.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - HUSTLE.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Delirium",
+      "artist": "Sergik x Hausofdevotion",
+      "collaborators": [
+        "Hausofdevotion"
+      ],
+      "version": null,
+      "creation_date": "2021-11-02",
+      "year": 2021,
+      "filename": "Sergik x Hausofdevotion - Delirium.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Hausofdevotion - Delirium.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Kittymean",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-11-04",
+      "year": 2021,
+      "filename": "Sergik - Kittymean.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Kittymean.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Its My Birthday?",
+      "artist": "Sergik ft. 1200runway x DJ Epidemik",
+      "collaborators": [
+        "1200runway",
+        "DJ"
+      ],
+      "version": null,
+      "creation_date": "2021-11-07",
+      "year": 2021,
+      "filename": "Sergik ft. 1200runway x DJ Epidemik - Its My Birthday?.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik ft. 1200runway x DJ Epidemik - Its My Birthday?.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "If you want to",
+      "artist": "Sergik x Slick Floyd",
+      "collaborators": [
+        "Slick"
+      ],
+      "version": null,
+      "creation_date": "2021-11-10",
+      "year": 2021,
+      "filename": "Sergik x Slick Floyd - If you want to.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Slick Floyd - If you want to.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Doses",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-11-14",
+      "year": 2021,
+      "filename": "Sergik - Doses.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Doses.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "We All Turnt",
+      "artist": "Sergik x Silent Jay",
+      "collaborators": [
+        "Silent"
+      ],
+      "version": null,
+      "creation_date": "2021-11-22",
+      "year": 2021,
+      "filename": "Sergik x Silent Jay - We All Turnt.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Silent Jay - We All Turnt.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Doses.2",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-11-23",
+      "year": 2021,
+      "filename": "Sergik - Doses.2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Doses.2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "I Could",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-11-26",
+      "year": 2021,
+      "filename": "Sergik - I Could.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - I Could.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rabbit hole",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-11-28",
+      "year": 2021,
+      "filename": "SERGIK - Rabbit hole.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rabbit hole.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Warehouse District",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-02",
+      "year": 2021,
+      "filename": "Sergik - Warehouse District.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Warehouse District.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Astro Spore",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-04",
+      "year": 2021,
+      "filename": "SERGIK - Astro Spore.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Astro Spore.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Up All Night",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-10",
+      "year": 2021,
+      "filename": "SERGIK - Up All Night.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Up All Night.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hard to Love",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-12",
+      "year": 2021,
+      "filename": "Sergik - Hard to Love.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Hard to Love.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Temptations",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-13",
+      "year": 2021,
+      "filename": "SERGIK - Temptations.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Temptations.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Desert Dweller",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-14",
+      "year": 2021,
+      "filename": "Sergik - Desert Dweller.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Desert Dweller.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Not My Fault",
+      "artist": "Sergik x Nobounds",
+      "collaborators": [
+        "Nobounds"
+      ],
+      "version": null,
+      "creation_date": "2021-12-15",
+      "year": 2021,
+      "filename": "Sergik x Nobounds - Not My Fault.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Nobounds - Not My Fault.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Changing Lanes",
+      "artist": "Sergik x Mateo Haze",
+      "collaborators": [
+        "Mateo"
+      ],
+      "version": null,
+      "creation_date": "2021-12-16",
+      "year": 2021,
+      "filename": "Sergik x Mateo Haze - Changing Lanes.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Mateo Haze - Changing Lanes.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Whats the Plan Ft. WWW",
+      "artist": "SERGIK",
+      "collaborators": [
+        "WWW"
+      ],
+      "version": null,
+      "creation_date": "2021-12-17",
+      "year": 2021,
+      "filename": "SERGIK - Whats the Plan Ft. WWW.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Whats the Plan Ft. WWW.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "GET ON MY VIBE.2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-27",
+      "year": 2021,
+      "filename": "SERGIK - GET ON MY VIBE.2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - GET ON MY VIBE.2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Alleyways",
+      "artist": "SERGIK x NOBOUNDS",
+      "collaborators": [
+        "NOBOUNDS"
+      ],
+      "version": null,
+      "creation_date": "2021-12-29",
+      "year": 2021,
+      "filename": "SERGIK x NOBOUNDS - Alleyways.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x NOBOUNDS - Alleyways.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Get Up",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2021-12-30",
+      "year": 2021,
+      "filename": "SERGIK - Get Up.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Get Up.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bad Water",
+      "artist": "SERGIK X OLEA",
+      "collaborators": [
+        "OLEA"
+      ],
+      "version": null,
+      "creation_date": "2021-12-30",
+      "year": 2021,
+      "filename": "SERGIK X OLEA - Bad Water.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK X OLEA - Bad Water.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Head Up",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-01-02",
+      "year": 2022,
+      "filename": "SERGIK - Head Up.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Head Up.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Cruise Control",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-01-06",
+      "year": 2022,
+      "filename": "SERGIK - Cruise Control.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Cruise Control.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "6 Hours In.2",
+      "artist": "SERGIK x L9V",
+      "collaborators": [
+        "L9V"
+      ],
+      "version": null,
+      "creation_date": "2022-01-08",
+      "year": 2022,
+      "filename": "SERGIK x L9V - 6 Hours In.2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x L9V - 6 Hours In.2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "We Should Save",
+      "artist": "SERGIK x L9V x Silent Jay",
+      "collaborators": [
+        "L9V",
+        "Silent"
+      ],
+      "version": null,
+      "creation_date": "2022-01-08",
+      "year": 2022,
+      "filename": "SERGIK x L9V x Silent Jay - We Should Save.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x L9V x Silent Jay - We Should Save.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "BS Aside",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-01-10",
+      "year": 2022,
+      "filename": "SERGIK - BS Aside.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - BS Aside.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hello Hello",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-01-15",
+      "year": 2022,
+      "filename": "SERGIK - Hello Hello.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Hello Hello.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Space Travel",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-01-29",
+      "year": 2022,
+      "filename": "SERGIK - Space Travel.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Space Travel.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "All My Ladies",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-01-30",
+      "year": 2022,
+      "filename": "SERGIK - All My Ladies.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - All My Ladies.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Whats Her Name ft. Mateo Haze",
+      "artist": "SERGIK",
+      "collaborators": [
+        "Mateo"
+      ],
+      "version": null,
+      "creation_date": "2022-01-30",
+      "year": 2022,
+      "filename": "SERGIK - Whats Her Name ft. Mateo Haze.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Whats Her Name ft. Mateo Haze.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Gottalotta",
+      "artist": "SERGIK ft. Residuo",
+      "collaborators": [
+        "Residuo"
+      ],
+      "version": null,
+      "creation_date": "2022-01-31",
+      "year": 2022,
+      "filename": "SERGIK ft. Residuo - Gottalotta.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK ft. Residuo - Gottalotta.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Love Again",
+      "artist": "SERGIK x Hausofdevotion",
+      "collaborators": [
+        "Hausofdevotion"
+      ],
+      "version": null,
+      "creation_date": "2022-01-31",
+      "year": 2022,
+      "filename": "SERGIK x Hausofdevotion - Love Again.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Hausofdevotion - Love Again.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "T!me",
+      "artist": "Sergik ft. RubyRainbow",
+      "collaborators": [
+        "RubyRainbow"
+      ],
+      "version": null,
+      "creation_date": "2022-02-01",
+      "year": 2022,
+      "filename": "Sergik ft. RubyRainbow - T!me.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik ft. RubyRainbow - T!me.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "I Got",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-02",
+      "year": 2022,
+      "filename": "SERGIK - I Got.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - I Got.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Never Hold Back (TechyesHausno mix)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-02",
+      "year": 2022,
+      "filename": "SERGIK - Never Hold Back (TechyesHausno mix).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Never Hold Back (TechyesHausno mix).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "No Drama",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-02",
+      "year": 2022,
+      "filename": "SERGIK - No Drama.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - No Drama.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Preach to the Choir ft. Sewer",
+      "artist": "SERGIK",
+      "collaborators": [
+        "Sewer"
+      ],
+      "version": null,
+      "creation_date": "2022-02-02",
+      "year": 2022,
+      "filename": "SERGIK - Preach to the Choir ft. Sewer.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Preach to the Choir ft. Sewer.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Warehouse District.1",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-02",
+      "year": 2022,
+      "filename": "Sergik - Warehouse District.1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Warehouse District.1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Spanktula",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-04",
+      "year": 2022,
+      "filename": "SERGIK - Spanktula.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Spanktula.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hourglass",
+      "artist": "Sergik x L9V",
+      "collaborators": [
+        "L9V"
+      ],
+      "version": null,
+      "creation_date": "2022-02-05",
+      "year": 2022,
+      "filename": "Sergik x L9V - Hourglass.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x L9V - Hourglass.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Mind Rollercoaster",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-06",
+      "year": 2022,
+      "filename": "SERGIK - Mind Rollercoaster.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Mind Rollercoaster.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Abduction",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-07",
+      "year": 2022,
+      "filename": "SERGIK - Abduction.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Abduction.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "LAZER BEAMS",
+      "artist": "SERGIK x Zonii",
+      "collaborators": [
+        "Zonii"
+      ],
+      "version": null,
+      "creation_date": "2022-02-07",
+      "year": 2022,
+      "filename": "SERGIK x Zonii - LAZER BEAMS.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Zonii - LAZER BEAMS.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "kcuf",
+      "artist": "SERGIK x Zonii",
+      "collaborators": [
+        "Zonii"
+      ],
+      "version": null,
+      "creation_date": "2022-02-08",
+      "year": 2022,
+      "filename": "SERGIK x Zonii - kcuf.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Zonii - kcuf.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Fall Back",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-02-20",
+      "year": 2022,
+      "filename": "SERGIK - Fall Back.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Fall Back.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Kouch Potato",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-03",
+      "year": 2022,
+      "filename": "SERGIK - Kouch Potato.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Kouch Potato.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "All My Ladies ft. Nessa",
+      "artist": "SERGIK",
+      "collaborators": [
+        "Nessa"
+      ],
+      "version": null,
+      "creation_date": "2022-03-04",
+      "year": 2022,
+      "filename": "SERGIK - All My Ladies ft. Nessa.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - All My Ladies ft. Nessa.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Came to get Lit",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-04",
+      "year": 2022,
+      "filename": "SERGIK - Came to get Lit.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Came to get Lit.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Never Hold Back",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-04",
+      "year": 2022,
+      "filename": "SERGIK - Never Hold Back.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Never Hold Back.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Spanktula.1",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-04",
+      "year": 2022,
+      "filename": "SERGIK - Spanktula.1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Spanktula.1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Take",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-04",
+      "year": 2022,
+      "filename": "SERGIK - Take.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Take.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Want What I Want",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-10",
+      "year": 2022,
+      "filename": "SERGIK - Want What I Want.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Want What I Want.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Lose Yourself",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-19",
+      "year": 2022,
+      "filename": "SERGIK - Lose Yourself.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Lose Yourself.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Nimbus Ride",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-19",
+      "year": 2022,
+      "filename": "SERGIK - Nimbus Ride.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Nimbus Ride.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Self Love",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-19",
+      "year": 2022,
+      "filename": "SERGIK - Self Love.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Self Love.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "WooksWonkWubz",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-19",
+      "year": 2022,
+      "filename": "SERGIK - WooksWonkWubz.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - WooksWonkWubz.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "All My Friends",
+      "artist": "SERGIK x Kody Black x Lugh Haurie",
+      "collaborators": [
+        "Kody",
+        "Lugh"
+      ],
+      "version": null,
+      "creation_date": "2022-03-23",
+      "year": 2022,
+      "filename": "SERGIK x Kody Black x Lugh Haurie - All My Friends.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Kody Black x Lugh Haurie - All My Friends.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Oooh Ah Eee",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-03-24",
+      "year": 2022,
+      "filename": "SERGIK - Oooh Ah Eee.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Oooh Ah Eee.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Turn in to",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-04-03",
+      "year": 2022,
+      "filename": "SERGIK - Turn in to.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Turn in to.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Gottalotta.1",
+      "artist": "SERGIK ft. Residuo",
+      "collaborators": [
+        "Residuo"
+      ],
+      "version": null,
+      "creation_date": "2022-04-03",
+      "year": 2022,
+      "filename": "SERGIK ft. Residuo - Gottalotta.1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK ft. Residuo - Gottalotta.1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "C MAJOR W BATTLO",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-04-04",
+      "year": 2022,
+      "filename": "C MAJOR W BATTLO.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/C MAJOR W BATTLO.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Peer Pressure",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-04-08",
+      "year": 2022,
+      "filename": "SERGIK - Peer Pressure.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Peer Pressure.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Smoke Break at Da Crib VIP1",
+      "artist": "SERGIK x Javi",
+      "collaborators": [
+        "Javi"
+      ],
+      "version": null,
+      "creation_date": "2022-04-09",
+      "year": 2022,
+      "filename": "SERGIK x Javi - Smoke Break at Da Crib VIP1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Javi - Smoke Break at Da Crib VIP1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Smoke Break at Da Crib",
+      "artist": "SERGIK x Javi",
+      "collaborators": [
+        "Javi"
+      ],
+      "version": null,
+      "creation_date": "2022-04-09",
+      "year": 2022,
+      "filename": "SERGIK x Javi - Smoke Break at Da Crib.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Javi - Smoke Break at Da Crib.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dubba Haus",
+      "artist": "We Should Save",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-04-11",
+      "year": 2022,
+      "filename": "We Should Save - Dubba Haus.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/We Should Save - Dubba Haus.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "City Circus",
+      "artist": "SERGIK x L9V",
+      "collaborators": [
+        "L9V"
+      ],
+      "version": null,
+      "creation_date": "2022-04-14",
+      "year": 2022,
+      "filename": "SERGIK x L9V - City Circus.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x L9V - City Circus.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Shifting",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-04-16",
+      "year": 2022,
+      "filename": "Sergik - Shifting.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Shifting.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bicycle Day",
+      "artist": "SERGIK x Braydo",
+      "collaborators": [
+        "Braydo"
+      ],
+      "version": null,
+      "creation_date": "2022-04-20",
+      "year": 2022,
+      "filename": "SERGIK x Braydo - Bicycle Day.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Braydo - Bicycle Day.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Roundabout No Exit",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-04-23",
+      "year": 2022,
+      "filename": "SERGIK - Roundabout No Exit.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Roundabout No Exit.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feelin Good",
+      "artist": "SERGIK x SLICK FLOYD",
+      "collaborators": [
+        "SLICK"
+      ],
+      "version": null,
+      "creation_date": "2022-05-06",
+      "year": 2022,
+      "filename": "SERGIK x SLICK FLOYD - Feelin Good.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x SLICK FLOYD - Feelin Good.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Containment Breach",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-13",
+      "year": 2022,
+      "filename": "SERGIK - Containment Breach.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Containment Breach.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Drunk n UFO'n",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-13",
+      "year": 2022,
+      "filename": "SERGIK - Drunk n UFO'n.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Drunk n UFO'n.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "No Fvcks Left",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-13",
+      "year": 2022,
+      "filename": "SERGIK - No Fvcks Left.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - No Fvcks Left.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "LOKO",
+      "artist": "SERGIK ft. Javi",
+      "collaborators": [
+        "Javi"
+      ],
+      "version": null,
+      "creation_date": "2022-05-13",
+      "year": 2022,
+      "filename": "SERGIK ft. Javi - LOKO.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK ft. Javi - LOKO.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Frequency",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-16",
+      "year": 2022,
+      "filename": "SERGIK - Frequency.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Frequency.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Back Around",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-21",
+      "year": 2022,
+      "filename": "SERGIK - Back Around.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Back Around.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Why Not",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-22",
+      "year": 2022,
+      "filename": "SERGIK - Why Not.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Why Not.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Lunar Gravity",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-27",
+      "year": 2022,
+      "filename": "SERGIK - Lunar Gravity.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Lunar Gravity.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Disco 82",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-28",
+      "year": 2022,
+      "filename": "SERGIK - Disco 82.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Disco 82.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rover Coasting",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-28",
+      "year": 2022,
+      "filename": "SERGIK - Rover Coasting.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rover Coasting.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "City Control",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-29",
+      "year": 2022,
+      "filename": "SERGIK - City Control.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - City Control.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Vibrationz",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-05-29",
+      "year": 2022,
+      "filename": "SERGIK - Vibrationz.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Vibrationz.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Radiowave Contact",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-10",
+      "year": 2022,
+      "filename": "SERGIK - Radiowave Contact.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Radiowave Contact.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Everlast",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-17",
+      "year": 2022,
+      "filename": "SERGIK - Everlast.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Everlast.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bloops n Kats",
+      "artist": "Sergik",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-18",
+      "year": 2022,
+      "filename": "Sergik - Bloops n Kats.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik - Bloops n Kats.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Creature Hrs",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-19",
+      "year": 2022,
+      "filename": "SERGIK - Creature Hrs.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Creature Hrs.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Oye Mami",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-24",
+      "year": 2022,
+      "filename": "SERGIK - Oye Mami.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Oye Mami.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rooftop Sunsets",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-25",
+      "year": 2022,
+      "filename": "SERGIK - Rooftop Sunsets.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rooftop Sunsets.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Soular Exploration",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-28",
+      "year": 2022,
+      "filename": "SERGIK - Soular Exploration.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Soular Exploration.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Take A Walk",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-06-30",
+      "year": 2022,
+      "filename": "SERGIK - Take A Walk.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Take A Walk.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Baggin On Me",
+      "artist": "SERGIK x Emperor Obscure",
+      "collaborators": [
+        "Emperor"
+      ],
+      "version": null,
+      "creation_date": "2022-07-03",
+      "year": 2022,
+      "filename": "SERGIK x Emperor Obscure - Baggin On Me.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Emperor Obscure - Baggin On Me.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "What You Gon Do",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-07-20",
+      "year": 2022,
+      "filename": "SERGIK - What You Gon Do.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - What You Gon Do.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Early Morning",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-07-22",
+      "year": 2022,
+      "filename": "SERGIK - Early Morning.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Early Morning.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Cosmos",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-08-10",
+      "year": 2022,
+      "filename": "SERGIK - Cosmos.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Cosmos.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Ooh I Like That",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-08-10",
+      "year": 2022,
+      "filename": "SERGIK - Ooh I Like That.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Ooh I Like That.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Moon Freakin",
+      "artist": "SERGIK x Konbot x Lavender",
+      "collaborators": [
+        "Konbot",
+        "Lavender"
+      ],
+      "version": null,
+      "creation_date": "2022-08-18",
+      "year": 2022,
+      "filename": "SERGIK x Konbot x Lavender - Moon Freakin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Konbot x Lavender - Moon Freakin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Creekside",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-08-22",
+      "year": 2022,
+      "filename": "SERGIK - Creekside.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Creekside.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Love in Ibiza",
+      "artist": "SERGIK X Karlido x Joc",
+      "collaborators": [
+        "Karlido",
+        "Joc"
+      ],
+      "version": null,
+      "creation_date": "2022-10-01",
+      "year": 2022,
+      "filename": "SERGIK X Karlido x Joc - Love in Ibiza.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK X Karlido x Joc - Love in Ibiza.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Juiced Up",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-11-19",
+      "year": 2022,
+      "filename": "SERGIK - Juiced Up.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Juiced Up.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Up n Down",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-11-19",
+      "year": 2022,
+      "filename": "SERGIK - Up n Down.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Up n Down.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tell Me What It Do",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-12-01",
+      "year": 2022,
+      "filename": "SERGIK - Tell Me What It Do.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Tell Me What It Do.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tell me wat it do",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-12-01",
+      "year": 2022,
+      "filename": "SERGIK - Tell me wat it do.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Tell me wat it do.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On the Go",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-12-15",
+      "year": 2022,
+      "filename": "SERGIK - On the Go.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - On the Go.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Losing Control",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-12-20",
+      "year": 2022,
+      "filename": "SERGIK - Losing Control.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Losing Control.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Digitality",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2022-12-21",
+      "year": 2022,
+      "filename": "SERGIK - Digitality.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Digitality.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bussin",
+      "artist": "SERGIK x LODIN",
+      "collaborators": [
+        "LODIN"
+      ],
+      "version": null,
+      "creation_date": "2023-02-16",
+      "year": 2023,
+      "filename": "SERGIK x LODIN - Bussin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x LODIN - Bussin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bussin v2",
+      "artist": "SERGIK x LODIN",
+      "collaborators": [
+        "LODIN"
+      ],
+      "version": "v2",
+      "creation_date": "2023-02-17",
+      "year": 2023,
+      "filename": "SERGIK x LODIN - Bussin v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x LODIN - Bussin v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "We Got It",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-02-21",
+      "year": 2023,
+      "filename": "SERGIK - We Got It.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - We Got It.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "JUST IN CASE",
+      "artist": "SERGIK X JIMII",
+      "collaborators": [
+        "JIMII"
+      ],
+      "version": null,
+      "creation_date": "2023-02-21",
+      "year": 2023,
+      "filename": "SERGIK X JIMII - JUST IN CASE .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK X JIMII - JUST IN CASE .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Front to Da Back",
+      "artist": "SERGIK x Optikz",
+      "collaborators": [
+        "Optikz"
+      ],
+      "version": null,
+      "creation_date": "2023-02-21",
+      "year": 2023,
+      "filename": "SERGIK x Optikz - Front to Da Back.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Optikz - Front to Da Back.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Gangsta",
+      "artist": "Sergik x Skeezy",
+      "collaborators": [
+        "Skeezy"
+      ],
+      "version": null,
+      "creation_date": "2023-02-21",
+      "year": 2023,
+      "filename": "Sergik x Skeezy - Gangsta.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Skeezy - Gangsta.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Get it Poppn",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-02-23",
+      "year": 2023,
+      "filename": "SERGIK - Get it Poppn.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Get it Poppn.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Keep Myself",
+      "artist": "SERGIK x Skeezy",
+      "collaborators": [
+        "Skeezy"
+      ],
+      "version": null,
+      "creation_date": "2023-02-24",
+      "year": 2023,
+      "filename": "SERGIK x Skeezy - Keep Myself .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Skeezy - Keep Myself .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "ELROW",
+      "artist": "ANDINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2023-03-22",
+      "year": 2023,
+      "filename": "ANDINO x SERGIK -  ELROW .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/ANDINO x SERGIK -  ELROW .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "MEXICAN CHEETOS",
+      "artist": "DINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2023-03-22",
+      "year": 2023,
+      "filename": "DINO x SERGIK - MEXICAN CHEETOS.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/DINO x SERGIK - MEXICAN CHEETOS.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "MINIMAL",
+      "artist": "DINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2023-03-22",
+      "year": 2023,
+      "filename": "DINO x SERGIK - MINIMAL .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/DINO x SERGIK - MINIMAL .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Groove Junkie",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-03-22",
+      "year": 2023,
+      "filename": "SERGIK - Groove Junkie.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Groove Junkie.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Swonky",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-03-22",
+      "year": 2023,
+      "filename": "SERGIK - Swonky.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Swonky.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "ELROW 1",
+      "artist": "ANDINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2023-03-23",
+      "year": 2023,
+      "filename": "ANDINO x SERGIK -  ELROW 1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/ANDINO x SERGIK -  ELROW 1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Swonky 1",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-03-23",
+      "year": 2023,
+      "filename": "SERGIK - Swonky 1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Swonky 1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Fxck it",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-03-30",
+      "year": 2023,
+      "filename": "SERGIK - Fxck it.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Fxck it.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Brain Alter",
+      "artist": "SERGIK x Skeezy",
+      "collaborators": [
+        "Skeezy"
+      ],
+      "version": null,
+      "creation_date": "2023-03-30",
+      "year": 2023,
+      "filename": "SERGIK x Skeezy- Brain Alter.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Skeezy- Brain Alter.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Late Morning",
+      "artist": "SERGIK x Silent Jay",
+      "collaborators": [
+        "Silent"
+      ],
+      "version": null,
+      "creation_date": "2023-04-02",
+      "year": 2023,
+      "filename": "SERGIK x Silent Jay - Late Morning.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Silent Jay - Late Morning.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Late Morning1",
+      "artist": "SERGIK x Silent Jay",
+      "collaborators": [
+        "Silent"
+      ],
+      "version": null,
+      "creation_date": "2023-04-07",
+      "year": 2023,
+      "filename": "SERGIK x Silent Jay - Late Morning1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Silent Jay - Late Morning1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Viva Ponderosa",
+      "artist": "SERGIK x Silent Jay x Van",
+      "collaborators": [
+        "Silent",
+        "Van"
+      ],
+      "version": null,
+      "creation_date": "2023-04-07",
+      "year": 2023,
+      "filename": "SERGIK x Silent Jay x Van - Viva Ponderosa.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Silent Jay x Van - Viva Ponderosa.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "To Da Flow",
+      "artist": "SERGIK x CHKLZ",
+      "collaborators": [
+        "CHKLZ"
+      ],
+      "version": null,
+      "creation_date": "2023-04-10",
+      "year": 2023,
+      "filename": "SERGIK x CHKLZ - To Da Flow.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x CHKLZ - To Da Flow.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On Da Flow",
+      "artist": "SERGIK x CHKLZ",
+      "collaborators": [
+        "CHKLZ"
+      ],
+      "version": null,
+      "creation_date": "2023-04-12",
+      "year": 2023,
+      "filename": "SERGIK x CHKLZ - On Da Flow.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x CHKLZ - On Da Flow.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "SlimThick",
+      "artist": "SERGIK x CEEMOAR x GOJI",
+      "collaborators": [
+        "CEEMOAR",
+        "GOJI"
+      ],
+      "version": null,
+      "creation_date": "2023-04-13",
+      "year": 2023,
+      "filename": "SERGIK x CEEMOAR x GOJI - SlimThick.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x CEEMOAR x GOJI - SlimThick.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "When we go",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-04-19",
+      "year": 2023,
+      "filename": "SERGIK - When we go.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - When we go.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On Slack",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-05-05",
+      "year": 2023,
+      "filename": "SERGIK - On Slack.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - On Slack.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Floatin",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-05-09",
+      "year": 2023,
+      "filename": "SERGIK - Floatin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Floatin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Yardman",
+      "artist": "SERGIK x Steve",
+      "collaborators": [
+        "Steve"
+      ],
+      "version": null,
+      "creation_date": "2023-05-27",
+      "year": 2023,
+      "filename": "SERGIK x Steve - Yardman.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Steve - Yardman.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bombaclat",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-06-03",
+      "year": 2023,
+      "filename": "SERGIK - Bombaclat.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Bombaclat.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Yard man",
+      "artist": "SERGIK x Steve",
+      "collaborators": [
+        "Steve"
+      ],
+      "version": null,
+      "creation_date": "2023-06-04",
+      "year": 2023,
+      "filename": "SERGIK x Steve - Yard man.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Steve - Yard man.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Give It Up",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-06-05",
+      "year": 2023,
+      "filename": "SERGIK - Give It Up.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Give It Up.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "DTF",
+      "artist": "SERGIK x CHKLZ",
+      "collaborators": [
+        "CHKLZ"
+      ],
+      "version": null,
+      "creation_date": "2023-06-21",
+      "year": 2023,
+      "filename": "SERGIK x CHKLZ - DTF.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x CHKLZ - DTF.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Going Fast2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-07-25",
+      "year": 2023,
+      "filename": "SERGIK - Going Fast2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Going Fast2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Alright",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-10-27",
+      "year": 2023,
+      "filename": "SERGIK - Alright.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Alright.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Seretonin",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-10-28",
+      "year": 2023,
+      "filename": "SERGIK - Seretonin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Seretonin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Around the World",
+      "artist": "SERGIK x OffMedz_",
+      "collaborators": [
+        "OffMedz_"
+      ],
+      "version": null,
+      "creation_date": "2023-11-04",
+      "year": 2023,
+      "filename": "SERGIK x OffMedz_ - Around the World.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OffMedz_ - Around the World.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Trippy Liquid",
+      "artist": "SERGIKx Offmedz_",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-11-05",
+      "year": 2023,
+      "filename": "SERGIKx Offmedz_ - Trippy Liquid.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIKx Offmedz_ - Trippy Liquid.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Its a Feeling",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2023-11-07",
+      "year": 2023,
+      "filename": "SERGIK - Its a Feeling.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Its a Feeling.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Just Breathe",
+      "artist": "Auxlee x Silent Jay x SERGIK x Offmedz",
+      "collaborators": [
+        "Silent",
+        "SERGIK",
+        "Offmedz"
+      ],
+      "version": null,
+      "creation_date": "2023-11-27",
+      "year": 2023,
+      "filename": "Auxlee x Silent Jay x SERGIK x Offmedz - Just Breathe.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Auxlee x Silent Jay x SERGIK x Offmedz - Just Breathe.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Late Nighters",
+      "artist": "SERGIK x WWW",
+      "collaborators": [
+        "WWW"
+      ],
+      "version": null,
+      "creation_date": "2023-11-30",
+      "year": 2023,
+      "filename": "SERGIK x WWW - Late Nighters.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x WWW - Late Nighters.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Mercy (Club Master)",
+      "artist": "SERGIK x LODIN",
+      "collaborators": [
+        "LODIN"
+      ],
+      "version": "Master",
+      "creation_date": "2023-12-24",
+      "year": 2023,
+      "filename": "SERGIK x LODIN - Mercy (Club Master).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x LODIN - Mercy (Club Master).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Running (No Vocals)",
+      "artist": "SERGIK x Slick Floyd x Lev Ayathiens",
+      "collaborators": [
+        "Slick",
+        "Lev"
+      ],
+      "version": null,
+      "creation_date": "2024-01-07",
+      "year": 2024,
+      "filename": "SERGIK x Slick Floyd x Lev Ayathiens - Running (No Vocals).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Slick Floyd x Lev Ayathiens - Running (No Vocals).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Running V2",
+      "artist": "SERGIK x Slick Floyd x Lev Ayathiens",
+      "collaborators": [
+        "Slick",
+        "Lev"
+      ],
+      "version": "V2",
+      "creation_date": "2024-01-07",
+      "year": 2024,
+      "filename": "SERGIK x Slick Floyd x Lev Ayathiens - Running V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Slick Floyd x Lev Ayathiens - Running V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Running",
+      "artist": "SERGIK x Slick Floyd x Lev Ayathiens",
+      "collaborators": [
+        "Slick",
+        "Lev"
+      ],
+      "version": null,
+      "creation_date": "2024-01-07",
+      "year": 2024,
+      "filename": "SERGIK x Slick Floyd x Lev Ayathiens - Running.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Slick Floyd x Lev Ayathiens - Running.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "How I Feel",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-09",
+      "year": 2024,
+      "filename": "SERGIK - How I Feel.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - How I Feel.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Got Dat",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-10",
+      "year": 2024,
+      "filename": "SERGIK - Got Dat.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Got Dat.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Give it To Em",
+      "artist": "SERGIK x Forgotten Modern",
+      "collaborators": [
+        "Forgotten"
+      ],
+      "version": null,
+      "creation_date": "2024-01-10",
+      "year": 2024,
+      "filename": "SERGIK x Forgotten Modern - Give it To Em.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Forgotten Modern - Give it To Em.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feelin",
+      "artist": "SERGIK x Guage x Fairydvst",
+      "collaborators": [
+        "Guage",
+        "Fairydvst"
+      ],
+      "version": null,
+      "creation_date": "2024-01-16",
+      "year": 2024,
+      "filename": "SERGIK x Guage x Fairydvst - Feelin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Guage x Fairydvst - Feelin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dont Stop v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2024-01-17",
+      "year": 2024,
+      "filename": "SERGIK - Dont Stop v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dont Stop v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Flip Da Switch v2",
+      "artist": "SERGIK x Forgotten Modern",
+      "collaborators": [
+        "Forgotten"
+      ],
+      "version": "v2",
+      "creation_date": "2024-01-17",
+      "year": 2024,
+      "filename": "SERGIK x Forgotten Modern - Flip Da Switch v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Forgotten Modern - Flip Da Switch v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Flip Da Switch",
+      "artist": "SERGIK x Forgotten Modern",
+      "collaborators": [
+        "Forgotten"
+      ],
+      "version": null,
+      "creation_date": "2024-01-17",
+      "year": 2024,
+      "filename": "SERGIK x Forgotten Modern - Flip Da Switch.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Forgotten Modern - Flip Da Switch.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Guttah",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-19",
+      "year": 2024,
+      "filename": "SERGIK - Guttah.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Guttah.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Shake",
+      "artist": "Sergik x Slick Floyd x Connectjon",
+      "collaborators": [
+        "Slick",
+        "Connectjon"
+      ],
+      "version": null,
+      "creation_date": "2024-01-19",
+      "year": 2024,
+      "filename": "Sergik x Slick Floyd x Connectjon - Shake.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Slick Floyd x Connectjon - Shake.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Voyager",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-21",
+      "year": 2024,
+      "filename": "SERGIK - Voyager.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Voyager.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Intelligent Filteroid",
+      "artist": "SERGIK x Stoy",
+      "collaborators": [
+        "Stoy"
+      ],
+      "version": null,
+      "creation_date": "2024-01-23",
+      "year": 2024,
+      "filename": "SERGIK x Stoy - Intelligent Filteroid.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Stoy - Intelligent Filteroid.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rhythm v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2024-01-25",
+      "year": 2024,
+      "filename": "SERGIK - Rhythm v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rhythm v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rhythm v3",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v3",
+      "creation_date": "2024-01-25",
+      "year": 2024,
+      "filename": "SERGIK - Rhythm v3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rhythm v3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rhythm",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-25",
+      "year": 2024,
+      "filename": "SERGIK - Rhythm.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rhythm.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "How We Do",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-26",
+      "year": 2024,
+      "filename": "SERGIK - How We Do.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - How We Do.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rhythm VIP Techno",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "VIP",
+      "creation_date": "2024-01-26",
+      "year": 2024,
+      "filename": "SERGIK - Rhythm VIP Techno.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rhythm VIP Techno.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Acid Wash",
+      "artist": "slick x ?",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-26",
+      "year": 2024,
+      "filename": "slick x ? - Acid Wash.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/slick x ? - Acid Wash.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Quarter Keys ft Andino",
+      "artist": "SERGIK",
+      "collaborators": [
+        "Andino"
+      ],
+      "version": null,
+      "creation_date": "2024-01-27",
+      "year": 2024,
+      "filename": "SERGIK - Quarter Keys ft Andino.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Quarter Keys ft Andino.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Vibracion",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-27",
+      "year": 2024,
+      "filename": "SERGIK - Vibracion.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Vibracion.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Intrinsic Ones",
+      "artist": "SERGIK x ANDINO",
+      "collaborators": [
+        "ANDINO"
+      ],
+      "version": null,
+      "creation_date": "2024-01-28",
+      "year": 2024,
+      "filename": "SERGIK x ANDINO - Intrinsic Ones.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x ANDINO - Intrinsic Ones.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Drop Dat B",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-01-29",
+      "year": 2024,
+      "filename": "SERGIK - Drop Dat B.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Drop Dat B.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Do it Yourself",
+      "artist": "SERGIK x JIMII",
+      "collaborators": [
+        "JIMII"
+      ],
+      "version": null,
+      "creation_date": "2024-02-01",
+      "year": 2024,
+      "filename": "SERGIK x JIMII - Do it Yourself.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x JIMII - Do it Yourself.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "It's Getting",
+      "artist": "Silent Jay x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2024-02-04",
+      "year": 2024,
+      "filename": "Silent Jay x SERGIK -  It's Getting.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Silent Jay x SERGIK -  It's Getting.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Perspectives",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-02-18",
+      "year": 2024,
+      "filename": "SERGIK - Perspectives.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Perspectives.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Kiss Me",
+      "artist": "SERGIK x Bob Secret",
+      "collaborators": [
+        "Bob"
+      ],
+      "version": null,
+      "creation_date": "2024-02-22",
+      "year": 2024,
+      "filename": "SERGIK x Bob Secret - Kiss Me.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Bob Secret - Kiss Me.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Moon Settler",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-03-04",
+      "year": 2024,
+      "filename": "SERGIK - Moon Settler.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Moon Settler.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Mavericks",
+      "artist": "SERGIK x OG Coconut x Kuhl",
+      "collaborators": [
+        "OG",
+        "Kuhl"
+      ],
+      "version": null,
+      "creation_date": "2024-03-05",
+      "year": 2024,
+      "filename": "SERGIK x OG Coconut x Kuhl - Mavericks.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OG Coconut x Kuhl - Mavericks.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "MNWKA",
+      "artist": "SERGIK x Mike Ron",
+      "collaborators": [
+        "Mike"
+      ],
+      "version": null,
+      "creation_date": "2024-03-13",
+      "year": 2024,
+      "filename": "SERGIK x Mike Ron - MNWKA.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Mike Ron - MNWKA.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Celestial Groove",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-03-14",
+      "year": 2024,
+      "filename": "SERGIK - Celestial Groove.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Celestial Groove.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Highway 1",
+      "artist": "SERGIK x Stan The Guitarman",
+      "collaborators": [
+        "Stan"
+      ],
+      "version": null,
+      "creation_date": "2024-03-14",
+      "year": 2024,
+      "filename": "SERGIK x Stan The Guitarman - Highway 1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Stan The Guitarman - Highway 1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Reverie",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-03-15",
+      "year": 2024,
+      "filename": "SERGIK - Reverie.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Reverie.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Nitrous",
+      "artist": "SERGIK x ESHER",
+      "collaborators": [
+        "ESHER"
+      ],
+      "version": null,
+      "creation_date": "2024-03-15",
+      "year": 2024,
+      "filename": "SERGIK x ESHER - Nitrous.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x ESHER - Nitrous.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Check This Out",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-03-16",
+      "year": 2024,
+      "filename": "SERGIK - Check This Out.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Check This Out.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Midnight Mirage",
+      "artist": "SERGIK x Curiousoul",
+      "collaborators": [
+        "Curiousoul"
+      ],
+      "version": null,
+      "creation_date": "2024-03-16",
+      "year": 2024,
+      "filename": "SERGIK x Curiousoul - Midnight Mirage.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Curiousoul - Midnight Mirage.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Well Known Treat",
+      "artist": "SERIK x Stan The Guitarman",
+      "collaborators": [
+        "Stan"
+      ],
+      "version": null,
+      "creation_date": "2024-03-23",
+      "year": 2024,
+      "filename": "SERIK x Stan The Guitarman - Well Known Treat.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERIK x Stan The Guitarman - Well Known Treat.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "24:7 VIP 1",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "VIP",
+      "creation_date": "2024-03-25",
+      "year": 2024,
+      "filename": "SERGIK - 24:7 VIP 1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - 24:7 VIP 1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "24:7 VIP 2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "VIP",
+      "creation_date": "2024-03-25",
+      "year": 2024,
+      "filename": "SERGIK - 24:7 VIP 2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - 24:7 VIP 2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Big Macs n Jumbo Jacks",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-03-25",
+      "year": 2024,
+      "filename": "SERGIK - Big Macs n Jumbo Jacks.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Big Macs n Jumbo Jacks.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Utopia",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-03-26",
+      "year": 2024,
+      "filename": "SERGIK - Utopia.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Utopia.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Brooting",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-04-27",
+      "year": 2024,
+      "filename": "SERGIK - Brooting.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Brooting.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Betta Daze 88bpm",
+      "artist": "SERGIK x Aloe Flipz",
+      "collaborators": [
+        "Aloe"
+      ],
+      "version": null,
+      "creation_date": "2024-05-10",
+      "year": 2024,
+      "filename": "SERGIK x Aloe Flipz - Betta Daze 88bpm.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Aloe Flipz - Betta Daze 88bpm.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Broken Problems",
+      "artist": "SERGIK x Aloe Flipz",
+      "collaborators": [
+        "Aloe"
+      ],
+      "version": null,
+      "creation_date": "2024-05-10",
+      "year": 2024,
+      "filename": "SERGIK x Aloe Flipz - Broken Problems.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Aloe Flipz - Broken Problems.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Broken Problems v2",
+      "artist": "SERGIK x Aloe Flipz",
+      "collaborators": [
+        "Aloe"
+      ],
+      "version": "v2",
+      "creation_date": "2024-05-11",
+      "year": 2024,
+      "filename": "SERGIK x Aloe Flipz - Broken Problems v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Aloe Flipz - Broken Problems v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag v2",
+      "artist": "SERGIK x Bob Secret",
+      "collaborators": [
+        "Bob"
+      ],
+      "version": "v2",
+      "creation_date": "2024-05-17",
+      "year": 2024,
+      "filename": "SERGIK x Bob Secret - The Bag v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Bob Secret - The Bag v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag",
+      "artist": "SERGIK x Bob Secret",
+      "collaborators": [
+        "Bob"
+      ],
+      "version": null,
+      "creation_date": "2024-05-17",
+      "year": 2024,
+      "filename": "SERGIK x Bob Secret - The Bag.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Bob Secret - The Bag.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Betta v2",
+      "artist": "SERGIK x Zack Thrasher",
+      "collaborators": [
+        "Zack"
+      ],
+      "version": "v2",
+      "creation_date": "2024-06-01",
+      "year": 2024,
+      "filename": "SERGIK x Zack Thrasher - Betta v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Zack Thrasher - Betta v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Betta",
+      "artist": "SERGIK x Zack Thrasher",
+      "collaborators": [
+        "Zack"
+      ],
+      "version": null,
+      "creation_date": "2024-06-01",
+      "year": 2024,
+      "filename": "SERGIK x Zack Thrasher - Betta.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Zack Thrasher - Betta.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "So Good",
+      "artist": "SERGIK x Deep Chetty",
+      "collaborators": [
+        "Deep"
+      ],
+      "version": null,
+      "creation_date": "2024-06-08",
+      "year": 2024,
+      "filename": "SERGIK x Deep Chetty- So Good.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Deep Chetty- So Good.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Do It",
+      "artist": "SERGIK x OG Coconut",
+      "collaborators": [
+        "OG"
+      ],
+      "version": null,
+      "creation_date": "2024-06-11",
+      "year": 2024,
+      "filename": "SERGIK x OG Coconut - Do It.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OG Coconut - Do It.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Elevator v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2024-06-12",
+      "year": 2024,
+      "filename": "SERGIK - Elevator v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Elevator v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "So Good v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2024-06-12",
+      "year": 2024,
+      "filename": "SERGIK - So Good v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - So Good v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "So Good v3",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v3",
+      "creation_date": "2024-06-12",
+      "year": 2024,
+      "filename": "SERGIK - So Good v3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - So Good v3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feeling Quirky v2",
+      "artist": "SERGIK x Auxlee",
+      "collaborators": [
+        "Au"
+      ],
+      "version": "v2",
+      "creation_date": "2024-06-13",
+      "year": 2024,
+      "filename": "SERGIK x Auxlee - Feeling Quirky v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Auxlee - Feeling Quirky v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feeling Quirky",
+      "artist": "SERGIK x Auxlee",
+      "collaborators": [
+        "Au"
+      ],
+      "version": null,
+      "creation_date": "2024-06-13",
+      "year": 2024,
+      "filename": "SERGIK x Auxlee - Feeling Quirky.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Auxlee - Feeling Quirky.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Love v3",
+      "artist": "Cory Hill x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": "v3",
+      "creation_date": "2024-06-14",
+      "year": 2024,
+      "filename": "Cory Hill x SERGIK - Love v3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Cory Hill x SERGIK - Love v3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Love",
+      "artist": "Cory Hill x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2024-06-14",
+      "year": 2024,
+      "filename": "Cory Hill x SERGIK - Love.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Cory Hill x SERGIK - Love.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dmn8r's VI",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-06-15",
+      "year": 2024,
+      "filename": "SERGIK - Dmn8r's VI.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dmn8r's VI.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dominate",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-06-15",
+      "year": 2024,
+      "filename": "SERGIK - Dominate.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dominate.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Zoned",
+      "artist": "SERGIK x Lugh Haurie",
+      "collaborators": [
+        "Lugh"
+      ],
+      "version": null,
+      "creation_date": "2024-06-15",
+      "year": 2024,
+      "filename": "SERGIK x Lugh Haurie - Zoned.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Lugh Haurie - Zoned.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "FTP",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-06-16",
+      "year": 2024,
+      "filename": "SERGIK - FTP.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - FTP.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Zoned 118 BPM D Min",
+      "artist": "SERGIK x Lugh Haurie",
+      "collaborators": [
+        "Lugh"
+      ],
+      "version": null,
+      "creation_date": "2024-06-17",
+      "year": 2024,
+      "filename": "SERGIK x Lugh Haurie - Zoned 118 BPM D Min.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Lugh Haurie - Zoned 118 BPM D Min.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Giddup - 125BPM CMaj v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2024-06-19",
+      "year": 2024,
+      "filename": "SERGIK - Giddup - 125BPM CMaj v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Giddup - 125BPM CMaj v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Zoned v2",
+      "artist": "SERGIK x Lugh Haurie",
+      "collaborators": [
+        "Lugh"
+      ],
+      "version": "v2",
+      "creation_date": "2024-06-19",
+      "year": 2024,
+      "filename": "SERGIK x Lugh Haurie - Zoned v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Lugh Haurie - Zoned v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Decomp",
+      "artist": "Stov x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2024-06-27",
+      "year": 2024,
+      "filename": "Stov x SERGIK - Decomp.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Stov x SERGIK - Decomp.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "I Forgot",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-06-29",
+      "year": 2024,
+      "filename": "SERGIK - I Forgot.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - I Forgot.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Come On Strong - 124 BPM Dmin",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-07-01",
+      "year": 2024,
+      "filename": "SERGIK - Come On Strong - 124 BPM Dmin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Come On Strong - 124 BPM Dmin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Better With You",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-07-02",
+      "year": 2024,
+      "filename": "SERGIK - Better With You.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Better With You.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Come On Strong 2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-07-03",
+      "year": 2024,
+      "filename": "SERGIK - Come On Strong 2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Come On Strong 2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "It's Getting FINAL",
+      "artist": "Silent Jay x Sergik",
+      "collaborators": [
+        "Sergik"
+      ],
+      "version": null,
+      "creation_date": "2024-07-04",
+      "year": 2024,
+      "filename": "Silent Jay x Sergik - It's Getting FINAL.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Silent Jay x Sergik - It's Getting FINAL.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Prosper v2",
+      "artist": "SERGIK x Tibbs",
+      "collaborators": [
+        "Tibbs"
+      ],
+      "version": "v2",
+      "creation_date": "2024-07-23",
+      "year": 2024,
+      "filename": "SERGIK x Tibbs - Prosper v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Tibbs - Prosper v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Prosper",
+      "artist": "SERGIK x Tibbs",
+      "collaborators": [
+        "Tibbs"
+      ],
+      "version": null,
+      "creation_date": "2024-07-23",
+      "year": 2024,
+      "filename": "SERGIK x Tibbs - Prosper.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Tibbs - Prosper.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "It Is What It Is",
+      "artist": "SERGIK x OPTIKZ",
+      "collaborators": [
+        "OPTIKZ"
+      ],
+      "version": null,
+      "creation_date": "2024-08-04",
+      "year": 2024,
+      "filename": "SERGIK x OPTIKZ - It Is What It Is.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OPTIKZ - It Is What It Is.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Happiness 1",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-07",
+      "year": 2024,
+      "filename": "SERGIK - Happiness 1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Happiness 1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Searching (Instrumental)",
+      "artist": "Janis and The Planets x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": "Instrumental",
+      "creation_date": "2024-08-08",
+      "year": 2024,
+      "filename": "Janis and The Planets x SERGIK - Searching (Instrumental).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets x SERGIK - Searching (Instrumental).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Searching 3",
+      "artist": "Janis and The Planets x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2024-08-08",
+      "year": 2024,
+      "filename": "Janis and The Planets x SERGIK - Searching 3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets x SERGIK - Searching 3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Utopia EP Mix",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-08",
+      "year": 2024,
+      "filename": "SERGIK - Utopia EP Mix.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Utopia EP Mix.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "To The Moon",
+      "artist": "SERGIK x Janis & The Planets",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2024-08-08",
+      "year": 2024,
+      "filename": "SERGIK x Janis & The Planets - To The Moon.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis & The Planets - To The Moon.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Searching",
+      "artist": "SERGIK x Janis and The Planets",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2024-08-08",
+      "year": 2024,
+      "filename": "SERGIK x Janis and The Planets - Searching.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis and The Planets - Searching.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Take Me Home",
+      "artist": "SERGIK x OG Coconut",
+      "collaborators": [
+        "OG"
+      ],
+      "version": null,
+      "creation_date": "2024-08-11",
+      "year": 2024,
+      "filename": "SERGIK x OG Coconut - Take Me Home.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OG Coconut - Take Me Home.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Astro Daze",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-15",
+      "year": 2024,
+      "filename": "SERGIK - Astro Daze.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Astro Daze.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "What Is What",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-15",
+      "year": 2024,
+      "filename": "SERGIK - What Is What.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - What Is What.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Muzik",
+      "artist": "SERGIK X WWW",
+      "collaborators": [
+        "WWW"
+      ],
+      "version": null,
+      "creation_date": "2024-08-15",
+      "year": 2024,
+      "filename": "SERGIK X WWW - Muzik.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK X WWW - Muzik.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "What Is What 3",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-16",
+      "year": 2024,
+      "filename": "SERGIK - What Is What 3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - What Is What 3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wont Stop",
+      "artist": "SERGIK x Isaiah",
+      "collaborators": [
+        "Isaiah"
+      ],
+      "version": null,
+      "creation_date": "2024-08-17",
+      "year": 2024,
+      "filename": "SERGIK x Isaiah - Wont Stop.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Isaiah - Wont Stop.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Who's Boss?",
+      "artist": "SERGIK x Mateo Haze",
+      "collaborators": [
+        "Mateo"
+      ],
+      "version": null,
+      "creation_date": "2024-08-18",
+      "year": 2024,
+      "filename": "SERGIK x Mateo Haze - Who's Boss?.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Mateo Haze - Who's Boss?.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Who's Boss 2?",
+      "artist": "SERGIK x Mateo Haze",
+      "collaborators": [
+        "Mateo"
+      ],
+      "version": null,
+      "creation_date": "2024-08-20",
+      "year": 2024,
+      "filename": "SERGIK x Mateo Haze - Who's Boss 2?.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Mateo Haze - Who's Boss 2?.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Deeper",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-23",
+      "year": 2024,
+      "filename": "SERGIK - Deeper.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Deeper.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "What Is What lo Vocz",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-27",
+      "year": 2024,
+      "filename": "SERGIK - What Is What lo Vocz.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - What Is What lo Vocz.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Morpheus",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-08-28",
+      "year": 2024,
+      "filename": "SERGIK - Morpheus.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Morpheus.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Golden Hour - House",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-02",
+      "year": 2024,
+      "filename": "SERGIK - Golden Hour - House.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Golden Hour - House.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Golden Hour - Reggaeton",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-02",
+      "year": 2024,
+      "filename": "SERGIK - Golden Hour - Reggaeton.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Golden Hour - Reggaeton.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Straight to the Room",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-08",
+      "year": 2024,
+      "filename": "SERGIK - Straight to the Room.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Straight to the Room.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Suade",
+      "artist": "Janis & The Planets x Sergik",
+      "collaborators": [
+        "Sergik"
+      ],
+      "version": null,
+      "creation_date": "2024-09-09",
+      "year": 2024,
+      "filename": "Janis & The Planets x Sergik - Suade.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis & The Planets x Sergik - Suade.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Gypsy - House",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-09",
+      "year": 2024,
+      "filename": "SERGIK - Gypsy - House.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Gypsy - House.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Gypsy - Trap",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-09",
+      "year": 2024,
+      "filename": "SERGIK - Gypsy - Trap.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Gypsy - Trap.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Farewell",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-15",
+      "year": 2024,
+      "filename": "SERGIK - Farewell.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Farewell.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Give Me Peace",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-09-15",
+      "year": 2024,
+      "filename": "SERGIK - Give Me Peace.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Give Me Peace.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Seed",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-10-04",
+      "year": 2024,
+      "filename": "SERGIK - The Seed.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - The Seed.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feelin Good V2",
+      "artist": "SERGIK x SLICK FLOYD",
+      "collaborators": [
+        "SLICK"
+      ],
+      "version": "V2",
+      "creation_date": "2024-10-16",
+      "year": 2024,
+      "filename": "SERGIK x SLICK FLOYD - Feelin Good V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x SLICK FLOYD - Feelin Good V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tap In",
+      "artist": "Sergik x JIMIII x Mateo Haze",
+      "collaborators": [
+        "JIMIII",
+        "Mateo"
+      ],
+      "version": null,
+      "creation_date": "2024-10-25",
+      "year": 2024,
+      "filename": "Sergik x JIMIII x Mateo Haze - Tap In .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x JIMIII x Mateo Haze - Tap In .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Forza",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-10-26",
+      "year": 2024,
+      "filename": "SERGIK - Forza.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Forza.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "It Is What It Is v2",
+      "artist": "SERGIK x OPTIKZ",
+      "collaborators": [
+        "OPTIKZ"
+      ],
+      "version": "v2",
+      "creation_date": "2024-10-31",
+      "year": 2024,
+      "filename": "SERGIK x OPTIKZ - It Is What It Is v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OPTIKZ - It Is What It Is v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Levitating",
+      "artist": "SERGIK x Janis & the Planets",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2024-11-05",
+      "year": 2024,
+      "filename": "SERGIK x Janis & the Planets - Levitating.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis & the Planets - Levitating.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Daze V2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "V2",
+      "creation_date": "2024-11-08",
+      "year": 2024,
+      "filename": "SERGIK - Daze V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Daze V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Daze",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-11-08",
+      "year": 2024,
+      "filename": "SERGIK - Daze.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Daze.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "For The Love",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-11-08",
+      "year": 2024,
+      "filename": "SERGIK - For The Love.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - For The Love.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Like A Daisy",
+      "artist": "SERGIK x Janis",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2024-11-11",
+      "year": 2024,
+      "filename": "SERGIK x Janis - Like A Daisy.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis - Like A Daisy.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Like A Daisy",
+      "artist": "SERGIK Ft. Janis & The Planets",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2024-11-12",
+      "year": 2024,
+      "filename": "SERGIK Ft. Janis & The Planets - Like A Daisy.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK Ft. Janis & The Planets - Like A Daisy.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Say Yeah v2",
+      "artist": "SERGIK Rework",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2024-11-13",
+      "year": 2024,
+      "filename": "SERGIK Rework - Say Yeah v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK Rework - Say Yeah v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Say Yeah v3",
+      "artist": "SERGIK Rework",
+      "collaborators": [],
+      "version": "v3",
+      "creation_date": "2024-11-14",
+      "year": 2024,
+      "filename": "SERGIK Rework - Say Yeah v3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK Rework - Say Yeah v3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Techno Vato",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-11-18",
+      "year": 2024,
+      "filename": "SERGIK - Techno Vato.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Techno Vato.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Drifter",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-11-20",
+      "year": 2024,
+      "filename": "SERGIK - Drifter.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Drifter.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Everyday",
+      "artist": "SERGIK x Stov",
+      "collaborators": [
+        "Stov"
+      ],
+      "version": null,
+      "creation_date": "2024-12-13",
+      "year": 2024,
+      "filename": "SERGIK x Stov - Everyday.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Stov - Everyday.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Everyday Jah",
+      "artist": "SERGIK x Stov",
+      "collaborators": [
+        "Stov"
+      ],
+      "version": null,
+      "creation_date": "2024-12-14",
+      "year": 2024,
+      "filename": "SERGIK x Stov - Everyday Jah.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Stov - Everyday Jah.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Way",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2024-12-16",
+      "year": 2024,
+      "filename": "SERGIK - The Way.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - The Way.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Lifecycle Of Growth Instrumental",
+      "artist": "Mike Crowe x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": "Instrumental",
+      "creation_date": "2024-12-22",
+      "year": 2024,
+      "filename": "Mike Crowe x SERGIK - Lifecycle Of Growth Instrumental.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Mike Crowe x SERGIK - Lifecycle Of Growth Instrumental.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Lifecycle Of Growth",
+      "artist": "Mike Crowe x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2024-12-22",
+      "year": 2024,
+      "filename": "Mike Crowe x SERGIK - Lifecycle Of Growth.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Mike Crowe x SERGIK - Lifecycle Of Growth.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bxtch I Grow (Shafeus Edit)",
+      "artist": "SERGIK x Aloe Flipz x Nood",
+      "collaborators": [
+        "Aloe",
+        "Nood"
+      ],
+      "version": "Edit",
+      "creation_date": "2025-01-02",
+      "year": 2025,
+      "filename": "SERGIK x Aloe Flipz x Nood - Bxtch I Grow (Shafeus Edit).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Aloe Flipz x Nood - Bxtch I Grow (Shafeus Edit).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Im Grown",
+      "artist": "SERGIK x Nood",
+      "collaborators": [
+        "Nood"
+      ],
+      "version": null,
+      "creation_date": "2025-01-11",
+      "year": 2025,
+      "filename": "SERGIK x Nood - Im Grown.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Nood - Im Grown.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "If You Want To",
+      "artist": "SERGIK x NOOD",
+      "collaborators": [
+        "NOOD"
+      ],
+      "version": null,
+      "creation_date": "2025-01-18",
+      "year": 2025,
+      "filename": "SERGIK x NOOD - If You Want To.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x NOOD - If You Want To.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag  (TechYa VIP)",
+      "artist": "SERGIK x Breauxxx",
+      "collaborators": [
+        "Breau"
+      ],
+      "version": "VIP",
+      "creation_date": "2025-01-21",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxx - The Bag  (TechYa VIP).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxx - The Bag  (TechYa VIP).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag",
+      "artist": "SERGIK x Breauxxxx x Janis",
+      "collaborators": [
+        "Breau",
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2025-01-21",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxxx x Janis - The Bag.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxxx x Janis - The Bag.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Havn Fun",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-01-22",
+      "year": 2025,
+      "filename": "SERGIK - Havn Fun.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Havn Fun.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag  (DiscoTech VIP)",
+      "artist": "SERGIK x Breauxxx",
+      "collaborators": [
+        "Breau"
+      ],
+      "version": "VIP",
+      "creation_date": "2025-01-22",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxx - The Bag  (DiscoTech VIP).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxx - The Bag  (DiscoTech VIP).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag 130bpm (Tech-yes VIP2)",
+      "artist": "SERGIK x Breauxxx",
+      "collaborators": [
+        "Breau"
+      ],
+      "version": null,
+      "creation_date": "2025-01-23",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxx - The Bag 130bpm (Tech-yes VIP2).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxx - The Bag 130bpm (Tech-yes VIP2).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag 130bpm (Techno SRGFLP))",
+      "artist": "SERGIK x Breauxxx",
+      "collaborators": [
+        "Breau"
+      ],
+      "version": null,
+      "creation_date": "2025-01-23",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxx - The Bag 130bpm (Techno SRGFLP)).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxx - The Bag 130bpm (Techno SRGFLP)).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Bag 135bpm (Tech-yes VIP)",
+      "artist": "SERGIK x Breauxxx",
+      "collaborators": [
+        "Breau"
+      ],
+      "version": "VIP",
+      "creation_date": "2025-01-23",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxx - The Bag 135bpm (Tech-yes VIP).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxx - The Bag 135bpm (Tech-yes VIP).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bizzz (Instrumental)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "Instrumental",
+      "creation_date": "2025-01-28",
+      "year": 2025,
+      "filename": "SERGIK - Bizzz (Instrumental).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Bizzz (Instrumental).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bizzz",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-01-28",
+      "year": 2025,
+      "filename": "SERGIK - Bizzz.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Bizzz.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Coming Thru 12",
+      "artist": "Andino x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2025-01-31",
+      "year": 2025,
+      "filename": "Andino x SERGIK - Coming Thru 12.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Andino x SERGIK - Coming Thru 12.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "CONTRABAND",
+      "artist": "OMNOM x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2025-01-31",
+      "year": 2025,
+      "filename": "OMNOM x SERGIK - CONTRABAND.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/OMNOM x SERGIK - CONTRABAND.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Refreshments",
+      "artist": "SERGIK x NOOD",
+      "collaborators": [
+        "NOOD"
+      ],
+      "version": null,
+      "creation_date": "2025-01-31",
+      "year": 2025,
+      "filename": "SERGIK x NOOD -  Refreshments.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x NOOD -  Refreshments.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "juice",
+      "artist": "SERGIK x NOOD",
+      "collaborators": [
+        "NOOD"
+      ],
+      "version": null,
+      "creation_date": "2025-02-15",
+      "year": 2025,
+      "filename": "SERGIK x NOOD - juice.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x NOOD - juice.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Be Yourself",
+      "artist": "SERGIK x Isaiah Walker",
+      "collaborators": [
+        "Isaiah"
+      ],
+      "version": null,
+      "creation_date": "2025-02-17",
+      "year": 2025,
+      "filename": "SERGIK x Isaiah Walker - Be Yourself.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Isaiah Walker - Be Yourself.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Foolin",
+      "artist": "SERGIK x Cut Rugs",
+      "collaborators": [
+        "Cut"
+      ],
+      "version": null,
+      "creation_date": "2025-02-23",
+      "year": 2025,
+      "filename": "SERGIK x Cut Rugs - Foolin.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Cut Rugs - Foolin.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tricks",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-01",
+      "year": 2025,
+      "filename": "SERGIK - Tricks .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Tricks .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Cherry Bombs singled",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-08",
+      "year": 2025,
+      "filename": "SERGIK - Cherry Bombs singled.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Cherry Bombs singled.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Drunk",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-11",
+      "year": 2025,
+      "filename": "SERGIK - Drunk.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Drunk.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Birdtalk 2",
+      "artist": "ANDINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2025-03-14",
+      "year": 2025,
+      "filename": "ANDINO x SERGIK - Birdtalk 2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/ANDINO x SERGIK - Birdtalk 2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Birdtalk",
+      "artist": "ANDINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2025-03-14",
+      "year": 2025,
+      "filename": "ANDINO x SERGIK - Birdtalk.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/ANDINO x SERGIK - Birdtalk.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Melt",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-14",
+      "year": 2025,
+      "filename": "SERGIK - Melt.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Melt.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rockn",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-19",
+      "year": 2025,
+      "filename": "SERGIK - Rockn.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rockn.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Ascencion",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-20",
+      "year": 2025,
+      "filename": "SERGIK - Ascencion.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Ascencion.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hotstepper Remix",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "Remix",
+      "creation_date": "2025-03-20",
+      "year": 2025,
+      "filename": "SERGIK - Hotstepper Remix.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Hotstepper Remix.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Alchemy",
+      "artist": "SERGIK x Janis",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2025-03-20",
+      "year": 2025,
+      "filename": "SERGIK x Janis - Alchemy.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis - Alchemy.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Like a Daisy (VIP Alchemy)",
+      "artist": "SERGIK x Janis",
+      "collaborators": [
+        "Janis"
+      ],
+      "version": "VIP",
+      "creation_date": "2025-03-21",
+      "year": 2025,
+      "filename": "SERGIK x Janis - Like a Daisy (VIP Alchemy).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis - Like a Daisy (VIP Alchemy).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Assignment",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-22",
+      "year": 2025,
+      "filename": "SERGIK - The Assignment.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - The Assignment.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "In The Streets",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-03-25",
+      "year": 2025,
+      "filename": "SERGIK - In The Streets.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - In The Streets.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "From The Stars",
+      "artist": "JETSKI x SERGIK x Dante x Lodin",
+      "collaborators": [
+        "SERGIK",
+        "Dante",
+        "Lodin"
+      ],
+      "version": null,
+      "creation_date": "2025-03-26",
+      "year": 2025,
+      "filename": "JETSKI x SERGIK x Dante x Lodin - From The Stars.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/JETSKI x SERGIK x Dante x Lodin - From The Stars.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hi n Lo",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-04-07",
+      "year": 2025,
+      "filename": "SERGIK - Hi n Lo.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Hi n Lo.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Conducter",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-04-08",
+      "year": 2025,
+      "filename": "SERGIK - Conducter.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Conducter.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The Sound",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-04-09",
+      "year": 2025,
+      "filename": "SERGIK - The Sound.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - The Sound.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Cruise Control",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-04-12",
+      "year": 2025,
+      "filename": "SERGIK - Cruise Control .wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Cruise Control .wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feelin Jiggy",
+      "artist": "SERGIK x Sean Watson",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-04-13",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson - Feelin Jiggy.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson - Feelin Jiggy.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "A Good Day",
+      "artist": "SERGIK x Sean Watson",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-04-14",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson - A Good Day.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson - A Good Day.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "A Good Day v2",
+      "artist": "SERGIK x Sean Watson Ft. Janis",
+      "collaborators": [
+        "Sean",
+        "Janis"
+      ],
+      "version": "v2",
+      "creation_date": "2025-04-14",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson Ft. Janis - A Good Day v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson Ft. Janis - A Good Day v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "A Good Day (Instrumental)",
+      "artist": "SERGIK x Sean Watson",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": "Instrumental",
+      "creation_date": "2025-04-15",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson  - A Good Day (Instrumental).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson  - A Good Day (Instrumental).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "From The Soul",
+      "artist": "SERGIK x Bobs Secret",
+      "collaborators": [
+        "Bobs"
+      ],
+      "version": null,
+      "creation_date": "2025-04-17",
+      "year": 2025,
+      "filename": "SERGIK x Bobs Secret - From The Soul.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Bobs Secret - From The Soul.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bless the Trap 2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-04-19",
+      "year": 2025,
+      "filename": "SERGIK - Bless the Trap 2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Bless the Trap 2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bless the Trap",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-04-19",
+      "year": 2025,
+      "filename": "SERGIK - Bless the Trap.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Bless the Trap.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Soul Infinite",
+      "artist": "BeJanis x Sergik's Secret",
+      "collaborators": [
+        "Sergik"
+      ],
+      "version": null,
+      "creation_date": "2025-04-24",
+      "year": 2025,
+      "filename": "BeJanis x Sergik's Secret - Soul Infinite.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/BeJanis x Sergik's Secret - Soul Infinite.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Ahhh",
+      "artist": "SERGIK x NOOD",
+      "collaborators": [
+        "NOOD"
+      ],
+      "version": null,
+      "creation_date": "2025-04-24",
+      "year": 2025,
+      "filename": "SERGIK x NOOD - Ahhh.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x NOOD - Ahhh.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Ahhh V2",
+      "artist": "SERGIK x NOOD",
+      "collaborators": [
+        "NOOD"
+      ],
+      "version": "V2",
+      "creation_date": "2025-04-25",
+      "year": 2025,
+      "filename": "SERGIK x NOOD - Ahhh V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x NOOD - Ahhh V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Aqua",
+      "artist": "SERGIK x Sean Watson x NOOD",
+      "collaborators": [
+        "Sean",
+        "NOOD"
+      ],
+      "version": null,
+      "creation_date": "2025-04-26",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson x NOOD - Aqua.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson x NOOD - Aqua.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tippn Screw",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-05-02",
+      "year": 2025,
+      "filename": "SERGIK - Tippn Screw.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Tippn Screw.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hydrate",
+      "artist": "SERGIK x BeJanis",
+      "collaborators": [
+        "BeJanis"
+      ],
+      "version": null,
+      "creation_date": "2025-05-02",
+      "year": 2025,
+      "filename": "SERGIK x BeJanis - Hydrate.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x BeJanis - Hydrate.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Birdtalk Master1",
+      "artist": "ANDINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2025-05-08",
+      "year": 2025,
+      "filename": "ANDINO x SERGIK - Birdtalk Master1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/ANDINO x SERGIK - Birdtalk Master1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Birdtalk Premaster",
+      "artist": "ANDINO x SERGIK",
+      "collaborators": [
+        "SERGIK"
+      ],
+      "version": "Premaster",
+      "creation_date": "2025-05-08",
+      "year": 2025,
+      "filename": "ANDINO x SERGIK - Birdtalk Premaster.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/ANDINO x SERGIK - Birdtalk Premaster.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Feel The Rhythm",
+      "artist": "SERGIK x BeJanis",
+      "collaborators": [
+        "BeJanis"
+      ],
+      "version": null,
+      "creation_date": "2025-05-08",
+      "year": 2025,
+      "filename": "SERGIK x BeJanis - Feel The Rhythm.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x BeJanis - Feel The Rhythm.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Da Pyramids",
+      "artist": "Sergik x Slick",
+      "collaborators": [
+        "Slick"
+      ],
+      "version": null,
+      "creation_date": "2025-05-08",
+      "year": 2025,
+      "filename": "Sergik x Slick - Da Pyramids.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sergik x Slick - Da Pyramids.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Game",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-05-09",
+      "year": 2025,
+      "filename": "SERGIK - Game.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Game.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Just Dont 124bpm",
+      "artist": "SERGIK x ESHER",
+      "collaborators": [
+        "ESHER"
+      ],
+      "version": null,
+      "creation_date": "2025-05-09",
+      "year": 2025,
+      "filename": "SERGIK x ESHER - Just Dont 124bpm.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x ESHER - Just Dont 124bpm.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Just Dont",
+      "artist": "SERGIK x ESHER",
+      "collaborators": [
+        "ESHER"
+      ],
+      "version": null,
+      "creation_date": "2025-05-09",
+      "year": 2025,
+      "filename": "SERGIK x ESHER - Just Dont.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x ESHER - Just Dont.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Give Back",
+      "artist": "SERGIK ft Cy Heck",
+      "collaborators": [
+        "Cy"
+      ],
+      "version": null,
+      "creation_date": "2025-05-15",
+      "year": 2025,
+      "filename": "SERGIK ft Cy Heck - Give Back.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK ft Cy Heck - Give Back.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Doin My Thang",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-05-16",
+      "year": 2025,
+      "filename": "SERGIK - Doin My Thang.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Doin My Thang.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Give Back Ft. Cy Heck",
+      "artist": "SERGIK",
+      "collaborators": [
+        "Cy"
+      ],
+      "version": null,
+      "creation_date": "2025-05-17",
+      "year": 2025,
+      "filename": "SERGIK - Give Back Ft. Cy Heck.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Give Back Ft. Cy Heck.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On Da Flo",
+      "artist": "SERGIK x CHKLZ",
+      "collaborators": [
+        "CHKLZ"
+      ],
+      "version": null,
+      "creation_date": "2025-05-21",
+      "year": 2025,
+      "filename": "SERGIK x CHKLZ - On Da Flo.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x CHKLZ - On Da Flo.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Levels To This",
+      "artist": "SERGIK x Jetskii",
+      "collaborators": [
+        "Jetskii"
+      ],
+      "version": null,
+      "creation_date": "2025-05-21",
+      "year": 2025,
+      "filename": "SERGIK x Jetskii - Levels To This.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Jetskii - Levels To This.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Ain\"t Goin Out",
+      "artist": "SERGIK x CHKLZ",
+      "collaborators": [
+        "CHKLZ"
+      ],
+      "version": null,
+      "creation_date": "2025-05-22",
+      "year": 2025,
+      "filename": "SERGIK x CHKLZ - Ain\"t Goin Out.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x CHKLZ - Ain\"t Goin Out.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Comprehension",
+      "artist": "SERGIK x Breauxxx x NOOD",
+      "collaborators": [
+        "Breau",
+        "NOOD"
+      ],
+      "version": null,
+      "creation_date": "2025-05-23",
+      "year": 2025,
+      "filename": "SERGIK x Breauxxx x NOOD - Comprehension.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Breauxxx x NOOD - Comprehension.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Free v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2025-05-29",
+      "year": 2025,
+      "filename": "SERGIK - Free v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Free v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Free v3",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v3",
+      "creation_date": "2025-05-29",
+      "year": 2025,
+      "filename": "SERGIK - Free v3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Free v3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Free",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-05-29",
+      "year": 2025,
+      "filename": "SERGIK - Free.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Free.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "After Party",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-05-30",
+      "year": 2025,
+      "filename": "SERGIK - After Party.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - After Party.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "repeat [mstr v2] (worth the weight mastering)",
+      "artist": "frank terry x sergik",
+      "collaborators": [
+        "sergik"
+      ],
+      "version": "v2",
+      "creation_date": "2025-06-11",
+      "year": 2025,
+      "filename": "frank terry x sergik - repeat [mstr v2] (worth the weight mastering).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/frank terry x sergik - repeat [mstr v2] (worth the weight mastering).wav.download/frank terry x sergik - repeat [mstr v2] (worth the weight mastering).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "sergik x frank terry_cozy cats_master 1 (worth the weight)",
+      "artist": "SERGIK",
+      "collaborators": [
+        "frank"
+      ],
+      "version": null,
+      "creation_date": "2025-06-11",
+      "year": 2025,
+      "filename": "sergik x frank terry_cozy cats_master 1 (worth the weight).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/sergik x frank terry_cozy cats_master 1 (worth the weight).wav.download/sergik x frank terry_cozy cats_master 1 (worth the weight).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "One Time",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-12",
+      "year": 2025,
+      "filename": "SERGIK - One Time.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - One Time.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dandy (BeJanis - Suade Remix)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "Remix",
+      "creation_date": "2025-06-14",
+      "year": 2025,
+      "filename": "SERGIK - Dandy (BeJanis - Suade Remix).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dandy (BeJanis - Suade Remix).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dandy (FTP VIP)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "VIP",
+      "creation_date": "2025-06-14",
+      "year": 2025,
+      "filename": "SERGIK - Dandy (FTP VIP).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dandy (FTP VIP).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dandy",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-14",
+      "year": 2025,
+      "filename": "SERGIK - Dandy.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Dandy.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Last Night v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2025-06-14",
+      "year": 2025,
+      "filename": "SERGIK - Last Night v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Last Night v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Duce",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-15",
+      "year": 2025,
+      "filename": "SERGIK - Duce.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Duce.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Duces (Disco Infero Remix)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "Remix",
+      "creation_date": "2025-06-15",
+      "year": 2025,
+      "filename": "SERGIK - Duces (Disco Infero Remix).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Duces (Disco Infero Remix).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Gooped",
+      "artist": "Andino",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-17",
+      "year": 2025,
+      "filename": "Andino - Gooped.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Andino - Gooped.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "In The Streets = (Funkshway SRGFLp)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-17",
+      "year": 2025,
+      "filename": "SERGIK - In The Streets = (Funkshway SRGFLp).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - In The Streets = (Funkshway SRGFLp).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hustle Funkshway V2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "V2",
+      "creation_date": "2025-06-18",
+      "year": 2025,
+      "filename": "SERGIK - Hustle Funkshway V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Hustle Funkshway V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Hustle Funkshway",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-18",
+      "year": 2025,
+      "filename": "SERGIK - Hustle Funkshway.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Hustle Funkshway.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Rushy Funkshway",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-18",
+      "year": 2025,
+      "filename": "SERGIK - Rushy Funkshway.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Rushy Funkshway.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Funkshway - ANALOG REC SERGIK - Funkshway - ANALOG RECORDING",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-19",
+      "year": 2025,
+      "filename": "SERGIK - Funkshway - ANALOG REC SERGIK - Funkshway - ANALOG RECORDING.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Funkshway - ANALOG REC SERGIK - Funkshway - ANALOG RECORDING.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Funkshway - ANALOG REC SERGIK - Funkshway - Digi Analog",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-19",
+      "year": 2025,
+      "filename": "SERGIK - Funkshway - ANALOG REC SERGIK - Funkshway - Digi Analog.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Funkshway - ANALOG REC SERGIK - Funkshway - Digi Analog.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Funkshway - ANALOG RECORDING",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-19",
+      "year": 2025,
+      "filename": "SERGIK - Funkshway - ANALOG RECORDING.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Funkshway - ANALOG RECORDING.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Funkshway - Digi Analog",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-19",
+      "year": 2025,
+      "filename": "SERGIK - Funkshway - Digi Analog.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Funkshway - Digi Analog.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Funkshway analog",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-19",
+      "year": 2025,
+      "filename": "SERGIK - Funkshway analog.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Funkshway analog.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Escapade",
+      "artist": "SERGIK x Sean Hart x Sean Watson",
+      "collaborators": [
+        "Sean",
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-06-20",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Sean Watson - Escapade.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Sean Watson - Escapade.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Snap Back Sweet",
+      "artist": "SERGIK x Sean Hart x Sean Watson x Janis",
+      "collaborators": [
+        "Sean",
+        "Sean",
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2025-06-20",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Sean Watson x Janis - Snap Back Sweet.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Sean Watson x Janis - Snap Back Sweet.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Snap Back",
+      "artist": "SERGIK x Sean Hart x Sean Watson x Janis",
+      "collaborators": [
+        "Sean",
+        "Sean",
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2025-06-20",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Sean Watson x Janis - Snap Back.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Sean Watson x Janis - Snap Back.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Snap Back1",
+      "artist": "SERGIK x Sean Hart x Sean Watson x Janis",
+      "collaborators": [
+        "Sean",
+        "Sean",
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2025-06-20",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Sean Watson x Janis - Snap Back1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Sean Watson x Janis - Snap Back1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Snap Back Sweet",
+      "artist": "SERGIK x Sean Hart x Sean Watson V2x Janis",
+      "collaborators": [
+        "Sean",
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-06-21",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Sean Watson V2x Janis - Snap Back Sweet.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Sean Watson V2x Janis - Snap Back Sweet.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Can We Rock",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-06-22",
+      "year": 2025,
+      "filename": "SERGIK - Can We Rock.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Can We Rock.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Plane View V2",
+      "artist": "SERGIK x WWW",
+      "collaborators": [
+        "WWW"
+      ],
+      "version": "V2",
+      "creation_date": "2025-06-22",
+      "year": 2025,
+      "filename": "SERGIK x WWW - Plane View V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x WWW - Plane View V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Plane View",
+      "artist": "SERGIK x WWW",
+      "collaborators": [
+        "WWW"
+      ],
+      "version": null,
+      "creation_date": "2025-06-22",
+      "year": 2025,
+      "filename": "SERGIK x WWW - Plane View.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x WWW - Plane View.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "One Time v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2025-06-26",
+      "year": 2025,
+      "filename": "SERGIK - One Time v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - One Time v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Tell Em Heal",
+      "artist": "SERGIK x OG Coco",
+      "collaborators": [
+        "OG"
+      ],
+      "version": null,
+      "creation_date": "2025-06-27",
+      "year": 2025,
+      "filename": "SERGIK x OG Coco - Tell Em Heal.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x OG Coco - Tell Em Heal.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Make A Wish",
+      "artist": "SERGIK x Sean Watson x BeJanis",
+      "collaborators": [
+        "Sean",
+        "BeJanis"
+      ],
+      "version": null,
+      "creation_date": "2025-07-01",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson x BeJanis - Make A Wish.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson x BeJanis - Make A Wish.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE (Rebass)",
+      "artist": "SERGIK x Sean Hart",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart - American LOVE (Rebass).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart - American LOVE (Rebass).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dandelicious V3",
+      "artist": "SERGIK x Sean Hart",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": "V3",
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart - Dandelicious V3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart - Dandelicious V3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dandelicious v2",
+      "artist": "SERGIK x Sean Hart",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": "v2",
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart - Dandelicious v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart - Dandelicious v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Dandelicious",
+      "artist": "SERGIK x Sean Hart",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart - Dandelicious.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart - Dandelicious.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE V2",
+      "artist": "SERGIK x Sean Hart Ft. Chris Powell",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": "V2",
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart Ft. Chris Powell - American LOVE V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart Ft. Chris Powell - American LOVE V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE",
+      "artist": "SERGIK x Sean Hart Ft. Chris Powell",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart Ft. Chris Powell - American LOVE.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart Ft. Chris Powell - American LOVE.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE",
+      "artist": "SERGIK x Sean Hart Ft. Chris Powell v3",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": "v3",
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart Ft. Chris Powell v3 - American LOVE.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart Ft. Chris Powell v3 - American LOVE.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE (Rebass) 118bpm",
+      "artist": "SERGIK x Sean Hart x Chris Powell",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-03",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Chris Powell - American LOVE (Rebass) 118bpm.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Chris Powell - American LOVE (Rebass) 118bpm.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE (Rebass) V2",
+      "artist": "SERGIK x Sean Hart Ft. Chris Powell",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": "V2",
+      "creation_date": "2025-07-04",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart Ft. Chris Powell - American LOVE (Rebass) V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart Ft. Chris Powell - American LOVE (Rebass) V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE",
+      "artist": "SERGIK x Sean Hart Ft. Chris Powell v4",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": "v4",
+      "creation_date": "2025-07-04",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart Ft. Chris Powell v4- American LOVE.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart Ft. Chris Powell v4- American LOVE.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "State Of Mind",
+      "artist": "SERGIK x Slick Floyd x Batt Lo ft. Chris Powell",
+      "collaborators": [
+        "Slick",
+        "Batt",
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-04",
+      "year": 2025,
+      "filename": "SERGIK x Slick Floyd x Batt Lo ft. Chris Powell- State Of Mind.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Slick Floyd x Batt Lo ft. Chris Powell- State Of Mind.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and The Planets - Safespace v2",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v2",
+      "creation_date": "2025-07-12",
+      "year": 2025,
+      "filename": "Janis and The Planets - Safespace v2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets - Safespace v2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and The Planets - Safespace",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-12",
+      "year": 2025,
+      "filename": "Janis and The Planets - Safespace.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets - Safespace.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Spawn",
+      "artist": "SERGIK x Kayvon",
+      "collaborators": [
+        "Kayvon"
+      ],
+      "version": null,
+      "creation_date": "2025-07-13",
+      "year": 2025,
+      "filename": "SERGIK x Kayvon - Spawn.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Kayvon - Spawn.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and The Planets - Safespace v1",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "v1",
+      "creation_date": "2025-07-14",
+      "year": 2025,
+      "filename": "Janis and The Planets - Safespace v1.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets - Safespace v1.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Leisure (Fmin 121bpm)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-14",
+      "year": 2025,
+      "filename": "SERGIK - Leisure (Fmin 121bpm).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Leisure (Fmin 121bpm).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "American LOVE (Rebass)",
+      "artist": "SERGIK x Sean Hart Ft. Chris Powell",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-14",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart Ft. Chris Powell - American LOVE (Rebass).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart Ft. Chris Powell - American LOVE (Rebass).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Safespace (OG Mix)",
+      "artist": "Sean Hart x Sean Watson x Janis x SERGIK",
+      "collaborators": [
+        "Sean",
+        "Janis",
+        "SERGIK"
+      ],
+      "version": null,
+      "creation_date": "2025-07-14",
+      "year": 2025,
+      "filename": "Sean Hart x Sean Watson x Janis x SERGIK - Safespace (OG Mix).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Sean Hart x Sean Watson x Janis x SERGIK - Safespace (OG Mix).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Witchoo",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-16",
+      "year": 2025,
+      "filename": "SERGIK - Witchoo.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Witchoo.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Durand Jones & The Indications - Witchoo",
+      "artist": "SERGIK Remix",
+      "collaborators": [],
+      "version": "Remix",
+      "creation_date": "2025-07-16",
+      "year": 2025,
+      "filename": "SERGIK Remix - Durand Jones & The Indications - Witchoo.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK Remix - Durand Jones & The Indications - Witchoo.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "So Wrong Vocals",
+      "artist": "SERGIK x Chris Powell",
+      "collaborators": [
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-16",
+      "year": 2025,
+      "filename": "SERGIK x Chris Powell - So Wrong Vocals.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Chris Powell - So Wrong Vocals.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "So Wrong",
+      "artist": "SERGIK x Chris Powell",
+      "collaborators": [
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-16",
+      "year": 2025,
+      "filename": "SERGIK x Chris Powell - So Wrong.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Chris Powell - So Wrong.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wut We Hear To Do",
+      "artist": "SERGIK x Chris Powell",
+      "collaborators": [
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-16",
+      "year": 2025,
+      "filename": "SERGIK x Chris Powell - Wut We Hear To Do.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Chris Powell - Wut We Hear To Do.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wut We Hear For (Instrumental)",
+      "artist": "SERGIK x SafeCrackaz",
+      "collaborators": [
+        "SafeCrackaz"
+      ],
+      "version": "Instrumental",
+      "creation_date": "2025-07-18",
+      "year": 2025,
+      "filename": "SERGIK x SafeCrackaz - Wut We Hear For (Instrumental).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x SafeCrackaz - Wut We Hear For (Instrumental).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wut We Hear For",
+      "artist": "SERGIK x SafeCrackaz",
+      "collaborators": [
+        "SafeCrackaz"
+      ],
+      "version": null,
+      "creation_date": "2025-07-18",
+      "year": 2025,
+      "filename": "SERGIK x SafeCrackaz - Wut We Hear For.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x SafeCrackaz - Wut We Hear For.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wut We Hear To Do",
+      "artist": "SERGIK x Sean Watson x Chris P",
+      "collaborators": [
+        "Sean",
+        "Chris"
+      ],
+      "version": null,
+      "creation_date": "2025-07-18",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson x Chris P - Wut We Hear To Do.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson x Chris P - Wut We Hear To Do.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Traction",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-20",
+      "year": 2025,
+      "filename": "SERGIK - Traction.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Traction.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Sometimes Ft. Bessie Jones",
+      "artist": "SERGIK",
+      "collaborators": [
+        "Bessie"
+      ],
+      "version": null,
+      "creation_date": "2025-07-21",
+      "year": 2025,
+      "filename": "SERGIK - Sometimes Ft. Bessie Jones.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Sometimes Ft. Bessie Jones.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Sometimes (instrumental)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "instrumental",
+      "creation_date": "2025-07-23",
+      "year": 2025,
+      "filename": "SERGIK - Sometimes (instrumental).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Sometimes (instrumental).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Resist d'King Of The Jungle with LOVE",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-24",
+      "year": 2025,
+      "filename": "SERGIK - Resist d'King Of The Jungle with LOVE.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Resist d'King Of The Jungle with LOVE.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Damian Marley - Welcome To Jamrock",
+      "artist": "SERGIK Remix",
+      "collaborators": [],
+      "version": "Remix",
+      "creation_date": "2025-07-25",
+      "year": 2025,
+      "filename": "SERGIK Remix - Damian Marley - Welcome To Jamrock.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK Remix - Damian Marley - Welcome To Jamrock.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and The Planets - Take Me To",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-27",
+      "year": 2025,
+      "filename": "Janis and The Planets - Take Me To.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets - Take Me To.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The World Dont Stop The Day Gmaj 124bpm",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-27",
+      "year": 2025,
+      "filename": "SERGIK - The World Dont Stop The Day Gmaj 124bpm.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - The World Dont Stop The Day Gmaj 124bpm.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "The World Dont Stop The Day",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-07-27",
+      "year": 2025,
+      "filename": "SERGIK - The World Dont Stop The Day.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - The World Dont Stop The Day.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "nosavin - battlo x sergik trashtalqqq",
+      "artist": "SERGIK",
+      "collaborators": [
+        "sergik"
+      ],
+      "version": null,
+      "creation_date": "2025-07-29",
+      "year": 2025,
+      "filename": "nosavin - battlo x sergik trashtalqqq.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/nosavin - battlo x sergik trashtalqqq.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On A Diet",
+      "artist": "SERGIK x Cy Heck",
+      "collaborators": [
+        "Cy"
+      ],
+      "version": null,
+      "creation_date": "2025-07-30",
+      "year": 2025,
+      "filename": "SERGIK x Cy Heck - On A Diet.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Cy Heck - On A Diet.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On A Diet V2",
+      "artist": "SERGIK x Cy Heck",
+      "collaborators": [
+        "Cy"
+      ],
+      "version": "V2",
+      "creation_date": "2025-07-31",
+      "year": 2025,
+      "filename": "SERGIK x Cy Heck - On A Diet V2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Cy Heck - On A Diet V2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "All I Want is",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-08-01",
+      "year": 2025,
+      "filename": "SERGIK - All I Want is.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - All I Want is.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "On A Diet V3",
+      "artist": "SERGIK x Cy heck",
+      "collaborators": [
+        "Cy"
+      ],
+      "version": "V3",
+      "creation_date": "2025-08-01",
+      "year": 2025,
+      "filename": "SERGIK x Cy heck - On A Diet V3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Cy heck - On A Diet V3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Take Me To 2",
+      "artist": "SERGIK x Janis x Sean W x Safecrackaz",
+      "collaborators": [
+        "Janis",
+        "Sean",
+        "Safecrackaz"
+      ],
+      "version": null,
+      "creation_date": "2025-08-01",
+      "year": 2025,
+      "filename": "SERGIK x Janis x Sean W x Safecrackaz - Take Me To 2.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Janis x Sean W x Safecrackaz - Take Me To 2.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Bout Dat",
+      "artist": "SERGIK x Slick Floyd",
+      "collaborators": [
+        "Slick"
+      ],
+      "version": null,
+      "creation_date": "2025-08-01",
+      "year": 2025,
+      "filename": "SERGIK x Slick Floyd - Bout Dat.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Slick Floyd - Bout Dat.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "- All I Want V3",
+      "artist": "SERGIK x Sean Hart",
+      "collaborators": [
+        "Sean"
+      ],
+      "version": "V3",
+      "creation_date": "2025-08-02",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart - - All I Want V3.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart - - All I Want V3.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Thats IT.",
+      "artist": "SERGIK ft Tia Jenny",
+      "collaborators": [
+        "Tia"
+      ],
+      "version": null,
+      "creation_date": "2025-08-03",
+      "year": 2025,
+      "filename": "SERGIK ft Tia Jenny - Thats IT..wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK ft Tia Jenny - Thats IT..wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "They Grooved",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-08-05",
+      "year": 2025,
+      "filename": "SERGIK - They Grooved.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - They Grooved.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "They Got Me",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-08-06",
+      "year": 2025,
+      "filename": "SERGIK - They Got Me.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - They Got Me.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Give Me That Sound",
+      "artist": "SERGIK x Sean Hart x Cy Heck",
+      "collaborators": [
+        "Sean",
+        "Cy"
+      ],
+      "version": null,
+      "creation_date": "2025-08-07",
+      "year": 2025,
+      "filename": "SERGIK x Sean Hart x Cy Heck - Give Me That Sound.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Hart x Cy Heck - Give Me That Sound.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Wantchoo",
+      "artist": "SERGIK x Ben Frank x Sean H",
+      "collaborators": [
+        "Ben",
+        "Sean"
+      ],
+      "version": null,
+      "creation_date": "2025-08-10",
+      "year": 2025,
+      "filename": "SERGIK x Ben Frank x Sean H - Wantchoo.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Ben Frank x Sean H - Wantchoo.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Must Be",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-08-23",
+      "year": 2025,
+      "filename": "SERGIK - Must Be.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Must Be.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Do It Right (Peggy Gou Remix)",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "Remix",
+      "creation_date": "2025-08-24",
+      "year": 2025,
+      "filename": "SERGIK - Do It Right (Peggy Gou Remix).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Do It Right (Peggy Gou Remix).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and The Planets - What They Saying?",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-09-12",
+      "year": 2025,
+      "filename": "Janis and The Planets - What They Saying?.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets - What They Saying?.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and The Planets - (instrumental) What They Saying?",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": "instrumental",
+      "creation_date": "2025-09-18",
+      "year": 2025,
+      "filename": "Janis and The Planets - (instrumental) What They Saying?.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and The Planets - (instrumental) What They Saying?.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Janis and the Planets - Miel",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-09-25",
+      "year": 2025,
+      "filename": "Janis and the Planets - Miel.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Janis and the Planets - Miel.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Soul Infinite (Instrumental)",
+      "artist": "BeJanis x Sergik's Secret",
+      "collaborators": [
+        "Sergik"
+      ],
+      "version": "Instrumental",
+      "creation_date": "2025-09-26",
+      "year": 2025,
+      "filename": "BeJanis x Sergik's Secret - Soul Infinite (Instrumental).wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/BeJanis x Sergik's Secret - Soul Infinite (Instrumental).wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Nectar",
+      "artist": "SERGIK x Be.Janice",
+      "collaborators": [
+        "Be"
+      ],
+      "version": null,
+      "creation_date": "2025-09-27",
+      "year": 2025,
+      "filename": "SERGIK x Be.Janice- Nectar.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Be.Janice- Nectar.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "In The Forest",
+      "artist": "SERGIK x BeJanis",
+      "collaborators": [
+        "BeJanis"
+      ],
+      "version": null,
+      "creation_date": "2025-09-27",
+      "year": 2025,
+      "filename": "SERGIK x BeJanis - In The Forest.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x BeJanis - In The Forest.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "A Good Day",
+      "artist": "SERGIK x Sean Watson Ft. Janis",
+      "collaborators": [
+        "Sean",
+        "Janis"
+      ],
+      "version": null,
+      "creation_date": "2025-10-05",
+      "year": 2025,
+      "filename": "SERGIK x Sean Watson Ft. Janis - A Good Day.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Sean Watson Ft. Janis - A Good Day.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Copy of HANGED",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-10-09",
+      "year": 2025,
+      "filename": "Copy of HANGED.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/Copy of HANGED.wav.download/Copy of HANGED.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Regulate",
+      "artist": "SERGIK",
+      "collaborators": [],
+      "version": null,
+      "creation_date": "2025-10-12",
+      "year": 2025,
+      "filename": "SERGIK - Regulate.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK - Regulate.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Get up Stand up",
+      "artist": "SERGIK x Bob Marley and The Wailers",
+      "collaborators": [
+        "Bob"
+      ],
+      "version": null,
+      "creation_date": "2025-10-12",
+      "year": 2025,
+      "filename": "SERGIK x Bob Marley and The Wailers - Get up Stand up.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Bob Marley and The Wailers - Get up Stand up.wav",
+      "status": "pending_upload"
+    },
+    {
+      "title": "Fly Away",
+      "artist": "SERGIK x Be.Janis",
+      "collaborators": [
+        "Be"
+      ],
+      "version": null,
+      "creation_date": "2025-10-23",
+      "year": 2025,
+      "filename": "SERGIK x Be.Janis - Fly Away.wav",
+      "filepath": "/Volumes/SERGIK/Exports SERGIK/SERGIK WAVs/SERGIK x Be.Janis - Fly Away.wav",
+      "status": "pending_upload"
+    }
+  ]
+}

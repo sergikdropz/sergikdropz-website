@@ -1,0 +1,105 @@
+-- Copy everything below this line and paste into Supabase SQL Editor
+-- Then click "Run"
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================
+-- PURCHASES TABLE
+-- Stores Stripe purchase information
+-- ============================================
+CREATE TABLE IF NOT EXISTS purchases (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  stripe_session_id TEXT UNIQUE NOT NULL,
+  track_id TEXT,
+  track_title TEXT,
+  format TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  customer_email TEXT,
+  customer_name TEXT,
+  amount_paid INTEGER,
+  currency TEXT DEFAULT 'usd',
+  purchased_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  download_count INTEGER DEFAULT 0,
+  last_downloaded_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchases_session_id ON purchases(stripe_session_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_customer_email ON purchases(customer_email);
+CREATE INDEX IF NOT EXISTS idx_purchases_track_id ON purchases(track_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchases(created_at);
+
+-- ============================================
+-- AUDIO FILES TABLE
+-- Stores metadata about audio files in Supabase Storage
+-- ============================================
+CREATE TABLE IF NOT EXISTS audio_files (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  artist TEXT DEFAULT 'SERGIK',
+  file_name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  format TEXT NOT NULL,
+  size_bytes BIGINT,
+  size_mb DECIMAL(10, 2),
+  duration_seconds INTEGER,
+  folder_path TEXT,
+  is_purchasable BOOLEAN DEFAULT false,
+  price_usd DECIMAL(10, 2),
+  artwork_url TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audio_files_title ON audio_files(title);
+CREATE INDEX IF NOT EXISTS idx_audio_files_artist ON audio_files(artist);
+CREATE INDEX IF NOT EXISTS idx_audio_files_format ON audio_files(format);
+CREATE INDEX IF NOT EXISTS idx_audio_files_purchasable ON audio_files(is_purchasable);
+CREATE INDEX IF NOT EXISTS idx_audio_files_folder_path ON audio_files(folder_path);
+
+-- ============================================
+-- FUNCTIONS
+-- ============================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_audio_files_updated_at
+  BEFORE UPDATE ON audio_files
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- ROW LEVEL SECURITY (RLS)
+-- ============================================
+ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own purchases"
+  ON purchases
+  FOR SELECT
+  USING (auth.jwt() ->> 'email' = customer_email);
+
+CREATE POLICY "Service role full access"
+  ON purchases
+  FOR ALL
+  USING (auth.role() = 'service_role');
+
+ALTER TABLE audio_files ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public can view audio files"
+  ON audio_files
+  FOR SELECT
+  USING (true);
+
+CREATE POLICY "Service role full access audio"
+  ON audio_files
+  FOR ALL
+  USING (auth.role() = 'service_role');
+

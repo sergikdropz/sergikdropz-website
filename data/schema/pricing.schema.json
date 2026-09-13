@@ -1,0 +1,19 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"PricingPlan",
+  "type":"object",
+  "required":["id","name","billing_period","price_usd"],
+  "properties":{
+    "id":{"type":"string"},
+    "name":{"type":"string"},
+    "billing_period":{"type":"string","enum":["monthly","annual"]},
+    "price_usd":{"type":"number","minimum":0},
+    "price_display":{"type":"string"},
+    "features":{"type":"array","items":{"type":"string"}},
+    "discount_code":{"type":["string","null"]},
+    "discount_percent":{"type":["number","null"]},
+    "max_artist_accounts":{"type":"integer"},
+    "team_sharing":{"type":"boolean"},
+    "created_at":{"type":"string","format":"date-time"}
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"Testimonial",
+  "type":"object",
+  "required":["id","quote","created_at"],
+  "properties":{
+    "id":{"type":"string"},
+    "author_name":{"type":"string"},
+    "author_handle":{"type":["string","null"]},
+    "author_role":{"type":["string","null"]},
+    "quote":{"type":"string"},
+    "rating":{"type":["number","null"],"minimum":1,"maximum":5},
+    "source":{"type":"string"},
+    "artist_ref":{"type":["string","null"]},
+    "created_at":{"type":"string","format":"date-time"}
+  }
+}

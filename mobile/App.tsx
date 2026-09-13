@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from './src/screens/HomeScreen';
@@ -25,32 +26,32 @@ export default function App() {
         <Tab.Screen 
           name="Home" 
           component={HomeScreen}
-          options={{ tabBarIcon: () => <span style={{ color: '#fff' }}>🏠</span> }}
+          options={{ tabBarIcon: () => <Text style={{ color: '#fff', fontSize: 20 }}>🏠</Text> }}
         />
         <Tab.Screen 
           name="About" 
           component={AboutScreen}
-          options={{ tabBarIcon: () => <span style={{ color: '#fff' }}>ℹ️</span> }}
+          options={{ tabBarIcon: () => <Text style={{ color: '#fff', fontSize: 20 }}>ℹ️</Text> }}
         />
         <Tab.Screen 
           name="Music" 
           component={MusicScreen}
-          options={{ tabBarIcon: () => <span style={{ color: '#fff' }}>🎵</span> }}
+          options={{ tabBarIcon: () => <Text style={{ color: '#fff', fontSize: 20 }}>🎵</Text> }}
         />
         <Tab.Screen 
           name="Performances" 
           component={PerformancesScreen}
-          options={{ tabBarIcon: () => <span style={{ color: '#fff' }}>🎤</span> }}
+          options={{ tabBarIcon: () => <Text style={{ color: '#fff', fontSize: 20 }}>🎤</Text> }}
         />
         <Tab.Screen 
           name="Gallery" 
           component={GalleryScreen}
-          options={{ tabBarIcon: () => <span style={{ color: '#fff' }}>📷</span> }}
+          options={{ tabBarIcon: () => <Text style={{ color: '#fff', fontSize: 20 }}>📷</Text> }}
         />
         <Tab.Screen 
           name="EPK" 
           component={EPKScreen}
-          options={{ tabBarIcon: () => <span style={{ color: '#fff' }}>📄</span> }}
+          options={{ tabBarIcon: () => <Text style={{ color: '#fff', fontSize: 20 }}>📄</Text> }}
         />
       </Tab.Navigator>
     </NavigationContainer>

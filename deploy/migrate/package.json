@@ -1,0 +1,28 @@
+{
+  "name": "sergik-r2-migrate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "backup:dump-db": "node dump-db.mjs",
+    "backup:upload": "node upload-r2.mjs",
+    "backup:verify": "node verify-r2.mjs",
+    "backup:all": "node dump-db.mjs && node upload-r2.mjs && node verify-r2.mjs",
+    "r2:setup:browser": "node playwright-cloudflare-r2.mjs",
+    "r2:production:upload": "node upload-r2-production.mjs",
+    "r2:production:public": "node enable-r2-public.mjs",
+    "r2:production:public:browser": "node enable-r2-public-browser.mjs",
+    "r2:production:verify": "node verify-r2-production.mjs",
+    "r2:production:cutover": "node finish-r2-cutover.mjs",
+    "r2:production:continue": "node continue-r2-production.mjs",
+    "r2:production:finish": "node verify-r2-production.mjs && node finish-r2-cutover.mjs",
+    "r2:production:finish:public": "node enable-r2-public-browser.mjs && node verify-r2-production.mjs && node finish-r2-cutover.mjs",
+    "r2:production:all": "node playwright-cloudflare-r2.mjs && node continue-r2-production.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.51.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/lib-storage": "^3.758.0"
+  }
+}

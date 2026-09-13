@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 
-// API route to fetch Spotify album artwork
-// Uses Spotify's oEmbed API which doesn't require authentication
+const CACHE_SECONDS = 86400 // 24 hours — artwork URLs rarely change
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -15,17 +14,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Use Spotify's oEmbed API
     const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`
-    const response = await fetch(oembedUrl)
+    const response = await fetch(oembedUrl, {
+      next: { revalidate: CACHE_SECONDS },
+    })
     const data = await response.json()
 
     if (data.thumbnail_url) {
-      return NextResponse.json({
-        imageUrl: data.thumbnail_url,
-        width: data.thumbnail_width,
-        height: data.thumbnail_height,
-      })
+      return NextResponse.json(
+        {
+          imageUrl: data.thumbnail_url,
+          width: data.thumbnail_width,
+          height: data.thumbnail_height,
+        },
+        {
+          headers: {
+            'Cache-Control': `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS * 7}`,
+          },
+        },
+      )
     }
 
     return NextResponse.json(

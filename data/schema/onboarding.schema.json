@@ -1,0 +1,14 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"OnboardingEvent",
+  "type":"object",
+  "properties":{
+    "id":{"type":"string"},
+    "user_id":{"type":"string"},
+    "step_key":{"type":"string"},
+    "status":{"type":"string","enum":["not-started","in-progress","completed"]},
+    "started_at":{"type":["string","null"],"format":"date-time"},
+    "completed_at":{"type":["string","null"],"format":"date-time"},
+    "notes":{"type":["string","null"]}
+  }
+}

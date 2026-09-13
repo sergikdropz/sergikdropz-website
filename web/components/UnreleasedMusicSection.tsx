@@ -1,7 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import SoundCloudPlayer from './SoundCloudPlayer'
 import { FaMusic } from 'react-icons/fa'
+import { resolveAudioUrl } from '@/utils/resolveAudioUrl'
 
 interface UnreleasedTrack {
   id: string
@@ -24,15 +26,30 @@ interface UnreleasedMusicSectionProps {
 export default function UnreleasedMusicSection({ 
   tracks 
 }: UnreleasedMusicSectionProps) {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/a346b04a-1680-490e-a42d-0a05edd129a0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UnreleasedMusicSection.tsx:24',message:'UnreleasedMusicSection rendered',data:{totalTracks:tracks.length,tracksIsArray:Array.isArray(tracks)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-  // #endregion
   const publicTracks = tracks.filter(t => !t.isPrivate)
+  const [resolvedTracks, setResolvedTracks] = useState<Array<UnreleasedTrack & { resolvedSrc?: string }>>([])
+
+  // Resolve all audio URLs to Supabase
+  useEffect(() => {
+    const resolveTracks = async () => {
+      const resolved = await Promise.all(
+        publicTracks.map(async (track) => {
+          const localPath = `/audio/unreleased/${track.filename}`
+          try {
+            const resolvedUrl = await resolveAudioUrl(localPath)
+            return { ...track, resolvedSrc: resolvedUrl }
+          } catch (error) {
+            console.error(`Failed to resolve ${localPath}:`, error)
+            return { ...track, resolvedSrc: localPath } // Fallback to local path
+          }
+        })
+      )
+      setResolvedTracks(resolved)
+    }
+    resolveTracks()
+  }, [publicTracks])
 
   if (publicTracks.length === 0) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/a346b04a-1680-490e-a42d-0a05edd129a0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UnreleasedMusicSection.tsx:29',message:'No public tracks, returning null',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     return null
   }
 
@@ -51,18 +68,23 @@ export default function UnreleasedMusicSection({
       </div>
 
       <div className="space-y-4">
-        {publicTracks.map((track) => (
-          <SoundCloudPlayer
-            key={track.id}
-            src={`/audio/unreleased/${track.filename}`}
-            title={track.title}
-            artist="SERGIK"
-            artwork={track.artwork}
-            duration={track.duration}
-            likes={track.likes || 0}
-            plays={track.plays || 0}
-          />
-        ))}
+        {resolvedTracks.length > 0 ? (
+          resolvedTracks.map((track, index) => (
+            <SoundCloudPlayer
+              key={track.id}
+              src={track.resolvedSrc || `/audio/unreleased/${track.filename}`}
+              title={track.title}
+              artist="SERGIK"
+              artwork={track.artwork}
+              duration={track.duration}
+              likes={track.likes || 0}
+              plays={track.plays || 0}
+              priority={index === 0} // Prioritize first track artwork for LCP
+            />
+          ))
+        ) : (
+          <div className="text-gray-400 text-center py-8">Loading tracks...</div>
+        )}
       </div>
     </div>
   )

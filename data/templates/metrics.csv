@@ -1,0 +1,3 @@
+id,entity_type,entity_id,snapshot_time,monthly_listeners,streams_28d,followers,popularity_score,stream_velocity_28d,ad_spend_28d_usd,source,tags
+
+ms_0001,artist,artist_123,2026-01-28T12:00:00Z,27100,89200,1250,38,3200,210,spotify,"release-cycle;need-action"

@@ -1,0 +1,1 @@
+MOVED: web/docs/reference/SCHEMA_TO_COPY.txt

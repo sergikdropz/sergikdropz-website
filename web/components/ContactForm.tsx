@@ -19,20 +19,37 @@ export default function ContactForm() {
     setIsSubmitting(true)
     setSubmitStatus('idle')
 
-    // In production, this would send to an API endpoint
-    // For now, we'll use mailto as fallback
-    const subject = encodeURIComponent(
-      formData.type === 'booking' ? `Booking Inquiry: ${formData.subject}` :
-      formData.type === 'press' ? `Press Inquiry: ${formData.subject}` :
-      formData.subject
-    )
-    const body = encodeURIComponent(
-      `From: ${formData.name} (${formData.email})\n\n${formData.message}`
-    )
+    try {
+      // 1. Save fan/contact to database
+      const fanResponse = await fetch('/api/nurturing/fans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          name: formData.name,
+          tags: [formData.type],
+          source: 'contact_form',
+        }),
+      })
 
-    // Simulate API call
-    setTimeout(() => {
+      if (!fanResponse.ok) {
+        throw new Error('Failed to save contact information')
+      }
+
+      // 2. Send email notification (mailto as fallback)
+      const subject = encodeURIComponent(
+        formData.type === 'booking' ? `Booking Inquiry: ${formData.subject}` :
+        formData.type === 'press' ? `Press Inquiry: ${formData.subject}` :
+        formData.subject
+      )
+      const body = encodeURIComponent(
+        `From: ${formData.name} (${formData.email})\n\n${formData.message}`
+      )
+
       window.location.href = `mailto:${artistData.contact.email}?subject=${subject}&body=${body}`
+      
       setIsSubmitting(false)
       setSubmitStatus('success')
       
@@ -41,7 +58,11 @@ export default function ContactForm() {
         setFormData({ name: '', email: '', subject: '', message: '', type: 'general' })
         setSubmitStatus('idle')
       }, 3000)
-    }, 500)
+    } catch (error) {
+      console.error('Error submitting form:', error)
+      setSubmitStatus('error')
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -54,7 +75,7 @@ export default function ContactForm() {
           id="type"
           value={formData.type}
           onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white"
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 sm:py-2 text-white focus:outline-none focus:border-white text-base touch-manipulation min-h-[48px]"
         >
           <option value="general">General Inquiry</option>
           <option value="booking">Booking</option>
@@ -74,7 +95,8 @@ export default function ContactForm() {
             required
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white"
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 sm:py-2 text-white focus:outline-none focus:border-white text-base touch-manipulation min-h-[48px]"
+            autoComplete="name"
           />
         </div>
 
@@ -88,7 +110,9 @@ export default function ContactForm() {
             required
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white"
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 sm:py-2 text-white focus:outline-none focus:border-white text-base touch-manipulation min-h-[48px]"
+            autoComplete="email"
+            inputMode="email"
           />
         </div>
       </div>
@@ -103,7 +127,8 @@ export default function ContactForm() {
           required
           value={formData.subject}
           onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white"
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 sm:py-2 text-white focus:outline-none focus:border-white text-base touch-manipulation min-h-[48px]"
+          autoComplete="off"
         />
       </div>
 
@@ -117,14 +142,14 @@ export default function ContactForm() {
           rows={6}
           value={formData.message}
           onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-white resize-none"
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 sm:py-2 text-white focus:outline-none focus:border-white resize-none text-base touch-manipulation min-h-[120px]"
         />
       </div>
 
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-white text-black font-semibold py-3 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-white text-black font-semibold py-4 sm:py-3 rounded-lg hover:bg-gray-200 active:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] text-base"
       >
         {isSubmitting ? 'Sending...' : submitStatus === 'success' ? 'Message Sent!' : 'Send Message'}
       </button>

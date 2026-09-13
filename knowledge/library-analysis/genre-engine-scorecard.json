@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-26T17:53:53.787Z",
+  "goldTracks": 7,
+  "measuredAvailable": 347,
+  "scorecard": {
+    "total": 7,
+    "primaryHits": 7,
+    "familyHits": 7,
+    "primaryAccuracy": 1,
+    "familyAccuracy": 1,
+    "mismatches": []
+  },
+  "proposals": [],
+  "guidance": null
+}

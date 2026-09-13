@@ -1,0 +1,15 @@
+{
+  "source_url": "https://www.intellijend.com",
+  "schema_version": "1.0",
+  "mappings": [
+    {"page_block":"hero","entity":"ContentPage","target":"/","fields":["title","subtitle","cta","promo_code"]},
+    {"page_block":"pricing_table","entity":"PricingPlan","fields":["name","billing_period","price_usd","discount_code","discount_percent"]},
+    {"page_block":"dashboard_metrics","entity":"MetricSnapshot","fields":["popularity_score","monthly_listeners","streams_28d","followers"]},
+    {"page_block":"campaign_flow","entity":"Campaign","fields":["name","budget_total_usd","budget_daily_usd","frontload_pattern","targeting"]},
+    {"page_block":"insights","entity":"KBDoc","fields":["title","content","tags","recommended_actions"]},
+    {"page_block":"leaderboard","entity":"LeaderboardEntry","fields":["rank","artist_id","monthly_listeners_before","monthly_listeners_after","sample_ads"]},
+    {"page_block":"testimonials","entity":"Testimonial","fields":["author_name","quote","rating","source","created_at"]},
+    {"page_block":"faq","entity":"FAQ","fields":["question","answer","tags"]},
+    {"page_block":"legal","entity":"LegalDoc","fields":["type","content_markdown","effective_date","version"]}
+  ]
+}

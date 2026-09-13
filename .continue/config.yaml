@@ -1,0 +1,59 @@
+name: SERGIK Project Local Models
+version: "1"
+schema: v1
+
+# Local Ollama models for this project
+# These models are available in your local Ollama installation
+models:
+  # Coding-focused models (recommended for development)
+  - name: Qwen2.5 Coder 7B
+    provider: ollama
+    model: qwen2.5-coder:7b
+    contextLength: 32768
+    
+  - name: Qwen3 Coder 30B
+    provider: ollama
+    model: qwen3-coder:30b
+    contextLength: 32768
+    
+  - name: Qwen2.5 Coder 1.5B (Base)
+    provider: ollama
+    model: qwen2.5-coder:1.5b-base
+    contextLength: 32768
+    
+  - name: CodeGemma
+    provider: ollama
+    model: codegemma:latest
+    contextLength: 8192
+    
+  # Vision-capable model
+  - name: LLaVA (Vision)
+    provider: ollama
+    model: llava:latest
+    contextLength: 4096
+    
+  # Large language models
+  - name: GPT-OSS 20B
+    provider: ollama
+    model: gpt-oss:20b
+    contextLength: 4096
+    
+  - name: GPT-OSS 120B
+    provider: ollama
+    model: gpt-oss:120b
+    contextLength: 4096
+    
+  # Cloud models (if available)
+  - name: GPT-OSS 120B Cloud
+    provider: ollama
+    model: gpt-oss:120b-cloud
+    contextLength: 4096
+    
+  - name: DeepSeek v3.1 Cloud
+    provider: ollama
+    model: deepseek-v3.1:671b-cloud
+    contextLength: 4096
+
+# Default model selection
+# Uncomment and set your preferred default model:
+# defaultModel: "Qwen2.5 Coder 7B"

@@ -1,0 +1,77 @@
+---
+description: Keep localhost dev server healthy; verify before finishing UI/code tasks
+globs: web/**/*
+alwaysApply: false
+---
+
+# Dev server (localhost:3001) — automated
+
+## Start / ensure (agents and IDE)
+
+From `web/`:
+
+```bash
+npm run dev:ensure
+```
+
+- If healthy → exit 0 immediately.
+- If not → starts **dev daemon** (detached), waits until `dev:verify` passes.
+- Do **not** use short-lived `npm run dev` in agent background shells.
+
+On workspace open, VS Code/Cursor may run the same via `.vscode/tasks.json` (`runOn: folderOpen`). Allow automatic tasks when prompted.
+
+## Before claiming a UI/code task is done
+
+```bash
+cd web && npm run dev:ensure && npm run dev:verify
+```
+
+Do not say localhost works if either command fails.
+
+## Recovery
+
+| Command | When |
+| --- | --- |
+| `npm run dev:recover` | Stuck port, 404 chunks, corrupt cache |
+| `npm run dev:stop` | Stop daemon + next |
+| `npm run dev:status` | Quick health check |
+
+Logs: `web/.dev/daemon.log`
+
+Sonic DNA catalog/DB auto-sync runs with the daemon (`npm run sonic-dna:watch`). Edits to `knowledge/scripts`, `knowledge/sonic-dna`, or `web/lib/audio` debounce then `sync-sonic-dna-analysis.mjs`. Set `SONIC_DNA_WATCH=0` to disable.
+
+## Memory (long dev sessions)
+
+`next dev` can grow to many GB after hours of HMR + admin/audio routes. Safe recovery:
+
+| Command | When |
+| --- | --- |
+| `npm run dev:restart` | Quick stop + start (keeps cache) |
+| `npm run dev:recover` | Stuck or very high memory — clears `.next-dev-3001` |
+| `SONIC_DNA_WATCH=0` | Disable Sonic DNA sync watcher when not editing classifiers |
+| `DEV_DAEMON_NEXT_ROTATE_MS=14400000` | Optional: auto-restart `next dev` every 4h (daemon keeps running) |
+
+Close `/admin/music-vault` and `/music-library` browser tabs when not in use — they keep the server warm.
+
+## Supabase: cloud vs home-server Docker
+
+| Mode | When | Command |
+| --- | --- | --- |
+| **Cloud Supabase** (default for daily dev) | Docker home-server **off** | `npm run env:cloud && npm run dev:restart` |
+| **Home-server** | Docker stack **running** on `:8000` | `npm run env:home-server && npm run dev:restart` |
+
+If `web/.env.local` still has `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:8000` while Docker is stopped, every DB call times out and the app lags. Check `/api/health/deps` — it returns a `hint` when this mismatch is detected.
+
+**Cloud mode:** audio plays from Supabase Storage (`audio-files` bucket). Do not set `NEXT_PUBLIC_LOCAL_AUDIO`.
+
+## Supabase dual-database (cloud + home backup)
+
+Full runbook: `deploy/supabase-foundation/README.md`
+
+| Command | Purpose |
+| --- | --- |
+| `npm run db:init-cloud-profile` | Save new Supabase project keys |
+| `npm run db:schema-bundle` | Build SQL for dashboard |
+| `npm run db:bootstrap-cloud` | First upsert from home or JSON |
+| `npm run db:sync-pair -- --apply` | Keep cloud ↔ home in sync |
+| `npm run db:backup` | Weekly snapshot (anti-loss) |

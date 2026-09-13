@@ -1,0 +1,39 @@
+# Image Mappings - PRELIMINARY (REVIEW BEFORE USING)
+# These are educated guesses based on file sizes and characteristics
+# PLEASE REVIEW VISUALLY before running rename script
+#
+# Format: OLD_FILENAME|NEW_FILENAME|NOTES
+
+# Large files (likely portraits or landscapes) - REVIEW THESE FIRST
+# 1.JPG|desert-elated-1.jpg|Large file from Nov 2024 - could be desert landscape
+# 2.JPG|portrait-supreme-nike-1.jpg|Large file from Nov 2024 - could be full body portrait
+# IMG_1519.jpeg|portrait-group-three-1.jpg|Medium-large, could be group photo
+# IMG_2192.jpeg|performance-sergik-tent-1.jpg|Medium, could be performance with tent backdrop
+
+# Medium performance files
+# IMG_5612.jpg|dj-booth-lasers-1.jpg|Medium size, likely performance
+# IMG_5629.jpg|performance-two-djs-1.jpg|Medium size, could be dual DJs
+# IMG_2018.jpg|performance-green-haze-1.jpg|Medium-small, green lighting possible
+
+# Small close-up files (likely DJ hands, mixers, details)
+# IMG_2011.jpg|performance-blue-hands-1.jpg|Small, likely close-up of hands
+# IMG_2014.jpg|dj-blue-mixer-1.jpg|Small, likely mixer close-up
+# IMG_2022.jpg|dj-mixing-blue-1.jpg|Small, likely mixing shot
+# IMG_2023.jpg|performance-hand-pattern-1.jpg|Small, hand detail
+# IMG_2025.jpg|performance-blue-hands-1.jpg|Very small, detail shot
+# IMG_2026.jpg|dj-blue-mixer-1.jpg|Very small, detail shot
+# IMG_3353.jpg|portrait-vault-green-1.jpg|Small, close-up portrait
+# IMG_5043.jpeg|dj-gold-glasses-1.jpg|Small, close-up with glasses
+# IMG_5046.jpeg|portrait-offwhite-supreme-1.jpg|Very small, portrait
+# IMG_5063.jpeg|portrait-smoking-graffiti-1.jpg|Small, portrait
+# IMG_5798.jpg|portrait-graffiti-wall-1.jpg|Small, portrait
+# IMG_5800.jpg|portrait-graffiti-crouch-1.jpg|Small, portrait
+# IMG_5801.jpg|portrait-festival-two-1.jpg|Small, could be two people
+# IMG_5809.jpg|performance-eye-led-1.jpg|Small, performance
+# IMG_5826.jpeg|club-neon-all-you-1.jpg|Small, club scene
+
+# PNG file
+# IMG_0203.PNG|performance-sergik-back-1.jpg|Large PNG, could be performance from behind
+
+# NOTE: These are ALL GUESSES - you MUST review visually!
+# Uncomment lines above after confirming matches

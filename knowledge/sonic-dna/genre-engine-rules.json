@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1.0",
+  "description": "Trained overlay rules for the unified Sonic DNA genre engine. Applied after the base DSP classifier. Expand via gold-set scorecards + admin Accuracy Challenge notes.",
+  "updatedAt": "2026-08-26",
+  "rules": [
+    {
+      "id": "breakbeat-liquid-dnb-mid",
+      "priority": 80,
+      "notes": "Slower liquid / jungle-adjacent breakbeat with rolling or syncopated bass — not hip-hop broken beat.",
+      "when": {
+        "drumFamily": ["breakbeat"],
+        "bpmMin": 148,
+        "bpmMax": 174,
+        "bassLock": ["rolling", "offbeat-syncopated", "follows-kick"],
+        "notBassLock": ["sparse-808"]
+      },
+      "then": {
+        "family": "Drum & Bass",
+        "primary": "Drum & Bass",
+        "subgenre": "Liquid DnB",
+        "confidence": 0.84,
+        "reason": ["breakbeat grid at liquid DnB tempo with non-808 bass pocket"]
+      }
+    },
+    {
+      "id": "breakbeat-jungle-fast",
+      "priority": 85,
+      "notes": "Fast broken drums without sparse-808 → jungle / classic DnB.",
+      "when": {
+        "drumFamily": ["breakbeat"],
+        "bpmMin": 160,
+        "bpmMax": 190,
+        "notBassLock": ["sparse-808"]
+      },
+      "then": {
+        "family": "Drum & Bass",
+        "primary": "Drum & Bass",
+        "subgenre": "Jungle",
+        "confidence": 0.82,
+        "reason": ["broken drums at jungle/DnB tempo"]
+      }
+    },
+    {
+      "id": "half-time-house-hats-hiphop",
+      "priority": 90,
+      "notes": "Cosmic Cadillac class: house-like hats over hip-hop/trap kick-snare must stay Hip-Hop.",
+      "when": {
+        "drumFamily": ["half-time"],
+        "bpmMin": 110,
+        "bpmMax": 136,
+        "hatGrid": ["eighths", "offbeat-hats", "16th-wash"],
+        "notBassLock": ["sparse-808"]
+      },
+      "then": {
+        "family": "Hip-Hop",
+        "primary": "Hip-Hop",
+        "subgenre": "Trap",
+        "confidence": 0.86,
+        "reason": ["hip-hop/trap kick-snare with house-like hats; kick+snare decide genre"]
+      }
+    }
+  ]
+}

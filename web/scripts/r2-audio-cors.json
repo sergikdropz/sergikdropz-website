@@ -1,0 +1,22 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://sergikdropz.com",
+      "https://www.sergikdropz.com",
+      "http://127.0.0.1:3001",
+      "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://localhost:3000"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": [
+      "Accept-Ranges",
+      "Content-Length",
+      "Content-Range",
+      "Content-Type",
+      "ETag"
+    ],
+    "MaxAgeSeconds": 86400
+  }
+]

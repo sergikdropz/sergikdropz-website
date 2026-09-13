@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import eventsData from '../data/events.json';
 import venuesData from '../data/venues.json';
 
 export default function PerformancesScreen() {
+  // Memoize data to prevent unnecessary re-renders
+  const festivals = useMemo(() => eventsData.festivals, []);
+  const venues = useMemo(() => venuesData.venues, []);
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
@@ -12,7 +15,7 @@ export default function PerformancesScreen() {
         {/* Festivals */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Festivals</Text>
-          {eventsData.festivals.map((festival) => (
+          {festivals.map((festival) => (
             <View key={festival.id} style={styles.card}>
               <Text style={styles.cardTitle}>{festival.name}</Text>
               <Text style={styles.cardLocation}>{festival.location}</Text>
@@ -24,7 +27,7 @@ export default function PerformancesScreen() {
         {/* Venues */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Venues</Text>
-          {venuesData.venues.map((venue) => (
+          {venues.map((venue) => (
             <View key={venue.id} style={styles.card}>
               <Text style={styles.cardTitle}>{venue.name}</Text>
               <Text style={styles.cardLocation}>{venue.city}</Text>

@@ -1,0 +1,217 @@
+{
+  "artist": {
+    "primaryName": "SERGIK",
+    "legalName": "Jordan Caboga",
+    "aliases": ["SergikL", "Sergik"],
+    "activePeriod": {
+      "start": 2015,
+      "end": null
+    },
+    "primaryDaw": "Ableton Live 12 with Max for Live",
+    "genres": ["House", "Tech House", "Funk", "Hip-Hop", "Soul", "Disco", "Electronic"]
+  },
+  "catalogStats": {
+    "totalAbletonProjects": 20503,
+    "finishedExports": 721,
+    "itunesLibraryTotal": 1895,
+    "sergikProductions": 1167,
+    "influenceLibrary": 728,
+    "trainingReadyTracks": 554,
+    "totalDurationHours": 44.59,
+    "totalStorageGB": 350,
+    "soloProductions": 430,
+    "collaborations": 183,
+    "remixesVips": 38,
+    "uniqueCollaborators": 98
+  },
+  "productionTimeline": [
+    { "year": 2015, "projects": 2 },
+    { "year": 2016, "projects": 86 },
+    { "year": 2017, "projects": 378 },
+    { "year": 2018, "projects": 242 },
+    { "year": 2019, "projects": 147 },
+    { "year": 2020, "projects": 250 },
+    { "year": 2021, "projects": 1638 },
+    { "year": 2022, "projects": 4631 },
+    { "year": 2023, "projects": 2514 },
+    { "year": 2024, "projects": 6364 },
+    { "year": 2025, "projects": 4251 }
+  ],
+  "musicalDna": {
+    "bpmProfile": {
+      "averageBpm": 107.6,
+      "sweetSpot": { "min": 120, "max": 127 },
+      "zones": [
+        { "label": "Downtempo/Hip-Hop", "range": "< 90", "percentage": 40.6, "color": "#8B5CF6" },
+        { "label": "Hip-Hop/Funk", "range": "90-99", "percentage": 9.0, "color": "#A78BFA" },
+        { "label": "Transitional", "range": "100-109", "percentage": 0.6, "color": "#C4B5FD" },
+        { "label": "Funk/House", "range": "110-119", "percentage": 8.5, "color": "#F59E0B" },
+        { "label": "House/Tech House", "range": "120-129", "percentage": 31.9, "color": "#10B981" },
+        { "label": "Techno", "range": "130-139", "percentage": 2.1, "color": "#3B82F6" },
+        { "label": "DnB/Experimental", "range": "140+", "percentage": 7.3, "color": "#EF4444" }
+      ]
+    },
+    "keyProfile": {
+      "camelot": [
+        { "key": "10B", "musicalKey": "D major", "percentage": 31, "character": "Bright, uplifting, energetic" },
+        { "key": "11B", "musicalKey": "A major", "percentage": 21, "character": "Warm, open, soulful" },
+        { "key": "7A", "musicalKey": "D minor", "percentage": 13, "character": "Dark, driving, hypnotic" },
+        { "key": "8A", "musicalKey": "A minor", "percentage": 12, "character": "Melancholic, deep, introspective" },
+        { "key": "11A", "musicalKey": "F# minor", "percentage": 4, "character": "Complex, mysterious" },
+        { "key": "9A", "musicalKey": "E minor", "percentage": 3, "character": "Melancholic, indie" }
+      ],
+      "harmonicZones": {
+        "majorZone": { "keys": ["10B", "11B"], "percentage": 52 },
+        "minorZone": { "keys": ["7A", "8A"], "percentage": 25 }
+      }
+    },
+    "energyProfile": {
+      "average": 6,
+      "sweetSpot": { "min": 5, "max": 7 },
+      "distribution": [
+        { "level": "1-4", "percentage": 2.4, "description": "Ambient/Intro" },
+        { "level": "5", "percentage": 20.9, "description": "Chill Groove" },
+        { "level": "6", "percentage": 50.8, "description": "Standard Energy" },
+        { "level": "7", "percentage": 18.9, "description": "Club Ready" },
+        { "level": "8-10", "percentage": 6.4, "description": "Peak Energy" }
+      ]
+    },
+    "genreDna": [
+      { "genre": "Hip-Hop", "percentage": 42, "color": "#8B5CF6" },
+      { "genre": "Funk", "percentage": 17, "color": "#F59E0B" },
+      { "genre": "House", "percentage": 8, "color": "#10B981" },
+      { "genre": "Soul", "percentage": 7, "color": "#EC4899" },
+      { "genre": "Other", "percentage": 26, "color": "#6B7280" }
+    ],
+    "taggedGenres": [
+      { "genre": "Hip-Hop", "tracks": 74 },
+      { "genre": "Funk", "tracks": 29 },
+      { "genre": "House", "tracks": 14 },
+      { "genre": "Soul", "tracks": 13 },
+      { "genre": "Reggae", "tracks": 12 },
+      { "genre": "Techno", "tracks": 10 },
+      { "genre": "Disco", "tracks": 8 },
+      { "genre": "Ambient", "tracks": 7 },
+      { "genre": "Jazz", "tracks": 6 },
+      { "genre": "DnB", "tracks": 3 }
+    ]
+  },
+  "collaborators": [
+    { "name": "Silent Jay", "projects": 408, "influence": "Increases vocal presence, soul elements" },
+    { "name": "Slick Floyd", "projects": 285, "influence": "Electronic groove, funk elements" },
+    { "name": "Breauxx", "projects": 213, "influence": "Increases production complexity, bass design" },
+    { "name": "OG Coconut", "projects": 187, "influence": null },
+    { "name": "NOOD", "projects": 185, "influence": "Bass experimentation, experimental sounds" },
+    { "name": "ANDINO", "projects": 154, "influence": null },
+    { "name": "Sean Watson", "projects": 151, "influence": null },
+    { "name": "Sean Hart", "projects": 122, "influence": null },
+    { "name": "CHKLZ", "projects": 108, "influence": null },
+    { "name": "LODIN", "projects": 108, "influence": null },
+    { "name": "Jetski", "projects": 107, "influence": null },
+    { "name": "JIMII", "projects": 100, "influence": null },
+    { "name": "Aloe Flipz", "projects": 87, "influence": null },
+    { "name": "Stan The Guitarman", "projects": 87, "influence": null },
+    { "name": "BeJanis", "projects": 83, "influence": null },
+    { "name": "Frank Terry", "projects": 81, "influence": null },
+    { "name": "Batt Lo", "projects": 74, "influence": null },
+    { "name": "Lugh Haurie", "projects": 73, "influence": null },
+    { "name": "Zak Martin", "projects": 65, "influence": null },
+    { "name": "Cy Heck", "projects": 62, "influence": null },
+    { "name": "Janis & The Planets", "projects": 58, "influence": "Indie/melodic sensibility, organic textures" },
+    { "name": "Mateo Haze", "projects": 56, "influence": null },
+    { "name": "WWW", "projects": 55, "influence": null },
+    { "name": "ESHER", "projects": 44, "influence": null },
+    { "name": "L9V", "projects": 39, "influence": null }
+  ],
+  "productionStyle": {
+    "philosophy": [
+      {
+        "name": "Groove-First Philosophy",
+        "description": "Rhythm drives composition decisions. Kick/clap placement establishes foundation before melodics."
+      },
+      {
+        "name": "Multi-Layer Melodic Architecture",
+        "description": "Typical structure: 3+ melodic layers with distinct spectral space."
+      },
+      {
+        "name": "Spectral Separation Processing",
+        "description": "Heavy use of Multiband Dynamics. No mud in 200-400 Hz range."
+      },
+      {
+        "name": "Gate-Tight Transients",
+        "description": "Gate applied per stem for clean transient control and punchy, defined sound."
+      },
+      {
+        "name": "Send/Return as Compositional Elements",
+        "description": "Reverb and Delay treated as instruments, recorded as discrete stems."
+      },
+      {
+        "name": "Stem-Ready Architecture",
+        "description": "7-stem standard: Vocals, Drums, Bass, Guitars, Keys, Perc, Other."
+      }
+    ],
+    "recommendations": {
+      "house": { "bpm": "122-126", "key": "10B or 11B", "energy": "6-7" },
+      "hipHop": { "bpm": "80-88", "key": "7A or 8A", "energy": "5-6" },
+      "funkFusion": { "bpm": "95-110", "key": "Major keys", "energy": "6" },
+      "techHouse": { "bpm": "124-128", "key": "10B", "energy": "6-7" }
+    }
+  },
+  "djMixing": {
+    "keyTransitionsFrom10B": [
+      { "to": "11B", "effect": "Energy up" },
+      { "to": "9B", "effect": "Smooth" },
+      { "to": "10A", "effect": "Relative minor" },
+      { "to": "7A", "effect": "Parallel minor" }
+    ],
+    "bpmTransitions": [
+      { "from": 85, "to": 125, "technique": "Double-time transition" },
+      { "from": 125, "to": 85, "technique": "Half-time breakdown" }
+    ],
+    "mixingTip": "Stay within ±5 BPM for seamless mixes"
+  },
+  "qualityStandards": {
+    "tiers": [
+      { "tier": 1, "quality": "Master", "format": "WAV PCM", "bitDepth": 24, "status": "Training-ready" },
+      { "tier": 2, "quality": "High", "format": "WAV/AIFF", "bitDepth": 24, "status": "Include" },
+      { "tier": 3, "quality": "Legacy", "format": "WAV", "bitDepth": 16, "status": "Validate only" },
+      { "tier": 4, "quality": "Compressed", "format": "MP3/AAC", "bitDepth": null, "status": "Exclude" }
+    ],
+    "masteringTargets": {
+      "integratedLoudness": { "target": -12, "unit": "LUFS", "tolerance": 2 },
+      "truePeak": { "target": -1.0, "unit": "dBTP", "max": 0 },
+      "dynamicRange": { "target": 6, "unit": "dB", "min": 4 },
+      "stereoCorrelation": { "min": 0.7 }
+    }
+  },
+  "sampleTracks": [
+    "6 Hours In", "90s Baby", "Abduction", "All My Ladies", "Astro Spore",
+    "Atlantis", "Back Around", "Bad Decisions", "Bass Bunker", "Bender",
+    "Birth of a planet", "Bloops n Kats", "Bombaclat", "Boomers", "Bouncy Bop",
+    "Came to get Lit", "City Control", "Cosmos", "Creature Hrs", "Cruise Control",
+    "Desert Dweller", "Disco 82", "Divine Molecules", "Everlast", "Feeling Lit",
+    "Freaks n Beats", "Frequency", "Get Up", "Groove Junkie", "Have To Dance",
+    "Hold Me Down", "Lunar Gravity", "Mind Rollercoaster", "One Of Those Nights",
+    "Radiowave Contact", "Realm Transfer", "Rock Dem Feets", "Spring Swing",
+    "Take A Walk", "The Worst", "Celestial Groove", "Golden Hour", "FTP",
+    "Everyday Gratitude", "Happiness", "Cosmic Cadillac", "Musik Is The Answr"
+  ],
+  "tools": {
+    "daw": "Ableton Live 12",
+    "customDevices": ["SergikL Splitz", "SERGIK Tech House Kit", "SERGIK AI Controller"],
+    "templates": ["SERGIK Template V2", "SERG 12.3"],
+    "audioEffects": [
+      "SERGIK Vox Chain 1",
+      "SERGIK Master Funk Chain",
+      "SERGIK DUB FX",
+      "SERG Duckka",
+      "SERG Around the Head"
+    ],
+    "midiEffects": ["SERG CHORDS", "SERG Dmin Harm"]
+  },
+  "metadata": {
+    "source": "sergik-ableton-cli repository",
+    "lastUpdated": "2026-01-30",
+    "dataVersion": "1.0"
+  }
+}

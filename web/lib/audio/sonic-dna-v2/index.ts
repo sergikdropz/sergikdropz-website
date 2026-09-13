@@ -1,0 +1,16 @@
+/** Barrel for Sonic DNA v2 signal-flow modules. */
+
+export * from './recipe'
+export * from './waveform-stage'
+export * from './pocket-fingerprint'
+export * from './creative-insights'
+export * from './evidence-ledger'
+export * from './diff-narrative'
+export * from './audio-health'
+export * from './publish-checklist'
+export * from './enrich-dna'
+export * from './agent-blackboard'
+export * from './merge-agent-wave'
+export * from './accuracy-challenge'
+export * from './pipeline-architecture'
+export { ensureMeasuredOnDna, normalizeAgentDnaToMeasured } from '../normalize-agent-to-measured'

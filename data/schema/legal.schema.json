@@ -1,0 +1,14 @@
+{
+  "$schema":"http://json-schema.org/draft-07/schema#",
+  "title":"LegalDoc",
+  "type":"object",
+  "required":["id","type","content_markdown","effective_date","version"],
+  "properties":{
+    "id":{"type":"string"},
+    "type":{"type":"string","enum":["privacy","tos","refund"]},
+    "content_markdown":{"type":"string"},
+    "effective_date":{"type":"string","format":"date"},
+    "version":{"type":"string"},
+    "url":{"type":["string","null"],"format":"uri"}
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-09-04T14:42:42.539799+00:00",
+  "stats": {
+    "ok": 135,
+    "skip": 0,
+    "fail": 1,
+    "partial": 0,
+    "completed": 135
+  },
+  "failures": [
+    {
+      "id": "3202603f-410d-4c85-b287-709f4e5c5797",
+      "title": "SERGIK - Bender",
+      "error": "Error opening '/Users/machd/Documents/SERGIK Web and app/web/public/audio/unreleased/Playlists/Party Time/SERGIK - Bender.m4a': Format not recognised."
+    }
+  ]
+}

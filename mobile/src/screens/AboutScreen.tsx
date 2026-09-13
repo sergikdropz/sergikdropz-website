@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import artistData from '../data/artist.json';
 import socialProofData from '../data/social-proof.json';
 
 export default function AboutScreen() {
+  // Memoize data to prevent unnecessary re-renders
+  const musicalRhythmic = useMemo(() => artistData.influences.musical.rhythmic, []);
+  const musicalTextural = useMemo(() => artistData.influences.musical.textural, []);
+  const philosophy = useMemo(() => artistData.influences.philosophy, []);
+  const environmentalContexts = useMemo(() => artistData.environmental_contexts, []);
+  const communityRoles = useMemo(() => artistData.community_roles, []);
+  const communityFocus = useMemo(() => artistData.community_focus, []);
+  const sharedBilling = useMemo(() => socialProofData.shared_billing, []);
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
@@ -21,7 +29,7 @@ export default function AboutScreen() {
           <Text style={styles.subsectionTitle}>Musical</Text>
           <Text style={styles.label}>Rhythmic:</Text>
           <View style={styles.tagContainer}>
-            {artistData.influences.musical.rhythmic.map((influence) => (
+            {musicalRhythmic.map((influence) => (
               <View key={influence} style={styles.tag}>
                 <Text style={styles.tagText}>{influence}</Text>
               </View>
@@ -29,14 +37,14 @@ export default function AboutScreen() {
           </View>
           <Text style={styles.label}>Textural:</Text>
           <View style={styles.tagContainer}>
-            {artistData.influences.musical.textural.map((influence) => (
+            {musicalTextural.map((influence) => (
               <View key={influence} style={styles.tag}>
                 <Text style={styles.tagText}>{influence}</Text>
               </View>
             ))}
           </View>
           <Text style={styles.subsectionTitle}>Philosophy</Text>
-          {artistData.influences.philosophy.map((principle, index) => (
+          {philosophy.map((principle, index) => (
             <Text key={index} style={styles.bulletPoint}>• {principle}</Text>
           ))}
         </View>
@@ -46,7 +54,7 @@ export default function AboutScreen() {
           <Text style={styles.sectionTitle}>Performance Context</Text>
           <Text style={styles.text}>{artistData.environment_statement}</Text>
           <View style={styles.tagContainer}>
-            {artistData.environmental_contexts.map((context) => (
+            {environmentalContexts.map((context) => (
               <View key={context} style={styles.tag}>
                 <Text style={styles.tagText}>{context}</Text>
               </View>
@@ -58,11 +66,11 @@ export default function AboutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Community</Text>
           <Text style={styles.subsectionTitle}>Roles</Text>
-          {artistData.community_roles.map((role, index) => (
+          {communityRoles.map((role, index) => (
             <Text key={index} style={styles.bulletPoint}>• {role}</Text>
           ))}
           <Text style={styles.subsectionTitle}>Focus</Text>
-          {artistData.community_focus.map((focus, index) => (
+          {communityFocus.map((focus, index) => (
             <Text key={index} style={styles.bulletPoint}>• {focus}</Text>
           ))}
         </View>
@@ -71,7 +79,7 @@ export default function AboutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Shared Billing</Text>
           <View style={styles.tagContainer}>
-            {socialProofData.shared_billing.map((artist) => (
+            {sharedBilling.map((artist) => (
               <View key={artist} style={styles.artistTag}>
                 <Text style={styles.artistTagText}>{artist}</Text>
               </View>

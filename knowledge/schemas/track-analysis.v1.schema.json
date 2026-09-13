@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sergikdropz.com/schemas/track-analysis.v1.schema.json",
+  "title": "SergikTrackAnalysis",
+  "description": "Compiled per-track analysis: identity, library membership, metadata, Sonic DNA, and waveform.",
+  "type": "object",
+  "required": ["schemaVersion", "id", "identity", "analysis"],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "slug": { "type": "string" },
+    "inLibrary": { "type": "boolean" },
+    "identity": {
+      "type": "object",
+      "required": ["title", "artist", "filePath"],
+      "properties": {
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "fileName": { "type": "string" },
+        "filePath": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "format": { "type": "string" },
+        "artworkUrl": { "type": ["string", "null"] },
+        "folderPath": { "type": ["string", "null"] }
+      }
+    },
+    "library": {
+      "type": "object",
+      "properties": {
+        "trackIds": { "type": "array", "items": { "type": "string" } },
+        "folders": { "type": "array" },
+        "playlists": { "type": "array" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "durationSeconds": { "type": ["number", "null"] },
+        "bpm": { "type": ["number", "null"] },
+        "originalBpm": { "type": ["number", "null"] },
+        "keySignature": { "type": ["string", "null"] },
+        "energyLevel": { "type": ["number", "null"] },
+        "danceability": { "type": ["number", "null"] },
+        "danceabilityNormalized": { "type": ["number", "null"] },
+        "bpmZone": { "type": "string" }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "required": ["sonicDna", "waveform"],
+      "properties": {
+        "compiledAt": { "type": "string" },
+        "status": { "type": "string" },
+        "sonicDna": { "type": "object" },
+        "frequencyBands": { "type": ["object", "null"] },
+        "measured": { "type": ["object", "null"] },
+        "waveform": { "type": "object" }
+      }
+    }
+  }
+}

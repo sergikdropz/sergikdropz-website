@@ -1,84 +1,125 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Modal } from 'react-native';
-import galleryData from '../data/gallery.json';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Modal } from 'react-native';
+import { Image } from 'expo-image';
+import { useFilteredGalleryImages } from '../hooks/useData';
+
+// Memoize image item component for better performance
+const ImageItem = React.memo(({ image, onPress }: { image: any; onPress: (src: string) => void }) => (
+  <TouchableOpacity
+    style={styles.imageContainer}
+    onPress={() => onPress(image.src)}
+    activeOpacity={0.8}
+  >
+    <Image
+      source={{ uri: image.src }}
+      style={styles.image}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={200}
+    />
+  </TouchableOpacity>
+));
+
+ImageItem.displayName = 'ImageItem';
 
 export default function GalleryScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
 
-  const filteredImages = filter === 'all'
-    ? galleryData.images
-    : galleryData.images.filter(img => img.category === filter);
+  // Use optimized hook for filtered images
+  const filteredImages = useFilteredGalleryImages(filter);
 
-  const categories = [
+  // Memoize callback to prevent re-renders
+  const handleImagePress = useCallback((src: string) => {
+    setSelectedImage(src);
+  }, []);
+
+  // Optimize render item with useCallback
+  const renderItem = useCallback(({ item }: { item: any }) => (
+    <ImageItem image={item} onPress={handleImagePress} />
+  ), [handleImagePress]);
+
+  // Key extractor for FlatList
+  const keyExtractor = useCallback((item: any) => item.id, []);
+
+  // Get item layout for better FlatList performance
+  const getItemLayout = useCallback((_: any, index: number) => {
+    const itemSize = 120; // Approximate item height including padding
+    return {
+      length: itemSize,
+      offset: itemSize * Math.floor(index / 3),
+      index,
+    };
+  }, []);
+
+  const categories = useMemo(() => [
     { value: 'all', label: 'All' },
     { value: 'performance', label: 'Performance' },
     { value: 'portrait', label: 'Portrait' },
     { value: 'studio', label: 'Studio' },
     { value: 'landscape', label: 'Landscape' },
-  ];
+  ], []);
 
   return (
     <View style={styles.container}>
-      <ScrollView>
-        <View style={styles.header}>
-          <Text style={styles.title}>Gallery</Text>
-          <Text style={styles.subtitle}>
-            Visual documentation of performances and moments
-          </Text>
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.title}>Gallery</Text>
+        <Text style={styles.subtitle}>
+          Visual documentation of performances and moments
+        </Text>
+      </View>
 
-        {/* Filter Buttons */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterContainer}
-          contentContainerStyle={styles.filterContent}
-        >
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.value}
-              onPress={() => setFilter(cat.value)}
+      {/* Filter Buttons */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterContainer}
+        contentContainerStyle={styles.filterContent}
+      >
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat.value}
+            onPress={() => setFilter(cat.value)}
+            style={[
+              styles.filterButton,
+              filter === cat.value && styles.filterButtonActive
+            ]}
+          >
+            <Text
               style={[
-                styles.filterButton,
-                filter === cat.value && styles.filterButtonActive
+                styles.filterText,
+                filter === cat.value && styles.filterTextActive
               ]}
             >
-              <Text
-                style={[
-                  styles.filterText,
-                  filter === cat.value && styles.filterTextActive
-                ]}
-              >
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Image Grid */}
-        <View style={styles.grid}>
-          {filteredImages.map((image) => (
-            <TouchableOpacity
-              key={image.id}
-              style={styles.imageContainer}
-              onPress={() => setSelectedImage(image.src)}
-            >
-              <Image
-                source={{ uri: image.src }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
+
+      {/* Optimized FlatList for better performance */}
+      <FlatList
+        data={filteredImages}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        numColumns={3}
+        getItemLayout={getItemLayout}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        initialNumToRender={12}
+        updateCellsBatchingPeriod={50}
+        key={`grid-${filter}`}
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
+      />
 
       {/* Modal */}
       <Modal
         visible={selectedImage !== null}
         transparent={true}
         onRequestClose={() => setSelectedImage(null)}
+        animationType="fade"
       >
         <TouchableOpacity
           style={styles.modalContainer}
@@ -89,7 +130,8 @@ export default function GalleryScreen() {
             <Image
               source={{ uri: selectedImage }}
               style={styles.modalImage}
-              resizeMode="contain"
+              contentFit="contain"
+              cachePolicy="memory-disk"
             />
           )}
         </TouchableOpacity>
