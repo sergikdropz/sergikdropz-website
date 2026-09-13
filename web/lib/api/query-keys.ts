@@ -47,6 +47,26 @@ export const queryKeys = {
         opts.limit ?? 0,
         opts.offset ?? 0,
       ] as const,
+    browseSongsAll: (
+      publishVersion: number,
+      opts: {
+        sort?: string
+        dir?: string
+        genre?: string | null
+        artist?: string | null
+        search?: string
+      } = {},
+    ) =>
+      [
+        'musicLibrary',
+        'browse-songs-all',
+        publishVersion,
+        opts.sort ?? '',
+        opts.dir ?? '',
+        opts.genre ?? '',
+        opts.artist ?? '',
+        opts.search ?? '',
+      ] as const,
     playlists: (publishVersion: number, includeHidden: boolean, includeArchived = false) =>
       ['musicLibrary', 'playlists', publishVersion, includeHidden, includeArchived] as const,
     smartPlaylists: (publishVersion: number) =>

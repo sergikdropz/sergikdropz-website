@@ -11,8 +11,6 @@ import { copyShareEmbedHtml, copyShareListenLink, exportShareStorySnippet } from
 import { createdDateFromTrack } from '@/lib/music-library/track-created-date'
 import StarRating from './StarRating'
 import {
-  fetchBrowse,
-  fetchBrowseSongsAll,
   fetchFolders,
   fetchPlaylists,
   fetchTracks,
@@ -97,7 +95,13 @@ import {
   type CatalogSyncEvent,
 } from '@/lib/catalog-sync'
 import { useCatalogSync } from '@/contexts/CatalogSyncContext'
-import { useMusicPlaylists, useMusicSmartPlaylists } from '@/lib/api/music-library-hooks'
+import {
+  fetchMusicBrowse,
+  fetchMusicBrowseSongsAll,
+  useMusicPlaylists,
+  useMusicSmartPlaylists,
+} from '@/lib/api/music-library-hooks'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useMusicPlayer, type PlayerSource } from '@/contexts/MusicPlayerContext'
 import { CrateCoverMosaic } from '@/components/music/CrateCoverMosaic'
 import { mosaicCoversForTrack, usePlayerCoverPool } from '@/hooks/useTrackMosaicCovers'
@@ -602,10 +606,19 @@ function mergeAlbumTiles(...lists: AlbumTile[][]): AlbumTile[] {
   })
 }
 
-async function loadVisibleAlbumAndEpTiles(): Promise<AlbumTile[]> {
+async function loadVisibleAlbumAndEpTiles(
+  queryClient: QueryClient,
+  publishVersion: number,
+): Promise<AlbumTile[]> {
   const fromFolders = await loadAlbumAndEpTilesFromLibrary(false).catch(() => [] as AlbumTile[])
   try {
-    const data = await fetchBrowse({ view: 'albums', sort: 'title', dir: 'asc', limit: 500, offset: 0 })
+    const data = await fetchMusicBrowse(queryClient, publishVersion, {
+      view: 'albums',
+      sort: 'title',
+      dir: 'asc',
+      limit: 500,
+      offset: 0,
+    })
     return mergeAlbumTiles(toAlbumTiles(data.albums || []), fromFolders).filter((t) => !t.hidden)
   } catch {
     return fromFolders.filter((t) => !t.hidden)
@@ -613,11 +626,21 @@ async function loadVisibleAlbumAndEpTiles(): Promise<AlbumTile[]> {
 }
 
 /** Admin catalog: include private folders; public: visible only. */
-async function loadCatalogAlbumAndEpTiles(includePrivate: boolean): Promise<AlbumTile[]> {
-  if (!includePrivate) return loadVisibleAlbumAndEpTiles()
+async function loadCatalogAlbumAndEpTiles(
+  includePrivate: boolean,
+  queryClient: QueryClient,
+  publishVersion: number,
+): Promise<AlbumTile[]> {
+  if (!includePrivate) return loadVisibleAlbumAndEpTiles(queryClient, publishVersion)
   const fromFolders = await loadAlbumAndEpTilesFromLibrary(true).catch(() => [] as AlbumTile[])
   try {
-    const data = await fetchBrowse({ view: 'albums', sort: 'title', dir: 'asc', limit: 500, offset: 0 })
+    const data = await fetchMusicBrowse(queryClient, publishVersion, {
+      view: 'albums',
+      sort: 'title',
+      dir: 'asc',
+      limit: 500,
+      offset: 0,
+    })
     return mergeAlbumTiles(fromFolders, toAlbumTiles(data.albums || []))
   } catch {
     return fromFolders
@@ -651,6 +674,7 @@ export default function SergBrowser({
     toggleQueuePanel,
     setQueuePanelHost,
   } = useMusicPlayer()
+  const queryClient = useQueryClient()
   const { publishVersion, onRemoteVersionChange } = useCatalogSync()
   const smartPlaylistsQuery = useMusicSmartPlaylists({ publishVersion })
   const curatedPlaylistsQuery = useMusicPlaylists({
@@ -924,7 +948,7 @@ export default function SergBrowser({
           setLoading(false)
           return
         }
-        const data = await fetchBrowseSongsAll({
+        const data = await fetchMusicBrowseSongsAll(queryClient, publishVersion, {
           sort: sortField,
           dir: sortDir,
           genre: filterGenre || undefined,
@@ -959,7 +983,7 @@ export default function SergBrowser({
         showBlockingLoader()
       }
 
-      const data = await fetchBrowse({
+      const data = await fetchMusicBrowse(queryClient, publishVersion, {
         view,
         sort: sortField,
         dir: sortDir,
@@ -1111,7 +1135,7 @@ export default function SergBrowser({
         if (view !== 'albums') setAlbumTracksHydrating(false)
       }
     }
-  }, [view, sortField, sortDir, filterGenre, filterArtist, searchQuery, activeSmartPlaylist, activeCuratedPlaylist, activeSidebarAlbum, isAdminCatalog])
+  }, [view, sortField, sortDir, filterGenre, filterArtist, searchQuery, activeSmartPlaylist, activeCuratedPlaylist, activeSidebarAlbum, isAdminCatalog, queryClient, publishVersion])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -1145,7 +1169,7 @@ export default function SergBrowser({
   }, [curatedPlaylistsQuery.data])
 
   useEffect(() => {
-    loadCatalogAlbumAndEpTiles(isAdminCatalog)
+    loadCatalogAlbumAndEpTiles(isAdminCatalog, queryClient, publishVersion)
       .then((tiles) =>
         setSidebarAlbums((prev) =>
           mergeAlbumTilesPreservingUploads(
@@ -1166,7 +1190,7 @@ export default function SergBrowser({
           )
           .catch(() => {})
       })
-  }, [isAdminCatalog])
+  }, [isAdminCatalog, queryClient, publishVersion])
 
   useEffect(() => {
     if (!isAdminCatalog) return
@@ -8229,6 +8253,8 @@ function AdminPlaylistChrome({
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
 }) {
   const folderId = folderIdFromPlaylistId(playlist.id)
+  const queryClient = useQueryClient()
+  const { publishVersion } = useCatalogSync()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -8357,7 +8383,12 @@ function AdminPlaylistChrome({
     const timer = window.setTimeout(async () => {
       setSearchBusy(true)
       try {
-        const data = await fetchBrowse({ view: 'songs', search: q, limit: 8, offset: 0 })
+        const data = await fetchMusicBrowse(queryClient, publishVersion, {
+          view: 'songs',
+          search: q,
+          limit: 8,
+          offset: 0,
+        })
         if (cancelled) return
         const hits = ((data.tracks || []) as Track[]).filter(
           (t) => !orderedTracks.some((existing) => existing.id === t.id)
@@ -8373,7 +8404,7 @@ function AdminPlaylistChrome({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [trackSearch, editOpen, orderedTracks])
+  }, [trackSearch, editOpen, orderedTracks, queryClient, publishVersion])
 
   const openMenu = (e: React.MouseEvent) => {
     e.preventDefault()

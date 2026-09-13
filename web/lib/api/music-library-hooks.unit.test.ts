@@ -23,6 +23,13 @@ describe('queryKeys.musicLibrary', () => {
     expect(a[2]).toBe(1)
     expect(b[2]).toBe(2)
   })
+
+  it('keeps browseSongsAll under the same root with version in the key', () => {
+    const key = queryKeys.musicLibrary.browseSongsAll(7, { sort: 'title', dir: 'asc' })
+    expect(key[0]).toBe('musicLibrary')
+    expect(key[1]).toBe('browse-songs-all')
+    expect(key[2]).toBe(7)
+  })
 })
 
 describe('music library leaf cache contract', () => {
