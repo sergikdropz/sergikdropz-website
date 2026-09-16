@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { assignISRC } from '@/lib/studio/isrc'
 import type { MarketingCopy } from '@/lib/studio/constants'
+import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 
 const MARKETING_COPY_KEYS = [
@@ -238,6 +239,21 @@ export async function applyAssignIsrcs(params: { releaseId?: string; trackIds?: 
   }
 
   const ok = results.filter((r) => r.status === 'ok').length
+  const okIds = results.filter((r) => r.status === 'ok').map((r) => r.track_id)
+  if (okIds.length && params.releaseId) {
+    try {
+      const supabase = createSupabaseServerClient()
+      await pushDistributionToVault(supabase, {
+        releaseId: params.releaseId,
+        writeDates: false,
+        bumpCatalog: false,
+        trackIds: okIds,
+      })
+    } catch (err) {
+      console.warn('[applyAssignIsrcs] vault write-back failed', err)
+    }
+  }
+
   return {
     releaseId: params.releaseId ?? null,
     total: results.length,

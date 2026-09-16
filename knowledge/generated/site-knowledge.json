@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-09-13T20:59:56.456Z",
+    "generatedAt": "2026-09-16T22:44:46.445Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -16,9 +16,9 @@
     },
     "counts": {
       "appRouterPages": 82,
-      "appRouterRouteHandlers": 241,
+      "appRouterRouteHandlers": 242,
       "componentsTsx": 154,
-      "libTs": 436
+      "libTs": 439
     },
     "pagesByCategory": {
       "fan": 5,
@@ -30,7 +30,7 @@
       "admin": 39,
       "studio": 10
     },
-    "contentHash": "1b4e88414010b441"
+    "contentHash": "a7122744b1e376fe"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -1542,6 +1542,11 @@
       {
         "urlPath": "/api/studio/release-schedule",
         "file": "web/app/api/studio/release-schedule/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/copy-from-dna",
+        "file": "web/app/api/studio/releases/[id]/copy-from-dna/route.ts",
         "category": "api"
       },
       {

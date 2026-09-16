@@ -2,10 +2,43 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import releasesData from '@/data/releases.json'
 import releaseSchedule from '@/data/release-schedule.json'
-import artistData from '@/data/artist.json'
 import ReleaseDetailClient from './ReleaseDetailClient'
+import { getPublicLiveReleaseById } from '@/lib/marketing/public-releases'
+import {
+  breadcrumbJsonLd,
+  musicAlbumJsonLd,
+  seoDescriptionFromCopy,
+  siteBaseUrl,
+  storeLinkToPlatform,
+} from '@/lib/marketing/music-seo'
 
-type Release = {
+export const revalidate = 300
+export const dynamicParams = true
+
+export type PublicReleaseView = {
+  id: string
+  title: string
+  type: string
+  year?: number
+  release_date?: string
+  genre?: string
+  subgenre?: string
+  description?: string
+  artwork?: string | null
+  image?: string | null
+  status?: string
+  platforms?: string[]
+  spotify_url?: string
+  soundcloud_url?: string
+  track_count?: number | null
+  presave_date?: string | null
+  smart_link?: string | null
+  upc?: string | null
+  tracks?: Array<{ title: string; duration?: number | null }>
+  storeLinks?: Array<{ store: string; url: string; label: string }>
+}
+
+type StaticRelease = {
   id: string
   title: string
   type: string
@@ -24,8 +57,8 @@ type Release = {
   smart_link?: string | null
 }
 
-function getAllReleases(): Release[] {
-  const fromReleases: Release[] = releasesData.releases.map((r: any) => ({
+function getStaticReleases(): StaticRelease[] {
+  const fromReleases: StaticRelease[] = releasesData.releases.map((r: any) => ({
     id: r.id,
     title: r.title,
     type: r.type,
@@ -38,7 +71,7 @@ function getAllReleases(): Release[] {
     soundcloud_url: r.soundcloud_url,
   }))
 
-  const fromSchedule: Release[] = releaseSchedule.schedule.map((r) => ({
+  const fromSchedule: StaticRelease[] = releaseSchedule.schedule.map((r) => ({
     id: r.id,
     title: r.title,
     type: r.type,
@@ -52,19 +85,62 @@ function getAllReleases(): Release[] {
     smart_link: r.smart_link,
   }))
 
-  // Merge: schedule data takes priority (has richer metadata)
-  const merged = new Map<string, Release>()
+  const merged = new Map<string, StaticRelease>()
   for (const r of fromReleases) merged.set(r.id, r)
   for (const r of fromSchedule) merged.set(r.id, { ...merged.get(r.id), ...r })
   return Array.from(merged.values())
 }
 
-function findRelease(slug: string): Release | undefined {
-  return getAllReleases().find((r) => r.id === slug)
+function findStaticRelease(slug: string): StaticRelease | undefined {
+  return getStaticReleases().find((r) => r.id === slug)
+}
+
+function viewFromStatic(release: StaticRelease): PublicReleaseView {
+  return {
+    ...release,
+    artwork: release.artwork || release.image || null,
+  }
+}
+
+function viewFromLive(live: NonNullable<Awaited<ReturnType<typeof getPublicLiveReleaseById>>>): PublicReleaseView {
+  const platforms = live.storeLinks.map((l) => storeLinkToPlatform(l.store).label)
+  const spotify = live.storeLinks.find((l) => storeLinkToPlatform(l.store).key === 'spotify')
+  const soundcloud = live.storeLinks.find((l) => storeLinkToPlatform(l.store).key === 'soundcloud')
+  return {
+    id: live.id,
+    title: live.title,
+    type: live.type,
+    year: live.release_date ? new Date(live.release_date).getFullYear() : undefined,
+    release_date: live.release_date || undefined,
+    genre: [live.genre, live.subgenre].filter(Boolean).join(' / ') || undefined,
+    subgenre: live.subgenre || undefined,
+    description: live.description || undefined,
+    artwork: live.artwork_url,
+    image: live.artwork_url,
+    status: 'released',
+    platforms: platforms.length ? platforms : undefined,
+    spotify_url: spotify?.url,
+    soundcloud_url: soundcloud?.url,
+    track_count: live.tracks.length || null,
+    upc: live.upc,
+    tracks: live.tracks.map((t) => ({ title: t.title, duration: t.duration })),
+    storeLinks: live.storeLinks,
+  }
+}
+
+async function resolveRelease(slug: string): Promise<{
+  view: PublicReleaseView
+  live: Awaited<ReturnType<typeof getPublicLiveReleaseById>>
+} | null> {
+  const live = await getPublicLiveReleaseById(slug)
+  if (live) return { view: viewFromLive(live), live }
+  const staticRelease = findStaticRelease(slug)
+  if (staticRelease) return { view: viewFromStatic(staticRelease), live: null }
+  return null
 }
 
 export async function generateStaticParams() {
-  return getAllReleases().map((r) => ({ slug: r.id }))
+  return getStaticReleases().map((r) => ({ slug: r.id }))
 }
 
 export async function generateMetadata({
@@ -73,20 +149,30 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>
 }): Promise<Metadata> {
   const { slug } = await params
-  const release = findRelease(slug)
-  if (!release) return { title: 'Release Not Found' }
+  const resolved = await resolveRelease(slug)
+  if (!resolved) return { title: 'Release Not Found' }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'
-  const title = `${release.title} — SERGIK`
+  const { view, live } = resolved
+  const siteUrl = siteBaseUrl()
+  const title = `${view.title} — SERGIK`
   const description =
-    release.description ||
-    `${release.title} by SERGIK — ${release.type} (${release.year || new Date(release.release_date || '').getFullYear()})`
-  const ogImage = `${siteUrl}/og?release=${slug}`
-  const imageAlt = `${release.title} by SERGIK`
+    live?.seoDescription ||
+    seoDescriptionFromCopy({
+      title: view.title,
+      type: view.type,
+      genre: view.genre,
+      description: view.description,
+    })
+  const ogImage = `${siteUrl}/og?release=${encodeURIComponent(slug)}`
+  const imageAlt = `${view.title} by SERGIK`
+  const keywords = ['SERGIK', view.title, view.type, view.genre, view.subgenre, 'electronic music', 'Phoenix']
+    .filter(Boolean)
+    .map(String)
 
   return {
     title,
     description,
+    keywords,
     openGraph: {
       title,
       description,
@@ -113,40 +199,26 @@ export default async function ReleaseDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const release = findRelease(slug)
-  if (!release) notFound()
+  const resolved = await resolveRelease(slug)
+  if (!resolved) notFound()
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'
-
-  // JSON-LD structured data
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'MusicAlbum',
-    name: release.title,
-    albumProductionType: 'StudioAlbum',
-    albumReleaseType:
-      release.type === 'EP'
-        ? 'EPRelease'
-        : release.type === 'Single'
-        ? 'SingleRelease'
-        : 'AlbumRelease',
-    byArtist: {
-      '@type': 'MusicGroup',
-      name: artistData.artist_name,
-      url: siteUrl,
-    },
-    ...(release.release_date && { datePublished: release.release_date }),
-    ...(release.genre && { genre: release.genre }),
-    ...(release.description && { description: release.description }),
-    ...(release.track_count && { numTracks: release.track_count }),
-    image:
-      release.artwork || release.image
-        ? release.artwork?.startsWith('/')
-          ? `${siteUrl}${release.artwork}`
-          : release.artwork || release.image
-        : undefined,
-    url: `${siteUrl}/music/${release.id}`,
-  }
+  const { view, live } = resolved
+  const siteUrl = siteBaseUrl()
+  const jsonLd = musicAlbumJsonLd({
+    siteUrl,
+    id: view.id,
+    title: view.title,
+    type: view.type,
+    description: live?.description || view.description,
+    genre: live?.genre || view.genre,
+    subgenre: live?.subgenre,
+    releaseDate: view.release_date,
+    image: view.artwork || view.image,
+    upc: live?.upc || view.upc,
+    tracks: live?.tracks || view.tracks,
+    storeLinks: live?.storeLinks,
+  })
+  const crumbs = breadcrumbJsonLd(siteUrl, view.title, view.id)
 
   return (
     <>
@@ -154,7 +226,11 @@ export default async function ReleaseDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ReleaseDetailClient release={release} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(crumbs) }}
+      />
+      <ReleaseDetailClient release={view} />
     </>
   )
 }

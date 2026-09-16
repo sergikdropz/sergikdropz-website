@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   buildVaultReleaseDraft,
+  descriptionFromSonicDna,
+  dnaCopyInputFromDraft,
+  marketingCopyFromDna,
   marketingCopyWithVaultMeta,
+  mergeGeneratedMarketingCopy,
+  type DnaCopyInput,
   type VaultFolderRow,
   type VaultTrackRow,
 } from '@/lib/studio/vault-import'
@@ -78,7 +83,10 @@ export async function importVaultFolderToStudio(
         genre: draft.release.genre,
         subgenre: draft.release.subgenre,
         label_name: draft.release.label_name,
-        marketing_copy: marketingCopyWithVaultMeta({}, draft.release.source_folder_id),
+        marketing_copy: marketingCopyWithVaultMeta(
+          marketingCopyFromDna(dnaCopyInputFromDraft(draft)),
+          draft.release.source_folder_id,
+        ),
         distribution_mode: 'self',
         target_stores: [],
         distributor_status: 'draft',
@@ -100,7 +108,11 @@ export async function importVaultFolderToStudio(
 
     const updates: Record<string, unknown> = {
       marketing_copy: marketingCopyWithVaultMeta(
-        (existing.marketing_copy as Record<string, unknown>) || {},
+        mergeGeneratedMarketingCopy(
+          (existing.marketing_copy as Record<string, unknown>) || {},
+          marketingCopyFromDna(dnaCopyInputFromDraft(draft)),
+          fillEmptyOnly,
+        ),
         draft.release.source_folder_id,
       ),
     }
@@ -263,4 +275,83 @@ export async function importVaultFolderToStudio(
       trackCount: draft.tracks.length,
     },
   }
+}
+
+export async function loadDnaCopyInputForRelease(
+  supabase: SupabaseClient,
+  releaseId: string,
+): Promise<{ input: DnaCopyInput; existingCopy: Record<string, unknown> }> {
+  const { data: release, error } = await supabase
+    .from('distribution_releases')
+    .select('id, title, genre, subgenre, description, label_name, release_date, marketing_copy')
+    .eq('id', releaseId)
+    .single()
+
+  if (error || !release) throw new Error('Release not found')
+
+  const { data: tracks } = await supabase
+    .from('distribution_tracks')
+    .select('title, music_library_track_id')
+    .eq('release_id', releaseId)
+    .order('created_at', { ascending: true })
+
+  const trackRows = tracks || []
+  const vaultIds = trackRows
+    .map((t) => t.music_library_track_id as string | null)
+    .filter((id): id is string => Boolean(id))
+
+  let dnaDescription: string | null = null
+  let vaultGenre: string | null = null
+  let vaultSubgenre: string | null = null
+
+  if (vaultIds.length) {
+    const { data: vaultTracks } = await supabase
+      .from('music_library_tracks')
+      .select('genre, subgenre, sonic_dna')
+      .in('id', vaultIds)
+
+    for (const row of vaultTracks || []) {
+      if (!vaultGenre && row.genre) vaultGenre = String(row.genre)
+      if (!vaultSubgenre && row.subgenre) vaultSubgenre = String(row.subgenre)
+      if (!dnaDescription) dnaDescription = descriptionFromSonicDna(row.sonic_dna)
+      if (vaultGenre && vaultSubgenre && dnaDescription) break
+    }
+  }
+
+  const yearRaw = String(release.release_date || '').slice(0, 4)
+  const year = Number(yearRaw)
+
+  return {
+    input: {
+      title: String(release.title || 'Untitled'),
+      genre: (release.genre as string | null) || vaultGenre,
+      subgenre: (release.subgenre as string | null) || vaultSubgenre,
+      description: (release.description as string | null) || dnaDescription,
+      artist: (release.label_name as string | null) || 'SERGIK',
+      trackTitles: trackRows.map((t) => String(t.title || '')).filter(Boolean),
+      year: year > 1900 ? year : null,
+    },
+    existingCopy: (release.marketing_copy as Record<string, unknown>) || {},
+  }
+}
+
+export async function applyMarketingCopyFromDna(
+  supabase: SupabaseClient,
+  releaseId: string,
+  opts?: { fillEmptyOnly?: boolean; persist?: boolean },
+) {
+  const fillEmptyOnly = Boolean(opts?.fillEmptyOnly)
+  const { input, existingCopy } = await loadDnaCopyInputForRelease(supabase, releaseId)
+  const generated = marketingCopyFromDna(input)
+  const merged = mergeGeneratedMarketingCopy(existingCopy, generated, fillEmptyOnly)
+
+  if (opts?.persist) {
+    const { error } = await supabase
+      .from('distribution_releases')
+      .update({ marketing_copy: merged })
+      .eq('id', releaseId)
+    if (error) throw new Error(error.message)
+  }
+
+  return { generated, copy: merged, input }
 }

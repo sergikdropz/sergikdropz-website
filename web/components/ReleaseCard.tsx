@@ -240,10 +240,13 @@ function ReleaseCard({
   return (
     <div className="bg-gray-900/50 rounded-lg overflow-hidden hover:bg-gray-800/50 transition-colors touch-manipulation">
       <div className="aspect-square bg-gray-800 relative">
+        <Link href={`/music/${release.id}`} className="absolute inset-0 z-[1]" aria-label={`${release.title} by SERGIK`}>
+          <span className="sr-only">{release.title}</span>
+        </Link>
         {imageUrl && !imageUrl.includes('image-cdn-fa.spotifycdn.com') && !imageUrl.includes('image-cdn-ak.spotifycdn.com') ? (
           <Image
             src={imageUrl}
-            alt={release.title}
+            alt={`${release.title} by SERGIK`}
             fill
             className="object-cover"
             unoptimized={shouldUnoptimizeImage(imageUrl)}
@@ -274,7 +277,11 @@ function ReleaseCard({
       </div>
       <div className="p-2.5 sm:p-6">
         <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-1.5 sm:gap-2">
-          <h3 className="text-sm sm:text-xl font-semibold flex-1 min-w-0 line-clamp-2">{release.title}</h3>
+          <h3 className="text-sm sm:text-xl font-semibold flex-1 min-w-0 line-clamp-2">
+            <Link href={`/music/${release.id}`} className="hover:text-white transition-colors">
+              {release.title}
+            </Link>
+          </h3>
           <span className="text-[10px] sm:text-xs text-gray-400 bg-gray-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
             {release.type}
           </span>

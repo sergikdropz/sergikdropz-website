@@ -30,7 +30,7 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
   const [filter, setFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'year' | 'type'>('year')
   const liveReleases = initialLiveReleases
-  const [releasesExpanded, setReleasesExpanded] = useState(false)
+  const [releasesExpanded, setReleasesExpanded] = useState(true)
   const [soundcloudExpanded, setSoundcloudExpanded] = useState(false)
   const [youtubeExpanded, setYoutubeExpanded] = useState(false)
   const [appleExpanded, setAppleExpanded] = useState(false)
@@ -141,6 +141,9 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
                 Music
               </h1>
             </div>
+            <p className="max-w-2xl text-center text-sm sm:text-base text-gray-400 leading-relaxed">
+              {artistData.bio.short}
+            </p>
             <div className="flex w-full justify-center">
               <Link
                 href="/music-library"

@@ -6,6 +6,12 @@ export async function GET() {
   
   const robotsTxt = `User-agent: *
 Allow: /
+Allow: /music
+Allow: /music/
+Disallow: /admin
+Disallow: /studio
+Disallow: /music-library
+Disallow: /api/
 
 Sitemap: ${baseUrl}/sitemap.xml
 `

@@ -9,6 +9,7 @@ import {
 } from '@/lib/studio/isrc'
 import { parseIsrcImportCsv } from '@/lib/studio/import-parse'
 import { logActivity } from '@/lib/activity-log'
+import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
 
 type BulkBody =
   | { trackIds: string[] }
@@ -113,6 +114,33 @@ export async function POST(request: NextRequest) {
     }
 
     const ok = results.filter((r) => r.status === 'ok').length
+    const okIds = results.filter((r) => r.status === 'ok').map((r) => r.track_id)
+    if (okIds.length) {
+      try {
+        const { data: linked } = await supabase
+          .from('distribution_tracks')
+          .select('id, release_id')
+          .in('id', okIds)
+        const byRelease = new Map<string, string[]>()
+        for (const row of linked || []) {
+          if (!row.release_id) continue
+          const list = byRelease.get(row.release_id) || []
+          list.push(row.id)
+          byRelease.set(row.release_id, list)
+        }
+        for (const [releaseId, trackIds] of byRelease) {
+          await pushDistributionToVault(supabase, {
+            releaseId,
+            writeDates: false,
+            bumpCatalog: false,
+            trackIds,
+          })
+        }
+      } catch (err) {
+        console.warn('[isrc/bulk-assign] vault write-back failed', err)
+      }
+    }
+
     await logActivity({
       actionType: 'bulk_assign_isrc',
       resourceType: 'track',

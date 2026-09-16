@@ -3,6 +3,7 @@ import {
   displayTrackSubgenre,
   type TrackDisplaySource,
 } from '@/lib/audio/track-display'
+import type { MarketingCopy } from '@/lib/studio/constants'
 
 export type VaultFolderRow = {
   id: string
@@ -241,4 +242,136 @@ export function vaultFolderIdFromMarketingCopy(
   if (!vault || typeof vault !== 'object') return null
   const id = clean((vault as { folderId?: string }).folderId)
   return id || null
+}
+
+const COPY_KEYS: (keyof MarketingCopy)[] = [
+  'elevator_pitch',
+  'press_blurb',
+  'spotify_pitch',
+  'social_caption',
+  'store_description',
+  'credits_block',
+]
+
+export type DnaCopyInput = {
+  title: string
+  genre?: string | null
+  subgenre?: string | null
+  description?: string | null
+  artist?: string | null
+  trackTitles?: string[]
+  year?: number | null
+}
+
+function firstSentence(text: string, max = 180): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  const sentence = trimmed.split(/(?<=[.!?])\s+/)[0] || trimmed
+  if (sentence.length <= max) return sentence
+  return `${sentence.slice(0, max - 1).trimEnd()}…`
+}
+
+function hashtag(genre: string): string {
+  return `#${genre.replace(/[^a-zA-Z0-9]+/g, '')}` || '#newmusic'
+}
+
+/** Build marketing copy from vault/Sonic DNA fields — no LLM. */
+export function marketingCopyFromDna(input: DnaCopyInput): MarketingCopy {
+  const title = clean(input.title) || 'Untitled'
+  const genre = clean(input.genre) || 'electronic'
+  const subgenre = clean(input.subgenre)
+  const mood = subgenre || genre
+  const artist = clean(input.artist) || 'SERGIK'
+  const year = input.year && input.year > 1900 ? input.year : new Date().getFullYear()
+  const desc = clean(input.description)
+  const hook = firstSentence(desc) || `${title} — ${mood} from ${artist}.`
+  const titles = (input.trackTitles || []).map(clean).filter(Boolean)
+  const tracklist = titles.length
+    ? titles.map((name, i) => `${i + 1}. ${name}`).join('\n')
+    : ''
+
+  return {
+    elevator_pitch: hook,
+    press_blurb:
+      desc ||
+      `${artist} unveils "${title}", a ${mood} release shaped for club systems and late-night listening.`,
+    spotify_pitch: `Mood: ${mood}. For fans of ${genre}${subgenre ? ` / ${subgenre}` : ''}. ${hook}`.slice(
+      0,
+      500,
+    ),
+    social_caption: `🎧 "${title}" is out now — stream everywhere. ${hashtag(genre)} ${hashtag('SERGIK')}`,
+    store_description: [desc || `${title} by ${artist}.`, tracklist && `Tracklist:\n${tracklist}`]
+      .filter(Boolean)
+      .join('\n\n'),
+    credits_block: `Written & produced by ${artist}.\nPublished © ${year} ${artist}. All rights reserved.`,
+  }
+}
+
+export function dnaCopyInputFromDraft(draft: {
+  release: VaultReleaseDraft
+  tracks: VaultTrackDraft[]
+}): DnaCopyInput {
+  const yearRaw = draft.release.release_date?.slice(0, 4)
+  const year = yearRaw ? Number(yearRaw) : null
+  return {
+    title: draft.release.title,
+    genre: draft.release.genre,
+    subgenre: draft.release.subgenre,
+    description: draft.release.description,
+    artist: draft.release.label_name,
+    trackTitles: draft.tracks.map((t) => t.title),
+    year: year && year > 1900 ? year : null,
+  }
+}
+
+/** Overlay generated copy. fillEmptyOnly keeps existing non-empty fields. Always preserves `_vault`. */
+export function mergeGeneratedMarketingCopy(
+  existing: Record<string, unknown> | null | undefined,
+  generated: MarketingCopy,
+  fillEmptyOnly = false,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...(existing || {}) }
+  for (const key of COPY_KEYS) {
+    const value = generated[key]
+    if (!value) continue
+    const prev = next[key]
+    if (fillEmptyOnly && typeof prev === 'string' && prev.trim()) continue
+    next[key] = value
+  }
+  if (existing?._vault) next._vault = existing._vault
+  return next
+}
+
+export type VaultDistributionStamp = {
+  releaseId: string
+  releaseTitle: string
+  status: string
+  isrc?: string | null
+  upc?: string | null
+  releaseDate?: string | null
+}
+
+export function mergeVaultDistributionMetadata(
+  existing: unknown,
+  stamp: VaultDistributionStamp,
+): Record<string, unknown> {
+  const meta =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {}
+  const prev =
+    meta.distribution && typeof meta.distribution === 'object' && !Array.isArray(meta.distribution)
+      ? { ...(meta.distribution as Record<string, unknown>) }
+      : {}
+  meta.distribution = {
+    ...prev,
+    releaseId: stamp.releaseId,
+    releaseTitle: stamp.releaseTitle,
+    status: stamp.status,
+    syncedAt: new Date().toISOString(),
+    ...(stamp.isrc ? { isrc: stamp.isrc } : {}),
+    ...(stamp.upc ? { upc: stamp.upc } : {}),
+    ...(stamp.releaseDate ? { releaseDate: stamp.releaseDate.slice(0, 10) } : {}),
+  }
+  return meta
 }

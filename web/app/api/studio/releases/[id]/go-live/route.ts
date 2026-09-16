@@ -9,6 +9,7 @@ import {
   publicMusicDestinationUrl,
 } from '@/lib/studio/launch-handoff'
 import { upsertScheduleFromDistribution } from '@/lib/studio/schedule-bridge'
+import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
 
 /**
  * POST /api/studio/releases/[id]/go-live
@@ -108,6 +109,19 @@ export async function POST(
       createCampaign,
       createSmartLink,
     })
+
+    try {
+      const vaultSync = await pushDistributionToVault(supabase, {
+        releaseId: params.id,
+        writeDates: true,
+        bumpCatalog: true,
+      })
+      if (vaultSync.errors.length) {
+        console.warn('[go-live] vault write-back', vaultSync)
+      }
+    } catch (err) {
+      console.warn('[go-live] vault write-back failed', err)
+    }
 
     await logActivity({
       actionType: 'go_live_release',

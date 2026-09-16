@@ -2,11 +2,12 @@ import { MetadataRoute } from 'next'
 import releasesData from '@/data/releases.json'
 import releaseSchedule from '@/data/release-schedule.json'
 import productsData from '@/data/products.json'
+import { getPublicLiveReleases } from '@/lib/marketing/public-releases'
+import { siteBaseUrl } from '@/lib/marketing/music-seo'
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://sergikdropz.com'
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const siteUrl = siteBaseUrl()
 
-  // Static pages
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: siteUrl,
@@ -21,14 +22,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
-      url: `${siteUrl}/music-library`,
+      url: `${siteUrl}/epk`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.7,
     },
+    {
+      url: `${siteUrl}/book`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
   ]
 
-  // Release pages from releases.json
   const releasePages: MetadataRoute.Sitemap = releasesData.releases.map((release: any) => ({
     url: `${siteUrl}/music/${release.id}`,
     lastModified: release.release_date ? new Date(release.release_date) : new Date(),
@@ -36,10 +42,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
-  // Scheduled release pages
   const scheduledPages: MetadataRoute.Sitemap = releaseSchedule.schedule
     .filter((r) => {
-      // Don't duplicate IDs already in releases.json
       return !releasesData.releases.some((existing: any) => existing.id === r.id)
     })
     .map((release) => ({
@@ -49,7 +53,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     }))
 
-  // Product pages
+  const live = await getPublicLiveReleases()
+  const known = new Set([
+    ...releasesData.releases.map((r: any) => r.id),
+    ...releaseSchedule.schedule.map((r) => r.id),
+  ])
+  const livePages: MetadataRoute.Sitemap = live
+    .filter((r) => !known.has(r.id))
+    .map((release) => ({
+      url: `${siteUrl}/music/${release.id}`,
+      lastModified: release.release_date ? new Date(release.release_date) : new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.85,
+    }))
+
   const productPages: MetadataRoute.Sitemap = productsData.products.map((product: any) => ({
     url: `${siteUrl}/shop/${product.id}`,
     lastModified: new Date(),
@@ -57,5 +74,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }))
 
-  return [...staticPages, ...releasePages, ...scheduledPages, ...productPages]
+  return [...staticPages, ...releasePages, ...scheduledPages, ...livePages, ...productPages]
 }

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import AiField from '@/components/AiField'
 import { COPY_TEMPLATES, type MarketingCopy } from '@/lib/studio/constants'
 import { dispatchAdminAiPrompt } from '@/lib/admin-ai-client'
-import { FaBrain, FaCopy, FaPen } from 'react-icons/fa'
+import { FaBrain, FaCopy, FaPen, FaWaveSquare } from 'react-icons/fa'
 
 type Props = {
   title: string
@@ -26,9 +26,33 @@ export default function CopywritingStudio({
   saving,
 }: Props) {
   const [activeField, setActiveField] = useState<keyof MarketingCopy>('elevator_pitch')
+  const [dnaLoading, setDnaLoading] = useState(false)
+  const [dnaError, setDnaError] = useState<string | null>(null)
 
   function updateField(key: keyof MarketingCopy, value: string) {
     onChange({ ...copy, [key]: value })
+  }
+
+  async function fillFromDna() {
+    if (!releaseId) return
+    setDnaLoading(true)
+    setDnaError(null)
+    try {
+      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/copy-from-dna`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fillEmptyOnly: false, apply: false }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'DNA copy failed')
+      }
+      onChange({ ...copy, ...(data.copy || data.generated || {}) })
+    } catch (err) {
+      setDnaError(err instanceof Error ? err.message : 'DNA copy failed')
+    } finally {
+      setDnaLoading(false)
+    }
   }
 
   function fillFromTemplate() {
@@ -97,6 +121,17 @@ export default function CopywritingStudio({
               Draft with AI
             </button>
           ) : null}
+          {releaseId ? (
+            <button
+              type="button"
+              onClick={fillFromDna}
+              disabled={dnaLoading}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-cyan-500/40 text-cyan-100 hover:bg-cyan-500/10 transition disabled:opacity-50"
+            >
+              <FaWaveSquare />
+              {dnaLoading ? 'Reading DNA…' : 'Regenerate from DNA'}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={fillFromTemplate}
@@ -133,6 +168,7 @@ export default function CopywritingStudio({
           ))}
         </div>
         <div className="flex-1 p-5">
+          {dnaError ? <p className="text-xs text-red-400 mb-2">{dnaError}</p> : null}
           <p className="text-xs text-zinc-500 mb-2">{meta.hint}</p>
           <AiField
             as="textarea"

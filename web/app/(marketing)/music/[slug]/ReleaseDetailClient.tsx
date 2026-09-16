@@ -24,6 +24,15 @@ interface Release {
   track_count?: number | null
   presave_date?: string | null
   smart_link?: string | null
+  tracks?: Array<{ title: string; duration?: number | null }>
+  storeLinks?: Array<{ store: string; url: string; label: string }>
+}
+
+function formatTrackTime(seconds?: number | null) {
+  if (!seconds || seconds <= 0) return null
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 function useCountdown(targetDate: string | undefined) {
@@ -114,7 +123,7 @@ export default function ReleaseDetailClient({ release }: { release: Release }) {
             {imageUrl ? (
               <Image
                 src={imageUrl}
-                alt={release.title}
+                alt={`${release.title} by SERGIK`}
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
@@ -153,7 +162,27 @@ export default function ReleaseDetailClient({ release }: { release: Release }) {
               </p>
             )}
 
-            {release.track_count && (
+            {release.tracks && release.tracks.length > 0 && (
+              <ol className="space-y-2 border border-gray-800 rounded-lg p-4">
+                {release.tracks.map((track, index) => {
+                  const time = formatTrackTime(track.duration)
+                  return (
+                    <li
+                      key={`${track.title}-${index}`}
+                      className="flex items-baseline justify-between gap-3 text-sm text-gray-300"
+                    >
+                      <span>
+                        <span className="text-gray-500 tabular-nums mr-2">{index + 1}.</span>
+                        {track.title}
+                      </span>
+                      {time ? <span className="text-gray-500 tabular-nums text-xs">{time}</span> : null}
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+
+            {release.track_count && !release.tracks?.length && (
               <p className="text-gray-500 text-sm">{release.track_count} tracks</p>
             )}
 
@@ -199,36 +228,53 @@ export default function ReleaseDetailClient({ release }: { release: Release }) {
             )}
 
             {/* Streaming platform links for released */}
-            {!isUpcoming && release.platforms && release.platforms.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-gray-500 text-xs uppercase tracking-wider font-semibold">
-                  Listen on
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {release.platforms.map((platform) => {
-                    const config = platformLinks[platform]
-                    if (!config) return null
-                    const Icon = config.icon
-
-                    let href = '#'
-                    if (platform === 'Spotify' && release.spotify_url) href = release.spotify_url
-                    else if (platform === 'SoundCloud' && release.soundcloud_url) href = release.soundcloud_url
-
-                    return (
-                      <a
-                        key={platform}
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 transition-all ${config.color}`}
-                      >
-                        <Icon className="text-lg" />
-                        <span className="text-sm text-gray-300">{config.label}</span>
-                      </a>
-                    )
-                  })}
-                </div>
-              </div>
+            {!isUpcoming && (
+              (() => {
+                const fallback = { icon: FaMusic, label: 'Listen', color: 'text-gray-300 hover:text-white' }
+                const links =
+                  release.storeLinks && release.storeLinks.length
+                    ? release.storeLinks.map((l) => ({
+                        key: l.store,
+                        href: l.url,
+                        config: platformLinks[l.label] || { ...fallback, label: l.label },
+                      }))
+                    : (release.platforms || []).map((platform) => {
+                        let href = ''
+                        if (platform === 'Spotify' && release.spotify_url) href = release.spotify_url
+                        else if (platform === 'SoundCloud' && release.soundcloud_url) href = release.soundcloud_url
+                        return {
+                          key: platform,
+                          href,
+                          config: platformLinks[platform] || { ...fallback, label: platform },
+                        }
+                      })
+                const usable = links.filter((l) => l.href)
+                if (!usable.length) return null
+                return (
+                  <div className="space-y-3">
+                    <p className="text-gray-500 text-xs uppercase tracking-wider font-semibold">
+                      Listen on
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {usable.map((link) => {
+                        const Icon = link.config.icon
+                        return (
+                          <a
+                            key={link.key}
+                            href={link.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 transition-all ${link.config.color}`}
+                          >
+                            <Icon className="text-lg" />
+                            <span className="text-sm text-gray-300">{link.config.label}</span>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()
             )}
 
             {/* Spotify embed */}

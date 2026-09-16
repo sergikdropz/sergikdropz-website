@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import artistData from '@/data/artist.json'
 import releasesData from '@/data/releases.json'
 import releaseSchedule from '@/data/release-schedule.json'
+import { getPublicLiveReleaseById } from '@/lib/marketing/public-releases'
 import {
   OG_MOSAIC_CELLS,
   OG_MOSAIC_COLS,
@@ -21,7 +22,7 @@ const OG_IMAGE_HEADERS = {
   'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
 }
 
-function findRelease(slug: string) {
+function findStaticRelease(slug: string) {
   const fromReleases = releasesData.releases.find((r: any) => r.id === slug)
   const fromSchedule = releaseSchedule.schedule.find((r) => r.id === slug)
   if (!fromReleases && !fromSchedule) return null
@@ -33,6 +34,26 @@ function findRelease(slug: string) {
     release_date: fromSchedule?.release_date || (fromReleases as any)?.release_date || '',
     year: (fromReleases as any)?.year,
     status: fromSchedule?.status || (fromReleases as any)?.status || 'released',
+  }
+}
+
+async function findRelease(slug: string) {
+  const staticRelease = findStaticRelease(slug)
+  if (staticRelease) return staticRelease
+  try {
+    const live = await getPublicLiveReleaseById(slug)
+    if (!live) return null
+    return {
+      title: live.title,
+      type: live.type,
+      genre: live.genre || '',
+      description: live.description || '',
+      release_date: live.release_date || '',
+      year: live.release_date ? new Date(live.release_date).getFullYear() : undefined,
+      status: 'released',
+    }
+  } catch {
+    return null
   }
 }
 
@@ -127,7 +148,7 @@ export async function GET(request: NextRequest) {
 
     // Per-release OG image
     if (releaseSlug) {
-      const release = findRelease(releaseSlug)
+      const release = await findRelease(releaseSlug)
       if (release) {
         const isUpcoming = release.status === 'upcoming' || release.status === 'scheduled'
         const yearText = release.release_date
