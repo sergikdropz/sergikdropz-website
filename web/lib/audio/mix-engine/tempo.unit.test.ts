@@ -3,9 +3,12 @@ import {
   applyDeckTempo,
   configureKeyLock,
   computeTempoCrossfadePlan,
+  formantCompensationGains,
   masterBpmAt,
   masterDeckRatesAt,
+  mergeEqWithFormantCompensation,
   MIX_RATE_SLEW,
+  pitchCancelSemitones,
   postHandoffNativeGlideMs,
   TEMPO_GLIDE_SOFT_KNEE,
   tempoMixProgress,
@@ -97,6 +100,29 @@ describe('applyDeckTempo', () => {
   it('clamps invalid rates to 1', () => {
     const deck = createDeck(1)
     expect(applyDeckTempo(asElement(deck), Number.NaN, { instant: true })).toBeCloseTo(1, 5)
+  })
+})
+
+describe('pitchCancelSemitones', () => {
+  it('is 0 near unity rate', () => {
+    expect(pitchCancelSemitones(1)).toBe(0)
+    expect(pitchCancelSemitones(1.004)).toBe(0)
+  })
+
+  it('cancels tempo-range pitch shifts', () => {
+    // Rates are clamped to TEMPO_MIN/MAX (0.5–1.5) before converting.
+    expect(pitchCancelSemitones(1.5)).toBeCloseTo(-12 * Math.log2(1.5), 5)
+    expect(pitchCancelSemitones(0.5)).toBeCloseTo(12, 5)
+  })
+})
+
+describe('formant compensation stays additive', () => {
+  it('mergeEqWithFormantCompensation keeps user bias', () => {
+    const base = { low: -6, mid: 2, high: 4 }
+    const merged = mergeEqWithFormantCompensation(base, 0.92)
+    expect(merged.low).not.toBe(base.low)
+    expect(Math.abs(merged.low - base.low)).toBeLessThan(8)
+    expect(formantCompensationGains(1)).toEqual({ low: 0, mid: 0, high: 0 })
   })
 })
 

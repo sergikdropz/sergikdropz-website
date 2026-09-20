@@ -196,6 +196,24 @@ describe('MixEngine symmetric deck bus', () => {
     expect(highA.gain.value).toBe(4)
   })
 
+  it('keeps formant compensation off the strip dial state', () => {
+    const deckA = createDeck()
+    const deckB = createDeck()
+    const engine = new MixEngine(
+      deckA as unknown as HTMLAudioElement,
+      deckB as unknown as HTMLAudioElement,
+    )
+    const { ctx } = mockAudioContext()
+    const raw = ctx as unknown as { createBiquadFilter: ReturnType<typeof vi.fn> }
+    engine.attachGraph(ctx)
+    engine.setDeckEqGains('a', { low: -6, mid: 1, high: 3 }, { instant: true })
+    engine.setDeckPlaybackRate('a', 0.9, { instant: true, notify: false })
+    expect(engine.getDeckEqGains('a')).toEqual({ low: -6, mid: 1, high: 3 })
+    const lowA = raw.createBiquadFilter.mock.results[0]?.value as { gain: { value: number } }
+    // Slowed + key-lock: formant lifts lows on the node, dial stays at -6.
+    expect(lowA.gain.value).toBeGreaterThan(-6)
+  })
+
   it('pulls deck B into the EQ chain when that platter takes the track', () => {
     const deckA = createDeck()
     const deckB = createDeck()

@@ -114,6 +114,27 @@ export function mergeEqWithFormantCompensation(
   }
 }
 
+/**
+ * Pitch cancel (semitones) for BufferSource / stretch when key-lock is on.
+ * BufferSource.playbackRate shifts pitch by 12·log₂(rate); cancel that so
+ * tempo moves without vinyl pitch when HTML preservesPitch cannot apply.
+ */
+export function pitchCancelSemitones(rate: number): number {
+  const r = clampTempoRate(rate)
+  if (Math.abs(r - 1) < 0.006) return 0
+  return -12 * Math.log2(r)
+}
+
+/** Scale formant EQ offsets (e.g. stretch-policy formantGain). */
+export function scaleFormantGains(
+  gains: { low: number; mid: number; high: number },
+  mul: number,
+): { low: number; mid: number; high: number } {
+  const m = Number.isFinite(mul) ? mul : 1
+  if (m === 1) return { ...gains }
+  return { low: gains.low * m, mid: gains.mid * m, high: gains.high * m }
+}
+
 /** Apply tempo with key-lock; optional instant vs slewed update. */
 export function applyDeckTempo(
   element: HTMLAudioElement,

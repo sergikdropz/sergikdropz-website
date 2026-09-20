@@ -94,7 +94,6 @@ import {
   playbackGridPhaseSec,
   applyDeckTempo,
   configureKeyLock,
-  formantCompensationGains,
   rampDeckTempo,
   clampTempoRate,
   postHandoffNativeGlideMs,
@@ -2195,7 +2194,6 @@ export default function MusicPlayer({
   const mixLookahead2IdRef = useRef<string | null>(null)
   const rateEaseRafRef = useRef<number | null>(null)
   const rateEaseLockRef = useRef(false)
-  const lastTempoCompRateRef = useRef(1)
   const tempoRampCancelRef = useRef<(() => void) | null>(null)
 
   const getPlaybackAudio = useCallback((): HTMLAudioElement | null => {
@@ -2456,27 +2454,6 @@ export default function MusicPlayer({
     [getOutgoingPlaybackRate]
   )
 
-  const applyFormantForRate = useCallback((rate: number) => {
-    const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
-    const engine = mixEngineRef.current
-    if (!engine) return
-    const gainMul = mixIntelRef.current?.incomingStretch.formantGain ?? 1
-    const prev = formantCompensationGains(lastTempoCompRateRef.current)
-    const next = formantCompensationGains(rate)
-    const cur = engine.getDeckEqGains(liveDeck)
-    const updated = {
-      low: cur.low - prev.low * gainMul + next.low * gainMul,
-      mid: cur.mid - prev.mid * gainMul + next.mid * gainMul,
-      high: cur.high - prev.high * gainMul + next.high * gainMul,
-    }
-    engine.setDeckEqGains(liveDeck, updated, { instant: false })
-    setDeckUi((prevUi) => ({
-      ...prevUi,
-      [liveDeck]: { ...prevUi[liveDeck], eqGains: updated },
-    }))
-    lastTempoCompRateRef.current = rate
-  }, [])
-
   const applyDeckStripEq = useCallback(
     (
       deck: DeckId,
@@ -2507,10 +2484,8 @@ export default function MusicPlayer({
         ...prev,
         [liveDeck]: { ...prev[liveDeck], playbackRate: clamped },
       }))
-      if (keyLock) applyFormantForRate(clamped)
-      else applyFormantForRate(1)
     },
-    [getPlaybackAudio, applyFormantForRate],
+    [getPlaybackAudio],
   )
 
   const flushMixUiSync = useCallback(() => {
@@ -5368,7 +5343,6 @@ export default function MusicPlayer({
             ...prev,
             [liveDeck]: { ...prev[liveDeck], playbackRate: rate },
           }))
-          applyFormantForRate(rate)
           if (u < 1) {
             rateEaseRafRef.current = requestAnimationFrame(step)
           } else {
@@ -5382,7 +5356,6 @@ export default function MusicPlayer({
       }
       tempoRampCancelRef.current = rampDeckTempo(live, from, to, durationMs, {
         keyLock: true,
-        onFormant: applyFormantForRate,
         onTick: (rate) => {
           setDeckUi((prev) => ({
             ...prev,
@@ -5396,7 +5369,7 @@ export default function MusicPlayer({
         applyLiveDeckTempo(to, true)
       }, durationMs + 32)
     },
-    [getPlaybackAudio, applyLiveDeckTempo, applyFormantForRate],
+    [getPlaybackAudio, applyLiveDeckTempo],
   )
 
   // Listener volume — never mix this with tempo (that re-triggers rate ramps).
@@ -5449,12 +5422,9 @@ export default function MusicPlayer({
       const clamped = clampTempoRate(rate)
       mixUiPendingRef.current.deckRates[deck] = clamped
       scheduleMixUiSync()
-      // Formant follows planned rates after handoff — mid-mix ticks stay silent.
-      if (mixEngineRef.current?.isMixing() || phraseMixLockRef.current) return
-      const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
-      if (deck === liveDeck) applyFormantForRate(clamped)
+      // MixEngine already applied formant/pitch-cancel in setDeckTempo.
     },
-    [scheduleMixUiSync, applyFormantForRate],
+    [scheduleMixUiSync],
   )
 
   const syncPostHandoffEq = useCallback((deck: DeckId) => {
@@ -5818,7 +5788,6 @@ export default function MusicPlayer({
       handleMixDeckFilter,
       cacheMixGridOffset,
       toMixTrackRef,
-      applyFormantForRate,
       computeMixIncomingRate,
       buildMixIntelligenceForPair,
       armDeckHandoff,
@@ -6680,11 +6649,9 @@ export default function MusicPlayer({
       }
       if (deck === liveDeck) {
         saveSettings({ playbackRate: clamped })
-        if (keyLock) applyFormantForRate(clamped)
-        else applyFormantForRate(1)
       }
     },
-    [applyFormantForRate, saveSettings],
+    [saveSettings],
   )
 
   const changeDeckKeyLock = useCallback(
@@ -6709,13 +6676,8 @@ export default function MusicPlayer({
       if (el && rate > 0) {
         applyDeckTempo(el, rate, { keyLock: enabled, instant: true })
       }
-      const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
-      if (deck === liveDeck) {
-        if (enabled) applyFormantForRate(rate)
-        else applyFormantForRate(1)
-      }
     },
-    [applyFormantForRate],
+    [],
   )
 
   const changePlaybackRate = (rate: number) => {

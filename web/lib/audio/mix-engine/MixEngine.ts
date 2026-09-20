@@ -79,7 +79,10 @@ import {
   clampTempoRate,
   computeTempoCrossfadePlan,
   configureKeyLock,
+  formantCompensationGains,
   masterDeckRatesAt,
+  pitchCancelSemitones,
+  scaleFormantGains,
   shouldNotifyMixUiRate,
   TEMPO_RATE_WRITE_EPSILON,
   TEMPO_GLIDE_SOFT_KNEE,
@@ -184,6 +187,14 @@ export class MixEngine {
     a: { low: 0, mid: 0, high: 0 },
     b: { low: 0, mid: 0, high: 0 },
   }
+  /**
+   * Key-lock formant EQ offset — never stored in deckUserEq / dial state.
+   * Written on top of user EQ when applying to biquads.
+   */
+  private deckFormantOffset: Record<DeckId, FilterMixEqGains> = {
+    a: { low: 0, mid: 0, high: 0 },
+    b: { low: 0, mid: 0, high: 0 },
+  }
   private deckRates: Record<DeckId, number> = { a: 1, b: 1 }
   private keyLock = true
   /** Per-deck MASTER TEMPO (preservesPitch). Defaults on. */
@@ -250,6 +261,7 @@ export class MixEngine {
       // Mid-blend stretcher flush fights MixEngine rates — apply after handoff.
       if (this.mixLock) return
       configureKeyLock(deck === 'a' ? this.deckA : this.deckB, enabled)
+      this.syncKeyLockAudio(deck, this.deckRates[deck])
       return
     }
     this.keyLock = enabled
@@ -258,6 +270,8 @@ export class MixEngine {
     if (this.mixLock) return
     configureKeyLock(this.deckA, enabled)
     configureKeyLock(this.deckB, enabled)
+    this.syncKeyLockAudio('a', this.deckRates.a)
+    this.syncKeyLockAudio('b', this.deckRates.b)
   }
 
   isKeyLockEnabled(deck?: DeckId): boolean {
@@ -598,6 +612,7 @@ export class MixEngine {
       rateAtCtx: when,
       paused: false,
     }
+    this.syncKeyLockAudio(deck, rate)
     src.onended = () => {
       if (this.deckBuffer[deck]?.src !== src) return
       const media = this.deckMediaTime(deck, el)
@@ -792,6 +807,7 @@ export class MixEngine {
         /* ignore */
       }
     }
+    this.syncKeyLockAudio(deck, applied)
     if (
       opts?.notify !== false &&
       Math.abs(applied - prev) >= TEMPO_RATE_WRITE_EPSILON
@@ -803,6 +819,70 @@ export class MixEngine {
       }
     }
     return applied
+  }
+
+  /**
+   * Keep key-lock honest on every audible path:
+   * - HTML: preservesPitch (applyDeckTempo)
+   * - BufferSource: formant EQ offset + stretch pitch-cancel (no preservesPitch)
+   * Never bakes formant into deckUserEq / dial state.
+   */
+  private syncKeyLockAudio(deck: DeckId, rate: number) {
+    const keyLock = this.deckKeyLock[deck]
+    const formantMul = this.mixIntel?.incomingStretch.formantGain ?? 1
+    if (keyLock) {
+      const scaled = scaleFormantGains(formantCompensationGains(rate), formantMul)
+      this.deckFormantOffset[deck] = scaled
+    } else {
+      this.deckFormantOffset[deck] = { low: 0, mid: 0, high: 0 }
+    }
+    if (!this.mixLock) {
+      this.writeEffectiveEq(deck)
+    }
+    // Stretch worklet can cancel BufferSource pitch when present.
+    if (
+      this.stretchInsertedDeck === deck &&
+      this.incomingStretch &&
+      this.hasBufferClock(deck)
+    ) {
+      try {
+        if (keyLock) {
+          this.incomingStretch.setFormantActive(true, pitchCancelSemitones(rate))
+        } else {
+          this.incomingStretch.setFormantActive(false, 0)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private effectiveEqGains(deck: DeckId): FilterMixEqGains {
+    const u = this.deckUserEq[deck]
+    const f = this.deckFormantOffset[deck]
+    return {
+      low: Math.max(-40, Math.min(12, u.low + f.low)),
+      mid: Math.max(-40, Math.min(12, u.mid + f.mid)),
+      high: Math.max(-40, Math.min(12, u.high + f.high)),
+    }
+  }
+
+  private writeEffectiveEq(deck: DeckId): boolean {
+    if (deck === 'a' && this.externalGainA && !this.sourceA && !this.externalSourceA) {
+      return false
+    }
+    this.ensureDeckChain(deck)
+    const nodes = this.getDeckEqNodes(deck)
+    if (!nodes.low || !nodes.mid || !nodes.high || !this.deckChainAttached[deck]) return false
+    const gains = this.effectiveEqGains(deck)
+    try {
+      this.writeEqGain(nodes.low.gain, gains.low)
+      this.writeEqGain(nodes.mid.gain, gains.mid)
+      this.writeEqGain(nodes.high.gain, gains.high)
+      return true
+    } catch {
+      return false
+    }
   }
 
   subscribe(fn: Listener): () => void {
@@ -1575,13 +1655,20 @@ export class MixEngine {
     }
     const nodes = this.getDeckEqNodes(deck)
     if (nodes.low && nodes.mid && nodes.high && this.deckFeedsEq(deck)) {
+      const f = this.deckFormantOffset[deck]
+      const effective: FilterMixEqGains = {
+        low: Math.max(-40, Math.min(12, gains.low + f.low)),
+        mid: Math.max(-40, Math.min(12, gains.mid + f.mid)),
+        high: Math.max(-40, Math.min(12, gains.high + f.high)),
+      }
       try {
-        this.writeEqGain(nodes.low.gain, gains.low)
-        this.writeEqGain(nodes.mid.gain, gains.mid)
-        this.writeEqGain(nodes.high.gain, gains.high)
+        this.writeEqGain(nodes.low.gain, effective.low)
+        this.writeEqGain(nodes.mid.gain, effective.mid)
+        this.writeEqGain(nodes.high.gain, effective.high)
       } catch {
         /* ignore */
       }
+      // Notify strip without formant so dials never bake compensation.
       this.notifyDeckEq(deck, gains, opts)
       return
     }
@@ -1967,14 +2054,8 @@ export class MixEngine {
   }
 
   getDeckEqGains(deck: DeckId): FilterMixEqGains {
-    const nodes = this.getDeckEqNodes(deck)
-    if (nodes.low && nodes.mid && nodes.high) {
-      return {
-        low: nodes.low.gain.value,
-        mid: nodes.mid.gain.value,
-        high: nodes.high.gain.value,
-      }
-    }
+    // Always return strip/user EQ — formant offset is internal and must not
+    // bake into dial state via get→set loops.
     return { ...this.deckUserEq[deck] }
   }
 
@@ -1998,32 +2079,37 @@ export class MixEngine {
     if (deck === 'a' && this.externalGainA && (this.sourceA || this.externalSourceA)) {
       this.externalGainA = null
     }
-    this.ensureDeckChain(deck)
-    const nodes = this.getDeckEqNodes(deck)
-    if (!nodes.low || !nodes.mid || !nodes.high || !this.deckChainAttached[deck]) return false
-    try {
-      this.writeEqGain(nodes.low.gain, gains.low)
-      this.writeEqGain(nodes.mid.gain, gains.mid)
-      this.writeEqGain(nodes.high.gain, gains.high)
-      return true
-    } catch {
-      return false
-    }
+    return this.writeEffectiveEq(deck)
   }
 
   /** Apply stored strip EQ + keylock prefs (post-handoff / mixer recover). */
   flushUserEq(opts?: { instant?: boolean }) {
     for (const deck of ['a', 'b'] as DeckId[]) {
-      this.setDeckEqGains(deck, this.deckUserEq[deck], opts)
       const el = deck === 'a' ? this.deckA : this.deckB
       const enabled = this.deckKeyLock[deck]
       configureKeyLock(el, enabled)
-      if (!this.mixLock && !this.hasBufferClock(deck)) {
-        const rate = this.deckRates[deck]
-        if (rate > 0) {
-          this.setDeckTempo(deck, el, rate, { instant: opts?.instant !== false, notify: false })
+      const rate = this.deckRates[deck]
+      if (!this.mixLock && rate > 0) {
+        if (this.hasBufferClock(deck)) {
+          const slot = this.deckBuffer[deck]
+          if (slot?.src) {
+            try {
+              if (Math.abs(slot.src.playbackRate.value - rate) >= TEMPO_RATE_WRITE_EPSILON) {
+                slot.src.playbackRate.value = rate
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          this.syncKeyLockAudio(deck, rate)
+        } else {
+          this.setDeckTempo(deck, el, rate, {
+            instant: opts?.instant !== false,
+            notify: false,
+          })
         }
       }
+      this.setDeckEqGains(deck, this.deckUserEq[deck], opts)
     }
   }
 
@@ -2866,6 +2952,16 @@ export class MixEngine {
           this.parkSilentDeck(outgoing)
           this.tryEnterStage('idle')
           this.settleMixWaiter(true)
+          // BufferSource has no preservesPitch — hand the live clock back to
+          // HTML so MASTER TEMPO (key-lock) actually holds after the blend.
+          if (this.deckKeyLock[this.active] && this.hasBufferClock(this.active)) {
+            this.releaseBufferClockToHtml({ resumeLive: true })
+            const liveEl = this.getActiveElement()
+            this.setDeckTempo(this.active, liveEl, this.deckRates[this.active], {
+              instant: true,
+              notify: false,
+            })
+          }
         }, handoffSettleMs(syncBpm))
       }
 

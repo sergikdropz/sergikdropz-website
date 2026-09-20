@@ -252,6 +252,8 @@ export {
   configureKeyLock,
   formantCompensationGains,
   mergeEqWithFormantCompensation,
+  pitchCancelSemitones,
+  scaleFormantGains,
   rampDeckTempo,
   rateToTempoPercent,
   tempoPercentToRate,
