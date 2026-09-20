@@ -13,8 +13,8 @@ describe('DEFAULT_PHASE_METER_OPTIONS', () => {
       showBars: true,
       showPhrases: false,
       showMs: false,
-      jogFeel: 'coarse',
-      jogSensitivity: 4,
+      jogFeel: 'normal',
+      jogSensitivity: 1.25,
       centerSnap: true,
       quantize: 'phrase',
       phraseBars: 8,
@@ -26,8 +26,8 @@ describe('parsePhaseMeterOptions', () => {
   it('fills missing fields from factory defaults', () => {
     expect(parsePhaseMeterOptions({ windowId: 'beat-1' })).toMatchObject({
       windowId: 'beat-1',
-      jogFeel: 'coarse',
-      jogSensitivity: 4,
+      jogFeel: 'normal',
+      jogSensitivity: 1.25,
       quantize: 'phrase',
     })
   })
@@ -41,7 +41,7 @@ describe('parsePhaseMeterOptions', () => {
   it('rejects junk and returns defaults', () => {
     expect(parsePhaseMeterOptions(null)).toEqual(DEFAULT_PHASE_METER_OPTIONS)
     expect(parsePhaseMeterOptions({ jogFeel: 'nope', jogSensitivity: -3 }).jogFeel).toBe(
-      'coarse',
+      'normal',
     )
   })
 })

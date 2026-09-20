@@ -356,15 +356,25 @@ export function resolveIncomingMixCue(params: {
  * same multiplier onto outgoing keeps relative rate at 1 and freezes the error
  * (the previous "poor blend" failure mode).
  */
-export const VINYL_BEND_MAX = 0.018
+export const VINYL_BEND_MAX = 0.012
 /** Seconds to close a typical residual (DJ nudge window). */
 export const VINYL_BEND_CATCH_SEC = 0.65
 /** Already-excellent lock — stop chasing. */
 export const VINYL_BEND_DEADBAND_SEC = 0.002
+/** Consecutive deadband ticks before mid-blend phase snaps and stays locked. */
+export const OVERLAP_PHASE_LOCK_STREAK = 4
+/**
+ * Mix-progress window where vinyl bend may still chase. Hold through most of
+ * the overlap so playheads / phrase lines keep locking; settle before handoff.
+ */
+export const VINYL_BEND_BLEND_WINDOW = 0.88
+/** Max media-time step per frame when dual-deck platter auto-align seeks. */
+export const DUAL_ALIGN_SEEK_MAX_SEC = 0.014
 
 /**
  * PlaybackRate multiplier to close residual phase error.
- * Ahead (+) → slow incoming; behind (−) → speed up. Clamped to ±1.8%.
+ * Ahead (+) → slow incoming; behind (−) → speed up.
+ * Default clamp ±1.2% (audible); silent pre-arm may pass a wider max.
  */
 export function microRateCorrection(params: {
   phaseErrorSec: number
@@ -373,6 +383,8 @@ export function microRateCorrection(params: {
   strength?: number
   /** Seconds to close the error (default VINYL_BEND_CATCH_SEC) */
   catchSec?: number
+  /** Absolute max |rate − 1| (default VINYL_BEND_MAX) */
+  maxBend?: number
 }): number {
   const err = params.phaseErrorSec
   if (!Number.isFinite(err) || Math.abs(err) < VINYL_BEND_DEADBAND_SEC) return 1
@@ -383,7 +395,11 @@ export function microRateCorrection(params: {
   // Close `capped` seconds of media-time error over catchSec of wall time.
   const raw = -capped / catchSec
   const scaled = raw * (0.58 + 0.42 * strength)
-  return clamp(1 + scaled, 1 - VINYL_BEND_MAX, 1 + VINYL_BEND_MAX)
+  const max =
+    typeof params.maxBend === 'number' && params.maxBend > 0
+      ? params.maxBend
+      : VINYL_BEND_MAX
+  return clamp(1 + scaled, 1 - max, 1 + max)
 }
 
 /**
@@ -405,6 +421,48 @@ export function applyVinylBendToDeckRates(params: {
   }
 }
 
+/**
+ * Split a relative vinyl correction across *both* decks so playheads and
+ * phrase lines meet in the middle (smooth dual-platter align).
+ *
+ * `microMultiplier` is the incoming-only factor from driftAlignRate.
+ * Dual: each deck takes half the relative correction so neither jumps alone.
+ */
+export function applyDualVinylBendToDeckRates(params: {
+  outRate: number
+  inRate: number
+  microMultiplier: number
+}): { outRate: number; inRate: number } {
+  const micro =
+    Number.isFinite(params.microMultiplier) && params.microMultiplier > 0
+      ? params.microMultiplier
+      : 1
+  const corr = micro - 1
+  const outMult = 1 - corr / 2
+  const inMult = 1 + corr / 2
+  return {
+    outRate: clamp(params.outRate * outMult, 0.5, 1.5),
+    inRate: clamp(params.inRate * inMult, 0.5, 1.5),
+  }
+}
+
+/**
+ * Split a phase error into dual platter seek steps (media seconds).
+ * Positive error = incoming ahead of outgoing → pull incoming back / push out forward.
+ */
+export function dualPlatterSeekDeltas(params: {
+  errorSec: number
+  maxAbsSec?: number
+}): { outDeltaSec: number; inDeltaSec: number } {
+  const err = Number.isFinite(params.errorSec) ? params.errorSec : 0
+  const max =
+    typeof params.maxAbsSec === 'number' && params.maxAbsSec > 0
+      ? params.maxAbsSec
+      : DUAL_ALIGN_SEEK_MAX_SEC
+  const half = clamp(err / 2, -max, max)
+  return { outDeltaSec: half, inDeltaSec: -half }
+}
+
 /** Faster attack when residual is audible; slower when already tight. */
 export function smoothVinylBend(prev: number, next: number, absErrSec: number): number {
   const attack = absErrSec > 0.012 ? 0.28 : absErrSec > 0.005 ? 0.5 : 0.78
@@ -414,7 +472,9 @@ export function smoothVinylBend(prev: number, next: number, absErrSec: number): 
 /** Ease the bend multiplier back to 1.0 once phase is inside the deadband. */
 export function settleVinylBend(prev: number, absErrSec: number): number {
   if (absErrSec >= VINYL_BEND_DEADBAND_SEC) return prev
-  return prev * 0.7 + 0.3
+  // Snap hard once locked — lingering lerp reopens chase on the next noisy frame.
+  if (Math.abs(prev - 1) < 0.002) return 1
+  return prev * 0.55 + 0.45
 }
 
 /** Chase every frame when loose, every 2–4 when locking. */

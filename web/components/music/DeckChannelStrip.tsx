@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { FaPause, FaPlay, FaStepBackward, FaStepForward } from 'react-icons/fa'
+import { BlendAutomationMenu } from '@/components/music/BlendAutomationMenu'
 import { formatClock, formatTapTempoButtonLabel } from '@/lib/audio/beat-count'
 import {
   HOT_CUE_SLOTS,
@@ -18,8 +19,14 @@ import {
   type IDJActiveCue,
 } from '@/lib/audio/idj-preferences'
 import type { DeckJumpCue } from '@/lib/audio/mix-engine/cues'
-import { eqGainFromDrag, isEqDialDrag, nudgeEqGain } from '@/lib/ui/eq-dial-drag'
 import {
+  EQ_DIAL_CLICK_SUPPRESS_DB,
+  eqGainFromDrag,
+  isEqDialDrag,
+  nudgeEqGain,
+} from '@/lib/ui/eq-dial-drag'
+import {
+  TEMPO_DIAL_CLICK_SUPPRESS_PCT,
   isTempoDialDrag,
   nudgeTempoPct,
   tempoPctFromDrag,
@@ -70,6 +77,8 @@ export type DeckChannelConfig = {
   pairHint?: string | null
   /** Last blend quality grade (brief flash after mix). */
   mixQualityGrade?: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown' | null
+  /** MASTER TEMPO — keep musical key when changing playback rate (default on). */
+  keyLock?: boolean
 }
 
 type EqBand = 'low' | 'mid' | 'high'
@@ -128,11 +137,21 @@ export function DeckEqDials({
   /** Compact knobs for narrow mixer strips (phones / stacked layout). */
   size?: 'default' | 'compact'
 }) {
+  const [curveAnchor, setCurveAnchor] = useState<{ x: number; y: number } | null>(null)
+  const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setCurveAnchor({ x: e.clientX, y: e.clientY })
+  }
   return (
+    <>
     <div
       className={`flex items-center ${size === 'compact' ? 'gap-0.5' : 'gap-0.5'} ${className}`}
       data-eq-dials={deckLabel.toLowerCase()}
       data-eq-size={size}
+      data-allow-scroll-when-locked=""
+      title="Right-click for crossfader volume curve"
+      onContextMenu={onContextMenu}
     >
       {(['low', 'mid', 'high'] as const).map((band) => (
         <MiniEqDial
@@ -151,6 +170,8 @@ export function DeckEqDials({
         />
       ))}
     </div>
+    <BlendAutomationMenu anchor={curveAnchor} onClose={() => setCurveAnchor(null)} />
+    </>
   )
 }
 
@@ -181,39 +202,97 @@ function MiniEqDial({
   onDragEnd?: () => void
 }) {
   const compact = size === 'compact'
+  const btnRef = useRef<HTMLButtonElement>(null)
   const dragRef = useRef<{
     pointerId: number
     startX: number
     startY: number
     startGain: number
     moved: boolean
+    captured: boolean
   } | null>(null)
   const suppressClickRef = useRef(false)
+  const onDragEndRef = useRef(onDragEnd)
+  onDragEndRef.current = onDragEnd
+  const onSetGainRef = useRef(onSetGain)
+  onSetGainRef.current = onSetGain
+  const onDragStartRef = useRef(onDragStart)
+  onDragStartRef.current = onDragStart
+  const gainRef = useRef(gain)
+  gainRef.current = gain
   const draggable = Boolean(onSetGain)
+  const finishPointerRef = useRef<(pointerId: number) => void>(() => {})
 
-  const endDrag = (pointerId: number, el: HTMLElement) => {
-    const drag = dragRef.current
-    if (!drag || drag.pointerId !== pointerId) return
-    dragRef.current = null
-    if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
-    if (!drag.moved) return
-    suppressClickRef.current = true
-    onDragEnd?.()
-  }
+  const onWindowPointerEnd = useCallback((e: PointerEvent) => {
+    finishPointerRef.current(e.pointerId)
+  }, [])
+
+  const finishPointer = useCallback(
+    (pointerId: number) => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== pointerId) return
+      const wasMoved = drag.moved
+      dragRef.current = null
+      const el = btnRef.current
+      if (el) {
+        try {
+          if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
+        } catch {
+          /* already released */
+        }
+      }
+      window.removeEventListener('pointerup', onWindowPointerEnd)
+      window.removeEventListener('pointercancel', onWindowPointerEnd)
+      if (wasMoved) {
+        const meaningful =
+          Math.abs(gainRef.current - drag.startGain) >= EQ_DIAL_CLICK_SUPPRESS_DB
+        if (meaningful) {
+          // Real trim — don't also toggle the fader popup on the trailing click.
+          suppressClickRef.current = true
+          queueMicrotask(() => {
+            onDragEndRef.current?.()
+          })
+        } else {
+          // Slop crossed without a real trim (trackpad jitter). Drop any transient
+          // popup now so the following click can open a stable one.
+          onDragEndRef.current?.()
+        }
+      }
+    },
+    [onWindowPointerEnd],
+  )
+  finishPointerRef.current = finishPointer
+
+  // Unmount / remount safety — never leave a drag latched.
+  useEffect(() => {
+    return () => {
+      const drag = dragRef.current
+      if (!drag) return
+      dragRef.current = null
+      window.removeEventListener('pointerup', onWindowPointerEnd)
+      window.removeEventListener('pointercancel', onWindowPointerEnd)
+      if (drag.moved) onDragEndRef.current?.()
+    }
+  }, [onWindowPointerEnd])
 
   return (
     <button
+      ref={btnRef}
       type="button"
       onPointerDown={(e) => {
         if (!draggable || e.button !== 0) return
+        // Do not capture yet — capture-before-drag is what sticks the dial to the
+        // pointer when the release event is swallowed by a popup re-render.
         dragRef.current = {
           pointerId: e.pointerId,
           startX: e.clientX,
           startY: e.clientY,
-          startGain: gain,
+          startGain: gainRef.current,
           moved: false,
+          captured: false,
         }
-        e.currentTarget.setPointerCapture?.(e.pointerId)
+        window.addEventListener('pointerup', onWindowPointerEnd)
+        window.addEventListener('pointercancel', onWindowPointerEnd)
       }}
       onPointerMove={(e) => {
         const drag = dragRef.current
@@ -222,13 +301,22 @@ function MiniEqDial({
         if (!drag.moved) {
           if (!isEqDialDrag(e.clientX - drag.startX, deltaY)) return
           drag.moved = true
-          onDragStart?.(e.currentTarget)
+          try {
+            e.currentTarget.setPointerCapture?.(e.pointerId)
+            drag.captured = true
+          } catch {
+            /* ignore */
+          }
+          onDragStartRef.current?.(e.currentTarget)
         }
         e.preventDefault()
-        onSetGain?.(eqGainFromDrag({ startGain: drag.startGain, deltaY, fine: e.shiftKey }))
+        onSetGainRef.current?.(
+          eqGainFromDrag({ startGain: drag.startGain, deltaY, fine: e.shiftKey }),
+        )
       }}
-      onPointerUp={(e) => endDrag(e.pointerId, e.currentTarget)}
-      onPointerCancel={(e) => endDrag(e.pointerId, e.currentTarget)}
+      onPointerUp={(e) => finishPointer(e.pointerId)}
+      onPointerCancel={(e) => finishPointer(e.pointerId)}
+      onLostPointerCapture={(e) => finishPointer(e.pointerId)}
       onClick={(e) => {
         // A drag already changed the gain — do not also toggle the popup.
         if (suppressClickRef.current) {
@@ -374,15 +462,74 @@ export function DeckTempoControls({
   const [editingBpm, setEditingBpm] = useState(false)
   const [bpmDraft, setBpmDraft] = useState('')
   const [savingBpm, setSavingBpm] = useState(false)
+  const tempoBtnRef = useRef<HTMLButtonElement>(null)
   const tempoDragRef = useRef<{
     pointerId: number
     startX: number
     startY: number
     startPct: number
     moved: boolean
+    captured: boolean
   } | null>(null)
   const suppressTempoClickRef = useRef(false)
+  const onTempoDragEndRef = useRef(onTempoDragEnd)
+  onTempoDragEndRef.current = onTempoDragEnd
+  const onTempoChangeRef = useRef(onTempoChange)
+  onTempoChangeRef.current = onTempoChange
+  const onTempoDragStartRef = useRef(onTempoDragStart)
+  onTempoDragStartRef.current = onTempoDragStart
+  const tempoPctRef = useRef(tempoPct)
+  tempoPctRef.current = tempoPct
   const tempoDraggable = Boolean(onTempoChange)
+  const finishTempoPointerRef = useRef<(pointerId: number) => void>(() => {})
+
+  const onWindowTempoPointerEnd = useCallback((e: PointerEvent) => {
+    finishTempoPointerRef.current(e.pointerId)
+  }, [])
+
+  const finishTempoPointer = useCallback(
+    (pointerId: number) => {
+      const drag = tempoDragRef.current
+      if (!drag || drag.pointerId !== pointerId) return
+      const wasMoved = drag.moved
+      tempoDragRef.current = null
+      const el = tempoBtnRef.current
+      if (el) {
+        try {
+          if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
+        } catch {
+          /* already released */
+        }
+      }
+      window.removeEventListener('pointerup', onWindowTempoPointerEnd)
+      window.removeEventListener('pointercancel', onWindowTempoPointerEnd)
+      if (wasMoved) {
+        const meaningful =
+          Math.abs(tempoPctRef.current - drag.startPct) >= TEMPO_DIAL_CLICK_SUPPRESS_PCT
+        if (meaningful) {
+          suppressTempoClickRef.current = true
+          queueMicrotask(() => {
+            onTempoDragEndRef.current?.()
+          })
+        } else {
+          onTempoDragEndRef.current?.()
+        }
+      }
+    },
+    [onWindowTempoPointerEnd],
+  )
+  finishTempoPointerRef.current = finishTempoPointer
+
+  useEffect(() => {
+    return () => {
+      const drag = tempoDragRef.current
+      if (!drag) return
+      tempoDragRef.current = null
+      window.removeEventListener('pointerup', onWindowTempoPointerEnd)
+      window.removeEventListener('pointercancel', onWindowTempoPointerEnd)
+      if (drag.moved) onTempoDragEndRef.current?.()
+    }
+  }, [onWindowTempoPointerEnd])
 
   const startBpmEdit = () => {
     setEditingBpm(true)
@@ -430,16 +577,6 @@ export function DeckTempoControls({
     .filter(Boolean)
     .join(' · ')
 
-  const endTempoDrag = (pointerId: number, el: HTMLElement) => {
-    const drag = tempoDragRef.current
-    if (!drag || drag.pointerId !== pointerId) return
-    tempoDragRef.current = null
-    if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
-    if (!drag.moved) return
-    suppressTempoClickRef.current = true
-    onTempoDragEnd?.()
-  }
-
   const onBpmKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       void saveBpmEdit()
@@ -451,6 +588,8 @@ export function DeckTempoControls({
   return (
     <div
       className={`flex min-w-0 flex-wrap items-stretch gap-1.5 sm:gap-2 ${reverse ? 'flex-row-reverse' : ''} ${className}`}
+      data-deck-tempo={deckLabel.toLowerCase()}
+      data-allow-scroll-when-locked=""
     >
       {/* Compact BPM chip — tablet strip only when forceDetails; phones use deck-header chip. */}
       <button
@@ -459,7 +598,7 @@ export function DeckTempoControls({
         className={`flex shrink-0 flex-col justify-center rounded-lg text-left transition touch-manipulation ${
           forceDetails
             ? 'hidden px-1.5 py-1 md:flex xl:hidden'
-            : 'px-2.5 py-1.5 md:hidden'
+            : 'hidden'
         } ${
           isMixing
             ? mixRole === 'outgoing'
@@ -489,7 +628,7 @@ export function DeckTempoControls({
 
       <div
         className={`${
-          forceDetails ? 'hidden xl:flex' : 'hidden md:flex'
+          forceDetails ? 'hidden xl:flex' : 'flex'
         } ${reverse ? 'flex-row-reverse' : ''} shrink-0 items-center gap-2`}
       >
         <div className="flex shrink-0 items-center gap-2.5 rounded-lg bg-gray-800/80 px-2.5 py-1.5">
@@ -560,6 +699,7 @@ export function DeckTempoControls({
           </div>
           <div className="h-7 w-px bg-gray-700" aria-hidden />
           <button
+            ref={tempoBtnRef}
             type="button"
             onPointerDown={(e) => {
               if (!tempoDraggable || e.button !== 0) return
@@ -567,10 +707,12 @@ export function DeckTempoControls({
                 pointerId: e.pointerId,
                 startX: e.clientX,
                 startY: e.clientY,
-                startPct: tempoPct,
+                startPct: tempoPctRef.current,
                 moved: false,
+                captured: false,
               }
-              e.currentTarget.setPointerCapture?.(e.pointerId)
+              window.addEventListener('pointerup', onWindowTempoPointerEnd)
+              window.addEventListener('pointercancel', onWindowTempoPointerEnd)
             }}
             onPointerMove={(e) => {
               const drag = tempoDragRef.current
@@ -579,15 +721,22 @@ export function DeckTempoControls({
               if (!drag.moved) {
                 if (!isTempoDialDrag(e.clientX - drag.startX, deltaY)) return
                 drag.moved = true
-                onTempoDragStart?.(e.currentTarget)
+                try {
+                  e.currentTarget.setPointerCapture?.(e.pointerId)
+                  drag.captured = true
+                } catch {
+                  /* ignore */
+                }
+                onTempoDragStartRef.current?.(e.currentTarget)
               }
               e.preventDefault()
-              onTempoChange?.(
+              onTempoChangeRef.current?.(
                 tempoPctFromDrag({ startPct: drag.startPct, deltaY, fine: e.shiftKey }),
               )
             }}
-            onPointerUp={(e) => endTempoDrag(e.pointerId, e.currentTarget)}
-            onPointerCancel={(e) => endTempoDrag(e.pointerId, e.currentTarget)}
+            onPointerUp={(e) => finishTempoPointer(e.pointerId)}
+            onPointerCancel={(e) => finishTempoPointer(e.pointerId)}
+            onLostPointerCapture={(e) => finishTempoPointer(e.pointerId)}
             onClick={(e) => {
               if (suppressTempoClickRef.current) {
                 suppressTempoClickRef.current = false
@@ -730,6 +879,7 @@ export function DeckTransportControls({
   canSkip = false,
   continuousPlay = false,
   cueJumpPlay = false,
+  cueMenuLaunch = true,
   onSetCue,
   onClearCue,
   onLaunchCue,
@@ -737,6 +887,8 @@ export function DeckTransportControls({
   onNext,
   onTogglePlay,
   onToggleContinuousPlay,
+  onCueJumpPlayChange,
+  onCueMenuLaunchChange,
   hotCues,
   onLaunchHotCue,
   onSetHotCue,
@@ -761,6 +913,8 @@ export function DeckTransportControls({
   canSkip?: boolean
   continuousPlay?: boolean
   cueJumpPlay?: boolean
+  /** Menu pick jumps immediately (true) or only arms the CUE button (false). */
+  cueMenuLaunch?: boolean
   onSetCue?: () => void
   onClearCue?: () => void
   onLaunchCue?: () => void
@@ -768,6 +922,8 @@ export function DeckTransportControls({
   onNext?: () => void
   onTogglePlay?: () => void
   onToggleContinuousPlay?: () => void
+  onCueJumpPlayChange?: (enabled: boolean) => void
+  onCueMenuLaunchChange?: (enabled: boolean) => void
   hotCues?: HotCueSlots
   onLaunchHotCue?: (slot: HotCueSlot) => void
   onSetHotCue?: (slot: HotCueSlot) => void
@@ -800,7 +956,7 @@ export function DeckTransportControls({
   }, { externalRef: menuElRef })
   const cueMenuClamp = useClampedFixedMenuPosition(cueMenuOpen, cueMenuAnchor, {
     width: 256,
-    height: 440,
+    height: 560,
   }, { externalRef: cueMenuElRef })
 
   const closeMenu = () => setMenuAnchor(null)
@@ -813,7 +969,7 @@ export function DeckTransportControls({
 
   const openCueMenuFromEl = (el: HTMLElement) => {
     const rect = el.getBoundingClientRect()
-    setCueMenuAnchor({ x: rect.left, y: Math.max(8, rect.top - 448) })
+    setCueMenuAnchor({ x: rect.left, y: Math.max(8, rect.top - 560) })
   }
 
   const clearHold = () => {
@@ -871,7 +1027,6 @@ export function DeckTransportControls({
     trackCues,
   })
   const canLaunchCue = Boolean(resolvedActive)
-  const activeKind = resolvedActive?.cue.kind
   const continuousHint = continuousPlay
     ? 'Continuous play on · right-click to change'
     : 'Right-click for continuous play'
@@ -1052,25 +1207,24 @@ export function DeckTransportControls({
               ? 'min-h-[36px] min-w-[32px] px-1.5 text-[10px]'
               : 'min-h-[36px] min-w-[36px] text-[10px]'
           } ${!canLaunchCue ? 'cursor-default opacity-40' : ''} ${
-            activeKind === 'hot'
-              ? 'bg-violet-500/20 text-violet-200 hover:bg-violet-500/30'
-              : activeKind === 'track'
-                ? 'bg-sky-500/20 text-sky-200 hover:bg-sky-500/30'
-                : canLaunchCue
-                  ? 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+            !canLaunchCue
+              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+              : cueJumpPlay
+                ? 'bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25'
+                : 'bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
           }`}
+          data-cue-action={canLaunchCue ? (cueJumpPlay ? 'play' : 'stop') : undefined}
           title={
             resolvedActive
               ? cueJumpPlay
-                ? `Jump to ${resolvedActive.label} and play deck ${deckLabel} · right-click to choose`
-                : `Jump to ${resolvedActive.label} and pause deck ${deckLabel} · right-click to choose`
-              : `Right-click to choose memory, hot, and track cues on deck ${deckLabel}`
+                ? `Cue play · jump to ${resolvedActive.label} and play · right-click for options`
+                : `Cue stop · jump to ${resolvedActive.label} and pause · right-click for options`
+              : `Right-click for cue options, memory, hot, and track cues on deck ${deckLabel}`
           }
           aria-label={
             resolvedActive
-              ? `Launch ${resolvedActive.label} on deck ${deckLabel}, right-click for cue list`
-              : `Launch cue deck ${deckLabel}, right-click for cue list`
+              ? `${cueJumpPlay ? 'Cue play' : 'Cue stop'} ${resolvedActive.label} on deck ${deckLabel}, right-click for cue menu`
+              : `Cue deck ${deckLabel}, right-click for cue menu`
           }
           data-deck-cue={deckLabel}
           data-active-cue={idjActiveCueKey(resolvedActive?.cue ?? null)}
@@ -1083,12 +1237,127 @@ export function DeckTransportControls({
           ref={cueMenuClamp.ref}
           {...cueMenuClamp.rootProps}
           role="menu"
-          aria-label={`Deck ${deckLabel} hot cues`}
+          aria-label={`Deck ${deckLabel} cue options`}
           data-deck-hot-cue-menu=""
           className="fixed w-[min(16rem,calc(100vw-1rem))] overflow-y-auto overscroll-y-contain rounded-lg border border-gray-700 bg-gray-950 px-2 py-2 shadow-2xl"
           style={cueMenuClamp.style}
           onContextMenu={(e) => e.preventDefault()}
         >
+          <p className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            Cue action
+          </p>
+          <div className="mb-1.5 space-y-0.5" role="group" aria-label="Cue button action">
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={!cueJumpPlay}
+              data-cue-action="stop"
+              className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors ${
+                !cueJumpPlay
+                  ? 'bg-amber-500/15 text-amber-100'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+              onClick={() => onCueJumpPlayChange?.(false)}
+            >
+              <span className="mt-0.5 w-3 shrink-0 text-center text-[10px]" aria-hidden>
+                {!cueJumpPlay ? '●' : '○'}
+              </span>
+              <span>
+                <span className="font-semibold">Cue stop</span>
+                <span className="mt-0.5 block text-[10px] text-gray-500">
+                  Seek to cue and pause (CDJ)
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={cueJumpPlay}
+              data-cue-action="play"
+              className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors ${
+                cueJumpPlay
+                  ? 'bg-emerald-500/15 text-emerald-100'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+              onClick={() => onCueJumpPlayChange?.(true)}
+            >
+              <span className="mt-0.5 w-3 shrink-0 text-center text-[10px]" aria-hidden>
+                {cueJumpPlay ? '●' : '○'}
+              </span>
+              <span>
+                <span className="font-semibold">Cue play</span>
+                <span className="mt-0.5 block text-[10px] text-gray-500">
+                  Seek to cue and play
+                </span>
+              </span>
+            </button>
+          </div>
+          <p className="px-1.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            Menu pick
+          </p>
+          <div className="mb-2 space-y-0.5" role="group" aria-label="Cue menu launch">
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={cueMenuLaunch}
+              data-cue-menu-launch="on"
+              className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors ${
+                cueMenuLaunch
+                  ? 'bg-violet-500/15 text-violet-100'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+              onClick={() => onCueMenuLaunchChange?.(true)}
+            >
+              <span className="mt-0.5 w-3 shrink-0 text-center text-[10px]" aria-hidden>
+                {cueMenuLaunch ? '●' : '○'}
+              </span>
+              <span>
+                <span className="font-semibold">Cue launch</span>
+                <span className="mt-0.5 block text-[10px] text-gray-500">
+                  Selecting a cue jumps there now
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={!cueMenuLaunch}
+              data-cue-menu-launch="off"
+              className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors ${
+                !cueMenuLaunch
+                  ? 'bg-gray-700/60 text-gray-100'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+              onClick={() => onCueMenuLaunchChange?.(false)}
+            >
+              <span className="mt-0.5 w-3 shrink-0 text-center text-[10px]" aria-hidden>
+                {!cueMenuLaunch ? '●' : '○'}
+              </span>
+              <span>
+                <span className="font-semibold">Arm only</span>
+                <span className="mt-0.5 block text-[10px] text-gray-500">
+                  Select active cue — tap CUE to fire
+                </span>
+              </span>
+            </button>
+          </div>
+          {canLaunchCue ? (
+            <button
+              type="button"
+              role="menuitem"
+              data-cue-launch-now=""
+              className="mb-2 flex w-full items-center justify-between gap-2 rounded-md bg-amber-500/15 px-2 py-1.5 text-left text-[11px] font-semibold text-amber-100 hover:bg-amber-500/25"
+              onClick={() => {
+                onLaunchCue?.()
+                closeCueMenu()
+              }}
+            >
+              <span>Launch CUE now</span>
+              <span className="text-[10px] font-normal text-amber-200/80">
+                {cueJumpPlay ? 'play' : 'stop'}
+              </span>
+            </button>
+          ) : null}
           <p className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
             Memory
           </p>
@@ -1100,8 +1369,11 @@ export function DeckTransportControls({
               selected={sameIDJActiveCue(resolvedActive?.cue, { kind: 'memory' })}
               onSelect={() => {
                 onSelectActiveCue?.({ kind: 'memory' })
-                if (typeof memoryCueSec === 'number') onLaunchCue?.()
-                else onSetCue?.()
+                if (typeof memoryCueSec === 'number') {
+                  if (cueMenuLaunch) onLaunchCue?.()
+                } else {
+                  onSetCue?.()
+                }
                 closeCueMenu()
               }}
               onDelete={onClearCue}
@@ -1124,8 +1396,11 @@ export function DeckTransportControls({
                   selected={sameIDJActiveCue(resolvedActive?.cue, { kind: 'hot', slot })}
                   onSelect={() => {
                     onSelectActiveCue?.({ kind: 'hot', slot })
-                    if (typeof timeSec === 'number') onLaunchHotCue?.(slot)
-                    else onSetHotCue?.(slot)
+                    if (typeof timeSec === 'number') {
+                      if (cueMenuLaunch) onLaunchHotCue?.(slot)
+                    } else {
+                      onSetHotCue?.(slot)
+                    }
                     closeCueMenu()
                   }}
                   onDelete={onClearHotCue ? () => onClearHotCue(slot) : undefined}
@@ -1168,7 +1443,7 @@ export function DeckTransportControls({
                     selected={sameIDJActiveCue(resolvedActive?.cue, { kind: 'track', id: cue.id })}
                     onSelect={() => {
                       onSelectActiveCue?.({ kind: 'track', id: cue.id })
-                      onJumpTrackCue?.(cue.timeSec)
+                      if (cueMenuLaunch) onJumpTrackCue?.(cue.timeSec)
                       closeCueMenu()
                     }}
                   />
@@ -1353,6 +1628,8 @@ export default function DeckChannelStrip({
       aria-haspopup="dialog"
       aria-label={`Deck ${deckLabel} tempo`}
       data-deck-header-bpm={deckLabel}
+      data-deck-tempo={deckLabel.toLowerCase()}
+      data-allow-scroll-when-locked=""
     >
       <div className="text-[8px] uppercase tracking-wide text-gray-500">BPM</div>
       <div

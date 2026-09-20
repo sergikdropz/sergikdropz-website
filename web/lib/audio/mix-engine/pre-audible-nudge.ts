@@ -3,7 +3,7 @@
  * Seeks up to ±½ beat; vinyl-bends harder than the audible chase.
  */
 
-import { beatPhaseErrorSec, microRateCorrection, VINYL_BEND_DEADBAND_SEC } from './sync'
+import { beatPhaseErrorSec, microRateCorrection, VINYL_BEND_DEADBAND_SEC, VINYL_BEND_MAX } from './sync'
 import { clampResidualSeekSec } from './phrase-mix-doctrine'
 
 /** Tighter than audible chase — incoming fader is 0 so a seek cannot click. */
@@ -72,8 +72,9 @@ export function resolvePreAudibleNudge(params: {
     bpm: params.bpm,
     strength: 1,
     catchSec: silent ? 0.4 : 0.65,
+    maxBend: silent ? SILENT_VINYL_BEND_MAX : VINYL_BEND_MAX,
   })
-  const max = silent ? SILENT_VINYL_BEND_MAX : 0.018
+  const max = silent ? SILENT_VINYL_BEND_MAX : VINYL_BEND_MAX
   const bendMultiplier = Math.max(1 - max, Math.min(1 + max, bend))
   return { phaseErrSec: err, seekDeltaSec, bendMultiplier, locked: false }
 }

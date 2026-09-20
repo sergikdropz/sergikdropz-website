@@ -4,8 +4,10 @@ export const TEMPO_DIAL_MIN_PCT = -50
 export const TEMPO_DIAL_MAX_PCT = 50
 /** Vertical pixels from 0% to either end of the fader travel. */
 export const TEMPO_DIAL_TRAVEL_PX = 140
-/** Pointer slop before a press counts as a drag instead of a tap. */
-export const TEMPO_DIAL_DRAG_SLOP_PX = 3
+/** Pointer slop before a press counts as a drag instead of a tap (trackpad jitter). */
+export const TEMPO_DIAL_DRAG_SLOP_PX = 10
+/** Ignore click-suppression when the drag settled within this many % of the start. */
+export const TEMPO_DIAL_CLICK_SUPPRESS_PCT = 0.15
 /** Shift-drag multiplier for fine trims. */
 export const TEMPO_DIAL_FINE_SCALE = 0.25
 /** Percents landing inside this window snap to a hard 0% detent. */

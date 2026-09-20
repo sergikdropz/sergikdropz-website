@@ -81,24 +81,28 @@ describe('idj-preferences', () => {
       continuousPlay: { a: true, b: false },
       snapToGrid: false,
       cueJumpPlay: true,
+      cueMenuLaunch: false,
       startOnCue: false,
     })
     expect(readIDJConfigFromStorage()).toEqual({
       continuousPlay: { a: true, b: false },
       snapToGrid: false,
       cueJumpPlay: true,
+      cueMenuLaunch: false,
       startOnCue: false,
     })
   })
 
-  it('defaults cue jump to pause and start-on-cue on', () => {
-    expect(DEFAULT_IDJ_CONFIG.cueJumpPlay).toBe(false)
+  it('defaults cue jump to play and start-on-cue on', () => {
+    expect(DEFAULT_IDJ_CONFIG.cueJumpPlay).toBe(true)
+    expect(DEFAULT_IDJ_CONFIG.cueMenuLaunch).toBe(true)
     expect(DEFAULT_IDJ_CONFIG.startOnCue).toBe(true)
     localStorage.setItem(
       IDJ_CONFIG_STORAGE_KEY,
       JSON.stringify({ continuousPlay: { a: false, b: false }, snapToGrid: true }),
     )
-    expect(readIDJConfigFromStorage().cueJumpPlay).toBe(false)
+    expect(readIDJConfigFromStorage().cueJumpPlay).toBe(true)
+    expect(readIDJConfigFromStorage().cueMenuLaunch).toBe(true)
     expect(readIDJConfigFromStorage().startOnCue).toBe(true)
   })
 
@@ -110,7 +114,8 @@ describe('idj-preferences', () => {
     expect(readIDJConfigFromStorage()).toEqual({
       continuousPlay: { a: true, b: true },
       snapToGrid: true,
-      cueJumpPlay: false,
+      cueJumpPlay: true,
+      cueMenuLaunch: true,
       startOnCue: true,
     })
   })

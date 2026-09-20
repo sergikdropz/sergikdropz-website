@@ -29,8 +29,8 @@ import { preferLongSmoothOverlap } from './blend-smooth'
 /** Fixed 8-bar DNA phrase cell. */
 export const PHRASE_CELL_BARS = BARS_PER_PHRASE as PhraseBars
 
-/** DJ-mode overlap choices (multiples of the phrase cell). */
-export const DJ_OVERLAP_OPTIONS: PhraseBars[] = [8, 16]
+/** DJ-mode overlap choices (multiples of the phrase cell; 4 = quality recovery). */
+export const DJ_OVERLAP_OPTIONS: PhraseBars[] = [4, 8, 16]
 
 /** Freeze plan this many media-seconds before OUT. */
 export const PLAN_FREEZE_SEC = 4
@@ -65,10 +65,12 @@ export type ResolvedPhraseMix = {
   summary: string
 }
 
-/** Snap overlap to DJ doctrine (8 or 16). Legacy 2/4 → 8; 32 → 16. */
+/** Snap overlap to DJ doctrine. Allow 4 for quality-gate shorten; 2→4, 32→16. */
 export function normalizeDjOverlapBars(n: unknown): PhraseBars {
   if (n === 16) return 16
   if (n === 32) return 16
+  if (n === 4) return 4
+  if (n === 2) return 4
   return 8
 }
 
@@ -97,13 +99,25 @@ export function resolvePhraseMixSettings(
     bpmRelDelta?: number
     /** Outgoing section at OUT — drop prefers a 16-bar blend */
     outgoingSection?: string | null
+    /** Pair-memory preferred OUT depth (last good mix) */
+    preferredOutPhraseBars?: OutPhraseBars | null
   },
 ): ResolvedPhraseMix {
   const creative = config.creativeMode === true
-  const outPhraseBars =
+  let outPhraseBars: OutPhraseBars =
     config.outPhraseBars === 16 || config.outPhraseBars === 24 || config.outPhraseBars === 32
       ? config.outPhraseBars
       : 8
+
+  // Pair memory: prefer last-good OUT depth when not quality-gated.
+  const learnedOut = opts?.preferredOutPhraseBars
+  if (
+    (learnedOut === 8 || learnedOut === 16 || learnedOut === 24 || learnedOut === 32) &&
+    opts?.qualityGate !== 'poor' &&
+    opts?.qualityGate !== 'fair'
+  ) {
+    outPhraseBars = learnedOut
+  }
 
   let overlapBars = normalizeDjOverlapBars(config.overlapBars)
   let syncMode: SyncMode = config.syncMode === 'tempo-sync' ? 'tempo-sync' : 'beat-sync'
@@ -120,14 +134,27 @@ export function resolvePhraseMixSettings(
         ? 1
         : 0
   const qualityGated = gate === 'poor' || gate === 'fair'
+  const bpmRel =
+    typeof opts?.bpmRelDelta === 'number' && Number.isFinite(opts.bpmRelDelta)
+      ? Math.max(0, opts.bpmRelDelta)
+      : null
+
   if (qualityGated) {
-    overlapBars = 8
+    // Weak mixes: shorten overlap so a smash has less airtime.
+    overlapBars = weak >= 2 ? 4 : 8
     bpmStrategy = 'match-outgoing'
+    // Learning: also shorten OUT depth after repeated weak mixes.
+    if (weak >= 2 && outPhraseBars > 8) {
+      outPhraseBars = 8
+    }
     // First miss: keep BeatSync and chase harder. Two in a row: TempoSync
     // only when grids are unlocked — a locked pair still needs the chase.
     if (weak >= QUALITY_GATE_TEMPO_SYNC_STREAK && opts?.gridsReady !== true) {
       syncMode = 'tempo-sync'
     }
+  } else if (bpmRel != null && bpmRel > 0.06) {
+    // Large stretch: prefer shorter 4-bar blend over long vinyl thrash.
+    overlapBars = 4
   } else if (
     preferLongSmoothOverlap({
       bpmRelDelta: opts?.bpmRelDelta,
@@ -275,12 +302,21 @@ export function clampResidualSeekSec(params: {
 }
 
 /**
- * Keep the planned 8/16-bar overlap. Late fire must not compress the lattice
- * (that smears EQ knees and the tempo glide).
+ * Snap planned overlap onto an N×4-bar master lattice (4/8/12/16…).
+ * Late fire must not smear EQ knees — prefer grid seconds over raw plan float.
  */
-export function exactOverlapDurationSec(plannedSec: number, maxSec = 48): number {
+export function exactOverlapDurationSec(
+  plannedSec: number,
+  maxSec = 48,
+  bpm = 120,
+): number {
   if (!Number.isFinite(plannedSec) || plannedSec <= 0) return 0.25
-  return Math.max(0.25, Math.min(maxSec, plannedSec))
+  const useBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 120
+  const barSec = (60 / useBpm) * 4
+  const bars = plannedSec / barSec
+  const snappedBars = Math.max(4, Math.round(bars / 4) * 4)
+  const snapped = snappedBars * barSec
+  return Math.max(0.25, Math.min(maxSec, snapped))
 }
 
 /** Media seconds to pre-arm before OUT (1 phrase @ master BPM). */

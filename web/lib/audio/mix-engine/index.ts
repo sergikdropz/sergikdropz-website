@@ -41,6 +41,14 @@ export {
   intelligentDeckMixAtProgress,
 } from './curves'
 export type { FilterMixEqGains } from './curves'
+export {
+  BLEND_AUTOMATION_EVENT,
+  DEFAULT_BLEND_AUTOMATION,
+  readBlendAutomation,
+  writeBlendAutomation,
+  patchBlendAutomation,
+} from './blend-automation'
+export type { BlendAutomation, BlendGainShape } from './blend-automation'
 export { deckFiltersAtProgress } from './filters'
 export type { DeckFilterState } from './filters'
 export {
@@ -91,6 +99,8 @@ export {
   phrasePeriodSec,
   phraseIndexAt,
   phraseBoundarySec,
+  phrasePhaseErrorSec,
+  fusePhraseBeatError,
   snapToFileStartPhrase,
 } from './phrase-lattice'
 export {
@@ -105,7 +115,7 @@ export {
   clampRateToPolicy,
 } from './stretch-policy'
 export type { StretchPolicy, StretchTier } from './stretch-policy'
-export { bpmRateRatio, effectiveDeckBpm, mixIncomingRateRatio, phaseAlignSeekDelta, mixPocketAlignSeekDelta, gridAlignSeekDelta, resolveIncomingMixCue, secondsToAlignedBoundary, microRateCorrection, applyVinylBendToDeckRates, smoothVinylBend, settleVinylBend, vinylBendTickInterval, filterPhaseErrorSec, phaseChaseStrength, beatPhaseErrorSec, normalizeBpmPair, VINYL_BEND_MAX, VINYL_BEND_CATCH_SEC, VINYL_BEND_DEADBAND_SEC, PHASE_ERR_FILTER_ALPHA } from './sync'
+export { bpmRateRatio, effectiveDeckBpm, mixIncomingRateRatio, phaseAlignSeekDelta, mixPocketAlignSeekDelta, gridAlignSeekDelta, resolveIncomingMixCue, secondsToAlignedBoundary, microRateCorrection, applyVinylBendToDeckRates, applyDualVinylBendToDeckRates, dualPlatterSeekDeltas, smoothVinylBend, settleVinylBend, vinylBendTickInterval, filterPhaseErrorSec, phaseChaseStrength, beatPhaseErrorSec, normalizeBpmPair, VINYL_BEND_MAX, VINYL_BEND_CATCH_SEC, VINYL_BEND_DEADBAND_SEC, VINYL_BEND_BLEND_WINDOW, DUAL_ALIGN_SEEK_MAX_SEC, PHASE_ERR_FILTER_ALPHA, OVERLAP_PHASE_LOCK_STREAK } from './sync'
 export {
   createDriftAlignState,
   driftAlignRate,
@@ -118,6 +128,7 @@ export {
 export type { DriftAlignState, DriftAlignResult, DriftEstimate, FusedBlendError } from './drift-align'
 export {
   solveAlignmentState,
+  resolveFireIncomingCue,
   mediaDelayToWallMs,
   beatSyncLockProgress,
   readPairBpmConfidence,
@@ -154,12 +165,33 @@ export {
   pushMixQualityHistory,
   clearMixQualityHistory,
   consecutiveWeakMixCount,
+  pairHistoryScoreBias,
+  shouldAvoidPairFromHistory,
   parseMixQualityHistory,
   mergeMixQualityHistory,
   extractMixQualityHistoryFromSettings,
   MIX_QUALITY_HISTORY_MAX,
 } from './mix-quality-history'
 export type { MixQualityHistoryEntry } from './mix-quality-history'
+export {
+  emptyMixScorecard,
+  formatMixScorecard,
+  scorecardStatusSuffix,
+} from './mix-scorecard'
+export type { MixScorecard } from './mix-scorecard'
+export {
+  readPairLearning,
+  pushPairLearning,
+  getPairLearning,
+  pairLearningScoreBias,
+  preferredOutFromPairLearning,
+  cueBiasSecFromPairLearning,
+} from './pair-learning'
+export type { PairLearningEntry } from './pair-learning'
+export * as TempoOwner from './owners/TempoOwner'
+export * as PhaseOwner from './owners/PhaseOwner'
+export * as OutFireOwner from './owners/OutFireOwner'
+export * as LearningOwner from './owners/LearningOwner'
 export { assessBeatSyncSafety, resolveHoldBeatmatch } from './bpm-guard'
 export type { BeatSyncSafety, BeatSyncRiskCode } from './bpm-guard'
 export {
@@ -213,6 +245,7 @@ export {
   masterDeckRatesAt,
   tempoMixProgress,
   tempoGlideProgress,
+  postHandoffNativeGlideMs,
   TEMPO_GLIDE_SOFT_KNEE,
   TEMPO_RATE_WRITE_EPSILON,
   MIX_RATE_SLEW,

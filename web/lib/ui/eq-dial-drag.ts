@@ -3,8 +3,10 @@ export const EQ_DIAL_MIN_GAIN = -40
 export const EQ_DIAL_MAX_GAIN = 12
 /** Vertical pixels between the 0 dB detent and either end of the dial's travel. */
 export const EQ_DIAL_TRAVEL_PX = 120
-/** Pointer slop allowed before a press counts as a drag instead of a tap. */
-export const EQ_DIAL_DRAG_SLOP_PX = 3
+/** Pointer slop before a press counts as a drag instead of a tap (trackpad jitter). */
+export const EQ_DIAL_DRAG_SLOP_PX = 10
+/** Ignore click-suppression when the drag settled within this many dB of the start. */
+export const EQ_DIAL_CLICK_SUPPRESS_DB = 0.15
 /** Shift-drag multiplier for fine trims. */
 export const EQ_DIAL_FINE_SCALE = 0.25
 /** Gains landing inside this window snap to a hard 0 dB detent. */

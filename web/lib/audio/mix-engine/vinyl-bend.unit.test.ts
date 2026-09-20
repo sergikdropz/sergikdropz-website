@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyDualVinylBendToDeckRates,
   applyVinylBendToDeckRates,
+  dualPlatterSeekDeltas,
   filterPhaseErrorSec,
   microRateCorrection,
   phaseChaseStrength,
@@ -91,5 +93,35 @@ describe('vinyl bend', () => {
     expect(phaseChaseStrength(0.4)).toBe(1)
     expect(phaseChaseStrength(0.85)).toBe(1)
     expect(phaseChaseStrength(1)).toBeCloseTo(0.2, 5)
+  })
+})
+
+describe('dual vinyl / platter align', () => {
+  it('splits relative correction across both decks', () => {
+    const bent = applyDualVinylBendToDeckRates({
+      outRate: 1,
+      inRate: 1,
+      microMultiplier: 0.98,
+    })
+    // Incoming ahead → slow in, speed out (meet in the middle).
+    expect(bent.outRate).toBeGreaterThan(1)
+    expect(bent.inRate).toBeLessThan(1)
+    expect(bent.inRate / bent.outRate).toBeCloseTo(0.98, 3)
+    const single = applyVinylBendToDeckRates({
+      outRate: 1,
+      inRate: 1,
+      microMultiplier: 0.98,
+    })
+    expect(single.outRate).toBe(1)
+    expect(single.inRate).toBeCloseTo(0.98, 5)
+  })
+
+  it('dual platter seeks move decks toward each other', () => {
+    const { outDeltaSec, inDeltaSec } = dualPlatterSeekDeltas({ errorSec: 0.04 })
+    expect(outDeltaSec).toBeCloseTo(0.014, 5) // capped
+    expect(inDeltaSec).toBeCloseTo(-0.014, 5)
+    const small = dualPlatterSeekDeltas({ errorSec: 0.01, maxAbsSec: 0.02 })
+    expect(small.outDeltaSec).toBeCloseTo(0.005, 5)
+    expect(small.inDeltaSec).toBeCloseTo(-0.005, 5)
   })
 })

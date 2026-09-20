@@ -1,10 +1,21 @@
 /**
  * Shared AudioContext clock helpers for dual-deck start + optional buffer incoming.
+ * Decode runs async; prefer scheduling after idle so peaks/worker paths stay responsive.
  */
 
 const decodeCache = new Map<string, Promise<AudioBuffer | null>>()
 
 export const SHARED_CLOCK_LEAD_SEC = 0.04
+
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => resolve(), { timeout: 120 })
+      return
+    }
+    setTimeout(resolve, 0)
+  })
+}
 
 export function nextSharedClockWhen(
   ctx: Pick<AudioContext, 'currentTime'>,
@@ -34,9 +45,11 @@ export async function decodeIncomingBuffer(
   if (existing) return existing
   const pending = (async () => {
     try {
+      await yieldToMain()
       const res = await fetch(url, { credentials: 'include', cache: 'force-cache' })
       if (!res.ok) return null
       const raw = await res.arrayBuffer()
+      await yieldToMain()
       const copy = raw.slice(0)
       return await ctx.decodeAudioData(copy)
     } catch {

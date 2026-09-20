@@ -116,12 +116,21 @@ export type MixEngineStatus =
   | 'mixing'
   | 'error'
 
+import type { MixScorecard } from './mix-scorecard'
+
 export type MixEngineEvent =
   | { type: 'status'; status: MixEngineStatus }
   | { type: 'active-deck'; deck: DeckId; trackId: string | null }
   | { type: 'mix-started'; plan: MixPlan }
   | { type: 'mix-completed'; plan: MixPlan; activeDeck: DeckId }
-  | { type: 'mix-quality'; plan: MixPlan; phaseRmsSec: number; kickResidualRmsMs: number; samples: number }
+  | {
+      type: 'mix-quality'
+      plan: MixPlan
+      phaseRmsSec: number
+      kickResidualRmsMs: number
+      samples: number
+      scorecard?: MixScorecard
+    }
   | { type: 'error'; message: string }
 
 export type MixTrackRef = {

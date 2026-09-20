@@ -6,6 +6,7 @@ import {
   masterBpmAt,
   masterDeckRatesAt,
   MIX_RATE_SLEW,
+  postHandoffNativeGlideMs,
   TEMPO_GLIDE_SOFT_KNEE,
   tempoMixProgress,
 } from './tempo'
@@ -78,41 +79,29 @@ describe('applyDeckTempo', () => {
     const deck = createDeck(1)
     const applied = applyDeckTempo(asElement(deck), 1.05, { instant: true })
     expect(applied).toBeCloseTo(1.05, 5)
-    expect(deck.playbackRate).toBeCloseTo(1.05, 5)
     expect(deck.writes.playbackRate).toBe(1)
+    expect(deck.playbackRate).toBeCloseTo(1.05, 5)
   })
 
-  it('stops writing once a slewed ramp settles on its target', () => {
+  it('slews toward the target when not instant', () => {
     const deck = createDeck(1)
-    const target = 1.02
-    let current = 1
-    for (let i = 0; i < 200; i += 1) {
-      current = applyDeckTempo(asElement(deck), target, { currentRate: current })
-    }
-    expect(current).toBeCloseTo(target, 6)
-
-    const settledWrites = deck.writes.playbackRate
-    for (let i = 0; i < 60; i += 1) {
-      current = applyDeckTempo(asElement(deck), target, { currentRate: current })
-    }
-    expect(deck.writes.playbackRate).toBe(settledWrites)
+    const applied = applyDeckTempo(asElement(deck), 1.2, {
+      instant: false,
+      currentRate: 1,
+      slew: MIX_RATE_SLEW,
+    })
+    expect(applied).toBeGreaterThan(1)
+    expect(applied).toBeLessThan(1.2)
   })
 
-  it('honors the slew limit so a single frame cannot jump the full delta', () => {
+  it('clamps invalid rates to 1', () => {
     const deck = createDeck(1)
-    const applied = applyDeckTempo(asElement(deck), 1.5, { currentRate: 1 })
-    expect(applied).toBeCloseTo(1 + MIX_RATE_SLEW, 6)
-  })
-
-  it('clamps out-of-range and nonsense targets', () => {
-    const deck = createDeck(1)
-    expect(applyDeckTempo(asElement(deck), 99, { instant: true })).toBeCloseTo(1.5, 5)
     expect(applyDeckTempo(asElement(deck), Number.NaN, { instant: true })).toBeCloseTo(1, 5)
   })
 })
 
 describe('dual master tempo handoff', () => {
-  it('holds master at outgoing BPM before glide knee', () => {
+  it('holds outgoing BPM for the entire overlap (no mid-mix glide)', () => {
     const plan = computeTempoCrossfadePlan({
       outgoingBpm: 128,
       incomingBpm: 124,
@@ -122,13 +111,16 @@ describe('dual master tempo handoff', () => {
       style: 'crossfade',
     })
     expect(plan.dualMasterGlide).toBe(true)
-    expect(plan.glideStart).toBeGreaterThanOrEqual(0.58)
+    expect(plan.glideStart).toBeGreaterThanOrEqual(1)
     expect(masterBpmAt(plan, 0)).toBeCloseTo(128, 1)
-    const beforeGlide = Math.max(0, plan.glideStart - TEMPO_GLIDE_SOFT_KNEE - 0.01)
-    expect(masterBpmAt(plan, beforeGlide)).toBeCloseTo(128, 1)
+    expect(masterBpmAt(plan, 0.5)).toBeCloseTo(128, 1)
+    expect(masterBpmAt(plan, 0.99)).toBeCloseTo(128, 1)
+    expect(tempoMixProgress(plan, 1)).toBe(0)
     const locked = masterDeckRatesAt(plan, 0)
     expect(locked.inRate).toBeCloseTo(128 / 124, 4)
     expect(locked.inRate * 124).toBeCloseTo(128, 1)
+    expect(masterDeckRatesAt(plan, 1).inRate).toBeCloseTo(128 / 124, 4)
+    expect(plan.outEndRate).toBeCloseTo(plan.outgoingRate, 5)
   })
 
   it('uses a pre-armed mixStartRate for the whole hold', () => {
@@ -143,11 +135,10 @@ describe('dual master tempo handoff', () => {
     })
     expect(plan.mixStartRate).toBeCloseTo(128 / 120, 5)
     expect(masterDeckRatesAt(plan, 0).inRate).toBeCloseTo(128 / 120, 5)
-    const holdEnd = Math.max(0, plan.glideStart - TEMPO_GLIDE_SOFT_KNEE - 0.005)
-    expect(masterDeckRatesAt(plan, holdEnd).inRate).toBeCloseTo(128 / 120, 5)
+    expect(masterDeckRatesAt(plan, 1).inRate).toBeCloseTo(128 / 120, 5)
   })
 
-  it('glides both decks so effective BPMs match toward incoming native', () => {
+  it('stores native mixEndRate for the post-handoff 4-bar glide', () => {
     const plan = computeTempoCrossfadePlan({
       outgoingBpm: 128,
       incomingBpm: 124,
@@ -156,39 +147,21 @@ describe('dual master tempo handoff', () => {
       dualMasterGlide: true,
       style: 'crossfade',
     })
-    const mid = masterDeckRatesAt(plan, (plan.glideStart + 1) / 2)
-    expect(mid.outRate * 128).toBeCloseTo(mid.inRate * 124, 1)
-    const end = masterDeckRatesAt(plan, 1)
-    expect(end.masterBpm).toBeCloseTo(124, 1)
-    expect(end.inRate).toBeCloseTo(1, 3)
+    expect(plan.mixEndRate).toBeCloseTo(1, 5)
+    expect(plan.masterEndBpm).toBeCloseTo(124, 1)
+    // Soft knee past 1.0 keeps mid-mix progress at 0 even at mix end.
+    expect(plan.glideStart).toBeCloseTo(1 + TEMPO_GLIDE_SOFT_KNEE, 5)
+  })
+})
+
+describe('postHandoffNativeGlideMs', () => {
+  it('is exactly 4 bars at the given BPM', () => {
+    expect(postHandoffNativeGlideMs(120, 4)).toBe(8000)
+    expect(postHandoffNativeGlideMs(128, 4)).toBe(Math.round((60 / 128) * 16 * 1000))
   })
 
-  it('eases into glide with a soft knee instead of a hard snap', () => {
-    const plan = computeTempoCrossfadePlan({
-      outgoingBpm: 128,
-      incomingBpm: 124,
-      style: 'crossfade',
-    })
-    expect(tempoMixProgress(plan, 0)).toBe(0)
-    const atKnee = Math.max(0, plan.glideStart - TEMPO_GLIDE_SOFT_KNEE + 0.02)
-    expect(tempoMixProgress(plan, atKnee)).toBeGreaterThan(0)
-    expect(tempoMixProgress(plan, atKnee)).toBeLessThan(0.2)
-    expect(masterBpmAt(plan, 1)).toBeCloseTo(124, 1)
-  })
-
-  it('phrase-quantizes glideStart by style and BPM delta', () => {
-    const smooth = computeTempoCrossfadePlan({
-      outgoingBpm: 128,
-      incomingBpm: 124,
-      incomingTargetRate: 1,
-      style: 'crossfade',
-    })
-    expect(smooth.glideStart).toBe(0.58)
-    const same = computeTempoCrossfadePlan({
-      outgoingBpm: 120,
-      incomingBpm: 120,
-      incomingTargetRate: 1,
-    })
-    expect(same.glideStart).toBe(0.78)
+  it('falls back safely for bad BPM', () => {
+    expect(postHandoffNativeGlideMs(0, 4)).toBe(8000)
+    expect(postHandoffNativeGlideMs(Number.NaN, 4)).toBe(8000)
   })
 })

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MixEngine } from './MixEngine'
 import type { MixPlan, MixTrackRef } from './types'
 
@@ -202,5 +202,84 @@ describe('MixEngine deck handoff', () => {
     expect(engine.getActiveDeck()).toBe('b')
     expect(deckA.src).toBe(before)
     expect(deckB.volume).toBeGreaterThan(0.98)
+  })
+
+  it('stopMix fails the awaiting startTransition instead of leaving it hung', async () => {
+    const previousRaf = globalThis.requestAnimationFrame
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      setTimeout(() => cb(performance.now()), 50)
+      return 1
+    }) as typeof globalThis.requestAnimationFrame
+
+    const deckA = createDeck()
+    const deckB = createDeck()
+    const engine = new MixEngine(asAudioElement(deckA), asAudioElement(deckB))
+    engine.setActiveTrack(trackA)
+    deckA.currentTime = plan.startAtOutgoingSec
+    deckA.paused = false
+    await engine.loadIdle(trackB, '/b.mp3', plan.incomingStartSec)
+
+    const pending = engine.startTransition(plan, plan.rateRatio)
+    engine.stopMix()
+    await expect(pending).resolves.toBe(false)
+    expect(engine.isMixing()).toBe(false)
+    expect(engine.getBlendStage()).toBe('idle')
+
+    globalThis.requestAnimationFrame = previousRaf
+  })
+
+  it('emits active-deck when the mix hands off', async () => {
+    const deckA = createDeck()
+    const deckB = createDeck()
+    const engine = new MixEngine(asAudioElement(deckA), asAudioElement(deckB))
+    const events: string[] = []
+    engine.subscribe((ev) => {
+      if (ev.type === 'active-deck') events.push(`deck:${ev.deck}:${ev.trackId}`)
+      if (ev.type === 'mix-completed') events.push(`done:${ev.activeDeck}`)
+    })
+    engine.setActiveTrack(trackA)
+    deckA.currentTime = plan.startAtOutgoingSec
+    deckA.paused = false
+    await engine.loadIdle(trackB, '/b.mp3', plan.incomingStartSec)
+    await engine.startTransition(plan, plan.rateRatio)
+
+    expect(events.some((e) => e.startsWith('done:b'))).toBe(true)
+    expect(events.some((e) => e === 'deck:b:b-track')).toBe(true)
+  })
+})
+
+describe('MixEngine hidden-tab mix clock', () => {
+  it('pauseIdleClock is a no-op when the idle deck has no buffer clock', () => {
+    const engine = new MixEngine(asAudioElement(createDeck()), asAudioElement(createDeck()))
+    expect(engine.pauseIdleClock()).toBe(false)
+    expect(engine.pauseActiveClock()).toBe(false)
+  })
+
+  it('completes a mix with the timeout clock when document.hidden', async () => {
+    const g = globalThis as typeof globalThis & { document?: Document }
+    const previousDocument = g.document
+    g.document = { hidden: true } as Document
+    const raf = vi.fn(() => 1)
+    globalThis.requestAnimationFrame = raf as unknown as typeof requestAnimationFrame
+    const origNow = performance.now.bind(performance)
+    let fakeNow = origNow()
+    performance.now = () => fakeNow
+    const origTimeout = globalThis.setTimeout
+    globalThis.setTimeout = ((cb: TimerHandler) => {
+      fakeNow += 60_000
+      if (typeof cb === 'function') origTimeout(() => (cb as () => void)(), 0)
+      return 1 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+    try {
+      const { ok } = await runMix()
+      expect(ok).toBe(true)
+      expect(raf).not.toHaveBeenCalled()
+    } finally {
+      globalThis.setTimeout = origTimeout
+      performance.now = origNow
+      globalThis.requestAnimationFrame = originalRaf
+      if (previousDocument) g.document = previousDocument
+      else Reflect.deleteProperty(g, 'document')
+    }
   })
 })

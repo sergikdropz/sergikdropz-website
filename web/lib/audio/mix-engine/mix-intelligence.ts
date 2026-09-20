@@ -35,9 +35,8 @@ export type MixIntelligence = {
   filterIntensity: number
   /** Delay incoming fade (Smooth ~0.04–0.08; techniques may raise) */
   incomingDelay: number
-  outgoingStretch: StretchPolicy
+  /** Incoming stretch only — outgoing stretch policy is unused by MixEngine */
   incomingStretch: StretchPolicy
-  suggestedStyle?: MixStyle
   /** Pre-fader delay send 0–1 */
   echoSend: number
   echoDelayBeats: 0.5 | 1
@@ -109,7 +108,6 @@ export function buildMixIntelligence(params: {
     (inProfile?.spectralBias.kicks ?? 0) + (inProfile?.spectralBias.hats ?? 0) * 0.5
   )
 
-  const outRate = params.outgoingRate ?? 1
   const inTarget = params.incomingTargetRate ?? 1
 
   const style = params.style
@@ -151,7 +149,6 @@ export function buildMixIntelligence(params: {
     softTailStart,
     filterIntensity,
     incomingDelay,
-    outgoingStretch: resolveStretchPolicy(params.outgoing, outRate),
     incomingStretch: (() => {
       const policy = resolveStretchPolicy(params.incoming, inTarget, {
         mixGlide: true,
@@ -162,7 +159,6 @@ export function buildMixIntelligence(params: {
       }
       return policy
     })(),
-    suggestedStyle: suggestMixStyle(params.outgoing, params.incoming, style),
     echoSend: 0,
     echoDelayBeats: 0.5,
     lowDuckDb: isSmooth

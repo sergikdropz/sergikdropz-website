@@ -60,8 +60,13 @@ export type AutoDjControllerHost = {
   isEngineMixing: () => boolean
   hasIncomingReady: () => boolean
   canEnterFire: () => boolean
+  /** True when idle deck phase is within the pre-audible lock window. */
+  isIdlePreArmLocked: () => boolean
   getIdleReadyState: () => number
   parkAndWarmIdle: (cueSec: number, rate: number) => void
+  /** Warm without parking (keeps live phase lock). */
+  warmIdle: (rate: number) => void
+  clearIdlePreArmLock: () => void
   nudgeIdleToMaster: (args: {
     outgoingTimeSec: number
     outgoingBpm: number
@@ -72,6 +77,8 @@ export type AutoDjControllerHost = {
     gridAlign?: MixPlan['gridAlign']
     gridPhraseBars?: number
   }) => void
+  /** Keep idle deck rate beatmatched to outgoing while cued. */
+  lockIdleTempo: (rate: number) => void
   incomingPeaksReady: (track: AutoDjHostTrack, inRef: MixTrackRef) => boolean
   loadIncomingPeaks: (track: AutoDjHostTrack) => void
   startPhraseMix: (
@@ -119,6 +126,8 @@ export class AutoDjController {
   private lastPhraseMix: PhraseMix | null = null
   private lastBeatSec = 0.5
   private lastTickPlan: MixPlan | null = null
+  /** Throttle pending pre-arm nudges so OUT rAF + tick don't double-seek. */
+  private lastPendingNudgeAt = 0
 
   constructor(host: AutoDjControllerHost) {
     this.host = host
@@ -137,6 +146,72 @@ export class AutoDjController {
     }
     this.host.clearOutWatch()
     this.host.clearCrossfadeTimeout()
+  }
+
+  /**
+   * While fire is pending, keep idle beatmatched + phase-nudged without
+   * rebuilding the mix plan (which would thrash OUT / cues).
+   */
+  private maintainPendingPreArm(
+    track: AutoDjHostTrack,
+    nextTrack: AutoDjHostTrack | undefined,
+    ct: number,
+  ) {
+    const host = this.host
+    if (!nextTrack || host.isEngineMixing()) return
+    if (host.getPendingId() !== nextTrack.id) return
+    if (host.getCuedIdleTrackId() !== nextTrack.id) return
+
+    const plan = host.getFrozen()?.plan ?? this.lastTickPlan ?? host.getLastPlan()
+    if (!plan) return
+
+    const outBpm =
+      resolvePlaybackBpm(track, host.getDetectedBpm()) ??
+      track.bpm ??
+      host.getDetectedBpm() ??
+      120
+    const cueArmRate =
+      typeof plan.rateRatio === 'number' && plan.rateRatio > 0
+        ? plan.rateRatio
+        : 1
+    if (cueArmRate > 0) host.lockIdleTempo(cueArmRate)
+
+    const outMarker = plan.startAtOutgoingSec
+    const delay = outMarker - ct
+    if (delay > 0 && delay <= 90) {
+      host.setOutCountdown(Math.round(delay * 10) / 10)
+    }
+
+    const inBpm = resolvePlaybackBpm(nextTrack, null) ?? nextTrack.bpm ?? outBpm
+    const meterOpts = host.getPhaseMeter()
+    const inRef = host.withMixGrid(nextTrack)
+    const incomingGridOffset =
+      typeof inRef.beat_grid_offset === 'number' ? inRef.beat_grid_offset : undefined
+
+    // Warm only — never park while pending (park kills the phase lock).
+    if (host.getIdleWarmedId() !== nextTrack.id) {
+      host.warmIdle(cueArmRate)
+      host.setIdleWarmedId(nextTrack.id)
+    }
+
+    // Single owner clock near OUT: tick nudges at most 5Hz when locked, 10Hz when chasing.
+    // Fire-hold path must NOT also nudge (see fireMix) — that was dual-seek thrash.
+    const now = performance.now()
+    const locked = host.isIdlePreArmLocked()
+    const minGapMs = locked ? 200 : 100
+    if (now - this.lastPendingNudgeAt < minGapMs) return
+    this.lastPendingNudgeAt = now
+
+    host.nudgeIdleToMaster({
+      outgoingTimeSec: ct,
+      outgoingBpm: outBpm,
+      outgoingOffsetSec: host.getBeatGridOffsetSec(),
+      incomingBpm: inBpm,
+      incomingOffsetSec: incomingGridOffset,
+      incomingRate: cueArmRate,
+      gridAlign: plan.phrase1Lock !== false ? 'phrase' : plan.gridAlign,
+      gridPhraseBars: plan.gridPhraseBars ?? meterOpts.phraseBars ?? 8,
+    })
   }
 
   private tick() {
@@ -176,8 +251,13 @@ export class AutoDjController {
       }
     }
 
-    if (host.getPendingId()) return
     const nextTrackInQueue = q[currentIndex + 1]
+    if (host.getPendingId()) {
+      // Pending = fire armed. Keep tempo + phase lock alive until OUT —
+      // bailing the whole tick lets silent idle drift into a trainwreck.
+      this.maintainPendingPreArm(track, nextTrackInQueue, ct)
+      return
+    }
     if (!nextTrackInQueue) {
       host.setOutCountdown(null)
       return
@@ -248,6 +328,7 @@ export class AutoDjController {
     this.lastPhraseMix = built.phraseMix
     this.lastBeatSec = built.beatSec
     this.lastTickPlan = built.plan
+    // Single freeze owner: plan module only (no controller double-latch).
     host.setFrozen(built.frozen)
 
     if (Math.abs(built.suggestedLeadInSec - host.getSuggestedLeadInSec()) > 0.04) {
@@ -286,6 +367,15 @@ export class AutoDjController {
         ? plan.resolvedIncomingSec
         : plan.incomingStartSec
 
+    // As soon as the cue deck is loaded, hold beatmatch tempo every tick.
+    if (
+      cueArmRate > 0 &&
+      host.getCuedIdleTrackId() === nextTrackInQueue.id &&
+      !host.isEngineMixing()
+    ) {
+      host.lockIdleTempo(cueArmRate)
+    }
+
     if (!host.incomingPeaksReady(nextTrackInQueue, inRef) && delaySeconds > 0.4) {
       host.loadIncomingPeaks(nextTrackInQueue)
       if (delaySeconds <= prepareLeadSec + 0.45) {
@@ -301,9 +391,9 @@ export class AutoDjController {
     ) {
       const inBpm =
         resolvePlaybackBpm(nextTrackInQueue, null) ?? nextTrackInQueue.bpm ?? outBpm
-      // Keep AlignmentState / phrase-1 cue — do not stamp host memory/0 over it.
+      // Already pre-armed / cued: warm + nudge only — park throws the lock away.
       if (host.getIdleWarmedId() !== nextTrackInQueue.id) {
-        host.parkAndWarmIdle(resolvedCue, cueArmRate)
+        host.warmIdle(cueArmRate)
         host.setIdleWarmedId(nextTrackInQueue.id)
       }
       host.nudgeIdleToMaster({
@@ -313,9 +403,22 @@ export class AutoDjController {
         incomingBpm: inBpm,
         incomingOffsetSec: incomingGridOffset,
         incomingRate: cueArmRate,
-        gridAlign: plan.gridAlign,
-        gridPhraseBars: plan.gridPhraseBars ?? meterOpts.phraseBars,
+        // Phrase-1 doctrine: keep warm idle on the phrase lattice until fire.
+        gridAlign:
+          plan.phrase1Lock !== false
+            ? 'phrase'
+            : plan.gridAlign,
+        gridPhraseBars: plan.gridPhraseBars ?? meterOpts.phraseBars ?? 8,
       })
+    } else if (
+      delaySeconds > 0 &&
+      delaySeconds <= prepareLeadSec + 0.45 &&
+      host.getCuedIdleTrackId() !== nextTrackInQueue.id &&
+      !host.isEngineMixing()
+    ) {
+      // First arm — park at cue then warm (cueIdleEarly below may also enterPreArm).
+      host.parkAndWarmIdle(resolvedCue, cueArmRate)
+      host.setIdleWarmedId(nextTrackInQueue.id)
     }
 
     if (delaySeconds <= armWindowSec + phrase && delaySeconds > -0.25) {
@@ -384,24 +487,103 @@ export class AutoDjController {
     const idleReady = host.getIdleReadyState()
     const incomingReady = host.hasIncomingReady()
     const fireGateOpen = host.canEnterFire()
+    const preArmLocked = host.isIdlePreArmLocked()
     const beatSync = phraseMixEarly?.syncMode !== 'tempo-sync'
+    // BeatSync: hold until buffer + real phase lock (not just stage gate).
+    // TempoSync: shorter hold for buffer only.
+    const holdWindowSec = beatSync ? 2.4 : 0.4
     const holdForIncoming =
       (idleReady < 2 && nowSec < outMarker + 0.12) ||
-      ((!incomingReady || !fireGateOpen) &&
-        nowSec < outMarker + (beatSync ? 0.85 : 0.4))
+      ((!incomingReady || !fireGateOpen || (beatSync && !preArmLocked)) &&
+        nowSec < outMarker + holdWindowSec)
     if (holdForIncoming) {
-      if (beatSync && !incomingReady && nowSec >= outMarker + 0.35) {
-        host.setStatus('Holding OUT — arming incoming for BeatSync…')
+      if (beatSync && (!incomingReady || !preArmLocked) && nowSec >= outMarker + 0.35) {
+        host.setStatus(
+          !incomingReady
+            ? 'Holding OUT — arming incoming for BeatSync…'
+            : 'Holding OUT — locking phrase phase…',
+        )
       }
+      // Tempo lock only here — phase nudge is owned by maintainPendingPreArm (single scheduler).
+      const frozen = host.getFrozen()?.plan
+      const rate =
+        typeof frozen?.rateRatio === 'number' && frozen.rateRatio > 0
+          ? frozen.rateRatio
+          : this.lastTickPlan?.rateRatio && this.lastTickPlan.rateRatio > 0
+            ? this.lastTickPlan.rateRatio
+            : 1
+      host.lockIdleTempo(rate)
       host.scheduleFireRetry(() =>
         this.fireMix(plannedOutgoing, plannedIncoming, targetOut, plannedDur),
       )
       return
     }
 
-    // Past hold window still unarmed under BeatSync → fire will TempoSync-degrade.
-    if (beatSync && !incomingReady) {
-      host.setStatus('BeatSync unavailable — TempoSync this blend (incoming not armed)')
+    // Past hold window still unlocked under BeatSync → delay OUT one phrase
+    // (prefer lock over TempoSync smash). Only TempoSync when BPM gap is tiny
+    // or there is no room left on the outgoing track.
+    if (beatSync && (!incomingReady || !preArmLocked)) {
+      const outBars =
+        host.getFrozen()?.plan.outPhraseBars ??
+        this.lastTickPlan?.outPhraseBars ??
+        8
+      const phraseSec = Math.max(this.lastBeatSec * 4 * outBars, this.lastBeatSec * 16)
+      const delayedOut = outMarker + phraseSec
+      const roomLeft = liveDur - delayedOut
+      const outBpmLive =
+        resolvePlaybackBpm(liveTrack, host.getDetectedBpm()) ??
+        liveTrack.bpm ??
+        host.getDetectedBpm() ??
+        120
+      const inBpmLive =
+        resolvePlaybackBpm(stillNext, null) ?? stillNext.bpm ?? outBpmLive
+      const bpmRel =
+        Math.abs(outBpmLive - inBpmLive) / Math.max(outBpmLive, inBpmLive, 1)
+      const tinyBpmGap = bpmRel <= 0.02
+
+      if (roomLeft > 2.5 && !tinyBpmGap) {
+        const basePlan = host.getFrozen()?.plan ?? this.lastTickPlan ?? host.getLastPlan()
+        if (!basePlan) {
+          releasePending()
+          return
+        }
+        host.setStatus('BeatSync — delaying OUT one phrase to lock phase…')
+        const delayedPlan = {
+          ...basePlan,
+          startAtOutgoingSec: delayedOut,
+          mixOutMarkerSec: delayedOut,
+          // Force fire re-solve so IN matches the new OUT bar (don't trust stale lock).
+          reason: `${basePlan.reason || 'mix'} · phrase-delay`,
+          dnaConfidence: Math.min(0.55, basePlan.dnaConfidence ?? 0.55),
+        }
+        // Unlock so maintainPending re-locks against the delayed OUT.
+        host.clearIdlePreArmLock()
+        host.setFrozen({
+          outgoingId: liveTrack.id,
+          incomingId: stillNext.id,
+          plan: delayedPlan,
+        })
+        host.setLastPlan(delayedPlan)
+        host.setMixOverlay({
+          active: true,
+          mixOutSec: delayedOut,
+          mixStartSec: delayedOut,
+          mixEndSec: delayedOut + (delayedPlan.mixDurationSec || 16),
+        })
+        host.clearOutWatch()
+        host.watchOutMarker(delayedOut, () =>
+          this.fireMix(plannedOutgoing, plannedIncoming, delayedOut, plannedDur),
+        )
+        return
+      }
+
+      host.setStatus(
+        tinyBpmGap
+          ? 'BeatSync unlock timed out — TempoSync (ΔBPM tiny)'
+          : !incomingReady
+            ? 'BeatSync unavailable — TempoSync this blend (incoming not armed)'
+            : 'BeatSync unlock timed out — TempoSync (no phrase room)',
+      )
     }
 
     host.clearOutWatch()
@@ -451,6 +633,7 @@ export class AutoDjController {
       detectedBpm: host.getDetectedBpm(),
       sliderPlaybackRate: host.getSliderPlaybackRate(),
       hasIncomingReady: incomingReady,
+      preArmLocked,
     })
 
     if (fired.gateReason) {

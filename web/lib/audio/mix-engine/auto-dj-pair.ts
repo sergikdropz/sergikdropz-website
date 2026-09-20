@@ -9,6 +9,16 @@ import { bothGridsReady, BPM_COMPAT_REL, BPM_SOFT_REL, pairBpmCompatible } from 
 import { isGridLocked, needsKickRemeasure } from './kick-onsets'
 import { isBrokenGroovePocket, isFourOnFloorPocket } from './mix-techniques'
 import type { MixQualityGrade } from './mix-quality'
+import {
+  pairHistoryScoreBias,
+  shouldAvoidPairFromHistory,
+  type MixQualityHistoryEntry,
+} from './mix-quality-history'
+import {
+  getPairLearning,
+  pairLearningScoreBias,
+  type PairLearningEntry,
+} from './pair-learning'
 import type { SyncMode } from '@/lib/audio/auto-dj-preferences'
 
 export { BPM_SOFT_REL, BPM_COMPAT_REL }
@@ -42,6 +52,10 @@ export type ScoreAutoDjPairParams = {
   lastIncomingId?: string | null
   /** Consecutive fair/poor mixes — tightens BPM window + grid preference. */
   consecutiveWeak?: number
+  /** Recent mix-quality history for pair-specific learning. */
+  mixQualityHistory?: MixQualityHistoryEntry[]
+  /** Per-pair cue/OUT memory (optional; falls back to localStorage read). */
+  pairLearning?: PairLearningEntry[]
 }
 
 function historyPenalty(params: ScoreAutoDjPairParams): number {
@@ -81,20 +95,25 @@ function bpmRelOf(outBpm: number | null, inBpm: number | null): number | null {
 }
 
 /**
- * Pairing BPM: prefer catalog when DNA and crate labels disagree beyond soft %.
- * Stale DNA (e.g. 128 on a 160 track) must not sneak into a BeatSync FoF set.
+ * Pairing BPM — same resolver as mix/phase so pick scoring matches rates.
  */
 export function resolvePairBpm(track: AutoDjPairTrack): number | null {
+  const resolved = resolvePlaybackBpm(track) ?? null
+  if (resolved && resolved > 0) return resolved
+  return typeof track.bpm === 'number' && Number.isFinite(track.bpm) && track.bpm > 0
+    ? track.bpm
+    : null
+}
+
+/** True when crate BPM and DNA BPM disagree beyond soft % (stale DNA / mistag). */
+export function pairBpmLabelConflict(track: AutoDjPairTrack): boolean {
   const catalog =
     typeof track.bpm === 'number' && Number.isFinite(track.bpm) && track.bpm > 0
       ? track.bpm
       : null
   const resolved = resolvePlaybackBpm(track) ?? null
-  if (catalog && resolved) {
-    const rel = Math.abs(catalog - resolved) / Math.max(catalog, resolved)
-    if (rel > BPM_SOFT_REL) return catalog
-  }
-  return resolved ?? catalog
+  if (!(catalog && resolved && catalog > 0 && resolved > 0)) return false
+  return Math.abs(catalog - resolved) / Math.max(catalog, resolved) > BPM_SOFT_REL
 }
 
 /** Score an outgoing → incoming pair. BeatSync refuses unlocked grids. */
@@ -122,6 +141,13 @@ export function scoreAutoDjPair(params: ScoreAutoDjPairParams): AutoDjPairScore 
   if (peakOnlyKicks) grid -= 0.06
 
   const history = historyPenalty(params)
+  const pairBias = pairHistoryScoreBias(
+    params.mixQualityHistory ?? [],
+    outgoing.id,
+    incoming.id,
+  )
+  const learned = getPairLearning(outgoing.id, incoming.id, params.pairLearning)
+  const learnBias = pairLearningScoreBias(learned)
 
   let bpmAdj = dna.bpm
   const softCeil = qualitySoftBpmRel(params.consecutiveWeak ?? 0, params.lastGrade)
@@ -159,6 +185,18 @@ export function scoreAutoDjPair(params: ScoreAutoDjPairParams): AutoDjPairScore 
   if (syncMode === 'beat-sync' && !gridsReady) {
     reject = true
     rejectReason = 'BeatSync unsafe — grid unlocked'
+  } else if (pairBpmLabelConflict(outgoing) || pairBpmLabelConflict(incoming)) {
+    reject = true
+    rejectReason = 'Crate BPM vs DNA BPM conflict'
+  } else if (
+    shouldAvoidPairFromHistory(
+      params.mixQualityHistory ?? [],
+      outgoing.id,
+      incoming.id,
+    )
+  ) {
+    reject = true
+    rejectReason = 'Pair mixed poorly before — pick another'
   } else if (
     weakTighten &&
     params.lastIncomingId &&
@@ -176,7 +214,7 @@ export function scoreAutoDjPair(params: ScoreAutoDjPairParams): AutoDjPairScore 
 
   const total = Math.max(
     0,
-    Math.min(1, bpmAdj + dna.key + dna.pocket + dna.energy + grid + history),
+    Math.min(1, bpmAdj + dna.key + dna.pocket + dna.energy + grid + history + pairBias + learnBias),
   )
 
   const why = formatAutoDjPairWhy({
@@ -239,6 +277,7 @@ export function rankAutoDjPairs<T extends AutoDjPairTrack>(params: {
   lastGrade?: MixQualityGrade | null
   lastIncomingId?: string | null
   consecutiveWeak?: number
+  mixQualityHistory?: MixQualityHistoryEntry[]
   excludeIds?: Set<string>
   allowRejected?: boolean
 }): Array<{ track: T; score: AutoDjPairScore }> {
@@ -255,6 +294,7 @@ export function rankAutoDjPairs<T extends AutoDjPairTrack>(params: {
         lastGrade: params.lastGrade,
         lastIncomingId: params.lastIncomingId,
         consecutiveWeak: params.consecutiveWeak,
+        mixQualityHistory: params.mixQualityHistory,
       }),
     }))
     .filter((row) => params.allowRejected || !row.score.reject)
@@ -302,6 +342,7 @@ export function pickTrustedAutoDjTrack<T extends AutoDjPairTrack>(params: {
   lastGrade?: MixQualityGrade | null
   lastIncomingId?: string | null
   consecutiveWeak?: number
+  mixQualityHistory?: MixQualityHistoryEntry[]
   excludeIds?: Set<string>
   randomizeTop?: number
 }): { track: T; score: AutoDjPairScore } | null {

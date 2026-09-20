@@ -65,8 +65,9 @@ export function resolveFireMixPlan(input: FirePlanResolveInput): MixPlan {
       base.phrase1Lock !== false &&
       (base.style === 'crossfade' || base.blendFromOut === true))
 
+  const bpmFromBeat = beatSec > 0 ? 60 / beatSec : 120
   const mixDurationSec = forceExact
-    ? exactOverlapDurationSec(base.mixDurationSec)
+    ? exactOverlapDurationSec(base.mixDurationSec, 48, bpmFromBeat)
     : Math.min(base.mixDurationSec, Math.max(0.8, remainAfterOut))
 
   return {
@@ -123,7 +124,7 @@ export function gateAutoDjFire(input: FireBlendGateInput): {
   let exact = Math.max(0.8, input.exactOverlapSec)
   if (exact + 1e-6 < planned * 0.98) {
     // Prefer doctrine length over a compressed remain-based fade.
-    exact = exactOverlapDurationSec(planned)
+    exact = exactOverlapDurationSec(planned, 48, 120)
   }
 
   const check = assertBlendInvariant({

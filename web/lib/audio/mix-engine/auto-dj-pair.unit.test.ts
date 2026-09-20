@@ -16,14 +16,24 @@ const lockedDnaAt = (bpm: number) => ({
 const lockedDna = lockedDnaAt(128)
 
 describe('resolvePairBpm', () => {
-  it('prefers catalog BPM when DNA disagrees beyond soft %', () => {
+  it('matches mix resolver — prefers DNA playback BPM when present', () => {
     expect(
       resolvePairBpm({
         id: 'wide',
         bpm: 160,
         sonic_dna: lockedDnaAt(128),
       }),
-    ).toBe(160)
+    ).toBe(128)
+  })
+
+  it('falls back to catalog BPM when DNA has no bpm', () => {
+    expect(
+      resolvePairBpm({
+        id: 'cat',
+        bpm: 140,
+        sonic_dna: {},
+      }),
+    ).toBe(140)
   })
 })
 

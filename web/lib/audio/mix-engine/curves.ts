@@ -3,6 +3,7 @@
  * Filter-style EQ automation for shared-bus DJ filter mixes.
  */
 
+import type { BlendAutomation } from './blend-automation'
 import type { MixIntelligence } from './mix-intelligence'
 import type { MixStyle } from './types'
 
@@ -111,10 +112,24 @@ export function handoffPair(
  * Style-shaped dual-deck gains.
  * `a` = outgoing, `b` = incoming. Always ends at a≈0, b≈1.
  */
+function shapedChannelGains(
+  x: number,
+  shape: BlendAutomation['gainShape'] | undefined,
+): { a: number; b: number } | null {
+  if (!shape || shape === 'equal-power') return null
+  if (shape === 'linear') {
+    const t = clamp01(x)
+    return { a: 1 - t, b: t }
+  }
+  const hold = 0.52
+  return equalPowerGains(smootherstep(Math.max(0, (clamp01(x) - hold) / (1 - hold))))
+}
+
 export function styleMixGains(
   style: MixStyle | undefined,
   rawProgress: number,
-  intel?: MixIntelligence
+  intel?: MixIntelligence,
+  curve?: BlendAutomation,
 ): { a: number; b: number } {
   const x = clamp01(rawProgress)
   const delay = intel?.incomingDelay ?? 0
@@ -153,6 +168,8 @@ export function styleMixGains(
     }
     case 'crossfade':
     default: {
+      const custom = shapedChannelGains(x, curve?.gainShape)
+      if (custom) return custom
       const { outU, inU } = handoffPair(x, intel)
       if (Math.abs(outU - inU) < 1e-6) return equalPowerGains(outU)
       return {
@@ -174,6 +191,7 @@ export function intelligentDeckMixAtProgress(params: {
   outBias?: FilterMixEqGains
   inBias?: FilterMixEqGains
   intel?: MixIntelligence
+  curve?: BlendAutomation
 }): { outgoing: FilterMixEqGains; incoming: FilterMixEqGains } {
   const x = clamp01(params.progress)
   const outBase = params.outBias ?? { low: 0, mid: 0, high: 0 }
@@ -218,6 +236,7 @@ export function intelligentDeckMixAtProgress(params: {
     outBias: outBase,
     inBias: inBase,
     intel: params.intel,
+    curve: params.curve,
   })
 }
 
@@ -230,6 +249,7 @@ export function crossfadeDeckEqAtProgress(params: {
   outBias?: FilterMixEqGains
   inBias?: FilterMixEqGains
   intel?: MixIntelligence
+  curve?: BlendAutomation
 }): { outgoing: FilterMixEqGains; incoming: FilterMixEqGains } {
   const x = clamp01(params.progress)
   const outBase = params.outBias ?? { low: 0, mid: 0, high: 0 }
@@ -255,8 +275,13 @@ export function crossfadeDeckEqAtProgress(params: {
   // Smooth: incoming starts with no low end. Bass follows the same out/in pair
   // as faders, with incoming bass held until the mid-blend downbeat knee.
   const { outU, inU } = handoffPair(x, params.intel)
-  const bass = complementaryBassDb(outU, { inU, incomingKnee: BASS_INCOMING_KNEE })
-  const mid = complementaryMidDb(outU, inU, params.intel?.vocalWeight ?? 0)
+  const knee = params.curve?.bassKnee ?? BASS_INCOMING_KNEE
+  const killDb = params.curve?.bassKillDb ?? BASS_KILL_DB
+  const bass = complementaryBassDb(outU, { inU, incomingKnee: knee, killDb })
+  const vocal = params.intel?.vocalWeight ?? 0
+  const mid = params.curve
+    ? complementaryMidDb(outU, inU, 0.35, params.curve.midDuckDb)
+    : complementaryMidDb(outU, inU, vocal)
   return {
     outgoing: {
       low: outBase.low + bass.out,

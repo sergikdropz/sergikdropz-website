@@ -4,7 +4,7 @@
 
 import { useMusicPlayer } from '@/contexts/MusicPlayerContext'
 import MusicPlayer from './MusicPlayer'
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   fetchAllTracksSummaryForHydration,
   fetchFolders,
@@ -78,6 +78,11 @@ async function listReleaseFolders(): Promise<ReturnType<typeof collectReleaseFol
   }
 }
 
+function unusedPool(newTracks: Track[], existingIds: Set<string>): Track[] {
+  const unused = newTracks.filter((t) => !existingIds.has(t.id))
+  return unused.length > 0 ? unused : newTracks
+}
+
 export default function GlobalMusicPlayer() {
   const {
     currentTrack,
@@ -96,6 +101,9 @@ export default function GlobalMusicPlayer() {
     handleQueueChange,
     removeFromQueue,
   } = useMusicPlayer()
+
+  const appendInFlightRef = useRef(false)
+  const lastAppendKeyRef = useRef<string | null>(null)
 
   const getTracksFromSource = useCallback(
     async (source: { type: 'folder' | 'playlist' | null; id: string | null } | null): Promise<Track[]> => {
@@ -178,72 +186,90 @@ export default function GlobalMusicPlayer() {
     setCurrentTrack,
   ])
 
-  const nextTrack = useCallback(async () => {
-    if (queue.length > 0 && currentIndex >= queue.length - 1) {
-      try {
-        const catalogRandom = readCatalogRandomSetting()
-        const newTracks = await getTracksFromSource(currentSource)
-        if (newTracks.length > 0) {
-          const existingIds = new Set(queue.map((t) => t.id))
-          if (currentTrack?.id) rememberPlayedTrackId(currentTrack.id)
-
-          let tracksToAdd: Track[] = []
-          if (catalogRandom && isOrderedReleaseRandomScope(currentSource)) {
-            tracksToAdd = pickNextOrderedTracks(newTracks, existingIds, 1, {
-              preferAfterId: currentTrack?.id ?? null,
-            })
-            if (tracksToAdd.length === 0) {
-              if (await jumpToRandomRelease()) return
-            }
-          } else if (catalogRandom) {
-            tracksToAdd = pickRandomUnusedTracks(
-              unusedPool(newTracks, existingIds),
-              existingIds,
-              1,
-              {
-                allowReshuffle: true,
-                keepExcluded: currentTrack ? [currentTrack.id] : [],
-                recentIds: getRecentPlayedTrackIds(),
-              },
-            )
-          } else {
-            tracksToAdd = newTracks.filter((t) => !existingIds.has(t.id))
-          }
-
-          if (tracksToAdd.length > 0) {
-            const updatedQueue = [...queue, ...tracksToAdd]
-            setQueue(updatedQueue)
-            const nextIndex = queue.length
-            setCurrentIndex(nextIndex)
-            setCurrentTrack(updatedQueue[nextIndex])
-            return
-          }
-        } else if (catalogRandom && isOrderedReleaseRandomScope(currentSource)) {
-          if (await jumpToRandomRelease()) return
-        }
-      } catch (error) {
-        console.error('Error auto-queueing tracks:', error)
+  /** Append more tracks before the last song ends so library playback never wraps cold. */
+  const appendUpcomingTracks = useCallback(async (): Promise<boolean> => {
+    if (appendInFlightRef.current) return false
+    const source = currentSource
+    const existing = queue
+    const currentId = currentTrack?.id
+    const key = `${source?.type ?? 'all'}:${source?.id ?? 'all'}:${existing.length}:${currentId ?? ''}`
+    if (lastAppendKeyRef.current === key) return false
+    appendInFlightRef.current = true
+    try {
+      const catalogRandom = readCatalogRandomSetting()
+      if (catalogRandom && isOrderedReleaseRandomScope(source)) {
+        const releases = await listReleaseFolders()
+        const currentIdFolder = source?.type === 'folder' ? source.id : null
+        if (currentIdFolder) rememberPlayedReleaseId(currentIdFolder)
+        const nextRelease = pickRandomReleaseFolder(releases, {
+          keepExcluded: currentIdFolder ? [currentIdFolder] : [],
+          recentIds: getRecentPlayedReleaseIds(),
+        })
+        if (!nextRelease?.id) return false
+        const releaseTracks = sortTracksInReleaseOrder(await fetchTracks(nextRelease.id))
+        if (!releaseTracks.length) return false
+        rememberPlayedReleaseId(nextRelease.id)
+        setCurrentSource({ type: 'folder', id: nextRelease.id })
+        setQueue((prev) => {
+          const seen = new Set(prev.map((t) => t.id))
+          const extra = releaseTracks.filter((t) => !seen.has(t.id))
+          return extra.length ? [...prev, ...extra] : prev
+        })
+        lastAppendKeyRef.current = key
+        return true
       }
 
-      if (queue.length > 0) {
-        setCurrentIndex(0)
-        setCurrentTrack(queue[0])
+      const newTracks = await getTracksFromSource(source)
+      if (newTracks.length === 0) return false
+      const existingIds = new Set(existing.map((t) => t.id))
+      if (currentId) rememberPlayedTrackId(currentId)
+
+      let tracksToAdd: Track[] = []
+      if (catalogRandom) {
+        tracksToAdd = pickRandomUnusedTracks(unusedPool(newTracks, existingIds), existingIds, 8, {
+          allowReshuffle: true,
+          keepExcluded: currentId ? [currentId] : [],
+          recentIds: getRecentPlayedTrackIds(),
+        })
+      } else {
+        tracksToAdd = newTracks.filter((t) => !existingIds.has(t.id)).slice(0, 24)
       }
-    } else {
-      contextNextTrack()
+      if (tracksToAdd.length === 0) return false
+      setQueue((prev) => {
+        const seen = new Set(prev.map((t) => t.id))
+        const extra = tracksToAdd.filter((t) => !seen.has(t.id))
+        return extra.length ? [...prev, ...extra] : prev
+      })
+      lastAppendKeyRef.current = key
+      return true
+    } catch (error) {
+      console.error('Error appending upcoming tracks:', error)
+      return false
+    } finally {
+      appendInFlightRef.current = false
     }
-  }, [
-    currentIndex,
-    currentTrack,
-    queue,
-    currentSource,
-    getTracksFromSource,
-    jumpToRandomRelease,
-    setQueue,
-    setCurrentIndex,
-    setCurrentTrack,
-    contextNextTrack,
-  ])
+  }, [currentSource, currentTrack?.id, getTracksFromSource, queue, setCurrentSource, setQueue])
+
+  // Prefetch the next batch while the last (or second-to-last) track is playing.
+  useEffect(() => {
+    if (!isPlaying || queue.length === 0) return
+    if (currentIndex < queue.length - 2) return
+    void appendUpcomingTracks()
+  }, [appendUpcomingTracks, currentIndex, isPlaying, queue.length])
+
+  const nextTrack = useCallback(() => {
+    if (queue.length === 0) return
+
+    if (currentIndex < queue.length - 1) {
+      contextNextTrack()
+      if (currentIndex >= queue.length - 3) void appendUpcomingTracks()
+      return
+    }
+
+    // Last track: wrap immediately so playback never stalls, then extend the list.
+    contextNextTrack()
+    void appendUpcomingTracks()
+  }, [appendUpcomingTracks, contextNextTrack, currentIndex, queue.length])
 
   const handleTrackEnd = useCallback(() => {
     nextTrack()
@@ -266,9 +292,4 @@ export default function GlobalMusicPlayer() {
       onRemoveFromQueue={removeFromQueue}
     />
   )
-}
-
-function unusedPool(newTracks: Track[], existingIds: Set<string>): Track[] {
-  const unused = newTracks.filter((t) => !existingIds.has(t.id))
-  return unused.length > 0 ? unused : newTracks
 }

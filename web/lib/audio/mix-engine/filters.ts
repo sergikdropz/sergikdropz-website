@@ -26,7 +26,7 @@ const OPEN_FILTERS: DeckFilterState = { hpfHz: OPEN_HPF, lpfHz: OPEN_LPF }
 
 /**
  * Per-deck LPF/HPF for creative mix styles.
- * Smooth / crossfade stays fully open — EQ + faders do the blend.
+ * Smooth / crossfade stays fully open — volume faders do the blend; EQ is separate.
  */
 export function deckFiltersAtProgress(params: {
   progress: number

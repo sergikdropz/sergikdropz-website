@@ -4,8 +4,10 @@ import {
   beatSyncLockProgress,
   mediaDelayToWallMs,
   readPairBpmConfidence,
+  resolveFireIncomingCue,
   solveAlignmentState,
 } from './alignment'
+import { PRE_AUDIBLE_LOCK_SEC } from './pre-audible-nudge'
 import { beatPhaseErrorSec } from './sync'
 import { buildMixPlan } from './plan-from-dna'
 
@@ -140,5 +142,76 @@ describe('solveAlignmentState groove-aware snare', () => {
     expect(a.incomingCueSec).toBeGreaterThan(3.5)
     expect(a.incomingCueSec).toBeLessThan(4.5)
     expect(a.sources).toContain('phrase-phase')
+  })
+})
+
+describe('resolveFireIncomingCue', () => {
+  it('resnaps drifted pre-arm media to phrase-aligned cue at fire', () => {
+    const fired = resolveFireIncomingCue({
+      mediaNowSec: 32.4,
+      alignedCueSec: 4.0,
+      idlePreArmLocked: true,
+      alreadyOnBuffer: true,
+      phrase1Lock: true,
+      bpm: 128,
+    })
+    expect(fired.cueSec).toBeCloseTo(4.0, 5)
+    expect(fired.resnapped).toBe(true)
+    expect(fired.usedMediaNow).toBe(false)
+  })
+
+  it('trusts locked warm playhead within half beat (no phrase-1 smash)', () => {
+    const aligned = 4.0
+    const media = aligned + 0.18 // < half beat @ 128bpm (~0.234s)
+    const fired = resolveFireIncomingCue({
+      mediaNowSec: media,
+      alignedCueSec: aligned,
+      idlePreArmLocked: true,
+      alreadyOnBuffer: true,
+      phrase1Lock: true,
+      bpm: 128,
+    })
+    expect(fired.cueSec).toBeCloseTo(media, 5)
+    expect(fired.usedMediaNow).toBe(true)
+    expect(fired.resnapped).toBe(false)
+  })
+
+  it('keeps mediaNow when already within the silent lock window', () => {
+    const aligned = 4.0
+    const media = aligned + PRE_AUDIBLE_LOCK_SEC * 0.5
+    const fired = resolveFireIncomingCue({
+      mediaNowSec: media,
+      alignedCueSec: aligned,
+      idlePreArmLocked: true,
+      alreadyOnBuffer: true,
+      phrase1Lock: true,
+    })
+    expect(fired.cueSec).toBeCloseTo(media, 5)
+    expect(fired.usedMediaNow).toBe(true)
+    expect(fired.resnapped).toBe(false)
+  })
+
+  it('trusts locked warm playhead when phrase1Lock is off', () => {
+    const fired = resolveFireIncomingCue({
+      mediaNowSec: 18.2,
+      alignedCueSec: 2.0,
+      idlePreArmLocked: true,
+      alreadyOnBuffer: true,
+      phrase1Lock: false,
+    })
+    expect(fired.cueSec).toBeCloseTo(18.2, 5)
+    expect(fired.usedMediaNow).toBe(true)
+  })
+
+  it('always uses aligned cue when not pre-arm locked', () => {
+    const fired = resolveFireIncomingCue({
+      mediaNowSec: 12,
+      alignedCueSec: 3.5,
+      idlePreArmLocked: false,
+      alreadyOnBuffer: true,
+      phrase1Lock: true,
+    })
+    expect(fired.cueSec).toBeCloseTo(3.5, 5)
+    expect(fired.resnapped).toBe(true)
   })
 })

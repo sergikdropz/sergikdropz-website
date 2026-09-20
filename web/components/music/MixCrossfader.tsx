@@ -14,6 +14,7 @@ import {
   applyCrossfaderWheelDelta,
   crossfaderDeltaFromWheel,
 } from '@/lib/ui/mix-crossfader-wheel'
+import { BlendAutomationMenu } from '@/components/music/BlendAutomationMenu'
 import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
 
 const DOUBLE_TAP_MS = 320
@@ -52,21 +53,25 @@ export default function MixCrossfader({
   className?: string
 }) {
   const p = Math.max(0, Math.min(1, progress))
-  const pct = p * 100
   const trackRef = useRef<HTMLDivElement>(null)
   const menuElRef = useRef<HTMLDivElement | null>(null)
   const draggingRef = useRef(false)
   const activePointerIdRef = useRef<number | null>(null)
-  const progressRef = useRef(p)
-  progressRef.current = p
+  /** Local paint during drag so parent can throttle React state without XF lag. */
+  const [dragProgress, setDragProgress] = useState<number | null>(null)
+  const display = dragProgress ?? p
+  const pct = display * 100
+  const progressRef = useRef(display)
+  progressRef.current = display
   const lastTapRef = useRef(0)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null)
-  const canOpenMenu =
+  const [curveMenu, setCurveMenu] = useState(false)
+  const canOpenUnlock =
     (lockedByAutoDj && Boolean(onUnlockFromAutoDj)) ||
     (unlockedUnderAutoDj && Boolean(onRelockToAutoDj))
-  const menuOpen = Boolean(menuAnchor && canOpenMenu)
+  const menuOpen = Boolean(menuAnchor && canOpenUnlock && !curveMenu)
   const menuClamp = useClampedFixedMenuPosition(
     menuOpen,
     menuAnchor,
@@ -96,16 +101,40 @@ export default function MixCrossfader({
       activePointerIdRef.current = null
     }
     draggingRef.current = false
+    setDragProgress(null)
+  }
+
+  const emitChange = (next: number) => {
+    const clamped = Math.max(0, Math.min(1, next))
+    if (draggingRef.current) setDragProgress(clamped)
+    onChangeRef.current?.(clamped)
   }
 
   const snapCenter = () => {
     if (!interactive || !onChangeRef.current) return
     const el = trackRef.current
     releasePointer(el, activePointerIdRef.current)
+    setDragProgress(null)
     onChangeRef.current(XF_CENTER)
   }
 
-  const closeMenu = () => setMenuAnchor(null)
+  const closeMenu = () => {
+    setMenuAnchor(null)
+    setCurveMenu(false)
+  }
+
+  const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Shift+right-click keeps the Auto DJ unlock menu.
+    if (e.shiftKey && canOpenUnlock) {
+      setCurveMenu(false)
+      setMenuAnchor({ x: e.clientX, y: e.clientY })
+      return
+    }
+    setCurveMenu(true)
+    setMenuAnchor({ x: e.clientX, y: e.clientY })
+  }
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (!interactive || !onChangeRef.current) return
@@ -123,13 +152,13 @@ export default function MixCrossfader({
     draggingRef.current = true
     activePointerIdRef.current = e.pointerId
     e.currentTarget.setPointerCapture(e.pointerId)
-    onChangeRef.current(valueFromClientX(e.clientX))
+    emitChange(valueFromClientX(e.clientX))
   }
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current || !onChangeRef.current) return
     if (activePointerIdRef.current != null && e.pointerId !== activePointerIdRef.current) return
-    onChangeRef.current(valueFromClientX(e.clientX))
+    emitChange(valueFromClientX(e.clientX))
   }
 
   const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
@@ -145,6 +174,7 @@ export default function MixCrossfader({
   const onLostPointerCapture = () => {
     draggingRef.current = false
     activePointerIdRef.current = null
+    setDragProgress(null)
   }
 
   const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -153,19 +183,13 @@ export default function MixCrossfader({
     snapCenter()
   }
 
-  const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
-    if (!canOpenMenu) return
-    e.preventDefault()
-    e.stopPropagation()
-    setMenuAnchor({ x: e.clientX, y: e.clientY })
-  }
-
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen && !curveMenu) return
     const onPointer = (event: globalThis.PointerEvent) => {
       const target = event.target as Node | null
       if (!target) return
       if (menuElRef.current?.contains(target) || trackRef.current?.contains(target)) return
+      if ((target as HTMLElement).closest?.('[data-blend-automation-menu]')) return
       closeMenu()
     }
     const onKey = (event: KeyboardEvent) => {
@@ -177,7 +201,7 @@ export default function MixCrossfader({
       window.removeEventListener('pointerdown', onPointer)
       window.removeEventListener('keydown', onKey)
     }
-  }, [menuOpen])
+  }, [menuOpen, curveMenu])
 
   // Native non-passive wheel: relative jog, independent of click-hold drag.
   useEffect(() => {
@@ -202,7 +226,7 @@ export default function MixCrossfader({
       e.preventDefault()
       e.stopPropagation()
       if (!delta) return
-      change(applyCrossfaderWheelDelta(progressRef.current, delta))
+      emitChange(applyCrossfaderWheelDelta(progressRef.current, delta))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -223,7 +247,7 @@ export default function MixCrossfader({
         aria-orientation={interactive ? 'horizontal' : undefined}
       >
         <div className="flex w-full items-center justify-between px-0.5 text-[8px] font-semibold uppercase tracking-wider text-gray-500">
-          <span className={p < 0.45 ? 'text-amber-400/90' : ''}>A</span>
+          <span className={display < 0.45 ? 'text-amber-400/90' : ''}>A</span>
           <span
             className={`font-mono text-[9px] normal-case tracking-normal tabular-nums ${
               lit ? 'text-gray-500' : 'text-gray-600'
@@ -231,7 +255,7 @@ export default function MixCrossfader({
           >
             {Math.round(pct)}%
           </span>
-          <span className={p > 0.55 ? 'text-sky-400/90' : ''}>B</span>
+          <span className={display > 0.55 ? 'text-sky-400/90' : ''}>B</span>
         </div>
         <div
           ref={trackRef}
@@ -247,11 +271,11 @@ export default function MixCrossfader({
           title={
             interactive
               ? unlockedUnderAutoDj
-                ? 'Manual XF · Auto DJ still on · right-click to relock'
-                : 'Drag for absolute cut · scroll sideways for smooth jog · double-click to center'
+                ? 'Manual XF · right-click volume curve · shift+right-click to relock'
+                : 'Drag · scroll sideways · double-click to center · right-click volume curve'
               : lockedByAutoDj
-                ? 'Auto DJ crossfader · right-click to unlock (keep Auto DJ)'
-                : undefined
+                ? 'Auto DJ crossfader · right-click volume curve · shift+right-click to unlock'
+                : 'Right-click for volume curve'
           }
           className={`relative h-9 w-full rounded-md border py-1 px-1.5 ${
             interactive
@@ -313,6 +337,10 @@ export default function MixCrossfader({
           </div>,
           document.body,
         )}
+      <BlendAutomationMenu
+        anchor={curveMenu ? menuAnchor : null}
+        onClose={closeMenu}
+      />
     </>
   )
 }

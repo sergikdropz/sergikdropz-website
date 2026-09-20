@@ -91,7 +91,7 @@ export type WaveformStageProps = {
   onCueSec?: (timeSec: number) => void
   /** After a double-click jump, start this deck if it is paused. */
   onJumpPlay?: () => void
-  /** User zoom/pan leaves the tape on that area; Follow can be turned back on. */
+  /** User pan leaves the tape on that area; Follow can be turned back on. Zoom keeps Follow. */
   onFollowChange?: (follow: boolean) => void
   /** Context menu; `timeSec` is the media time under the pointer (no grid snap). */
   onContextMenu?: (e: React.MouseEvent, timeSec: number | null) => void
@@ -111,6 +111,11 @@ export type WaveformStageProps = {
   onPhaseNudge?: (deltaSec: number) => void
   /** Double-click: lock grid to playhead (set downbeat here). */
   onPhaseLock?: () => void
+  /**
+   * Minimum ms between paints (default 0 = every frame while playing).
+   * Raise during mix blends (~66 → ~15fps) so MixEngine fade ticks stay on time.
+   */
+  paintMinMs?: number
 }
 
 /**
@@ -161,6 +166,7 @@ function WaveformStage({
   readPeerPhaseErrorSec,
   onPhaseNudge,
   onPhaseLock,
+  paintMinMs = 0,
 }: WaveformStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -210,6 +216,8 @@ function WaveformStage({
   readMediaTimeRef.current = readMediaTime
   const seekMediaTimeRef = useRef(seekMediaTime)
   seekMediaTimeRef.current = seekMediaTime
+  const paintMinMsRef = useRef(paintMinMs)
+  paintMinMsRef.current = Math.max(0, paintMinMs)
   const onFollowChangeRef = useRef(onFollowChange)
   onFollowChangeRef.current = onFollowChange
   const onCueSecRef = useRef(onCueSec)
@@ -726,8 +734,15 @@ function WaveformStage({
       return display
     }
 
+    let lastPaintMs = 0
     const tick = (now: number) => {
       rafRef.current = null
+      const minMs = paintMinMsRef.current
+      if (minMs > 0 && now - lastPaintMs < minMs) {
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+      lastPaintMs = now
       paint(advanceClock(now))
 
       const shouldRun =
@@ -820,6 +835,10 @@ function WaveformStage({
       if (followPropRef.current) onFollowChangeRef.current?.(false)
     }
 
+    /** Zoom while Follow is on: keep Follow and center on the playhead (CDJ). */
+    const followKeepsZoom = () =>
+      followPropRef.current === true && followHoldRef.current === false
+
     const containerWidth = () => {
       const w = (viewportRef.current ?? container).getBoundingClientRect().width
       return w > 0 ? w : container.clientWidth
@@ -866,6 +885,7 @@ function WaveformStage({
 
     /** Continuous zoom — update refs + paint this frame; parent sync is debounced. */
     const applyBarsLive = (nextBars: number, focalRatio = 0.5, opts?: { snap?: boolean }) => {
+      const keepFollow = followKeepsZoom()
       syncOffsetFromFollowWindow()
       const length = sampleCountRef.current
       let newBars = nextBars <= 0 ? 0 : nextBars
@@ -891,7 +911,7 @@ function WaveformStage({
         offsetRef.current = 0
         viewRef.current.visibleBars = 0
         viewRef.current.offsetIndex = 0
-        suspendFollowForGesture()
+        // Keep Follow preference when returning to overview — next zoom-in re-centers.
         paint(smoothTimeRef.current, { forceBase: true })
         onVisibleBarsChange(0, focalRatio)
         onOffsetChange(0)
@@ -901,9 +921,16 @@ function WaveformStage({
       const prevBars = barsRef.current
       const prevVisible = samplesForBars(prevBars <= 0 ? 0 : prevBars, length)
       const newVisible = samplesForBars(newBars, length)
+      // Follow: zoom around playhead (center of follow window). Else: cursor/focal.
+      const focal = keepFollow ? 0.5 : Math.max(0, Math.min(1, focalRatio))
       const start = prevBars <= 0 ? 0 : offsetRef.current
-      const focal = Math.max(0, Math.min(1, focalRatio))
-      const focalIndex = start + focal * Math.min(prevBars <= 0 ? length : prevVisible, length)
+      const focalIndex = keepFollow
+        ? (() => {
+            const dur = durationSec > 0 ? durationSec : 1
+            const t = Math.max(0, Math.min(dur, smoothTimeRef.current))
+            return (t / dur) * length
+          })()
+        : start + focal * Math.min(prevBars <= 0 ? length : prevVisible, length)
       const newStart = focalIndex - focal * newVisible
       const maxOffset = Math.max(0, length - newVisible)
       const newOffset = Math.max(0, Math.min(maxOffset, newStart))
@@ -912,9 +939,15 @@ function WaveformStage({
       offsetRef.current = newOffset
       viewRef.current.visibleBars = newBars
       viewRef.current.offsetIndex = newOffset
-      suspendFollowForGesture()
+      if (keepFollow) {
+        viewRef.current.follow = true
+        followScrollRef.current.armed = false
+        followScrollRef.current.dirty = true
+      } else {
+        suspendFollowForGesture()
+      }
       paint(smoothTimeRef.current, { forceBase: true })
-      onVisibleBarsChange(newBars, focalRatio)
+      onVisibleBarsChange(newBars, focal)
       onOffsetChange(newOffset)
     }
 
@@ -1050,7 +1083,9 @@ function WaveformStage({
       })
       if (next <= 0 && atFull) return
       const applied = atFull && next > 0 ? Math.min(next, 48) : next
-      applyBarsLive(applied, focal)
+      // Follow on → zoom to playhead (center), not cursor.
+      const zoomFocal = followKeepsZoom() ? 0.5 : focal
+      applyBarsLive(applied, zoomFocal)
     }
 
     const onWheel = (e: WheelEvent) => {
@@ -1071,7 +1106,7 @@ function WaveformStage({
         shift: e.shiftKey,
         pinch: e.ctrlKey || e.metaKey,
       })
-      const focal = focalFromClientX(e.clientX)
+      const focal = followKeepsZoom() ? 0.5 : focalFromClientX(e.clientX)
       if (zoomDelta) applyWheelZoom(zoomDelta, focal)
       if (panDelta) {
         if (barsRef.current <= 0 && !zoomDelta) applyBarsLive(32, focal)
@@ -1153,7 +1188,7 @@ function WaveformStage({
       const scale = dist / pinch.startDistance
       const approx = pinch.startBars / Math.max(0.2, scale)
       const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2
-      const focal = focalFromClientX(centerX)
+      const focal = followKeepsZoom() ? 0.5 : focalFromClientX(centerX)
       const beatSec = bpm && bpm > 0 ? 60 / bpm : null
       if (
         (scale < 0.5 && pinch.startBars >= 64) ||

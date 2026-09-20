@@ -21,6 +21,7 @@ import {
   type MixPeakSample,
 } from './transient-align'
 import { isFourOnFloorPocket } from './mix-techniques'
+import { PRE_AUDIBLE_LOCK_SEC } from './pre-audible-nudge'
 
 export type AlignmentWeights = {
   beat: number
@@ -252,6 +253,74 @@ export function solveAlignmentState(params: {
     snareLock,
     sources,
     weights,
+  }
+}
+
+/**
+ * Fire-time cue policy for the oncoming deck.
+ *
+ * When pre-arm is truly locked, trust the warm playhead within ±½ beat —
+ * a phrase-1 resnap from e.g. 32s → 4s restarts BufferSources and smashes.
+ * Only resnap when unlocked or the drift exceeds the trust window.
+ */
+export function resolveFireIncomingCue(params: {
+  mediaNowSec: number
+  alignedCueSec: number
+  idlePreArmLocked: boolean
+  alreadyOnBuffer: boolean
+  /** Default true (Auto DJ doctrine). */
+  phrase1Lock?: boolean
+  lockToleranceSec?: number
+  /**
+   * When locked, keep mediaNow if |media − aligned| ≤ this window.
+   * Default: half beat when `bpm` is set, else `lockToleranceSec` / PRE_AUDIBLE.
+   */
+  trustLockedWindowSec?: number
+  bpm?: number
+}): { cueSec: number; usedMediaNow: boolean; resnapped: boolean } {
+  const tol =
+    typeof params.lockToleranceSec === 'number' && params.lockToleranceSec > 0
+      ? params.lockToleranceSec
+      : PRE_AUDIBLE_LOCK_SEC
+  const aligned =
+    Number.isFinite(params.alignedCueSec) && params.alignedCueSec >= 0
+      ? params.alignedCueSec
+      : 0
+  const media =
+    Number.isFinite(params.mediaNowSec) && params.mediaNowSec >= 0
+      ? params.mediaNowSec
+      : aligned
+  const phrase1 = params.phrase1Lock !== false
+  const halfBeat =
+    typeof params.bpm === 'number' && params.bpm > 0 ? (60 / params.bpm) * 0.5 : tol * 8
+  const trustWindow =
+    typeof params.trustLockedWindowSec === 'number' && params.trustLockedWindowSec > 0
+      ? params.trustLockedWindowSec
+      : halfBeat
+
+  // Locked warm playhead within trust window — never resnap (avoids buffer restart).
+  if (
+    params.alreadyOnBuffer &&
+    params.idlePreArmLocked &&
+    Math.abs(media - aligned) <= trustWindow
+  ) {
+    return { cueSec: media, usedMediaNow: true, resnapped: false }
+  }
+
+  // Non-phrase creative path: trust a locked warm playhead fully.
+  if (params.alreadyOnBuffer && params.idlePreArmLocked && !phrase1) {
+    return { cueSec: media, usedMediaNow: true, resnapped: false }
+  }
+
+  const err = Math.abs(media - aligned)
+  if (params.alreadyOnBuffer && params.idlePreArmLocked && err <= tol) {
+    return { cueSec: media, usedMediaNow: true, resnapped: false }
+  }
+
+  return {
+    cueSec: aligned,
+    usedMediaNow: false,
+    resnapped: err > tol,
   }
 }
 

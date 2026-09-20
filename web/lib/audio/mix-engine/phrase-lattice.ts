@@ -104,6 +104,26 @@ export function phrasePhaseErrorSec(params: {
 }
 
 /**
+ * Fuse beat-pocket error with phrase-cell error for live chase.
+ * Large phrase offsets dominate; fine beat pocket when already on-phrase.
+ */
+export function fusePhraseBeatError(params: {
+  beatPhaseSec: number
+  phrasePhaseSec: number
+  beatSec: number
+}): number {
+  const beat = params.beatSec > 0 ? params.beatSec : 0.5
+  const phrase = Number.isFinite(params.phrasePhaseSec) ? params.phrasePhaseSec : 0
+  const grid = Number.isFinite(params.beatPhaseSec) ? params.beatPhaseSec : 0
+  if (Math.abs(phrase) > beat * 0.55) {
+    const cap = beat * 1.5
+    const mixed = phrase * 0.55 + grid * 0.45
+    return Math.max(-cap, Math.min(cap, mixed))
+  }
+  return grid
+}
+
+/**
  * Incoming media time in phrase 1 that sits on the same bar/beat as outgoing.
  * Stays inside the first 8-bar cell (doctrine IN = phrase 1).
  */

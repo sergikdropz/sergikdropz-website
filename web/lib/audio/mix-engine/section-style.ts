@@ -75,6 +75,13 @@ export function outgoingSectionAt(
   return sectionAtSec(readDnaSections(outgoing), timeSec)
 }
 
+/** DNA outro start when present — used to prefer outro→intro OUT markers. */
+export function readOutgoingOutroStartSec(outgoing: MixTrackRef): number | null {
+  const map = readDnaSections(outgoing)
+  const outro = map.outroStartSec
+  return typeof outro === 'number' && Number.isFinite(outro) && outro > 0 ? outro : null
+}
+
 export function styleFromOutgoingSection(section: PhraseSectionId): MixStyle {
   // Canonical Auto DJ OUT is always the last N bars (= outro). That blend
   // must stay Smooth — complementary bass on one handoff curve.

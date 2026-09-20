@@ -12,6 +12,7 @@ import {
 describe('isTempoDialDrag', () => {
   it('treats sub-slop movement as a tap', () => {
     expect(isTempoDialDrag(1, 1)).toBe(false)
+    expect(isTempoDialDrag(0, TEMPO_DIAL_DRAG_SLOP_PX - 1)).toBe(false)
     expect(isTempoDialDrag(0, TEMPO_DIAL_DRAG_SLOP_PX)).toBe(true)
   })
 })

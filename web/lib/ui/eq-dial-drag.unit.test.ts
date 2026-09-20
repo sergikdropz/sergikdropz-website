@@ -34,6 +34,7 @@ describe('eqGainToDialPosition', () => {
 describe('isEqDialDrag', () => {
   it('treats sub-slop movement as a tap', () => {
     expect(isEqDialDrag(1, 1)).toBe(false)
+    expect(isEqDialDrag(0, EQ_DIAL_DRAG_SLOP_PX - 1)).toBe(false)
     expect(isEqDialDrag(0, EQ_DIAL_DRAG_SLOP_PX)).toBe(true)
   })
 })

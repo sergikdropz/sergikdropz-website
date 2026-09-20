@@ -32,6 +32,8 @@ import {
   computeMixDeckRates,
   resolveHoldBeatmatch,
   suggestLeadInSec,
+  getPairLearning,
+  preferredOutFromPairLearning,
   type MixPlan,
   type MixTrackRef,
   type MixQualityGrade,
@@ -172,6 +174,7 @@ export function buildAutoDjTickPlan(
   })
 
   const inBpmForOverlap = resolvePlaybackBpm(inRef, null) ?? inRef.bpm ?? outBpm
+  const pairMem = getPairLearning(outRef.id, inRef.id)
   const phraseMix = resolvePhraseMixSettings(config, {
     qualityGate:
       config.autoCorrectWeakMixes && shouldApplyQualityGate(lastMixGrade)
@@ -186,6 +189,7 @@ export function buildAutoDjTickPlan(
     ),
     bpmRelDelta: Math.abs(outBpm - inBpmForOverlap) / Math.max(outBpm, inBpmForOverlap),
     outgoingSection: outgoingSectionAt(outRef, ct),
+    preferredOutPhraseBars: preferredOutFromPairLearning(pairMem),
   })
 
   const beatCorrectForPlan =
@@ -276,23 +280,34 @@ export function buildAutoDjTickPlan(
     frozen.outgoingId === outRef.id &&
     frozen.incomingId === inRef.id
   ) {
-    const frozenStart = frozen.plan.startAtOutgoingSec
-    if (plan.startAtOutgoingSec + 0.05 < frozenStart) {
-      const keepCue = phraseMix.canonicalPhraseCues
-      plan = stamp({
-        ...frozen.plan,
-        prepareLeadInSec: effectiveLeadInSec,
-        incomingStartSec: keepCue
-          ? frozen.plan.incomingStartSec
-          : mixInCueSec,
-        resolvedIncomingSec: keepCue
-          ? frozen.plan.resolvedIncomingSec ?? frozen.plan.incomingStartSec
-          : mixInCueSec,
-      })
-    } else {
-      nextFrozen = { outgoingId: outRef.id, incomingId: inRef.id, plan }
-    }
+    // Sticky freeze: once latched for this pair, never replace OUT/cues with a
+    // later rebuild — that thrash is a primary trainwreck driver.
+    const keepCue = phraseMix.canonicalPhraseCues
+    plan = stamp({
+      ...frozen.plan,
+      prepareLeadInSec: effectiveLeadInSec,
+      // Refresh beatmatch rate from live outgoing tempo only.
+      rateRatio: computeMixDeckRates({
+        outgoingBpm: outBpm,
+        incomingBpm: resolvePlaybackBpm(inRef, null) ?? inRef.bpm ?? outBpm,
+        outgoingPlaybackRate: outRate,
+        incomingTargetRate: phraseMix.bpmStrategy === 'manual' ? sliderPlaybackRate : 1,
+      }).incomingRate,
+      incomingStartSec: keepCue
+        ? frozen.plan.incomingStartSec
+        : mixInCueSec,
+      resolvedIncomingSec: keepCue
+        ? frozen.plan.resolvedIncomingSec ?? frozen.plan.incomingStartSec
+        : mixInCueSec,
+    })
+    nextFrozen = { outgoingId: outRef.id, incomingId: inRef.id, plan }
   } else if (plan.startAtOutgoingSec - ct <= PLAN_FREEZE_SEC) {
+    nextFrozen = { outgoingId: outRef.id, incomingId: inRef.id, plan }
+  } else if (
+    // Soft-freeze as soon as we're in the prepare/pre-arm window so OUT
+    // markers and cues don't keep rebuilding until the last hard-freeze window.
+    plan.startAtOutgoingSec - ct <= Math.max(effectiveLeadInSec, PLAN_FREEZE_SEC)
+  ) {
     nextFrozen = { outgoingId: outRef.id, incomingId: inRef.id, plan }
   } else if (
     frozen &&
@@ -322,6 +337,7 @@ export function buildAutoDjTickPlan(
   plan.masterTempoHandoff = true
   plan.phrase1Lock = true
   plan.blendFromOut = true
+  plan.rateRatio = cueArmRate
 
   const delaySeconds = plan.startAtOutgoingSec - ct
   const prepareLeadSec = Math.max(
@@ -372,6 +388,7 @@ export type BuildAutoDjFirePlanInput = {
   detectedBpm: number | null
   sliderPlaybackRate: number
   hasIncomingReady: boolean
+  preArmLocked?: boolean
 }
 
 export type BuildAutoDjFirePlanResult = {
@@ -404,6 +421,7 @@ export function buildAutoDjFirePlan(
     detectedBpm,
     sliderPlaybackRate,
     hasIncomingReady,
+    preArmLocked,
   } = input
 
   const remainAfterOut = Math.max(0.5, liveDurationSec - outMarker - 0.05)
@@ -510,6 +528,7 @@ export function buildAutoDjFirePlan(
     hasIncomingReady,
     plannedOverlapSec: fresh.mixDurationSec,
     exactOverlapSec: plannedMixDur,
+    preArmLocked: preArmLocked ?? true,
     // BeatSync without an armed buffer → hard hold / TempoSync fallback (no soft smash).
     requireIncomingReady: phraseMix.syncMode === 'beat-sync',
   })
@@ -517,14 +536,23 @@ export function buildAutoDjFirePlan(
 
   let planOut: MixPlan = { ...fresh, mixDurationSec }
   let gateReason = fireGate.ok ? undefined : fireGate.reason
-  if (!fireGate.ok && phraseMix.syncMode === 'beat-sync' && !hasIncomingReady) {
+  if (
+    phraseMix.syncMode === 'beat-sync' &&
+    (!hasIncomingReady || preArmLocked === false)
+  ) {
     // Degrade this fire only — keep phase unlocked so we don't smash.
     planOut = {
       ...planOut,
       holdBeatmatch: false,
-      reason: `${planOut.reason} · TempoSync (incoming not armed)`,
+      reason: `${planOut.reason} · TempoSync (${
+        !hasIncomingReady ? 'incoming not armed' : 'phase unlock timeout'
+      })`,
     }
-    gateReason = fireGate.reason || 'BeatSync blocked — incoming not armed'
+    gateReason =
+      gateReason ||
+      (!hasIncomingReady
+        ? 'BeatSync blocked — incoming not armed'
+        : 'BeatSync blocked — phase not locked')
   }
 
   return {

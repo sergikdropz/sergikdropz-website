@@ -401,13 +401,13 @@ export const DEFAULT_PHASE_METER_OPTIONS: PhaseMeterOptions = {
   showPhrases: false,
   phraseBars: 8,
   showMs: false,
-  jogFeel: 'coarse',
-  jogSensitivity: 4,
+  jogFeel: 'normal',
+  jogSensitivity: 1.25,
   centerSnap: true,
   quantize: 'phrase',
 }
 
-export const PHASE_METER_STORAGE_KEY = 'sergik.phaseMeterOptions.v1'
+export const PHASE_METER_STORAGE_KEY = 'sergik.phaseMeterOptions.v2'
 
 export const PHASE_METER_JOG_FEEL_OPTIONS: {
   id: PhaseMeterJogFeel
@@ -415,8 +415,8 @@ export const PHASE_METER_JOG_FEEL_OPTIONS: {
   hint: string
 }[] = [
   { id: 'fine', label: 'Fine', hint: 'Long stroke — sub-ms trims' },
-  { id: 'normal', label: 'Normal', hint: 'Balanced jog' },
-  { id: 'coarse', label: 'Coarse', hint: 'Default — faster phase moves' },
+  { id: 'normal', label: 'Normal', hint: 'Default — CDJ-like jog' },
+  { id: 'coarse', label: 'Coarse', hint: 'Faster phase moves' },
 ]
 
 /** Discrete scroll-length presets (multiplier on wheel/drag gear). */
@@ -426,13 +426,13 @@ export const PHASE_METER_JOG_SENSITIVITY_OPTIONS: {
 }[] = [
   { value: 0.5, label: '50% · longer' },
   { value: 0.75, label: '75%' },
-  { value: 1, label: '100%' },
+  { value: 1, label: '100% · default' },
   { value: 1.25, label: '125%' },
   { value: 1.5, label: '150%' },
   { value: 2, label: '200%' },
   { value: 2.5, label: '250%' },
   { value: 3, label: '300%' },
-  { value: 4, label: '400% · default' },
+  { value: 4, label: '400%' },
   { value: 5, label: '500% · shorter' },
 ]
 

@@ -3,6 +3,7 @@ import {
   phraseBoundarySec,
   phraseIndexAt,
   phrasePhaseErrorSec,
+  fusePhraseBeatError,
   incomingCueAtOutgoingPhrase,
   incomingTimeAfterPhraseSeek,
   snapToFileStartPhrase,
@@ -100,5 +101,21 @@ describe('analyzePhraseSections', () => {
     expect(sections.introEndPhrase).toBeLessThanOrEqual(sections.dropPhrase)
     // Phrase lattice from 0
     expect(sections.dropStartSec % 16).toBeCloseTo(0, 5)
+  })
+
+  it('fuses large phrase error with beat pocket for chase', () => {
+    const beat = 0.5
+    // On-phrase → beat wins
+    expect(
+      fusePhraseBeatError({ beatPhaseSec: 0.02, phrasePhaseSec: 0.04, beatSec: beat }),
+    ).toBeCloseTo(0.02, 5)
+    // Off-phrase cell → blend toward phrase
+    const fused = fusePhraseBeatError({
+      beatPhaseSec: 0.01,
+      phrasePhaseSec: 0.8,
+      beatSec: beat,
+    })
+    expect(Math.abs(fused)).toBeGreaterThan(0.2)
+    expect(Math.abs(fused)).toBeLessThanOrEqual(beat * 1.5)
   })
 })

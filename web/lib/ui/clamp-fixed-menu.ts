@@ -11,8 +11,12 @@ export type ClampedFixedMenuStyle = {
   zIndex: number
 }
 
-/** Above player chrome (~10050) and admin dock menus (~11100). */
-let nextPopupMenuZIndex = 12000
+/**
+ * Above player chrome (~10050), admin dock (~11100), and player/modals (~15000).
+ * Menus must also portal to document.body so they are not trapped under album
+ * stacking contexts (overflow-hidden + z-[1]).
+ */
+let nextPopupMenuZIndex = 16000
 
 export function allocatePopupMenuZIndex(): number {
   nextPopupMenuZIndex += 1
@@ -24,7 +28,7 @@ export function clampFixedMenuStyle(
   y: number,
   size: FixedMenuSize,
   pad = 8,
-  zIndex = 12000,
+  zIndex = 16000,
 ): ClampedFixedMenuStyle {
   if (typeof window === 'undefined') {
     return { left: x, top: y, maxHeight: Math.max(80, size.height), zIndex }

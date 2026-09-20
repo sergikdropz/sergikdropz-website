@@ -19,8 +19,12 @@ export type BlendSnapshot = {
   idleTrackId?: string | null
   /** |incoming media − cue| at fire. */
   cueDeltaSec?: number
+  /** Max |cueDeltaSec| allowed when preArmLocked (default PRE_AUDIBLE_LOCK_SEC). */
+  maxCueDeltaSec?: number
   /** When true, fire from preArm requires an armed/running incoming buffer. */
   requireIncomingReady?: boolean
+  /** When true, fire requires preArmLocked. */
+  requirePreArmLocked?: boolean
 }
 
 export type BlendInvariantResult = {
@@ -60,10 +64,16 @@ export function assertInvariant(snapshot: BlendSnapshot): BlendInvariantResult {
     if (snapshot.requireIncomingReady && !snapshot.hasIncomingReady) {
       return { ok: false, reason: 'incoming buffer not ready' }
     }
+    if (snapshot.requirePreArmLocked && !snapshot.preArmLocked) {
+      return { ok: false, reason: 'pre-arm phase not locked' }
+    }
     if (
       snapshot.preArmLocked &&
       typeof snapshot.cueDeltaSec === 'number' &&
-      Math.abs(snapshot.cueDeltaSec) > PRE_AUDIBLE_LOCK_SEC
+      Math.abs(snapshot.cueDeltaSec) >
+        (typeof snapshot.maxCueDeltaSec === 'number' && snapshot.maxCueDeltaSec > 0
+          ? snapshot.maxCueDeltaSec
+          : PRE_AUDIBLE_LOCK_SEC)
     ) {
       return { ok: false, reason: 'pre-arm lock would be rewritten' }
     }
@@ -92,7 +102,17 @@ export function assertInvariant(snapshot: BlendSnapshot): BlendInvariantResult {
 /** Fire from preArm only when the incoming BufferSource is armed or running. */
 export function canEnterFire(
   from: BlendStage,
-  snapshot: Pick<BlendSnapshot, 'hasIncomingReady' | 'preArmLocked' | 'cueDeltaSec'>,
+  snapshot: Pick<
+    BlendSnapshot,
+    | 'hasIncomingReady'
+    | 'preArmLocked'
+    | 'cueDeltaSec'
+    | 'maxCueDeltaSec'
+    | 'requireIncomingReady'
+    | 'requirePreArmLocked'
+    | 'activeTrackId'
+    | 'idleTrackId'
+  >,
 ): BlendInvariantResult {
   if (!canEnter(from, 'fire')) {
     return { ok: false, reason: `cannot enter fire from ${from}` }
@@ -102,7 +122,11 @@ export function canEnterFire(
     preArmLocked: snapshot.preArmLocked,
     hasIncomingReady: snapshot.hasIncomingReady,
     cueDeltaSec: snapshot.cueDeltaSec,
-    requireIncomingReady: from === 'preArm',
+    maxCueDeltaSec: snapshot.maxCueDeltaSec,
+    requireIncomingReady: snapshot.requireIncomingReady ?? from === 'preArm',
+    requirePreArmLocked: snapshot.requirePreArmLocked,
+    activeTrackId: snapshot.activeTrackId,
+    idleTrackId: snapshot.idleTrackId,
   })
 }
 

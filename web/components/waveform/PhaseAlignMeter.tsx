@@ -3,16 +3,14 @@
 import { memo, useEffect, useRef } from 'react'
 import {
   DEFAULT_PHASE_METER_OPTIONS,
-  localGridPhaseErrorSec,
   paintPhaseAlignStrip,
   resolvePhaseMeterWindowBeats,
   type PhaseMeterOptions,
 } from '@/lib/audio/waveform-overlays'
 import {
-  phaseDragPixels,
-  phaseNudgeSecFromPixels,
+  phasePlatterBendMultiplier,
+  phaseWheelBendMultiplier,
   phaseWheelPixels,
-  snapPhaseJogDelta,
   type PhaseNudgePolarity,
 } from '@/lib/ui/phase-meter-wheel'
 
@@ -29,11 +27,17 @@ export type PhaseAlignMeterProps = {
   /** Live grid offset (sec); falls back to offsetSec prop when omitted. */
   readOffsetSec?: () => number
   /**
-   * How offset nudges move the displayed error: +1 live sync master, −1 idle/grid.
-   * Used for magnetic center snap.
+   * How platter seek moves the displayed error: +1 live sync master, −1 idle.
+   * Kept for API compatibility with align/center helpers on the host.
    */
   nudgePolarity?: PhaseNudgePolarity
-  onPhaseNudge?: (deltaSec: number) => void
+  /**
+   * CDJ outer-platter bend: temporary playbackRate multiplier (1 = neutral).
+   * Host applies `baseRate * multiplier` — never seek/stop the platter.
+   */
+  onPlatterBend?: (rateMultiplier: number) => void
+  /** True while the DJ is dragging / wheeling this strip (host pauses BeatSync + settles rate). */
+  onJogActiveChange?: (active: boolean) => void
   /** Double-click: snap this deck's playhead to the menu quantize lattice. */
   onAlignPlayhead?: () => void
   /** Optional alternate lock (set downbeat) — unused when onAlignPlayhead is set. */
@@ -42,8 +46,12 @@ export type PhaseAlignMeterProps = {
 }
 
 /**
- * CDJ-style phase / grid-align strip — painted independently of WaveformStage
+ * CDJ-style phase / sync strip — painted independently of WaveformStage
  * so it can sit above the mixer crossfader at full chrome width.
+ *
+ * Jog = outer platter rim: temporary pitch bend from finger velocity.
+ * The media clock never seeks/stops mid-gesture; rate returns to base on release.
+ * Double-click still quantize-aligns the playhead (one discrete seek).
  */
 function PhaseAlignMeter({
   deckLabel,
@@ -54,8 +62,8 @@ function PhaseAlignMeter({
   readTimeSec,
   readPhaseErrorSec,
   readOffsetSec,
-  nudgePolarity = -1,
-  onPhaseNudge,
+  onPlatterBend,
+  onJogActiveChange,
   onAlignPlayhead,
   onPhaseLock,
   className = '',
@@ -77,21 +85,28 @@ function PhaseAlignMeter({
   readTimeRef.current = readTimeSec
   const readPhaseRef = useRef(readPhaseErrorSec)
   readPhaseRef.current = readPhaseErrorSec
-  const polarityRef = useRef<PhaseNudgePolarity>(nudgePolarity)
-  polarityRef.current = nudgePolarity
-  const onNudgeRef = useRef(onPhaseNudge)
-  onNudgeRef.current = onPhaseNudge
+  const onBendRef = useRef(onPlatterBend)
+  onBendRef.current = onPlatterBend
+  const onJogActiveRef = useRef(onJogActiveChange)
+  onJogActiveRef.current = onJogActiveChange
   const onAlignRef = useRef(onAlignPlayhead)
   onAlignRef.current = onAlignPlayhead
   const onLockRef = useRef(onPhaseLock)
   onLockRef.current = onPhaseLock
   const dragRef = useRef<{
     lastX: number
+    lastTs: number
     width: number
-    bpm: number
-    windowBeats: number
   } | null>(null)
   const sizeRef = useRef({ width: 0, height: 0, dpr: 1 })
+  const jogActiveRef = useRef(false)
+  const paintUrgentRef = useRef(false)
+  const bendRafRef = useRef(0)
+  const pendingBendRef = useRef(1)
+  const lastBendRef = useRef(1)
+  const coastRafRef = useRef(0)
+  /** Last spin velocity (mult − 1) for CDJ-style coast on release. */
+  const coastVelRef = useRef(0)
 
   const liveOffsetSec = () => {
     const read = readOffsetRef.current
@@ -102,37 +117,97 @@ function PhaseAlignMeter({
     return offsetRef.current
   }
 
-  const applyJogNudge = (pixels: number, widthPx: number, windowBeats: number, stageBpm: number) => {
-    const nudge = onNudgeRef.current
-    if (!nudge || !pixels) return
-    const rawDelta = phaseNudgeSecFromPixels({
-      pixels,
-      widthPx,
-      windowBeats,
-      bpm: stageBpm,
-    })
-    if (!rawDelta) return
-    const opts = optionsRef.current
-    if (!opts.centerSnap) {
-      nudge(rawDelta)
+  const setJogActive = (active: boolean) => {
+    if (jogActiveRef.current === active) return
+    jogActiveRef.current = active
+    paintUrgentRef.current = active
+    try {
+      onJogActiveRef.current?.(active)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const flushBend = () => {
+    bendRafRef.current = 0
+    const next = pendingBendRef.current
+    if (Math.abs(next - lastBendRef.current) < 0.00015) return
+    lastBendRef.current = next
+    try {
+      onBendRef.current?.(next)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const queueBend = (multiplier: number) => {
+    const m =
+      typeof multiplier === 'number' && Number.isFinite(multiplier) && multiplier > 0
+        ? multiplier
+        : 1
+    pendingBendRef.current = m
+    if (bendRafRef.current) return
+    bendRafRef.current = requestAnimationFrame(flushBend)
+  }
+
+  const settleBend = () => {
+    pendingBendRef.current = 1
+    lastBendRef.current = 1
+    coastVelRef.current = 0
+    if (bendRafRef.current) {
+      cancelAnimationFrame(bendRafRef.current)
+      bendRafRef.current = 0
+    }
+    if (coastRafRef.current) {
+      cancelAnimationFrame(coastRafRef.current)
+      coastRafRef.current = 0
+    }
+    try {
+      onBendRef.current?.(1)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** CDJ rim inertia — ease bend toward 1 over ~200ms instead of a hard stop. */
+  const coastBendToNeutral = () => {
+    if (coastRafRef.current) {
+      cancelAnimationFrame(coastRafRef.current)
+      coastRafRef.current = 0
+    }
+    let bend = lastBendRef.current
+    // Seed from last applied bend; if already near 1, finish immediately.
+    if (Math.abs(bend - 1) < 0.002) {
+      settleBend()
+      setJogActive(false)
       return
     }
-    const peer = typeof readPhaseRef.current === 'function' ? readPhaseRef.current() : null
-    const syncing = typeof peer === 'number' && Number.isFinite(peer)
-    const { deltaSec } = snapPhaseJogDelta({
-      errSec: syncing
-        ? peer
-        : localGridPhaseErrorSec({
-            currentTimeSec: readTimeRef.current(),
-            bpm: stageBpm,
-            offsetSec: liveOffsetSec(),
-          }),
-      deltaSec: rawDelta,
-      bpm: stageBpm,
-      // Local grid and idle sync: offset↑ lowers err. Live sync master: offset↑ raises err.
-      polarity: syncing ? polarityRef.current : -1,
-    })
-    if (deltaSec) nudge(deltaSec)
+    const step = () => {
+      bend = 1 + (bend - 1) * 0.78
+      if (Math.abs(bend - 1) < 0.0018) {
+        coastRafRef.current = 0
+        settleBend()
+        setJogActive(false)
+        return
+      }
+      queueBend(bend)
+      coastRafRef.current = requestAnimationFrame(step)
+    }
+    coastRafRef.current = requestAnimationFrame(step)
+  }
+
+  const endDrag = (pointerId?: number) => {
+    const el = wrapRef.current
+    if (el != null && pointerId != null && el.hasPointerCapture?.(pointerId)) {
+      try {
+        el.releasePointerCapture(pointerId)
+      } catch {
+        /* ignore */
+      }
+    }
+    dragRef.current = null
+    // Keep jogActive true during coast so BeatSync stays paused until settle.
+    coastBendToNeutral()
   }
 
   useEffect(() => {
@@ -157,6 +232,9 @@ function PhaseAlignMeter({
   }, [])
 
   useEffect(() => {
+    let lastPaintMs = 0
+    const idleMinMs = 33
+
     const paint = () => {
       const canvas = canvasRef.current
       const wrap = wrapRef.current
@@ -198,30 +276,43 @@ function PhaseAlignMeter({
         const alignHint =
           q === 'off' ? 'double-click disabled (quantize off)' : `double-click to align playhead · ${q}`
         wrap.title = painted.locked
-          ? `${painted.mode === 'sync' ? 'Sync' : 'Grid'} locked — ${alignHint}`
-          : `${painted.mode === 'sync' ? 'Sync' : 'Grid'} ${ms >= 0 ? '+' : ''}${ms.toFixed(0)} ms — jog to nudge · snaps to center · ${alignHint}`
+          ? `${painted.mode === 'sync' ? 'Sync' : 'Grid'} locked — spin edge to nudge · ${alignHint}`
+          : `${painted.mode === 'sync' ? 'Sync' : 'Grid'} ${ms >= 0 ? '+' : ''}${ms.toFixed(0)} ms — platter-edge bend · ${alignHint}`
+        wrap.setAttribute('aria-valuenow', String(Math.round(ms)))
       }
     }
 
-    const tick = () => {
-      paint()
+    const tick = (now: number) => {
+      const urgent = paintUrgentRef.current || Boolean(dragRef.current)
+      const minMs = urgent ? 0 : idleMinMs
+      if (now - lastPaintMs >= minMs) {
+        lastPaintMs = now
+        paint()
+      }
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
     return () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
+      if (bendRafRef.current) {
+        cancelAnimationFrame(bendRafRef.current)
+        bendRafRef.current = 0
+      }
+      if (coastRafRef.current) {
+        cancelAnimationFrame(coastRafRef.current)
+        coastRafRef.current = 0
+      }
     }
   }, [])
 
-  const nudgeable = Boolean(onPhaseNudge) && bpm != null && bpm > 0
+  const bendable = Boolean(onPlatterBend) && bpm != null && bpm > 0
 
   useEffect(() => {
     const el = wrapRef.current
-    if (!el || !nudgeable) return
+    if (!el || !bendable) return
+    let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null
     const onWheel = (e: WheelEvent) => {
-      const stageBpm = bpmRef.current
-      if (!stageBpm || stageBpm <= 0) return
       const pixels = phaseWheelPixels({
         deltaX: e.deltaX,
         deltaY: e.deltaY,
@@ -231,24 +322,34 @@ function PhaseAlignMeter({
         feel: optionsRef.current.jogFeel,
         sensitivity: optionsRef.current.jogSensitivity,
       })
-      // Always claim the wheel while hovering — this strip is a jog, not a scroll lane.
       e.preventDefault()
       e.stopPropagation()
       if (!pixels) return
-      applyJogNudge(
-        pixels,
-        Math.max(1, el.getBoundingClientRect().width),
-        resolvePhaseMeterWindowBeats(
-          optionsRef.current.windowId,
-          beatsPerBarRef.current,
-          optionsRef.current.phraseBars,
-        ),
-        stageBpm,
+      if (coastRafRef.current) {
+        cancelAnimationFrame(coastRafRef.current)
+        coastRafRef.current = 0
+      }
+      setJogActive(true)
+      if (wheelIdleTimer) clearTimeout(wheelIdleTimer)
+      wheelIdleTimer = setTimeout(() => {
+        coastBendToNeutral()
+      }, 90)
+      const width = Math.max(1, el.getBoundingClientRect().width)
+      queueBend(
+        phaseWheelBendMultiplier({
+          pixels,
+          widthPx: width,
+          feel: optionsRef.current.jogFeel,
+          sensitivity: optionsRef.current.jogSensitivity,
+        }),
       )
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [nudgeable])
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      if (wheelIdleTimer) clearTimeout(wheelIdleTimer)
+    }
+  }, [bendable])
 
   if (bpm == null || !(bpm > 0)) return null
 
@@ -256,9 +357,9 @@ function PhaseAlignMeter({
     <div
       ref={wrapRef}
       className={`relative h-5 w-full shrink-0 overflow-hidden rounded-sm border border-gray-800/80 bg-black ${
-        onPhaseNudge ? 'cursor-ew-resize touch-none' : ''
+        onPlatterBend ? 'cursor-ew-resize touch-none' : ''
       } ${className}`}
-      title="Phase / grid align — jog to nudge · snaps to center · double-click aligns playhead to quantize · right-click for options"
+      title="Phase / sync — spin like CDJ platter edge (temporary pitch bend) · release returns to tempo · double-click aligns playhead"
       data-phase-meter={deckLabel.toLowerCase()}
       role="slider"
       aria-label={`Deck ${deckLabel} beat phase alignment`}
@@ -267,51 +368,52 @@ function PhaseAlignMeter({
       aria-valuenow={0}
       onPointerDown={(e) => {
         if (e.button !== 0) return
-        if (!onNudgeRef.current || !bpm || bpm <= 0) return
+        if (!onBendRef.current || !bpm || bpm <= 0) return
         e.preventDefault()
         e.stopPropagation()
         const el = wrapRef.current
         if (!el) return
         el.setPointerCapture(e.pointerId)
+        setJogActive(true)
         dragRef.current = {
           lastX: e.clientX,
+          lastTs: e.timeStamp || performance.now(),
           width: Math.max(1, el.getBoundingClientRect().width),
-          bpm,
-          windowBeats: resolvePhaseMeterWindowBeats(
-            optionsRef.current.windowId,
-            beatsPerBar,
-            optionsRef.current.phraseBars,
-          ),
         }
       }}
       onPointerMove={(e) => {
         const drag = dragRef.current
         if (!drag) return
+        const now = e.timeStamp || performance.now()
         const dx = e.clientX - drag.lastX
-        if (Math.abs(dx) < 0.5) return
+        const dt = Math.max(1, now - drag.lastTs)
         drag.lastX = e.clientX
-        applyJogNudge(
-          phaseDragPixels(
-            dx,
-            optionsRef.current.jogFeel,
-            optionsRef.current.jogSensitivity,
-          ),
-          drag.width,
-          drag.windowBeats,
-          drag.bpm,
+        drag.lastTs = now
+        // Stationary finger → settle bend (platter rim stops spinning).
+        if (Math.abs(dx) < 0.75) {
+          queueBend(1)
+          return
+        }
+        queueBend(
+          phasePlatterBendMultiplier({
+            deltaPx: dx,
+            dtMs: dt,
+            widthPx: drag.width,
+            feel: optionsRef.current.jogFeel,
+            sensitivity: optionsRef.current.jogSensitivity,
+          }),
         )
       }}
       onPointerUp={(e) => {
-        const el = wrapRef.current
-        try {
-          el?.releasePointerCapture(e.pointerId)
-        } catch {
-          /* ignore */
-        }
-        dragRef.current = null
+        endDrag(e.pointerId)
       }}
-      onPointerCancel={() => {
+      onPointerCancel={(e) => {
+        endDrag(e.pointerId)
+      }}
+      onLostPointerCapture={() => {
+        if (!dragRef.current) return
         dragRef.current = null
+        coastBendToNeutral()
       }}
       onDoubleClick={(e) => {
         e.preventDefault()

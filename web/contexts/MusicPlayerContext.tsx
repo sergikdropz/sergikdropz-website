@@ -185,6 +185,8 @@ interface MusicPlayerContextType {
   isIDJEnabled: boolean
   setIsIDJEnabled: (enabled: boolean) => void
   toggleIDJ: () => void
+  /** Turn off Auto DJ and iDJ and persist — library continuous playback. */
+  resetDjModes: () => void
   /** Right-click Auto DJ settings popup (MusicPlayer portal). */
   autoDJSettingsMenu: { x: number; y: number } | null
   openAutoDJSettingsMenu: (pos: { x: number; y: number }) => void
@@ -301,6 +303,11 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     [applyIDJEnabled],
   )
 
+  const resetDjModes = useCallback(() => {
+    applyAutoDJEnabled(false, true)
+    applyIDJEnabled(false, true)
+  }, [applyAutoDJEnabled, applyIDJEnabled])
+
   const openAutoDJSettingsMenu = useCallback((pos: { x: number; y: number }) => {
     setIdjSettingsMenu(null)
     setAutoDJSettingsMenu(pos)
@@ -343,7 +350,13 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         }),
     }
     return () => {
-      delete w.__SERGIK_E2E__
+      // Keep MusicPlayer-attached helpers (__SERGIK_E2E__.idjSnapshot etc.) —
+      // only strip the hooks owned by this effect.
+      const api = w.__SERGIK_E2E__
+      if (!api) return
+      Reflect.deleteProperty(api, 'openAutoDJSettings')
+      Reflect.deleteProperty(api, 'enableIDJ')
+      Reflect.deleteProperty(api, 'openIDJSettings')
     }
   }, [applyIDJEnabled])
 
@@ -453,6 +466,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   }, [currentTrack, queue, currentIndex, currentSource])
 
   const playTrack = useCallback((track: Track, trackQueue?: Track[], source?: PlayerSource) => {
+    // Library / vault play starts continuous queue mode — iDJ would stop at song end.
+    if (isIDJEnabledRef.current) applyIDJEnabled(false, true)
     setSeekTargetSec(null)
     if (trackQueue && trackQueue.length > 0) {
       const index = trackQueue.findIndex(t => t.id === track.id)
@@ -479,7 +494,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         }),
       }).catch(() => {})
     }
-  }, [])
+  }, [applyIDJEnabled])
 
   /** Deck-swap handoff: keep playhead; do not force currentTime 0. */
   const adoptPlayingTrack = useCallback((track: Track, trackQueue: Track[]) => {
@@ -492,6 +507,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   const playQueue = useCallback((trackQueue: Track[], startIndex: number = 0, source?: PlayerSource) => {
     if (trackQueue.length > 0) {
+      if (isIDJEnabledRef.current) applyIDJEnabled(false, true)
       setSeekTargetSec(null)
       setQueue(trackQueue)
       setCurrentIndex(startIndex)
@@ -500,7 +516,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       setIsPlaying(true)
       patchMusicPlayerState({ currentTime: 0 })
     }
-  }, [])
+  }, [applyIDJEnabled])
 
   const addToQueue = useCallback((track: Track) => {
     setQueue(prev => [...prev, track])
@@ -714,6 +730,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       isIDJEnabled,
       setIsIDJEnabled,
       toggleIDJ,
+      resetDjModes,
       autoDJSettingsMenu,
       openAutoDJSettingsMenu,
       closeAutoDJSettingsMenu,
@@ -756,6 +773,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       isIDJEnabled,
       setIsIDJEnabled,
       toggleIDJ,
+      resetDjModes,
       autoDJSettingsMenu,
       openAutoDJSettingsMenu,
       closeAutoDJSettingsMenu,
@@ -822,6 +840,7 @@ export function useMusicPlayer() {
         isIDJEnabled: false,
         setIsIDJEnabled: () => {},
         toggleIDJ: () => {},
+        resetDjModes: () => {},
         autoDJSettingsMenu: null,
         openAutoDJSettingsMenu: () => {},
         closeAutoDJSettingsMenu: () => {},

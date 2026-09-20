@@ -16,16 +16,29 @@ import { buildMixPlan } from './plan-from-dna'
 
 describe('phrase-mix-doctrine', () => {
   it('normalizes overlap to 8 or 16', () => {
-    expect(normalizeDjOverlapBars(2)).toBe(8)
-    expect(normalizeDjOverlapBars(4)).toBe(8)
+    expect(normalizeDjOverlapBars(2)).toBe(4)
+    expect(normalizeDjOverlapBars(4)).toBe(4)
     expect(normalizeDjOverlapBars(8)).toBe(8)
     expect(normalizeDjOverlapBars(16)).toBe(16)
     expect(normalizeDjOverlapBars(32)).toBe(16)
   })
 
-  it('keeps the planned overlap instead of shrinking for a short outro', () => {
+  it('applies pair-memory preferred OUT when not quality-gated', () => {
+    const r = resolvePhraseMixSettings(
+      { ...DEFAULT_AUTO_DJ_CONFIG, outPhraseBars: 8 },
+      { preferredOutPhraseBars: 16 },
+    )
+    expect(r.outPhraseBars).toBe(16)
+    const gated = resolvePhraseMixSettings(
+      { ...DEFAULT_AUTO_DJ_CONFIG, outPhraseBars: 8 },
+      { preferredOutPhraseBars: 16, qualityGate: 'poor', consecutiveWeak: 1 },
+    )
+    expect(gated.outPhraseBars).toBe(8)
+  })
+
+  it('keeps the planned overlap snapped to the N×4 lattice', () => {
     expect(exactOverlapDurationSec(16)).toBe(16)
-    expect(exactOverlapDurationSec(14.8)).toBe(14.8)
+    expect(exactOverlapDurationSec(14.8)).toBe(16)
     expect(exactOverlapDurationSec(0)).toBe(0.25)
   })
 
@@ -40,7 +53,7 @@ describe('phrase-mix-doctrine', () => {
       mixLengthBias: 'long',
     })
     expect(r.inPhraseBars).toBe(8)
-    expect(r.overlapBars).toBe(8)
+    expect(r.overlapBars).toBe(4)
     expect(r.cuePriority).toBe('first-downbeat')
     expect(r.canonicalPhraseCues).toBe(true)
     expect(r.exactOverlap).toBe(true)
@@ -74,7 +87,7 @@ describe('phrase-mix-doctrine', () => {
       { qualityGate: 'poor', consecutiveWeak: 2 },
     )
     expect(r.syncMode).toBe('tempo-sync')
-    expect(r.overlapBars).toBe(8)
+    expect(r.overlapBars).toBe(4)
   })
 
   it('stretches Smooth to 16 bars when ΔBPM is large and not quality-gated', () => {

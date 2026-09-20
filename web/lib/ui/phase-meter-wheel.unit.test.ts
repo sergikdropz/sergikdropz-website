@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   PHASE_DRAG_SCALE,
   PHASE_JOG_SNAP_BEAT_FRAC,
+  PHASE_PLATTER_BEND_MAX,
   PHASE_WHEEL_FINE_SCALE,
   PHASE_WHEEL_MAX_STEP_PX,
   PHASE_WHEEL_SUPERFINE_SCALE,
   centerPhaseDeltaSec,
   phaseDragPixels,
   phaseNudgeSecFromPixels,
+  phaseNudgeToPlatterSeekSec,
+  phasePlatterBendMultiplier,
   phaseWheelPixels,
   snapPhaseJogDelta,
   softPhaseJogPixels,
@@ -40,7 +43,7 @@ describe('phaseWheelPixels', () => {
   })
 
   it('treats shift+wheel as jog on the dominant axis (still inverted)', () => {
-    const soft20 = softPhaseJogPixels(20)
+    const soft20 = softPhaseJogPixels(Math.min(20, PHASE_WHEEL_MAX_STEP_PX))
     expect(phaseWheelPixels({ deltaX: 0, deltaY: 20, shiftKey: true })).toBeCloseTo(
       -soft20 * PHASE_WHEEL_FINE_SCALE,
       6,
@@ -98,6 +101,34 @@ describe('phaseDragPixels', () => {
     const coarse = Math.abs(phaseDragPixels(12, 'coarse'))
     expect(fine).toBeLessThan(normal)
     expect(normal).toBeLessThan(coarse)
+  })
+})
+
+describe('phasePlatterBendMultiplier', () => {
+  it('returns 1 when stationary or invalid', () => {
+    expect(
+      phasePlatterBendMultiplier({ deltaPx: 0, dtMs: 16, widthPx: 400 }),
+    ).toBe(1)
+    expect(
+      phasePlatterBendMultiplier({ deltaPx: 10, dtMs: 0, widthPx: 400 }),
+    ).toBe(1)
+  })
+
+  it('speeds up for rightward drag and slows for leftward', () => {
+    const right = phasePlatterBendMultiplier({
+      deltaPx: 40,
+      dtMs: 16,
+      widthPx: 400,
+    })
+    const left = phasePlatterBendMultiplier({
+      deltaPx: -40,
+      dtMs: 16,
+      widthPx: 400,
+    })
+    expect(right).toBeGreaterThan(1)
+    expect(left).toBeLessThan(1)
+    expect(right - 1).toBeLessThanOrEqual(PHASE_PLATTER_BEND_MAX + 1e-9)
+    expect(1 - left).toBeLessThanOrEqual(PHASE_PLATTER_BEND_MAX + 1e-9)
   })
 })
 
@@ -174,5 +205,24 @@ describe('centerPhaseDeltaSec', () => {
     expect(centerPhaseDeltaSec({ errSec: 0.02, polarity: 1 })).toBeCloseTo(-0.02, 6)
     expect(centerPhaseDeltaSec({ errSec: 0, polarity: -1 })).toBe(0)
     expect(centerPhaseDeltaSec({ errSec: null })).toBe(0)
+  })
+})
+
+describe('phaseNudgeToPlatterSeekSec', () => {
+  it('inverts offset-style nudges into media-time platter seeks', () => {
+    expect(phaseNudgeToPlatterSeekSec(0.02)).toBeCloseTo(-0.02, 8)
+    expect(phaseNudgeToPlatterSeekSec(-0.015)).toBeCloseTo(0.015, 8)
+    expect(phaseNudgeToPlatterSeekSec(0)).toBe(0)
+  })
+
+  it('centers sync error by seeking the opposite of the offset delta', () => {
+    // Idle / local polarity −1: offsetΔ = +err → seek = −err (playhead back).
+    expect(
+      phaseNudgeToPlatterSeekSec(centerPhaseDeltaSec({ errSec: 0.04, polarity: -1 })),
+    ).toBeCloseTo(-0.04, 8)
+    // Live master polarity +1: offsetΔ = −err → seek = +err (playhead forward).
+    expect(
+      phaseNudgeToPlatterSeekSec(centerPhaseDeltaSec({ errSec: 0.04, polarity: 1 })),
+    ).toBeCloseTo(0.04, 8)
   })
 })

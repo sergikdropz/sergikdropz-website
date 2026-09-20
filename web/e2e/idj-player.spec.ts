@@ -5,6 +5,19 @@ test.describe.configure({ timeout: 180_000 })
 async function unlockVault(page: Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem('analytics_consent', 'granted')
+    window.localStorage.setItem('idjEnabled', '0')
+    window.localStorage.setItem('autoDJEnabled', '0')
+    // Songs dblclick with random on starts a 1-track queue — keep full list for deck-next / continuous.
+    try {
+      const raw = window.localStorage.getItem('musicPlayerSettings')
+      const parsed = raw ? JSON.parse(raw) : {}
+      window.localStorage.setItem(
+        'musicPlayerSettings',
+        JSON.stringify({ ...parsed, catalogRandom: false }),
+      )
+    } catch {
+      window.localStorage.setItem('musicPlayerSettings', JSON.stringify({ catalogRandom: false }))
+    }
   })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   const email = `e2e-idj-${Date.now()}@example.com`
@@ -37,17 +50,35 @@ async function playFirstVaultTrack(page: Page) {
   // Catalog can still be hydrating after a cold dev restart.
   await expect(page.getByText(/Loading tracks/i)).toHaveCount(0, { timeout: 90_000 }).catch(() => {})
 
-  // Scope to the table body so the sortable header row can never be the target.
-  const songRows = page.locator('table tbody tr')
-  const preferred = songRows.filter({ hasText: /Dmn8r|FTP 2|One Of Those Nights/i }).first()
-  const trackRow = (await preferred.isVisible().catch(() => false)) ? preferred : songRows.first()
+  // Known vault cuts with solid media (first Songs rows can be unplayable stubs).
+  const trackRow = page.getByRole('row', { name: /Dmn8r|FTP 2|One Of Those Nights/i }).first()
   await expect(trackRow).toBeVisible({ timeout: 90_000 })
   await trackRow.dblclick()
 
+  // __SERGIK_E2E__ can exist from context alone — wait for real player chrome.
   const expand = page.getByRole('button', { name: /^Expand player$/i }).first()
+  const collapse = page.getByRole('button', { name: /^Collapse player$/i }).first()
+  await expect
+    .poll(
+      async () =>
+        (await expand.isVisible().catch(() => false)) ||
+        (await collapse.isVisible().catch(() => false)) ||
+        (await page
+          .getByRole('button', { name: /Enable iDJ|Disable iDJ/i })
+          .first()
+          .isVisible()
+          .catch(() => false)),
+      { timeout: 60_000 },
+    )
+    .toBe(true)
+
   if (await expand.isVisible().catch(() => false)) {
     await expand.click({ force: true })
   }
+
+  await expect(page.getByRole('button', { name: /Enable iDJ|Disable iDJ/i }).first()).toBeVisible({
+    timeout: 60_000,
+  })
 
   await expect
     .poll(
@@ -90,15 +121,15 @@ test.describe('iDJ deck play menu', () => {
       e2e.enableIDJ()
     })
 
-    const deckAPlay = page.locator('[data-deck-play="A"]')
-    const deckBPlay = page.locator('[data-deck-play="B"]')
+    const deckAPlay = page.locator('[data-deck-play="A"]').last()
+    const deckBPlay = page.locator('[data-deck-play="B"]').last()
     await expect(deckAPlay).toBeVisible({ timeout: 30_000 })
     await expect(deckBPlay).toBeVisible()
 
-    const cueB = page.locator('[data-deck-cue="B"]')
+    const cueB = page.locator('[data-deck-cue="B"]').last()
     await expect(cueB).toBeVisible()
     await cueB.click({ button: 'right' })
-    const hotCueMenu = page.getByRole('menu', { name: /Deck B hot cues/i })
+    const hotCueMenu = page.getByRole('menu', { name: /Deck B cue options/i })
     await expect(hotCueMenu).toBeVisible()
     await expect(hotCueMenu.getByRole('menuitem', { name: /Memory \/ SET/i })).toBeVisible()
     await expect(hotCueMenu.getByRole('menuitem', { name: /Hot 1/i })).toBeVisible()
@@ -348,5 +379,283 @@ test.describe('iDJ deck play menu', () => {
     await expect
       .poll(async () => (await snapshot())?.liveId ?? '', { timeout: 15_000 })
       .not.toBe(beforeRealEnd?.liveId ?? '')
+  })
+
+  test('iDJ settings expose Reset DJ modes for library continuous', async ({ page }) => {
+    await unlockVault(page)
+    await playFirstVaultTrack(page)
+
+    await page.evaluate(() => {
+      ;(
+        window as unknown as { __SERGIK_E2E__: { enableIDJ: () => void; openIDJSettings: () => void } }
+      ).__SERGIK_E2E__.enableIDJ()
+    })
+    await expect(page.getByRole('button', { name: /Disable iDJ/i }).first()).toBeVisible({
+      timeout: 15_000,
+    })
+
+    await page.evaluate(() => {
+      ;(
+        window as unknown as { __SERGIK_E2E__: { openIDJSettings: () => void } }
+      ).__SERGIK_E2E__.openIDJSettings()
+    })
+    const menu = page.getByRole('dialog', { name: /iDJ settings/i })
+    await expect(menu).toBeVisible({ timeout: 15_000 })
+    await menu.getByRole('button', { name: /Reset DJ modes/i }).click()
+    await expect(page.getByRole('button', { name: /Enable iDJ/i }).first()).toBeVisible({
+      timeout: 15_000,
+    })
+  })
+})
+
+type ContinuityE2E = {
+  enableIDJ: () => void
+  setPlayerExpanded?: (expanded: boolean) => void
+  isPlayerExpanded?: () => boolean
+  setExpandedMode?: (mode: 'controls' | 'dj') => void
+  getExpandedMode?: () => 'controls' | 'dj'
+  idleDeckPlaying?: () => boolean
+  playIdleDeck?: () => boolean
+  setCueJumpPlay?: (enabled: boolean) => void
+  getCueJumpPlay?: () => boolean
+  probePhaseBendNoSeek?: () => {
+    timeDeltaSec: number
+    bent: number
+    restored: number
+  } | null
+  nowPlaying?: () => {
+    id: string | null
+    isPlaying: boolean
+    paused: boolean
+    time: number | null
+    duration: number | null
+  }
+  idjSnapshot?: () => IdjSnapshot
+  seekLiveNearEnd?: () => boolean
+  fireMediaEnded?: (deck: 'live' | 'idle') => void
+  resetIdjMediaCounters?: () => void
+}
+
+async function enableIdjAndWaitForDecks(page: Page) {
+  await page.evaluate(() => {
+    ;(window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__.enableIDJ()
+  })
+  await page.evaluate(() => {
+    ;(
+      window as unknown as { __SERGIK_E2E__: ContinuityE2E }
+    ).__SERGIK_E2E__.setPlayerExpanded?.(true)
+  })
+  // Compact + full strips both mount — prefer the visible full-size control.
+  const deckAPlay = page.locator('[data-deck-play="A"]').last()
+  await expect(deckAPlay).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-deck-play="B"]').last()).toBeVisible()
+  // Ensure transport intent is playing (HTML may be paused under buffer clock).
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+          return Boolean(e2e.nowPlaying?.()?.id && e2e.nowPlaying?.()?.isPlaying)
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(true)
+  return deckAPlay
+}
+
+test.describe('iDJ set continuity', () => {
+  test('collapse keeps idle hot while live keeps playing', async ({ page }) => {
+    await unlockVault(page)
+    await playFirstVaultTrack(page)
+    await enableIdjAndWaitForDecks(page)
+
+    await page.evaluate(() => {
+      ;(window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__.playIdleDeck?.()
+    })
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () =>
+              (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+                .idleDeckPlaying?.() === true,
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe(true)
+
+    await page.evaluate(() => {
+      ;(window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__.setPlayerExpanded?.(
+        false,
+      )
+    })
+    await page.waitForTimeout(500)
+
+    const afterCollapse = await page.evaluate(() => {
+      const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+      return {
+        expanded: e2e.isPlayerExpanded?.(),
+        idleHot: e2e.idleDeckPlaying?.(),
+        livePlaying: e2e.nowPlaying?.()?.isPlaying,
+      }
+    })
+    expect(afterCollapse.expanded).toBe(false)
+    expect(afterCollapse.idleHot).toBe(true)
+    expect(afterCollapse.livePlaying).toBe(true)
+  })
+
+  test('cue play keeps live rolling; phase bend does not seek', async ({ page }) => {
+    await unlockVault(page)
+    await playFirstVaultTrack(page)
+    await enableIdjAndWaitForDecks(page)
+
+    await page.evaluate(() => {
+      ;(
+        window as unknown as { __SERGIK_E2E__: ContinuityE2E }
+      ).__SERGIK_E2E__.setCueJumpPlay?.(true)
+    })
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () =>
+              (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+                .getCueJumpPlay?.() === true,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(true)
+
+    // Prefer the full strip CUE (compact twin can be CSS-hidden).
+    const cueA = page.locator('[data-deck-cue="A"]').last()
+    await expect(cueA).toBeAttached({ timeout: 30_000 })
+    await cueA.evaluate((el) => {
+      el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }))
+    })
+    const cueMenu = page.locator('[data-deck-hot-cue-menu]').last()
+    await expect(cueMenu).toBeAttached({ timeout: 15_000 })
+    await cueMenu.getByRole('menuitemradio', { name: /Cue play/i }).click({ force: true })
+    await cueMenu.getByRole('menuitem', { name: /Memory \/ SET/i }).click({ force: true })
+    await expect(cueMenu).toHaveCount(0)
+
+    // Advance a bit so SET is not at 0, then launch cue play.
+    await page.waitForTimeout(800)
+    await cueA.click({ force: true })
+    await page.waitForTimeout(300)
+
+    const afterCue = await page.evaluate(() => {
+      const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+      return {
+        isPlaying: e2e.nowPlaying?.()?.isPlaying,
+        cueJumpPlay: e2e.getCueJumpPlay?.(),
+      }
+    })
+    expect(afterCue.cueJumpPlay).toBe(true)
+    expect(afterCue.isPlaying).toBe(true)
+
+    const bend = await page.evaluate(() => {
+      const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+      return e2e.probePhaseBendNoSeek?.()
+    })
+    expect(bend).toBeTruthy()
+    expect(bend!.timeDeltaSec).toBeLessThan(0.05)
+  })
+
+  test('continuous handoff stays within silence budget', async ({ page }) => {
+    await unlockVault(page)
+    await playFirstVaultTrack(page)
+    const deckAPlay = await enableIdjAndWaitForDecks(page)
+
+    // Build a multi-track queue so continuous has a neighbor to promote.
+    const deckANext = page.locator('[data-deck-next="A"]').last()
+    await expect(deckANext).toBeVisible()
+    await expect
+      .poll(async () => !(await deckANext.isDisabled().catch(() => true)), { timeout: 30_000 })
+      .toBe(true)
+    for (let i = 0; i < 2; i += 1) {
+      const beforeId = await page.evaluate(
+        () =>
+          (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__.nowPlaying?.()
+            ?.id ?? '',
+      )
+      await deckANext.click({ force: true })
+      await expect
+        .poll(
+          async () =>
+            page.evaluate(
+              () =>
+                (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__.nowPlaying?.()
+                  ?.id ?? '',
+            ),
+          { timeout: 15_000 },
+        )
+        .not.toBe(beforeId)
+    }
+
+    await deckAPlay.click({ button: 'right' })
+    const deckAMenu = page.getByRole('dialog', { name: /Deck A continuous play/i })
+    await expect(deckAMenu).toBeVisible()
+    await deckAMenu.getByRole('checkbox').check()
+    await expect(deckAPlay).toHaveAttribute('data-continuous-play', 'on')
+    await page.keyboard.press('Escape')
+
+    const snapshot = () =>
+      page.evaluate(() => {
+        const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+        return e2e.idjSnapshot?.() ?? null
+      })
+
+    await expect
+      .poll(async () => {
+        const s = await snapshot()
+        return Boolean(
+          s?.liveId &&
+            s.liveDuration &&
+            s.liveDuration > 1 &&
+            s.armed.live &&
+            !s.skipLocked &&
+            !s.srcSwap,
+        )
+      }, { timeout: 30_000 })
+      .toBe(true)
+    await page.waitForTimeout(1000)
+
+    await page.evaluate(() => {
+      const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+      e2e.resetIdjMediaCounters?.()
+    })
+
+    const before = await snapshot()
+    const startedAt = Date.now()
+    const sought = await page.evaluate(() => {
+      const e2e = (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+      const ok = Boolean(e2e.seekLiveNearEnd?.())
+      if (ok) e2e.fireMediaEnded?.('live')
+      return ok
+    })
+    expect(sought).toBe(true)
+
+    await expect
+      .poll(async () => (await snapshot())?.liveId ?? '', { timeout: 15_000 })
+      .not.toBe(before?.liveId ?? '')
+
+    const elapsedMs = Date.now() - startedAt
+    const after = await snapshot()
+    expect(elapsedMs).toBeLessThan(4_000)
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () =>
+              (window as unknown as { __SERGIK_E2E__: ContinuityE2E }).__SERGIK_E2E__
+                .nowPlaying?.()?.isPlaying === true,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(true)
+    expect(after!.waitings).toBeLessThanOrEqual(3)
+    expect(after!.loadStarts).toBeLessThanOrEqual(3)
   })
 })

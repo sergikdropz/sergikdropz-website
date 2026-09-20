@@ -77,6 +77,126 @@ describe('buildAutoDjTickPlan', () => {
     expect(result!.plan.mixDurationSec).toBeGreaterThan(1)
     expect(result!.delaySeconds).toBeLessThan(60)
   })
+  it('soft-freezes the plan once inside the prepare lead window', () => {
+    const outgoing = track('out')
+    const incoming = track('in')
+    const probe = buildAutoDjTickPlan({
+      config: { ...DEFAULT_AUTO_DJ_CONFIG, enabled: true, syncMode: 'beat-sync' },
+      nowSec: 0,
+      durationSec: 240,
+      outgoing,
+      incoming,
+      outgoingPlaybackRate: 1,
+      outgoingBpm: 128,
+      outgoingGridOffset: 0,
+      incomingGridOffset: 0,
+      leadInSec: 8,
+      lastMixGrade: null,
+      consecutiveWeak: 0,
+      phaseMeterEnabled: false,
+      phaseMeter: { windowId: 'phrase-1', phraseBars: 8 },
+      frozen: null,
+      mixInCueSec: 0,
+      sliderPlaybackRate: 1,
+    })
+    expect(probe).not.toBeNull()
+    const outMarker = probe!.plan.startAtOutgoingSec
+    // Sit 6s before OUT — past soft-freeze (prepare lead) but before hard freeze (4s).
+    const mid = buildAutoDjTickPlan({
+      config: { ...DEFAULT_AUTO_DJ_CONFIG, enabled: true, syncMode: 'beat-sync' },
+      nowSec: outMarker - 6,
+      durationSec: 240,
+      outgoing,
+      incoming,
+      outgoingPlaybackRate: 1,
+      outgoingBpm: 128,
+      outgoingGridOffset: 0,
+      incomingGridOffset: 0,
+      leadInSec: 8,
+      lastMixGrade: null,
+      consecutiveWeak: 0,
+      phaseMeterEnabled: false,
+      phaseMeter: { windowId: 'phrase-1', phraseBars: 8 },
+      frozen: null,
+      mixInCueSec: 0,
+      sliderPlaybackRate: 1,
+    })
+    expect(mid).not.toBeNull()
+    expect(mid!.delaySeconds).toBeGreaterThan(4)
+    expect(mid!.delaySeconds).toBeLessThanOrEqual(Math.max(mid!.effectiveLeadInSec, 4) + 0.5)
+    expect(mid!.frozen).not.toBeNull()
+    expect(mid!.frozen!.incomingId).toBe('in')
+  })
+  it('keeps frozen OUT sticky across later rebuilds', () => {
+    const outgoing = track('out')
+    const incoming = track('in')
+    const probe = buildAutoDjTickPlan({
+      config: { ...DEFAULT_AUTO_DJ_CONFIG, enabled: true, syncMode: 'beat-sync' },
+      nowSec: 0,
+      durationSec: 240,
+      outgoing,
+      incoming,
+      outgoingPlaybackRate: 1,
+      outgoingBpm: 128,
+      outgoingGridOffset: 0,
+      incomingGridOffset: 0,
+      leadInSec: 8,
+      lastMixGrade: null,
+      consecutiveWeak: 0,
+      phaseMeterEnabled: false,
+      phaseMeter: { windowId: 'phrase-1', phraseBars: 8 },
+      frozen: null,
+      mixInCueSec: 0,
+      sliderPlaybackRate: 1,
+    })
+    expect(probe).not.toBeNull()
+    const outMarker = probe!.plan.startAtOutgoingSec
+    const first = buildAutoDjTickPlan({
+      config: { ...DEFAULT_AUTO_DJ_CONFIG, enabled: true, syncMode: 'beat-sync' },
+      nowSec: outMarker - 6,
+      durationSec: 240,
+      outgoing,
+      incoming,
+      outgoingPlaybackRate: 1,
+      outgoingBpm: 128,
+      outgoingGridOffset: 0,
+      incomingGridOffset: 0,
+      leadInSec: 8,
+      lastMixGrade: null,
+      consecutiveWeak: 0,
+      phaseMeterEnabled: false,
+      phaseMeter: { windowId: 'phrase-1', phraseBars: 8 },
+      frozen: null,
+      mixInCueSec: 0,
+      sliderPlaybackRate: 1,
+    })
+    expect(first).not.toBeNull()
+    expect(first!.frozen).not.toBeNull()
+    const frozenOut = first!.frozen!.plan.startAtOutgoingSec
+
+    const later = buildAutoDjTickPlan({
+      config: { ...DEFAULT_AUTO_DJ_CONFIG, enabled: true, syncMode: 'beat-sync' },
+      nowSec: frozenOut - 3,
+      durationSec: 240,
+      outgoing,
+      incoming,
+      outgoingPlaybackRate: 1.02,
+      outgoingBpm: 128,
+      outgoingGridOffset: 0,
+      incomingGridOffset: 0,
+      leadInSec: 8,
+      lastMixGrade: null,
+      consecutiveWeak: 0,
+      phaseMeterEnabled: false,
+      phaseMeter: { windowId: 'phrase-1', phraseBars: 8 },
+      frozen: first!.frozen,
+      mixInCueSec: 0,
+      sliderPlaybackRate: 1,
+    })
+    expect(later).not.toBeNull()
+    expect(later!.plan.startAtOutgoingSec).toBe(frozenOut)
+    expect(later!.frozen!.plan.startAtOutgoingSec).toBe(frozenOut)
+  })
 })
 
 describe('buildAutoDjFirePlan', () => {

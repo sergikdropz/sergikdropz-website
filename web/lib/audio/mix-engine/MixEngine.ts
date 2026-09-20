@@ -8,26 +8,35 @@
 
 import {
   applySoftTail,
-  equalPowerGains,
   intelligentDeckMixAtProgress,
   styleMixGains,
   type FilterMixEqGains,
 } from './curves'
 import { echoSendAtProgress, handoffSettleMs } from './blend-smooth'
+import {
+  DEFAULT_BLEND_AUTOMATION,
+  type BlendAutomation,
+} from './blend-automation'
 import { deckFiltersAtProgress, type DeckFilterState } from './filters'
 import { buildMixIntelligence, type MixIntelligence } from './mix-intelligence'
+import { emptyMixScorecard, type MixScorecard } from './mix-scorecard'
 import { ALIGN_PHRASE_BARS } from './plan-from-dna'
+import { fusePhraseBeatError, phrasePhaseErrorSec } from './phrase-lattice'
 import {
   applyVinylBendToDeckRates,
   beatPhaseErrorSec,
+  DUAL_ALIGN_SEEK_MAX_SEC,
   filterPhaseErrorSec,
   gridAlignSeekDelta,
   phaseChaseStrength,
   settleVinylBend,
   smoothVinylBend,
   vinylBendTickInterval,
+  VINYL_BEND_BLEND_WINDOW,
+  VINYL_BEND_DEADBAND_SEC,
+  OVERLAP_PHASE_LOCK_STREAK,
 } from './sync'
-import { solveAlignmentState } from './alignment'
+import { solveAlignmentState, resolveFireIncomingCue } from './alignment'
 import {
   createDriftAlignState,
   driftAlignRate,
@@ -52,6 +61,7 @@ import {
   integrateMediaSec,
   sampleOverlapClock,
   snapshotIntegratedMedia,
+  followHeardMedia,
 } from './overlap-clock'
 import {
   resolvePreAudibleNudge,
@@ -70,7 +80,9 @@ import {
   computeTempoCrossfadePlan,
   configureKeyLock,
   masterDeckRatesAt,
+  shouldNotifyMixUiRate,
   TEMPO_RATE_WRITE_EPSILON,
+  TEMPO_GLIDE_SOFT_KNEE,
 } from './tempo'
 import {
   incomingBufferMediaTime,
@@ -126,13 +138,22 @@ export class MixEngine {
   private status: MixEngineStatus = 'idle'
   private listeners = new Set<Listener>()
   private fadeRaf: number | null = null
+  /** Hidden-tab fallback — rAF throttles and would freeze the overlap. */
+  private mixTimer: ReturnType<typeof setTimeout> | null = null
   private playheadRaf: number | null = null
+  private playheadTimer: ReturnType<typeof setTimeout> | null = null
   private deferredPauseTimer: ReturnType<typeof setTimeout> | null = null
   private handoffSettleTimer: ReturnType<typeof setTimeout> | null = null
   /** True from mix finish until outgoing fader/EQ settle completes. */
   private handoffSettling = false
   private mixLock = false
+  /** Bumps when a mix is aborted so late rAF / settle timers cannot resolve. */
+  private mixGeneration = 0
+  private mixResolve: ((ok: boolean) => void) | null = null
   private masterVolume = 1
+  /** Last channel fader pair (0–1, pre-master). Volume must not snap these. */
+  private faderA = 1
+  private faderB = 0
   private gainA: GainNode | null = null
   private gainB: GainNode | null = null
   private sourceA: MediaElementAudioSourceNode | null = null
@@ -165,8 +186,12 @@ export class MixEngine {
   }
   private deckRates: Record<DeckId, number> = { a: 1, b: 1 }
   private keyLock = true
+  /** Per-deck MASTER TEMPO (preservesPitch). Defaults on. */
+  private deckKeyLock: Record<DeckId, boolean> = { a: true, b: true }
   private sumNode: GainNode | null = null
   private compressor: DynamicsCompressorNode | null = null
+  /** Post-compressor bus — listener volume, independent of XF / mixLock. */
+  private masterGain: GainNode | null = null
   private compressorMode: 'smooth' | 'punch' = 'smooth'
   private delayNode: DelayNode | null = null
   private delayFeedback: GainNode | null = null
@@ -180,12 +205,25 @@ export class MixEngine {
   private pendingIncomingBuffer: AudioBuffer | null = null
   /** Last pre-arm nudge reported a lock — do not re-solve/restart at OUT. */
   private idlePreArmLocked = false
+  /** performance.now() when preArm stage entered (scorecard). */
+  private preArmEnteredAt: number | null = null
+  /** performance.now() of first idle pre-arm lock this arm cycle. */
+  private preArmLockedAt: number | null = null
+  /** Outside-mix dual-platter align latch (snap + hold until error reopens). */
+  private outsideAlignLocked = false
+  private outsideAlignStreak = 0
+  /** Rate-limit BufferSource tear-down seeks (recreate clicks). */
+  private lastBufferSeekAt: Record<DeckId, number> = { a: 0, b: 0 }
   private blendStage: BlendStage = 'idle'
   private pendingBlendPlan: MixPlan | null = null
   /** Last user XF (0 = all A, 1 = all B). Null = Auto DJ / live-only gains. */
   private lastManualXf: number | null = null
   /** When true, user owns deck gains even during Auto DJ mixLock. */
   private manualXfOverride = false
+  /** User overlap gain/EQ curves (Smooth + manual XF). */
+  private blendAutomation: BlendAutomation = { ...DEFAULT_BLEND_AUTOMATION }
+  /** UI sync when a mix tick did not pass its own onDeckEq (manual XF). */
+  private deckEqListener: ((deck: DeckId, gains: FilterMixEqGains) => void) | null = null
   private deckBuffer: Record<
     DeckId,
     {
@@ -205,10 +243,26 @@ export class MixEngine {
   }
 
   /** Enable key-lock (tempo w/o vinyl pitch) on both decks. */
-  setKeyLock(enabled: boolean) {
+  setKeyLock(enabled: boolean, deck?: DeckId) {
+    if (deck === 'a' || deck === 'b') {
+      this.deckKeyLock[deck] = enabled
+      this.keyLock = this.deckKeyLock.a || this.deckKeyLock.b
+      // Mid-blend stretcher flush fights MixEngine rates — apply after handoff.
+      if (this.mixLock) return
+      configureKeyLock(deck === 'a' ? this.deckA : this.deckB, enabled)
+      return
+    }
     this.keyLock = enabled
+    this.deckKeyLock.a = enabled
+    this.deckKeyLock.b = enabled
+    if (this.mixLock) return
     configureKeyLock(this.deckA, enabled)
     configureKeyLock(this.deckB, enabled)
+  }
+
+  isKeyLockEnabled(deck?: DeckId): boolean {
+    if (deck === 'a' || deck === 'b') return this.deckKeyLock[deck]
+    return this.keyLock
   }
 
   /** Decode-ahead buffer for sample-accurate incoming start on the shared clock. */
@@ -234,6 +288,14 @@ export class MixEngine {
   private tryEnterStage(next: BlendStage): boolean {
     if (this.blendStage === next) return true
     if (!canEnter(this.blendStage, next)) return false
+    if (next === 'preArm' && this.blendStage !== 'preArm') {
+      this.preArmEnteredAt = performance.now()
+      this.preArmLockedAt = null
+    }
+    if (next === 'idle' || next === 'handoff') {
+      this.preArmEnteredAt = null
+      this.preArmLockedAt = null
+    }
     this.blendStage = next
     return true
   }
@@ -243,6 +305,15 @@ export class MixEngine {
     this.blendStage = 'idle'
     this.pendingBlendPlan = null
     this.idlePreArmLocked = false
+    this.preArmEnteredAt = null
+    this.preArmLockedAt = null
+  }
+
+  private markIdlePreArmLocked(locked: boolean) {
+    this.idlePreArmLocked = locked
+    if (locked && this.preArmLockedAt == null) {
+      this.preArmLockedAt = performance.now()
+    }
   }
 
   enterPlan(plan?: MixPlan | null): boolean {
@@ -263,7 +334,7 @@ export class MixEngine {
     url: string,
     rate?: number,
   ): Promise<boolean> {
-    if (this.mixLock || this.blendStage === 'overlap' || this.blendStage === 'fire') {
+    if (this.mixLock || this.handoffSettling || this.blendStage === 'overlap' || this.blendStage === 'fire') {
       return false
     }
     if (this.blendStage === 'handoff' && !this.tryEnterStage('plan')) return false
@@ -279,10 +350,52 @@ export class MixEngine {
   }
 
   canEnterFire(): boolean {
+    return this.fireGateSnapshot().ok
+  }
+
+  /** True when idle deck phase sits inside the pre-audible lock window. */
+  isIdlePreArmLocked(): boolean {
+    return this.idlePreArmLocked
+  }
+
+  /** Drop pre-arm lock (e.g. after OUT phrase-delay) so nudge can re-lock. */
+  clearIdlePreArmLock(): void {
+    this.idlePreArmLocked = false
+  }
+
+  /** Live |idle media − planned cue| for fire-gate / HUD. */
+  measureIdleCueDeltaSec(plan?: MixPlan | null): number {
+    const use = plan ?? this.pendingBlendPlan
+    if (!use) return 0
+    const plannedCue =
+      typeof use.resolvedIncomingSec === 'number' && Number.isFinite(use.resolvedIncomingSec)
+        ? use.resolvedIncomingSec
+        : use.incomingStartSec
+    const media = this.incomingMediaTime(this.getIdleElement())
+    return media - Math.max(0, plannedCue)
+  }
+
+  private fireGateSnapshot(plan?: MixPlan | null) {
+    const use = plan ?? this.pendingBlendPlan
+    const idle = this.getIdleTrack()
+    const outBpm =
+      resolvePlaybackBpm(this.getActiveTrack() ?? {}, this.getActiveTrack()?.bpm) ??
+      this.getActiveTrack()?.bpm ??
+      120
+    const halfBeat = (60 / Math.max(60, outBpm)) * 0.5
+    const cueDeltaSec = this.measureIdleCueDeltaSec(use)
+    const beatSync = use?.holdBeatmatch !== false
     return canEnterFire(this.blendStage, {
       hasIncomingReady: this.hasIncomingReady(),
       preArmLocked: this.idlePreArmLocked,
-    }).ok
+      cueDeltaSec: this.idlePreArmLocked ? cueDeltaSec : undefined,
+      maxCueDeltaSec: halfBeat,
+      requireIncomingReady: this.blendStage === 'preArm' || beatSync,
+      // BeatSync: require real pre-arm lock. TempoSync / unlock degrade may fire without.
+      requirePreArmLocked: beatSync && this.blendStage === 'preArm',
+      activeTrackId: this.getActiveTrack()?.id ?? null,
+      idleTrackId: idle?.id ?? null,
+    })
   }
 
   async enterFire(
@@ -292,10 +405,7 @@ export class MixEngine {
   ): Promise<boolean> {
     const use = plan ?? this.pendingBlendPlan
     if (!use) return false
-    const gate = canEnterFire(this.blendStage, {
-      hasIncomingReady: this.hasIncomingReady(),
-      preArmLocked: this.idlePreArmLocked,
-    })
+    const gate = this.fireGateSnapshot(use)
     if (!gate.ok) return false
     if (!this.tryEnterStage('fire')) return false
     this.pendingBlendPlan = use
@@ -313,10 +423,13 @@ export class MixEngine {
 
   getDeckDuration(deck?: DeckId): number {
     const d = deck ?? this.active
-    const slot = this.deckBuffer[d]
-    if (slot) return slot.buffer.duration
     const el = d === 'a' ? this.deckA : this.deckB
-    return Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0
+    const elDur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0
+    // Prefer the HTML duration — BufferSource length can disagree with the
+    // file, which made ended/skip fire early or never.
+    if (elDur > 0) return elDur
+    const slot = this.deckBuffer[d]
+    return slot ? slot.buffer.duration : 0
   }
 
   stampActiveElementTime() {
@@ -327,11 +440,23 @@ export class MixEngine {
     this.seekDeckMedia(this.active, sec)
   }
 
-  seekDeckMedia(deck: DeckId, sec: number) {
+  seekDeckMedia(deck: DeckId, sec: number, opts?: { force?: boolean }) {
+    // Mid-blend: never seek the on-air deck (waveform scrub / UI fights the mix).
+    if (this.mixLock && !opts?.force && deck === this.active) return
     const el = deck === 'a' ? this.deckA : this.deckB
     const t = Math.max(0, sec)
     const slot = this.deckBuffer[deck]
     if (slot) {
+      const current = this.deckMediaTime(deck, el)
+      const abs = Math.abs(t - current)
+      // Tiny phase nudges — stay on the running BufferSource (no stop/recreate click).
+      if (abs <= PRE_AUDIBLE_LOCK_SEC * 4) return
+      const now = performance.now()
+      // Hysteresis: skip stacked restarts within 100ms unless the jump is large.
+      if (!opts?.force && now - this.lastBufferSeekAt[deck] < 100 && abs < 0.08) {
+        return
+      }
+      this.lastBufferSeekAt[deck] = now
       this.startDeckBuffer(deck, el, slot.buffer, t, this.deckRates[deck])
       this.stampDeckElement(deck)
       return
@@ -379,23 +504,35 @@ export class MixEngine {
     }
   }
 
-  private startPlayheadStamp() {
-    if (this.playheadRaf != null) return
-    const tick = () => {
-      if (!this.deckBuffer[this.active]) {
-        this.playheadRaf = null
-        return
-      }
-      this.stampDeckElement(this.active)
-      this.playheadRaf = requestAnimationFrame(tick)
+  private armPlayheadTick(tick: () => void) {
+    const hidden = typeof document !== 'undefined' && document.hidden
+    if (hidden) {
+      this.playheadTimer = setTimeout(tick, 32)
+      return
     }
     this.playheadRaf = requestAnimationFrame(tick)
+  }
+
+  private startPlayheadStamp() {
+    if (this.playheadRaf != null || this.playheadTimer != null) return
+    const tick = () => {
+      this.playheadRaf = null
+      this.playheadTimer = null
+      if (!this.deckBuffer[this.active]) return
+      this.stampDeckElement(this.active)
+      this.armPlayheadTick(tick)
+    }
+    this.armPlayheadTick(tick)
   }
 
   private stopPlayheadStamp() {
     if (this.playheadRaf != null) {
       cancelAnimationFrame(this.playheadRaf)
       this.playheadRaf = null
+    }
+    if (this.playheadTimer != null) {
+      clearTimeout(this.playheadTimer)
+      this.playheadTimer = null
     }
   }
 
@@ -462,7 +599,24 @@ export class MixEngine {
       paused: false,
     }
     src.onended = () => {
-      if (this.deckBuffer[deck]?.src === src) this.deckBuffer[deck] = null
+      if (this.deckBuffer[deck]?.src !== src) return
+      const media = this.deckMediaTime(deck, el)
+      this.deckBuffer[deck] = null
+      if (deck === this.active) this.stopPlayheadStamp()
+      try {
+        if (Number.isFinite(media) && media >= 0) el.currentTime = media
+      } catch {
+        /* ignore */
+      }
+      // Hand the audible clock back to HTML — otherwise isPlaying + paused
+      // element looks like a freeze and MusicPlayer remounts the graph.
+      if (deck === this.active && this.getActiveTrack() && this.status !== 'mixing') {
+        try {
+          if (el.paused) void el.play().catch(() => {})
+        } catch {
+          /* ignore */
+        }
+      }
     }
     return true
   }
@@ -476,7 +630,14 @@ export class MixEngine {
     const existing = this.deckBuffer[deck]
     if (existing) {
       const t = this.deckMediaTime(deck, incoming)
-      if (Math.abs(t - cue) <= PRE_AUDIBLE_LOCK_SEC) return true
+      if (Math.abs(t - cue) <= PRE_AUDIBLE_LOCK_SEC) {
+        try {
+          incoming.pause()
+        } catch {
+          /* already on the buffer clock */
+        }
+        return true
+      }
       return this.startDeckBuffer(deck, incoming, existing.buffer, cue, rate)
     }
     const buffer = this.pendingIncomingBuffer
@@ -527,6 +688,14 @@ export class MixEngine {
     const ok = this.startDeckBuffer(deck, el, slot.buffer, slot.mediaSec, this.deckRates[deck])
     if (ok) this.startPlayheadStamp()
     return ok
+  }
+
+  /** Stop a running idle BufferSource so iDJ pause cannot leave a ghost copy. */
+  pauseIdleClock(): boolean {
+    const idle: DeckId = this.active === 'a' ? 'b' : 'a'
+    if (!this.deckBuffer[idle]) return false
+    this.stopDeckBuffer(idle)
+    return true
   }
 
   private disposeIncomingBuffer(opts?: { resumeElement?: HTMLAudioElement; deck?: DeckId }) {
@@ -604,7 +773,7 @@ export class MixEngine {
     }
   ): number {
     const applied = applyDeckTempo(el, targetRate, {
-      keyLock: this.keyLock,
+      keyLock: this.deckKeyLock[deck],
       currentRate: this.deckRates[deck],
       instant: opts?.instant,
       slew: opts?.slew,
@@ -615,7 +784,10 @@ export class MixEngine {
     const slot = this.deckBuffer[deck]
     if (slot?.src) {
       try {
-        slot.src.playbackRate.value = applied
+        // Same epsilon as HTML — every BufferSource rate write is audible at 60fps.
+        if (Math.abs(slot.src.playbackRate.value - applied) >= TEMPO_RATE_WRITE_EPSILON) {
+          slot.src.playbackRate.value = applied
+        }
       } catch {
         /* ignore */
       }
@@ -675,12 +847,28 @@ export class MixEngine {
     }
     this.active = deck
     if (!this.mixLock) {
+      // The deck that just took the track was often still on element.volume.
+      // Capture it into the EQ chain before the fader move, or the dials
+      // keep writing filters the speakers never hear.
+      this.ensureDeckChain('a')
+      this.ensureDeckChain('b')
       this.applyDeckGains(deck === 'a' ? 1 : 0, deck === 'b' ? 1 : 0, { instant: true })
+      this.applyDeckEq(deck, this.deckUserEq[deck], { instant: true })
     }
+    this.emit({
+      type: 'active-deck',
+      deck: this.active,
+      trackId: this.getActiveTrack()?.id ?? null,
+    })
   }
 
   isMixing() {
     return this.mixLock || this.handoffSettling || this.status === 'mixing'
+  }
+
+  /** Outside-mix BeatSync latch — skip dual seeks until error reopens. */
+  isOutsideAlignLocked() {
+    return this.outsideAlignLocked
   }
 
   getActiveElement(): HTMLAudioElement {
@@ -707,33 +895,56 @@ export class MixEngine {
 
   setMasterVolume(v: number) {
     this.masterVolume = Math.max(0, Math.min(1, v))
-    if (!this.mixLock) {
-      const instant = this.handoffSettling
-      if (this.lastManualXf != null) {
-        const { a, b } = equalPowerGains(this.lastManualXf)
-        this.applyDeckGains(a, b, instant ? { instant: true } : undefined)
+    this.writeMasterGain()
+    // Re-scale the current XF / mix faders. Never snap to 1/0 — that unmutes
+    // a parked deck and sounds like a second copy when volume comes back up.
+    this.applyDeckGains(this.faderA, this.faderB, { instant: true })
+  }
+
+  /** True once a MixEngine bus owns the speakers (MES / masterGain). */
+  hasAudibleGraph(): boolean {
+    return !!(this.masterGain || this.sourceA || this.sourceB || this.externalGainA)
+  }
+
+  private writeMasterGain() {
+    const gain = this.masterGain
+    if (!gain) return
+    const ctx = this.ctx
+    const param = gain.gain
+    try {
+      if (ctx && typeof param.setValueAtTime === 'function') {
+        param.cancelScheduledValues?.(ctx.currentTime)
+        param.setValueAtTime(this.masterVolume, ctx.currentTime)
         return
       }
-      // Scale both channel faders without resetting crossfader position:
-      // active channel full, silent channel stays at 0 (both decks still "on")
-      this.applyDeckGains(
-        this.active === 'a' ? 1 : 0,
-        this.active === 'b' ? 1 : 0,
-        instant ? { instant: true } : undefined,
-      )
+    } catch {
+      /* fall through */
     }
+    param.value = this.masterVolume
+  }
+
+  setBlendAutomation(curve: BlendAutomation) {
+    this.blendAutomation = curve
+  }
+
+  setDeckEqListener(fn: ((deck: DeckId, gains: FilterMixEqGains) => void) | null) {
+    this.deckEqListener = fn
   }
 
   /**
-   * Manual crossfader. 0 = all A, 1 = all B (equal-power).
+   * Manual crossfader. 0 = all A, 1 = all B.
+   * Volume only — EQ dials stay independent. Gain law follows the user curve.
    * Blocked during Auto DJ blend unless {@link setManualXfOverride} is on.
    */
-  setManualCrossfade(progress: number, opts?: { instant?: boolean }) {
-    if (this.mixLock && !this.manualXfOverride) return
+  setManualCrossfade(progress: number, opts?: { instant?: boolean }): boolean {
+    if (this.mixLock && !this.manualXfOverride) return false
     const p = Math.max(0, Math.min(1, progress))
     this.lastManualXf = p
-    const { a, b } = equalPowerGains(p)
+    this.ensureDeckChain('a')
+    this.ensureDeckChain('b')
+    const { a, b } = styleMixGains('crossfade', p, undefined, this.blendAutomation)
     this.applyDeckGains(a, b, { instant: opts?.instant !== false, tau: 0.018 })
+    return this.hasMixerControls() || this.deckChainAttached.a || this.deckChainAttached.b
   }
 
   /**
@@ -775,11 +986,28 @@ export class MixEngine {
    * Routes deck A through the same internal HPF/LPF/EQ/gain chain as deck B.
    */
   adoptExternalSourceA(source: MediaElementAudioSourceNode | null) {
+    if (source && source === this.sourceA && this.deckChainAttached.a) return
+    // MES chain owns deck A EQ/gain — drop the legacy external-gain bypass.
+    this.externalGainA = null
     this.externalSourceA = source
     if (source) {
       this.sourceA = source
       this.deckChainAttached.a = false
     }
+  }
+
+  /** True when a deck's MES is wired through MixEngine EQ → channel gain. */
+  isDeckChainLive(deck: DeckId): boolean {
+    return this.deckChainAttached[deck]
+  }
+
+  /** Mixer bus can own the speakers (not raw HTML / orphan fallback). */
+  hasMixerControls(): boolean {
+    return !!(
+      this.masterGain &&
+      ((this.deckChainAttached.a && (this.sourceA || this.externalSourceA)) ||
+        (this.deckChainAttached.b && this.sourceB))
+    )
   }
 
   /** Visualization tap — post-EQ, not in the audible output path. */
@@ -898,6 +1126,57 @@ export class MixEngine {
     this.applyDeckFilters('b', open, opts)
   }
 
+  /**
+   * Put a deck's media element through HPF → EQ → channel gain.
+   * Deck A is wired at graph attach; the other platter often is not, so the
+   * first time it becomes the live track its audio skips the EQ filters.
+   */
+  private ensureDeckChain(deck: DeckId): boolean {
+    const ctx = (this.ctx ?? this.externalGainA?.context) as AudioContext | null
+    if (!ctx || typeof ctx.createGain !== 'function') return this.deckChainAttached[deck]
+    this.ctx = ctx
+    try {
+      if (!this.gainA) this.gainA = ctx.createGain()
+      if (!this.gainB) this.gainB = ctx.createGain()
+      if (!this.eqLowA) this.createDeckEq(ctx, 'a')
+      if (!this.eqLowB) this.createDeckEq(ctx, 'b')
+      if (!this.hpfA) this.createDeckFilters(ctx, 'a')
+      if (!this.hpfB) this.createDeckFilters(ctx, 'b')
+      this.ensureMasterBus(ctx)
+    } catch {
+      return false
+    }
+
+    if (deck === 'a') {
+      if (!this.sourceA && !this.externalSourceA) {
+        try {
+          this.sourceA = ctx.createMediaElementSource(this.deckA)
+        } catch {
+          this.sourceA = null
+        }
+      }
+      const source = this.sourceA
+      if (source && this.gainA && !this.externalGainA && !this.deckChainAttached.a) {
+        this.connectDeckChain(source, 'a', this.gainA, ctx)
+      }
+      if (this.deckChainAttached.a) this.deckA.volume = 1
+      return this.deckChainAttached.a
+    }
+
+    if (!this.sourceB) {
+      try {
+        this.sourceB = ctx.createMediaElementSource(this.deckB)
+      } catch {
+        this.sourceB = null
+      }
+    }
+    if (this.sourceB && this.gainB && !this.deckChainAttached.b) {
+      this.connectDeckChain(this.sourceB, 'b', this.gainB, ctx)
+    }
+    if (this.deckChainAttached.b) this.deckB.volume = 1
+    return this.deckChainAttached.b
+  }
+
   private connectDeckChain(
     source: MediaElementAudioSourceNode,
     deck: DeckId,
@@ -961,22 +1240,40 @@ export class MixEngine {
     if (this.externalGainA) {
       ok = this.rewireExternalGainToBus() || ok
     }
-    // Ensure active deck is audible after reconnect.
-    if (this.active === 'a') this.applyDeckGains(1, 0, { instant: true })
-    else this.applyDeckGains(0, 1, { instant: true })
+    this.writeMasterGain()
+    if (this.lastManualXf != null) {
+      const { a, b } = styleMixGains('crossfade', this.lastManualXf, undefined, this.blendAutomation)
+      this.applyDeckGains(a, b, { instant: true })
+    } else {
+      this.applyDeckGains(this.faderA, this.faderB, { instant: true })
+    }
     return ok
   }
 
   private ensureMasterBus(ctx: AudioContext) {
-    if (this.sumNode && this.compressor) return
-    const sum = ctx.createGain()
-    sum.gain.value = 1
-    const comp = ctx.createDynamicsCompressor()
-    this.sumNode = sum
-    this.compressor = comp
-    this.applyMasterCompressor(this.compressorMode)
-    sum.connect(comp)
-    comp.connect(ctx.destination)
+    if (!this.sumNode) {
+      const sum = ctx.createGain()
+      sum.gain.value = 1
+      this.sumNode = sum
+    }
+    if (!this.compressor) {
+      const comp = ctx.createDynamicsCompressor()
+      this.compressor = comp
+      this.applyMasterCompressor(this.compressorMode)
+      this.sumNode.connect(comp)
+    }
+    if (!this.masterGain) {
+      const master = ctx.createGain()
+      master.gain.value = this.masterVolume
+      this.masterGain = master
+      try {
+        this.compressor.disconnect()
+      } catch {
+        /* first wire */
+      }
+      this.compressor.connect(master)
+      master.connect(ctx.destination)
+    }
     this.ensureDelaySend(ctx)
   }
 
@@ -1234,54 +1531,70 @@ export class MixEngine {
       : { low: this.eqLowB, mid: this.eqMidB, high: this.eqHighB }
   }
 
+  /** Media element, adopted source, or a running buffer — anything feeding this deck's EQ. */
+  private deckFeedsEq(deck: DeckId): boolean {
+    if (this.deckBuffer[deck]) return true
+    return deck === 'a'
+      ? !!(this.sourceA || this.externalSourceA)
+      : !!this.sourceB
+  }
+
+  /**
+   * Biquad gain writes. Always cancel first and land with setValueAtTime.
+   * A lingering setTargetAtTime keeps approaching its old target forever, so
+   * assigning `.value` from the EQ dials does not change what you hear.
+   */
+  private writeEqGain(param: AudioParam, db: number) {
+    const clamped = Math.max(-40, Math.min(12, db))
+    const ctx = this.ctx
+    const now = ctx && Number.isFinite(ctx.currentTime) ? ctx.currentTime : 0
+    try {
+      param.cancelScheduledValues(now)
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (typeof param.setValueAtTime === 'function') {
+        param.setValueAtTime(clamped, now)
+      }
+    } catch {
+      /* ignore */
+    }
+    param.value = clamped
+  }
+
   private applyDeckEq(
     deck: DeckId,
     gains: FilterMixEqGains,
-    opts?: StartTransitionOptions
+    opts?: StartTransitionOptions & { instant?: boolean }
   ) {
-    const clampDb = (n: number) => Math.max(-40, Math.min(12, n))
-    // Deck A often uses MusicPlayer's external graph (ThreeBandEQ)
-    if (deck === 'a' && this.externalGainA) {
-      try {
-        opts?.onDeckEq?.(deck, gains)
-      } catch {
-        /* ignore */
-      }
+    // Legacy externalGainA skips MixEngine EQ — only when no MES chain exists.
+    if (deck === 'a' && this.externalGainA && !this.sourceA && !this.externalSourceA) {
+      this.notifyDeckEq(deck, gains, opts)
       return
     }
     const nodes = this.getDeckEqNodes(deck)
-    const hasSource =
-      deck === 'a'
-        ? !!(this.sourceA || this.externalSourceA)
-        : !!this.sourceB
-    if (nodes.low && nodes.mid && nodes.high && hasSource) {
-      const ctx = this.ctx
-      const rampDb = (param: AudioParam, db: number) => {
-        const clamped = clampDb(db)
-        if (ctx && typeof param.setTargetAtTime === 'function') {
-          const t = ctx.currentTime
-          param.cancelScheduledValues(t)
-          param.setTargetAtTime(clamped, t, 0.012)
-        } else {
-          param.value = clamped
-        }
-      }
+    if (nodes.low && nodes.mid && nodes.high && this.deckFeedsEq(deck)) {
       try {
-        rampDb(nodes.low.gain, gains.low)
-        rampDb(nodes.mid.gain, gains.mid)
-        rampDb(nodes.high.gain, gains.high)
+        this.writeEqGain(nodes.low.gain, gains.low)
+        this.writeEqGain(nodes.mid.gain, gains.mid)
+        this.writeEqGain(nodes.high.gain, gains.high)
       } catch {
         /* ignore */
       }
-      try {
-        opts?.onDeckEq?.(deck, gains)
-      } catch {
-        /* ignore */
-      }
+      this.notifyDeckEq(deck, gains, opts)
       return
     }
+    this.notifyDeckEq(deck, gains, opts)
+  }
+
+  private notifyDeckEq(
+    deck: DeckId,
+    gains: FilterMixEqGains,
+    opts?: StartTransitionOptions,
+  ) {
     try {
-      opts?.onDeckEq?.(deck, gains)
+      ;(opts?.onDeckEq ?? this.deckEqListener)?.(deck, gains)
     } catch {
       /* ignore */
     }
@@ -1373,6 +1686,10 @@ export class MixEngine {
     }
     if (this.deckBuffer[idleDeck]) return
     try {
+      // Without MES, element volume is the only mute — keep warm-up silent.
+      if (!this.sourceA && !this.sourceB && !this.externalGainA) {
+        el.volume = 0
+      }
       if (el.paused) void el.play().catch(() => {})
     } catch {
       /* mix start will retry */
@@ -1383,6 +1700,7 @@ export class MixEngine {
    * Nudge the silent incoming deck onto the live master phase.
    * Call every Auto DJ tick after warmIdle — never parkIdleAtCue after this
    * (park pauses and throws the lock away).
+   * Idle-only seeks: never move the on-air outgoing deck during Auto DJ prepare.
    */
   nudgeIdleToMaster(params: {
     outgoingTimeSec: number
@@ -1419,53 +1737,8 @@ export class MixEngine {
         /* autoplay */
       }
     }
-    const inT = this.incomingMediaTime(incoming)
-    const phaseErrSec = measurePairPhaseErr({
-      outgoingTimeSec: params.outgoingTimeSec,
-      outgoingBpm: params.outgoingBpm,
-      outgoingOffsetSec: params.outgoingOffsetSec,
-      incomingTimeSec: inT,
-      incomingBpm: params.incomingBpm,
-      incomingOffsetSec: params.incomingOffsetSec,
-    })
 
-    // Phase-meter lattice: snap idle onto outgoing beat / bar / phrase before vinyl chase.
-    if (params.gridAlign) {
-      const gridDelta = gridAlignSeekDelta({
-        outgoingTimeSec: params.outgoingTimeSec,
-        outgoingBpm: params.outgoingBpm,
-        outgoingOffsetSec: params.outgoingOffsetSec ?? undefined,
-        incomingTimeSec: inT,
-        incomingBpm: params.incomingBpm,
-        incomingOffsetSec: params.incomingOffsetSec ?? undefined,
-        grid: params.gridAlign,
-        phraseBars: params.gridPhraseBars,
-        beatsPerBar: params.beatsPerBar,
-      })
-      if (Math.abs(gridDelta) > PRE_AUDIBLE_LOCK_SEC) {
-        const nextSec = Math.max(0, inT - gridDelta)
-        const slot = this.deckBuffer[idleDeck]
-        if (slot) {
-          this.startDeckBuffer(idleDeck, incoming, slot.buffer, nextSec, this.deckRates[idleDeck])
-        } else {
-          try {
-            incoming.currentTime = nextSec
-          } catch {
-            /* ignore */
-          }
-        }
-        this.idlePreArmLocked = true
-        return { phaseErrSec: 0, locked: true }
-      }
-    }
-
-    const nudge = resolvePreAudibleNudge({
-      phaseErrSec,
-      bpm: params.outgoingBpm,
-      silent: true,
-    })
-    if (nudge.seekDeltaSec != null) {
-      const nextSec = Math.max(0, inT - nudge.seekDeltaSec)
+    const seekIdle = (nextSec: number) => {
       const slot = this.deckBuffer[idleDeck]
       if (slot) {
         this.startDeckBuffer(idleDeck, incoming, slot.buffer, nextSec, this.deckRates[idleDeck])
@@ -1476,8 +1749,107 @@ export class MixEngine {
           /* ignore */
         }
       }
-      this.idlePreArmLocked = true
-      return { phaseErrSec: 0, locked: true }
+    }
+
+    const remeasure = (): number => {
+      const inNow = this.incomingMediaTime(incoming)
+      const beatErr = measurePairPhaseErr({
+        outgoingTimeSec: params.outgoingTimeSec,
+        outgoingBpm: params.outgoingBpm,
+        outgoingOffsetSec: params.outgoingOffsetSec,
+        incomingTimeSec: inNow,
+        incomingBpm: params.incomingBpm,
+        incomingOffsetSec: params.incomingOffsetSec,
+      })
+      if (params.gridAlign === 'phrase' || params.gridAlign === 'bar') {
+        const phraseBars =
+          typeof params.gridPhraseBars === 'number' && params.gridPhraseBars > 0
+            ? params.gridPhraseBars
+            : ALIGN_PHRASE_BARS
+        const phraseErr = phrasePhaseErrorSec({
+          outgoingTimeSec: params.outgoingTimeSec,
+          outgoingBpm: params.outgoingBpm,
+          outgoingOffsetSec: params.outgoingOffsetSec,
+          incomingTimeSec: inNow,
+          incomingBpm: params.incomingBpm,
+          incomingOffsetSec: params.incomingOffsetSec,
+          phraseBars,
+        })
+        const beatSec = 60 / Math.max(60, params.outgoingBpm)
+        return fusePhraseBeatError({
+          beatPhaseSec: beatErr,
+          phrasePhaseSec: phraseErr,
+          beatSec,
+        })
+      }
+      return beatErr
+    }
+
+    let inT = this.incomingMediaTime(incoming)
+    let phaseErrSec = remeasure()
+
+    // Phrase / bar: full correction onto idle only (never seek outgoing).
+    const phraseBars =
+      typeof params.gridPhraseBars === 'number' && params.gridPhraseBars > 0
+        ? params.gridPhraseBars
+        : ALIGN_PHRASE_BARS
+    if (params.gridAlign === 'phrase' || params.gridAlign === 'bar') {
+      if (Math.abs(phaseErrSec) > PRE_AUDIBLE_LOCK_SEC * 4) {
+        const beatSec = 60 / Math.max(60, params.outgoingBpm)
+        const maxAbs = Math.min(0.12, beatSec * 0.9)
+        // Positive phaseErr ⇒ incoming ahead ⇒ seek backward (inT − err). Same
+        // polarity as gridAlignSeekDelta / resolvePreAudibleNudge.
+        const delta = Math.max(-maxAbs, Math.min(maxAbs, phaseErrSec))
+        seekIdle(Math.max(0, inT - delta))
+        phaseErrSec = remeasure()
+        this.markIdlePreArmLocked(Math.abs(phaseErrSec) <= PRE_AUDIBLE_LOCK_SEC)
+        return {
+          phaseErrSec: this.idlePreArmLocked ? 0 : phaseErrSec,
+          locked: this.idlePreArmLocked,
+        }
+      }
+    }
+
+    // Phase-meter lattice: snap idle onto outgoing beat / bar / phrase.
+    if (params.gridAlign) {
+      inT = this.incomingMediaTime(incoming)
+      const gridDelta = gridAlignSeekDelta({
+        outgoingTimeSec: params.outgoingTimeSec,
+        outgoingBpm: params.outgoingBpm,
+        outgoingOffsetSec: params.outgoingOffsetSec ?? undefined,
+        incomingTimeSec: inT,
+        incomingBpm: params.incomingBpm,
+        incomingOffsetSec: params.incomingOffsetSec ?? undefined,
+        grid: params.gridAlign,
+        phraseBars: params.gridPhraseBars ?? phraseBars,
+        beatsPerBar: params.beatsPerBar,
+      })
+      if (Math.abs(gridDelta) > PRE_AUDIBLE_LOCK_SEC) {
+        seekIdle(Math.max(0, inT - gridDelta))
+        phaseErrSec = remeasure()
+        this.markIdlePreArmLocked(Math.abs(phaseErrSec) <= PRE_AUDIBLE_LOCK_SEC)
+        return {
+          phaseErrSec: this.idlePreArmLocked ? 0 : phaseErrSec,
+          locked: this.idlePreArmLocked,
+        }
+      }
+    }
+
+    phaseErrSec = remeasure()
+    const nudge = resolvePreAudibleNudge({
+      phaseErrSec,
+      bpm: params.outgoingBpm,
+      silent: true,
+    })
+    if (nudge.seekDeltaSec != null) {
+      inT = this.incomingMediaTime(incoming)
+      seekIdle(Math.max(0, inT - nudge.seekDeltaSec))
+      phaseErrSec = remeasure()
+      this.markIdlePreArmLocked(Math.abs(phaseErrSec) <= PRE_AUDIBLE_LOCK_SEC)
+      return {
+        phaseErrSec: this.idlePreArmLocked ? 0 : phaseErrSec,
+        locked: this.idlePreArmLocked,
+      }
     }
     if (nudge.bendMultiplier !== 1) {
       const base =
@@ -1489,19 +1861,107 @@ export class MixEngine {
         notify: false,
       })
     }
-    this.idlePreArmLocked = nudge.locked
-    return { phaseErrSec: nudge.phaseErrSec, locked: nudge.locked }
+    this.markIdlePreArmLocked(Math.abs(phaseErrSec) <= PRE_AUDIBLE_LOCK_SEC || nudge.locked)
+    return { phaseErrSec, locked: this.idlePreArmLocked }
+  }
+
+  /**
+   * Outside-mix BeatSync: smoothly nudge *both* deck playheads toward shared
+   * beat + phrase alignment. Uses small dual platter seeks (no grid rewrite).
+   */
+  smoothAlignPlayingDecks(params: {
+    outgoingBpm: number
+    incomingBpm: number
+    outgoingOffsetSec?: number | null
+    incomingOffsetSec?: number | null
+    phraseBars?: number
+    /** When true, idle may be silent — still nudge live + idle media clocks. */
+    allowSilentIdle?: boolean
+  }): { errorSec: number; adjusted: boolean; locked?: boolean } {
+    if (this.mixLock || this.handoffSettling || this.status === 'mixing') {
+      this.outsideAlignLocked = false
+      this.outsideAlignStreak = 0
+      return { errorSec: 0, adjusted: false, locked: false }
+    }
+    const outBpm = params.outgoingBpm > 0 ? params.outgoingBpm : 0
+    const inBpm = params.incomingBpm > 0 ? params.incomingBpm : 0
+    if (!(outBpm > 0) || !(inBpm > 0)) return { errorSec: 0, adjusted: false }
+
+    const outDeck: DeckId = this.active
+    const inDeck: DeckId = outDeck === 'a' ? 'b' : 'a'
+    const outEl = outDeck === 'a' ? this.deckA : this.deckB
+    const inEl = inDeck === 'a' ? this.deckA : this.deckB
+    if (outEl.paused) return { errorSec: 0, adjusted: false }
+    if (inEl.paused && !params.allowSilentIdle && !this.deckBuffer[inDeck]) {
+      return { errorSec: 0, adjusted: false }
+    }
+
+    const outT = this.getDeckMediaTime(outDeck)
+    const inT = this.getDeckMediaTime(inDeck)
+    const beatSec = 60 / outBpm
+    const phraseBars =
+      typeof params.phraseBars === 'number' && params.phraseBars > 0
+        ? params.phraseBars
+        : ALIGN_PHRASE_BARS
+    const beatErr = beatPhaseErrorSec({
+      outgoingTimeSec: outT,
+      outgoingBpm: outBpm,
+      outgoingOffsetSec: params.outgoingOffsetSec ?? undefined,
+      incomingTimeSec: inT,
+      incomingBpm: inBpm,
+      incomingOffsetSec: params.incomingOffsetSec ?? undefined,
+    })
+    const phraseErr = phrasePhaseErrorSec({
+      outgoingTimeSec: outT,
+      outgoingBpm: outBpm,
+      outgoingOffsetSec: params.outgoingOffsetSec,
+      incomingTimeSec: inT,
+      incomingBpm: inBpm,
+      incomingOffsetSec: params.incomingOffsetSec,
+      phraseBars,
+    })
+    const errorSec = fusePhraseBeatError({
+      beatPhaseSec: beatErr,
+      phrasePhaseSec: phraseErr,
+      beatSec,
+    })
+    const absErr = Math.abs(errorSec)
+    if (absErr <= VINYL_BEND_DEADBAND_SEC) {
+      this.outsideAlignStreak += 1
+      if (this.outsideAlignStreak >= OVERLAP_PHASE_LOCK_STREAK) {
+        this.outsideAlignLocked = true
+      }
+      return { errorSec, adjusted: false, locked: this.outsideAlignLocked }
+    }
+
+    // Reopen only on a large walk — stay locked through small jitter.
+    if (this.outsideAlignLocked && absErr <= beatSec * 0.45) {
+      return { errorSec, adjusted: false, locked: true }
+    }
+    this.outsideAlignLocked = false
+    this.outsideAlignStreak = 0
+
+    // Idle-only doctrine: never seek the on-air platter (live micro-skips).
+    const max = DUAL_ALIGN_SEEK_MAX_SEC
+    const inDeltaSec = Math.max(-max, Math.min(max, -errorSec))
+    if (!inDeltaSec) return { errorSec, adjusted: false, locked: false }
+
+    this.seekDeckMedia(inDeck, Math.max(0, inT + inDeltaSec))
+    return { errorSec, adjusted: true, locked: false }
   }
 
   /** Set tempo on a specific deck (key-lock when enabled). */
   setDeckPlaybackRate(
     deck: DeckId,
     rate: number,
-    opts?: { instant?: boolean; notify?: boolean },
+    opts?: { instant?: boolean; notify?: boolean; slew?: number },
   ): number {
+    // Mid-blend the shared master owns both decks — user/UI writes thrash the mix.
+    if (this.mixLock) return this.deckRates[deck]
     const el = deck === 'a' ? this.deckA : this.deckB
     return this.setDeckTempo(deck, el, rate, {
       instant: opts?.instant,
+      slew: opts?.slew,
       notify: opts?.notify,
     })
   }
@@ -1525,39 +1985,45 @@ export class MixEngine {
   setDeckEqGains(
     deck: DeckId,
     gains: FilterMixEqGains,
-    opts?: { instant?: boolean },
+    _opts?: { instant?: boolean },
   ): boolean {
     this.deckUserEq[deck] = { ...gains }
-    if (deck === 'a' && this.externalGainA) return false
-    const nodes = this.getDeckEqNodes(deck)
-    const hasSource =
-      deck === 'a'
-        ? !!(this.sourceA || this.externalSourceA)
-        : !!this.sourceB
-    if (!nodes.low || !nodes.mid || !nodes.high || !hasSource) return false
-    const clampDb = (n: number) => Math.max(-40, Math.min(12, n))
-    const ctx = this.ctx
-    const write = (param: AudioParam, db: number) => {
-      const clamped = clampDb(db)
-      if (opts?.instant || !ctx) {
-        try {
-          param.cancelScheduledValues(ctx?.currentTime ?? 0)
-        } catch {
-          /* ignore */
-        }
-        param.value = clamped
-        return
-      }
-      param.cancelScheduledValues(ctx.currentTime)
-      param.setTargetAtTime(clamped, ctx.currentTime, 0.012)
+    // Mid-blend EQ automation owns the nodes — queue until handoff.
+    // Return false so the strip can retry / flush after the blend.
+    if (this.mixLock) return false
+    // Prefer MixEngine EQ chain. Legacy externalGainA bypasses filters — drop it.
+    if (deck === 'a' && this.externalGainA && !this.sourceA && !this.externalSourceA) {
+      return false
     }
+    if (deck === 'a' && this.externalGainA && (this.sourceA || this.externalSourceA)) {
+      this.externalGainA = null
+    }
+    this.ensureDeckChain(deck)
+    const nodes = this.getDeckEqNodes(deck)
+    if (!nodes.low || !nodes.mid || !nodes.high || !this.deckChainAttached[deck]) return false
     try {
-      write(nodes.low.gain, gains.low)
-      write(nodes.mid.gain, gains.mid)
-      write(nodes.high.gain, gains.high)
+      this.writeEqGain(nodes.low.gain, gains.low)
+      this.writeEqGain(nodes.mid.gain, gains.mid)
+      this.writeEqGain(nodes.high.gain, gains.high)
       return true
     } catch {
       return false
+    }
+  }
+
+  /** Apply stored strip EQ + keylock prefs (post-handoff / mixer recover). */
+  flushUserEq(opts?: { instant?: boolean }) {
+    for (const deck of ['a', 'b'] as DeckId[]) {
+      this.setDeckEqGains(deck, this.deckUserEq[deck], opts)
+      const el = deck === 'a' ? this.deckA : this.deckB
+      const enabled = this.deckKeyLock[deck]
+      configureKeyLock(el, enabled)
+      if (!this.mixLock && !this.hasBufferClock(deck)) {
+        const rate = this.deckRates[deck]
+        if (rate > 0) {
+          this.setDeckTempo(deck, el, rate, { instant: opts?.instant !== false, notify: false })
+        }
+      }
     }
   }
 
@@ -1578,6 +2044,7 @@ export class MixEngine {
   /** Avoid canceling in-flight fader ramps when the blend already landed. */
   private confirmHandoffGains() {
     const vol = this.masterVolume
+    const liveTarget = this.masterGain ? 1 : vol
     const readLiveGain = (): number => {
       if (this.active === 'a') {
         if (this.externalGainA) return this.externalGainA.gain.value
@@ -1587,7 +2054,7 @@ export class MixEngine {
       if (this.gainB) return this.gainB.gain.value
       return this.deckB.volume
     }
-    const settled = readLiveGain() >= vol * 0.88
+    const settled = readLiveGain() >= liveTarget * 0.88
     const opts = settled ? { tau: 0.028 } : { tau: 0.045 }
     if (this.active === 'a') this.applyDeckGains(1, 0, opts)
     else this.applyDeckGains(0, 1, opts)
@@ -1598,6 +2065,19 @@ export class MixEngine {
       cancelAnimationFrame(this.fadeRaf)
       this.fadeRaf = null
     }
+    if (this.mixTimer != null) {
+      clearTimeout(this.mixTimer)
+      this.mixTimer = null
+    }
+  }
+
+  private armMixTick(tick: (now: number) => void) {
+    const hidden = typeof document !== 'undefined' && document.hidden
+    if (hidden) {
+      this.mixTimer = setTimeout(() => tick(performance.now()), 32)
+      return
+    }
+    this.fadeRaf = requestAnimationFrame(tick)
   }
 
   private clearDeferredPause() {
@@ -1641,8 +2121,8 @@ export class MixEngine {
     try {
       if (!this.gainA) this.gainA = ctx.createGain()
       if (!this.gainB) this.gainB = ctx.createGain()
-      this.gainA.gain.value = this.active === 'a' ? 1 : 0
-      this.gainB.gain.value = this.active === 'b' ? 1 : 0
+      this.gainA.gain.value = this.faderA
+      this.gainB.gain.value = this.faderB
 
       if (!this.eqLowA) this.createDeckEq(ctx, 'a')
       if (!this.eqLowB) this.createDeckEq(ctx, 'b')
@@ -1675,10 +2155,13 @@ export class MixEngine {
         this.connectDeckChain(this.sourceB, 'b', this.gainB, ctx)
       }
 
-      // When MES is connected, element.volume is ignored — keep at 1
-      this.deckA.volume = 1
-      this.deckB.volume = 1
+      // When MES is connected, element.volume is ignored — keep at 1 so a
+      // later html-only fallback isn't stuck muted. Master lives on masterGain.
+      this.deckA.volume = this.sourceA || this.externalSourceA ? 1 : this.active === 'a' ? this.masterVolume : 0
+      this.deckB.volume = this.sourceB ? 1 : this.active === 'b' ? this.masterVolume : 0
       if (this.externalGainA) this.rewireExternalGainToBus()
+      this.writeMasterGain()
+      this.applyDeckGains(this.faderA, this.faderB, { instant: true })
       return !!(this.sourceA || this.sourceB || this.externalGainA)
     } catch {
       return false
@@ -1686,50 +2169,91 @@ export class MixEngine {
   }
 
   private applyDeckGains(a: number, b: number, opts?: { instant?: boolean; tau?: number }) {
+    this.faderA = a
+    this.faderB = b
     const vol = this.masterVolume
-    const instant = opts?.instant === true
-    const tau = opts?.tau ?? 0.018
-    const now = !instant
-      ? this.ctx?.currentTime ?? this.externalGainA?.context.currentTime
-      : null
+    // Channel faders stay 0–1 when the master bus owns listener volume.
+    const nodeScale = this.masterGain ? 1 : vol
+    void opts
     const setGain = (gain: GainNode, value: number) => {
-      if (now != null && typeof gain.gain.setTargetAtTime === 'function') {
-        try {
-          // Without cancel, each rAF tick stacks another ramp and the
-          // faders fight themselves — audible as zipper noise during mixes.
-          gain.gain.cancelScheduledValues(now)
-          gain.gain.setTargetAtTime(value, now, tau)
-          return
-        } catch {
-          /* fall through */
-        }
-      }
+      const ctxTime = gain.context?.currentTime
+      const at = Number.isFinite(ctxTime) ? ctxTime : 0
       try {
-        gain.gain.cancelScheduledValues?.(gain.context.currentTime)
+        gain.gain.cancelScheduledValues(at)
+      } catch {
+        /* ignore */
+      }
+      // Land with setValueAtTime. setTargetAtTime keeps owning the param, so
+      // the next crossfader or EQ-side gain write never reaches the speakers.
+      try {
+        if (typeof gain.gain.setValueAtTime === 'function') {
+          gain.gain.setValueAtTime(value, at)
+        }
       } catch {
         /* ignore */
       }
       gain.gain.value = value
     }
 
-    if (this.gainA && this.gainB && this.sourceA && this.sourceB) {
-      setGain(this.gainA, a * vol)
-      setGain(this.gainB, b * vol)
-      return
+    // Reattach before deciding the audible path. MES ignores element.volume —
+    // writing volume while a source exists is a silent no-op for the speakers.
+    if ((this.sourceA || this.externalSourceA) && this.gainA && !this.deckChainAttached.a) {
+      this.ensureDeckChain('a')
     }
-    // Hybrid: deck A via external graph + deck B via Web Audio or element volume
-    if (this.externalGainA) {
-      setGain(this.externalGainA, a * vol)
+    if (this.sourceB && this.gainB && !this.deckChainAttached.b) {
+      this.ensureDeckChain('b')
+    }
+
+    const clampVol = (value: number) => Math.max(0, Math.min(1, value))
+    const aMes = !!(this.sourceA || this.externalSourceA)
+    const bMes = !!this.sourceB
+    const aInGraph = !!(this.deckChainAttached.a && this.gainA && aMes)
+    const bInGraph = !!(this.deckChainAttached.b && this.gainB && bMes)
+
+    if (aInGraph && this.gainA) {
+      setGain(this.gainA, a * nodeScale)
       this.deckA.volume = 1
-      if (this.gainB && this.sourceB) {
-        setGain(this.gainB, b * vol)
-      } else {
-        this.deckB.volume = Math.max(0, Math.min(1, b * vol))
-      }
-      return
+    } else if (this.externalGainA && !aMes) {
+      setGain(this.externalGainA, a * nodeScale)
+      this.deckA.volume = 1
+    } else if (!aMes) {
+      this.deckA.volume = clampVol(a * vol)
     }
-    this.deckA.volume = Math.max(0, Math.min(1, a * vol))
-    this.deckB.volume = Math.max(0, Math.min(1, b * vol))
+    // else: MES exists but chain not attached — leave volume alone; caller must reattach
+
+    if (bInGraph && this.gainB) {
+      setGain(this.gainB, b * nodeScale)
+      this.deckB.volume = 1
+    } else if (!bMes) {
+      this.deckB.volume = clampVol(b * vol)
+    }
+  }
+
+  /**
+   * Hard cut to one platter. Gain, not element.volume: once a deck is in the
+   * graph, volume writes do not reach the speakers.
+   */
+  soloDeck(deck: DeckId) {
+    if (this.mixLock && !this.manualXfOverride) return
+    const other: DeckId = deck === 'a' ? 'b' : 'a'
+    this.active = deck
+    this.stopDeckBuffer(other)
+    this.ensureDeckChain('a')
+    this.ensureDeckChain('b')
+    const otherEl = other === 'a' ? this.deckA : this.deckB
+    try {
+      otherEl.pause()
+    } catch {
+      /* ignore */
+    }
+    this.lastManualXf = deck === 'b' ? 1 : 0
+    this.applyDeckGains(deck === 'a' ? 1 : 0, deck === 'b' ? 1 : 0, { instant: true })
+    this.applyDeckEq(deck, this.deckUserEq[deck], { instant: true })
+    this.emit({
+      type: 'active-deck',
+      deck: this.active,
+      trackId: this.getActiveTrack()?.id ?? null,
+    })
   }
 
   /** Load a track onto the idle deck (preload / cue). */
@@ -1741,6 +2265,8 @@ export class MixEngine {
   ): Promise<void> {
     this.clearDeferredPause()
     this.idlePreArmLocked = false
+    this.outsideAlignLocked = false
+    this.outsideAlignStreak = 0
     const idleId: DeckId = this.active === 'a' ? 'b' : 'a'
     // Never load the on-air song onto the other deck — that pause/reload glitch.
     if (this.getActiveTrack()?.id === track.id) return
@@ -1859,11 +2385,12 @@ export class MixEngine {
       incomingTargetRate: opts?.incomingTargetRate,
       style: plan.style,
       dualMasterGlide: plan.masterTempoHandoff !== false,
-      mixStartRate: armedRate && Math.abs(armedRate - 1) > 0.002 ? armedRate : undefined,
+      mixStartRate: armedRate && armedRate > 0 ? armedRate : undefined,
     })
     this.enterPlan(plan)
     if (needLoad) {
-      await this.enterPreArm(plan, incoming, url, tempoPlan.mixStartRate)
+      const armed = await this.enterPreArm(plan, incoming, url, tempoPlan.mixStartRate)
+      if (!armed) return false
     } else {
       // Already cued — do not park/pause. That throws away the pre-audible lock.
       // Snap only when unlocked and the playhead is outside the 8ms lock window.
@@ -1876,7 +2403,11 @@ export class MixEngine {
       this.silenceIdle({ instant: true })
       this.lockIdleTempo(tempoPlan.mixStartRate)
       const nowT = this.deckMediaTime(idleDeck, el)
-      if (!this.idlePreArmLocked && Math.abs(nowT - targetCue) > PRE_AUDIBLE_LOCK_SEC) {
+      // Trust locked warm playhead within ±½ beat — don't smash-resnap phrase-1.
+      const halfBeat = (60 / Math.max(60, outBpm)) * 0.5
+      const allowSnap =
+        !this.idlePreArmLocked || Math.abs(nowT - targetCue) > halfBeat
+      if (allowSnap && Math.abs(nowT - targetCue) > PRE_AUDIBLE_LOCK_SEC) {
         const slot = this.deckBuffer[idleDeck]
         if (slot) {
           this.startDeckBuffer(idleDeck, el, slot.buffer, Math.max(0, targetCue), tempoPlan.mixStartRate)
@@ -1904,7 +2435,7 @@ export class MixEngine {
     incomingRate = 1,
     opts?: StartTransitionOptions
   ): Promise<boolean> {
-    if (this.mixLock) return false
+    if (this.isMixing()) return false
     if (this.blendStage !== 'fire' && this.blendStage !== 'overlap') {
       if (!this.tryEnterStage('fire')) return false
     }
@@ -1919,6 +2450,7 @@ export class MixEngine {
     }
 
     this.mixLock = true
+    const mixGen = ++this.mixGeneration
     if (!this.manualXfOverride) this.lastManualXf = null
     this.tryEnterStage('overlap')
     this.clearFade()
@@ -1935,9 +2467,6 @@ export class MixEngine {
       (plan.blendFromOut !== false &&
         plan.style === 'crossfade' &&
         plan.phrase1Lock !== false)
-    const mixSec = doctrineExact
-      ? exactOverlapDurationSec(plan.mixDurationSec)
-      : Math.max(minMix, Math.min(plan.mixDurationSec, Math.max(minMix, remain - 0.2), 48))
 
     if (opts?.keyLock === false) this.setKeyLock(false)
     else if (opts?.keyLock === true) this.setKeyLock(true)
@@ -1956,13 +2485,16 @@ export class MixEngine {
     const resolvedOutBpm =
       resolvePlaybackBpm(activeTrack ?? {}, activeTrack?.bpm) ??
       (typeof activeTrack?.bpm === 'number' && activeTrack.bpm > 0 ? activeTrack.bpm : 120)
+    const mixSec = doctrineExact
+      ? exactOverlapDurationSec(plan.mixDurationSec, 48, resolvedOutBpm)
+      : Math.max(minMix, Math.min(plan.mixDurationSec, Math.max(minMix, remain - 0.2), 48))
     const resolvedInBpm =
       resolvePlaybackBpm(idleTrack, idleTrack.bpm) ??
       (typeof idleTrack.bpm === 'number' && idleTrack.bpm > 0 ? idleTrack.bpm : resolvedOutBpm)
     const passedRate =
-      typeof incomingRate === 'number' && incomingRate > 0 && Math.abs(incomingRate - 1) > 0.002
+      typeof incomingRate === 'number' && incomingRate > 0
         ? incomingRate
-        : typeof plan.rateRatio === 'number' && plan.rateRatio > 0 && Math.abs(plan.rateRatio - 1) > 0.002
+        : typeof plan.rateRatio === 'number' && plan.rateRatio > 0
           ? plan.rateRatio
           : undefined
     const tempoPlan = computeTempoCrossfadePlan({
@@ -2013,46 +2545,66 @@ export class MixEngine {
       })
       const alreadyOnBuffer = this.deckBuffer[idleDeck] != null
       const mediaNow = this.incomingMediaTime(incoming)
-      if (alreadyOnBuffer && this.idlePreArmLocked) {
-        // Pre-arm already locked to the live master. Re-solving here would
-        // rewrite the cue and restart the buffer — late/early incoming.
-        cue = mediaNow
-        plan.resolvedIncomingSec = cue
-      } else if (
+      if (
         typeof outBpm === 'number' &&
         outBpm > 0 &&
         typeof inBpm === 'number' &&
         inBpm > 0
       ) {
-        // Media-time phase: use base BPM only (never bpm × playbackRate).
-        const align = solveAlignmentState({
-          plannedIncomingSec: plannedCue,
-          outgoingTimeSec: this.getDeckMediaTime(outDeck),
-          outgoingBpm: outBpm,
-          outgoingOffsetSec: activeTrack?.beat_grid_offset,
-          outgoingSonicDna: activeTrack?.sonic_dna,
-          outgoingPeaks: activeTrack?.waveformPeaks,
-          outgoingDurationSec:
-            activeTrack?.waveformDurationSec ??
-            (Number.isFinite(outgoing.duration) ? outgoing.duration : 0),
-          incomingBpm: inBpm,
-          incomingOffsetSec: idleTrack.beat_grid_offset,
-          incomingSonicDna: idleTrack.sonic_dna,
-          incomingPeaks: idleTrack.waveformPeaks,
-          incomingDurationSec:
-            idleTrack.waveformDurationSec ??
-            (Number.isFinite(incoming.duration) ? incoming.duration : 0),
-          phraseBars: alignBars,
-          dnaConfidence: plan.dnaConfidence,
-          phraseLock: plan.phraseLock,
-          phrase1Lock: plan.phrase1Lock !== false,
-        })
-        cue = align.incomingCueSec
+        const halfBeat = (60 / Math.max(60, outBpm)) * 0.5
+        const forceResolve =
+          typeof plan.reason === 'string' && plan.reason.includes('phrase-delay')
+        // Locked + within trust window: keep warm playhead — no full re-solve/restart.
+        if (
+          !forceResolve &&
+          alreadyOnBuffer &&
+          this.idlePreArmLocked &&
+          Math.abs(mediaNow - plannedCue) <= halfBeat
+        ) {
+          cue = mediaNow
+          plan.resolvedIncomingSec = cue
+        } else {
+          const align = solveAlignmentState({
+            plannedIncomingSec: plannedCue,
+            outgoingTimeSec: this.getDeckMediaTime(outDeck),
+            outgoingBpm: outBpm,
+            outgoingOffsetSec: activeTrack?.beat_grid_offset,
+            outgoingSonicDna: activeTrack?.sonic_dna,
+            outgoingPeaks: activeTrack?.waveformPeaks,
+            outgoingDurationSec:
+              activeTrack?.waveformDurationSec ??
+              (Number.isFinite(outgoing.duration) ? outgoing.duration : 0),
+            incomingBpm: inBpm,
+            incomingOffsetSec: idleTrack.beat_grid_offset,
+            incomingSonicDna: idleTrack.sonic_dna,
+            incomingPeaks: idleTrack.waveformPeaks,
+            incomingDurationSec:
+              idleTrack.waveformDurationSec ??
+              (Number.isFinite(incoming.duration) ? incoming.duration : 0),
+            phraseBars: alignBars,
+            dnaConfidence: plan.dnaConfidence,
+            phraseLock: plan.phraseLock,
+            phrase1Lock: plan.phrase1Lock !== false,
+          })
+          const fired = resolveFireIncomingCue({
+            mediaNowSec: mediaNow,
+            alignedCueSec: align.incomingCueSec,
+            idlePreArmLocked: this.idlePreArmLocked,
+            alreadyOnBuffer,
+            phrase1Lock: plan.phrase1Lock !== false,
+            bpm: outBpm,
+          })
+          cue = fired.cueSec
+          plan.resolvedIncomingSec = cue
+          plan.dnaConfidence = align.confidence
+          plan.phraseLock = align.phraseLock
+        }
+      } else if (alreadyOnBuffer && this.idlePreArmLocked) {
+        cue = mediaNow
         plan.resolvedIncomingSec = cue
-        plan.dnaConfidence = align.confidence
-        plan.phraseLock = align.phraseLock
       }
-      this.idlePreArmLocked = false
+      // Keep lock flag until first audible frame — onset/EQ gates need it.
+      // Cleared once fade opens past the silent window.
       if (!alreadyOnBuffer) {
         try {
           // Only snap if we are not already on the parked cue — mid-intro seeks
@@ -2092,10 +2644,17 @@ export class MixEngine {
         onNotify: opts?.onDeckRate,
       })
     } catch {
-      this.mixLock = false
-      this.resetBlendStage()
-      this.setStatus('error')
+      if (mixGen === this.mixGeneration) {
+        this.mixLock = false
+        this.resetBlendStage()
+        this.setStatus('error')
+      }
       this.emit({ type: 'error', message: 'Incoming deck failed to play' })
+      return false
+    }
+
+    if (mixGen !== this.mixGeneration) {
+      this.mixLock = false
       return false
     }
 
@@ -2107,7 +2666,6 @@ export class MixEngine {
     const microStrength = this.mixIntel?.microStrength ??
       (plan.style === 'crossfade' ? 0.82 : plan.style === 'filter-eq' ? 0.68 : 0.55)
     const incomingPolicy = this.mixIntel?.incomingStretch ?? resolveStretchPolicy(idleTrack, tempoPlan.mixEndRate, { mixGlide: true, incoming: true })
-    const tempoSlew = incomingPolicy.tempoSlew
     const quality = createMixQualityAccumulator()
     const echoBeats = this.mixIntel?.echoDelayBeats ?? 0.5
     const echoDelaySec = (60 / Math.max(60, syncBpm)) * echoBeats
@@ -2161,9 +2719,50 @@ export class MixEngine {
     let filteredPhaseErr = 0
     let phaseFilterPrimed = false
     let tickFrame = 0
-    /** Smoothed incoming-only vinyl bend — never copied onto the master deck. */
+    /** Smoothed dual-deck vinyl bend bias (1 = no bend). */
     let microRateBias = 1
+    /** Once true, skip vinyl chase — decks stay locked on the shared master. */
+    let overlapPhaseLocked = false
+    /** Soft-open pocket gate — never cliff from 0 → fadeProgress in one tick. */
+    let softAudibleFade = 0
+    let deadbandStreak = 0
+    let silentSeekCount = 0
+    let overlapLockAt: number | null = null
+    const fireCueDeltaSec = this.measureIdleCueDeltaSec(plan)
+    const lockedAtFire = this.idlePreArmLocked
+    const preArmLockMs =
+      this.preArmEnteredAt != null && this.preArmLockedAt != null
+        ? Math.max(0, this.preArmLockedAt - this.preArmEnteredAt)
+        : null
+    const fireGateReason = this.fireGateSnapshot(plan).reason ?? null
     const driftAlign = createDriftAlignState()
+    /** Last planned rates pushed to UI — decoupled from vinyl-bent audio rates. */
+    let lastUiInRate = Number.NaN
+    let lastUiOutRate = Number.NaN
+    // Chase through most of the hold; settle before the post-mix native glide.
+    const vinylWindowEnd = Math.min(
+      VINYL_BEND_BLEND_WINDOW,
+      Math.max(0.55, tempoPlan.glideStart - TEMPO_GLIDE_SOFT_KNEE - 0.02),
+    )
+    const notifyPlanRates = (planIn: number, planOut: number) => {
+      if (!opts?.onDeckRate) return
+      if (shouldNotifyMixUiRate(lastUiInRate, planIn)) {
+        lastUiInRate = planIn
+        try {
+          opts.onDeckRate(idleDeck, planIn)
+        } catch {
+          /* ignore */
+        }
+      }
+      if (shouldNotifyMixUiRate(lastUiOutRate, planOut)) {
+        lastUiOutRate = planOut
+        try {
+          opts.onDeckRate(outDeck, planOut)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
     const ctxClock = this.ctx
     const mixStartCtx = ctxClock?.currentTime ?? null
@@ -2179,7 +2778,9 @@ export class MixEngine {
     let lastCtxSec: number | null = mixStartCtx
 
     return await new Promise<boolean>((resolve) => {
+      this.mixResolve = resolve
       const finish = () => {
+        if (mixGen !== this.mixGeneration) return
         this.fadeRaf = null
         // Keep the incoming BufferSource running — swapping back to HTMLAudio
         // is the mix-end stop. Stamp the paused element for the playhead only.
@@ -2190,27 +2791,45 @@ export class MixEngine {
         // Disconnect/reconnect here was the harsh handoff click.
         this.softenIncomingStretch()
         const report = quality.report()
-
-        if (report.samples >= 4) {
-          this.emit({
-            type: 'mix-quality',
-            plan,
-            phaseRmsSec: report.phaseRmsSec,
-            kickResidualRmsMs: report.kickResidualRmsMs,
-            samples: report.samples,
-          })
+        const scorecard: MixScorecard = {
+          ...emptyMixScorecard(),
+          preArmLockMs,
+          fireCueDeltaMs:
+            Number.isFinite(fireCueDeltaSec) ? Math.abs(fireCueDeltaSec) * 1000 : null,
+          overlapLockMs:
+            overlapLockAt != null ? Math.max(0, overlapLockAt - started) : null,
+          phaseRmsSec: report.phaseRmsSec,
+          kickResidualRmsMs: report.kickResidualRmsMs,
+          samples: report.samples,
+          silentSeekCount,
+          gateReason: fireGateReason,
+          lockedAtFire,
         }
+
+        this.emit({
+          type: 'mix-quality',
+          plan,
+          phaseRmsSec: report.phaseRmsSec,
+          kickResidualRmsMs: report.kickResidualRmsMs,
+          samples: report.samples,
+          scorecard,
+        })
         try {
           opts?.onProgress?.(1)
-          // Ease incoming onto native tempo (no instant rate snap)
-          this.setDeckTempo(idleDeck, incoming, tempoPlan.mixEndRate, {
-            instant: false,
-            slew: Math.max(tempoSlew, 0.05),
+          // Stay locked on beatmatch through handoff — no rate rewrite that
+          // reopens relative drift. MusicPlayer glides to native after park.
+          const lockIn = overlapPhaseLocked
+            ? this.deckRates[idleDeck]
+            : tempoPlan.mixStartRate
+          const lockOut = overlapPhaseLocked
+            ? this.deckRates[outDeck]
+            : tempoPlan.outgoingRate
+          this.setDeckTempo(idleDeck, incoming, clampTempoRate(lockIn), {
+            instant: true,
             onNotify: opts?.onDeckRate,
           })
-          this.setDeckTempo(outDeck, outgoing, tempoPlan.outEndRate, {
-            instant: false,
-            slew: Math.max(tempoSlew, 0.05),
+          this.setDeckTempo(outDeck, outgoing, clampTempoRate(lockOut), {
+            instant: true,
             notify: false,
           })
           this.mixIntel = null
@@ -2222,6 +2841,7 @@ export class MixEngine {
         this.active = activeAtStart === 'a' ? 'b' : 'a'
         this.confirmHandoffGains()
         this.mixLock = false
+        this.flushUserEq({ instant: true })
         this.tryEnterStage('handoff')
         this.setStatus('playing')
         this.startPlayheadStamp()
@@ -2235,6 +2855,7 @@ export class MixEngine {
         this.clearHandoffSettle()
         this.handoffSettling = true
         this.handoffSettleTimer = setTimeout(() => {
+          if (mixGen !== this.mixGeneration) return
           this.handoffSettleTimer = null
           this.handoffSettling = false
           try {
@@ -2244,7 +2865,7 @@ export class MixEngine {
           }
           this.parkSilentDeck(outgoing)
           this.tryEnterStage('idle')
-          resolve(true)
+          this.settleMixWaiter(true)
         }, handoffSettleMs(syncBpm))
       }
 
@@ -2252,10 +2873,11 @@ export class MixEngine {
         if (this.deckBuffer[outDeck] && ctxClock) {
           return this.getDeckMediaTime(outDeck)
         }
-        // Mix lattice = ctx integral only. HTMLAudio currentTime jitter was
-        // smearing bar-aligned fades / EQ even when phase chase was tight.
+        // Mix lattice = ctx integral, softly pulled toward heard HTMLAudio.
         if (ctxClock && outClock.rateAtCtx > 0) {
-          return integrateMediaSec(outClock, ctxClock.currentTime)
+          const virtual = integrateMediaSec(outClock, ctxClock.currentTime)
+          const heard = this.getDeckMediaTime(outDeck)
+          return followHeardMedia(virtual, heard, 0.1)
         }
         return this.getDeckMediaTime(outDeck)
       }
@@ -2286,10 +2908,11 @@ export class MixEngine {
         const eqProgress = overlap.eq
         const tempoProgress = overlap.tempo
 
-        if (plan.needsOutroLoop) {
+        if (plan.needsOutroLoop && fadeProgress > 0.92) {
           const dur = this.getDeckDuration(outDeck)
           if (dur > phraseLoopSec + 0.5 && dur - outNow < 0.22) {
-            this.seekDeckMedia(outDeck, Math.max(0, outNow - phraseLoopSec))
+            // Only loop when outgoing is nearly silent — seeking live mid-mix jumps the set.
+            this.seekDeckMedia(outDeck, Math.max(0, outNow - phraseLoopSec), { force: true })
             outClock = createIntegratedMediaClock(
               this.getDeckMediaTime(outDeck),
               ctxClock?.currentTime ?? outClock.rateAtCtx,
@@ -2301,8 +2924,10 @@ export class MixEngine {
         // Shared master clock: both decks stay beatmatched while gliding to incoming native.
         tickFrame += 1
         const rates = masterDeckRatesAt(tempoPlan, tempoProgress)
-        let inRate = rates.inRate
-        let outRateTarget = rates.outRate
+        const planInRate = rates.inRate
+        const planOutRate = rates.outRate
+        let inRate = planInRate
+        let outRateTarget = planOutRate
         // Hold BeatSync through the whole overlap; TempoSync unlocks at the glide.
         const inLockPhase = holdPhaseLock
           ? raw < 0.999
@@ -2350,15 +2975,19 @@ export class MixEngine {
                 ? onsetPocket.kickSec
                 : onsetPocket.clapSec
             kickResidualMs = (pocketLead ?? onsetNudge) * 1000
-            // Pre-arm already locked phase. Mid-mix seeks click — micro-rate only
-            // after the blend is audible.
+
+            // One silent seek per frame max (onset OR grid OR residual) — never stack.
+            let didSilentSeek = false
             if (
+              !didSilentSeek &&
               allowKickCorrect &&
               raw < 0.02 &&
+              !overlapPhaseLocked &&
               Math.abs(pocketLead ?? onsetNudge) > 0.004 &&
               !this.deckBuffer[idleDeck]
             ) {
               try {
+                // Onset residual: early (+) → seek forward; matches transient-align.
                 incoming.currentTime = Math.max(0, inT + (pocketLead ?? onsetNudge))
                 phaseErr = beatPhaseErrorSec({
                   outgoingTimeSec: outT,
@@ -2368,6 +2997,8 @@ export class MixEngine {
                   incomingBpm: baseInBpm,
                   incomingOffsetSec: idleTrack.beat_grid_offset ?? undefined,
                 })
+                didSilentSeek = true
+                silentSeekCount += 1
               } catch {
                 /* ignore */
               }
@@ -2378,7 +3009,6 @@ export class MixEngine {
             if (absErr > halfBeat * 0.85) {
               largePhaseStreak += 1
               const closing = absErr < prevAbsPhaseErr - 0.0004
-              // ~600ms of unrecoverable half-beat error → TempoSync. Keep chasing if closing.
               if (!closing && largePhaseStreak >= 36) {
                 holdPhaseLock = false
               }
@@ -2387,9 +3017,13 @@ export class MixEngine {
             }
             prevAbsPhaseErr = absErr
 
-            // Grid modes: seek-snap incoming onto the outgoing lattice.
-            // HTMLAudio only before the blend is loud; buffer sources can snap later.
-            if (holdPhaseLock && gridAlign) {
+            if (
+              !didSilentSeek &&
+              holdPhaseLock &&
+              gridAlign &&
+              !overlapPhaseLocked &&
+              raw < 0.02
+            ) {
               const phraseBarsForGrid =
                 typeof plan.gridPhraseBars === 'number' && plan.gridPhraseBars > 0
                   ? plan.gridPhraseBars
@@ -2406,7 +3040,6 @@ export class MixEngine {
               })
               const absGrid = Math.abs(gridDelta)
               const beatSecGrid = 60 / Math.max(60, baseOutBpm)
-              const canGridSeek = raw < 0.08 || this.deckBuffer[idleDeck] != null
               const everyGrid = absGrid > 0.02 ? 4 : 16
               const maxBeats =
                 gridAlign === 'phrase'
@@ -2415,7 +3048,6 @@ export class MixEngine {
                     ? 4
                     : 1
               if (
-                canGridSeek &&
                 tickFrame % everyGrid === 0 &&
                 absGrid > 0.008 &&
                 absGrid < beatSecGrid * maxBeats
@@ -2425,10 +3057,14 @@ export class MixEngine {
                 if (slot) {
                   this.startDeckBuffer(idleDeck, incoming, slot.buffer, nextSec, this.deckRates[idleDeck])
                   phaseErr = 0
+                  didSilentSeek = true
+                  silentSeekCount += 1
                 } else {
                   try {
                     incoming.currentTime = nextSec
                     phaseErr = 0
+                    didSilentSeek = true
+                    silentSeekCount += 1
                   } catch {
                     /* fall through */
                   }
@@ -2436,8 +3072,13 @@ export class MixEngine {
               }
             }
 
-            // Residual seek only before the blend is audible.
-            if (holdPhaseLock && allowVinylBend && raw < 0.02) {
+            if (
+              !didSilentSeek &&
+              holdPhaseLock &&
+              allowVinylBend &&
+              raw < 0.02 &&
+              !overlapPhaseLocked
+            ) {
               const silentNudge = resolvePreAudibleNudge({
                 phaseErrSec: phaseErr,
                 bpm: baseOutBpm,
@@ -2476,8 +3117,29 @@ export class MixEngine {
             phaseErr = filteredPhaseErr
 
             const beatSec = 60 / Math.max(60, baseOutBpm)
+            const phraseBarsForChase =
+              typeof plan.gridPhraseBars === 'number' && plan.gridPhraseBars > 0
+                ? plan.gridPhraseBars
+                : alignBars
+            const phraseErr =
+              plan.phrase1Lock !== false || gridAlign === 'phrase'
+                ? phrasePhaseErrorSec({
+                    outgoingTimeSec: outT,
+                    outgoingBpm: baseOutBpm,
+                    outgoingOffsetSec: activeTrack?.beat_grid_offset ?? undefined,
+                    incomingTimeSec: this.incomingMediaTime(incoming),
+                    incomingBpm: baseInBpm,
+                    incomingOffsetSec: idleTrack.beat_grid_offset ?? undefined,
+                    phraseBars: phraseBarsForChase,
+                  })
+                : 0
+            const gridForFuse = fusePhraseBeatError({
+              beatPhaseSec: phaseErr,
+              phrasePhaseSec: phraseErr,
+              beatSec,
+            })
             const fused = fuseBlendError({
-              gridPhaseSec: phaseErr,
+              gridPhaseSec: gridForFuse,
               kickResidualSec: allowKickCorrect ? onsetPocket.kickSec : null,
               clapResidualSec: allowKickCorrect ? onsetPocket.clapSec : null,
               beatSec,
@@ -2491,68 +3153,134 @@ export class MixEngine {
             const tSec = ctxClock?.currentTime ?? now / 1000
             pushDriftSample(driftAlign, tSec, chaseErr)
             const drift = estimateDrift(driftAlign.samples)
+            const walking = Math.abs(drift.driftRate) >= 0.002
+            const inDeadband =
+              Math.abs(chaseErr) <= VINYL_BEND_DEADBAND_SEC && !walking
 
-            // Incoming-only PI vinyl bend for the whole overlap. Outgoing stays
-            // on the shared master so relative rate can close residual phase.
-            if (holdPhaseLock && allowVinylBend) {
-              const errNow = Math.abs(chaseErr)
-              const walking = Math.abs(drift.driftRate) >= 0.002
-              const every = walking || errNow > 0.004 ? 1 : vinylBendTickInterval(errNow)
-              if (tickFrame % every === 0) {
-                const dtSec =
-                  lastCtxSec == null
-                    ? 1 / 60
-                    : Math.max(0.008, Math.min(0.08, tSec - lastCtxSec))
-                lastCtxSec = tSec
-                driftAlign.lastTSec = tSec
-                const chase = phaseChaseStrength(raw) * microStrength
-                const aligned = driftAlignRate({
-                  errorSec: chaseErr,
-                  driftRate: drift.driftRate,
-                  integralSec: driftAlign.integralSec,
-                  bpm: baseOutBpm,
-                  strength: chase,
-                  dtSec,
-                  silent: raw < 0.02,
-                })
-                driftAlign.integralSec = aligned.nextIntegralSec
-                microRateBias = smoothVinylBend(microRateBias, aligned.multiplier, errNow)
-                microRateBias = settleVinylBend(microRateBias, errNow)
+            // Snap + latch: once locked, freeze on shared master through overlap.
+            if (inDeadband) {
+              deadbandStreak += 1
+              if (deadbandStreak >= OVERLAP_PHASE_LOCK_STREAK) {
+                if (!overlapPhaseLocked) overlapLockAt = performance.now()
+                overlapPhaseLocked = true
+                microRateBias = 1
+                driftAlign.integralSec = 0
               }
-              const bent = applyVinylBendToDeckRates({
-                outRate: outRateTarget,
-                inRate,
-                microMultiplier: microRateBias,
-              })
-              inRate = clampTempoRate(bent.inRate)
-              outRateTarget = bent.outRate
+            } else {
+              deadbandStreak = 0
+              // Large reopen only if walk or >½ beat — don't unlock on noise.
+              if (overlapPhaseLocked && (walking || Math.abs(chaseErr) > beatSec * 0.45)) {
+                overlapPhaseLocked = false
+              }
+            }
+
+            // Incoming-only PI vinyl bend — outgoing stays master clock (doctrine).
+            if (holdPhaseLock && allowVinylBend && !overlapPhaseLocked) {
+              if (raw < vinylWindowEnd) {
+                const errNow = Math.abs(chaseErr)
+                const every = walking || errNow > 0.004 ? 1 : vinylBendTickInterval(errNow)
+                if (tickFrame % every === 0) {
+                  const dtSec =
+                    lastCtxSec == null
+                      ? 1 / 60
+                      : Math.max(0.008, Math.min(0.08, tSec - lastCtxSec))
+                  lastCtxSec = tSec
+                  driftAlign.lastTSec = tSec
+                  const chase = phaseChaseStrength(raw) * microStrength
+                  const aligned = driftAlignRate({
+                    errorSec: chaseErr,
+                    driftRate: drift.driftRate,
+                    integralSec: driftAlign.integralSec,
+                    bpm: baseOutBpm,
+                    strength: chase,
+                    dtSec,
+                    silent: raw < 0.02,
+                  })
+                  driftAlign.integralSec = aligned.nextIntegralSec
+                  if (aligned.kind === 'deadband') {
+                    microRateBias = 1
+                  } else {
+                    microRateBias = smoothVinylBend(microRateBias, aligned.multiplier, errNow)
+                    microRateBias = settleVinylBend(microRateBias, errNow)
+                  }
+                }
+              } else if (Math.abs(microRateBias - 1) > 0.0004) {
+                microRateBias = microRateBias * 0.82 + 0.18
+                if (Math.abs(microRateBias - 1) < 0.0008) microRateBias = 1
+              }
+              if (Math.abs(microRateBias - 1) > 0.0004) {
+                const bent = applyVinylBendToDeckRates({
+                  outRate: outRateTarget,
+                  inRate,
+                  microMultiplier: microRateBias,
+                })
+                inRate = clampTempoRate(bent.inRate)
+                // Outgoing stays on planned master — do not bend the mix clock.
+                outRateTarget = planOutRate
+              }
+            } else if (overlapPhaseLocked) {
+              microRateBias = 1
+              outRateTarget = planOutRate
             }
           }
           // Instant shared-master rates — per-deck slew split effective BPM.
+          // Audio writes use bent rates; UI only sees planned master rates.
           if (ctxClock && !this.deckBuffer[outDeck]) {
             outClock = snapshotIntegratedMedia(outClock, ctxClock.currentTime, outRateTarget)
           }
           this.setDeckTempo(idleDeck, incoming, inRate, {
             instant: true,
-            onNotify: opts?.onDeckRate,
+            notify: false,
           })
           this.setDeckTempo(outDeck, outgoing, outRateTarget, {
             instant: true,
-            notify: opts?.onDeckRate != null,
-            onNotify: opts?.onDeckRate,
+            notify: false,
           })
+          notifyPlanRates(planInRate, planOutRate)
         } catch {
-          this.setDeckTempo(idleDeck, incoming, clampTempoRate(inRate), {
-            onNotify: opts?.onDeckRate,
+          this.setDeckTempo(idleDeck, incoming, clampTempoRate(planInRate), {
+            notify: false,
           })
+          notifyPlanRates(planInRate, planOutRate)
         }
 
-        let gains = styleMixGains(plan.style, fadeProgress, this.mixIntel ?? undefined)
+        let gains = styleMixGains(plan.style, fadeProgress, this.mixIntel ?? undefined, this.blendAutomation)
         // Smooth is one equal-power curve — no second tail cliff.
         if (plan.style !== 'crossfade') {
           const softTailStart = this.mixIntel?.softTailStart ??
             (plan.style === 'cut' ? 0.86 : 0.84)
           gains = applySoftTail(gains, fadeProgress, softTailStart)
+        }
+
+        // Onset / phase pocket gate: keep incoming quiet until locked, then soft-open.
+        const kickOk =
+          !allowKickCorrect ||
+          Math.abs(kickResidualMs) <= 20 ||
+          !Number.isFinite(kickResidualMs)
+        const pocketReady = overlapPhaseLocked || (Math.abs(phaseErr) <= VINYL_BEND_DEADBAND_SEC && kickOk)
+        const wantAudible = pocketReady || raw > 0.12 ? fadeProgress : 0
+        if (wantAudible > softAudibleFade) {
+          // Open over ~½ beat so late lock never dumps the full curve in one frame.
+          const openBeats = 0.5
+          const openSec = Math.max(0.12, (60 / Math.max(60, baseOutBpm)) * openBeats)
+          const step = fadeProgress * Math.min(1, 0.032 / openSec)
+          softAudibleFade = Math.min(wantAudible, softAudibleFade + Math.max(step, wantAudible * 0.06))
+        } else {
+          softAudibleFade = wantAudible
+        }
+        const audibleFade = softAudibleFade
+        if (audibleFade <= 0 && fadeProgress > 0) {
+          gains = styleMixGains(plan.style, 0, this.mixIntel ?? undefined, this.blendAutomation)
+        } else if (audibleFade !== fadeProgress && audibleFade > 0) {
+          gains = styleMixGains(plan.style, audibleFade, this.mixIntel ?? undefined, this.blendAutomation)
+          if (plan.style !== 'crossfade') {
+            const softTailStart = this.mixIntel?.softTailStart ??
+              (plan.style === 'cut' ? 0.86 : 0.84)
+            gains = applySoftTail(gains, audibleFade, softTailStart)
+          }
+        }
+        if (audibleFade > 0.02) {
+          this.idlePreArmLocked = false
         }
 
         const incomingGain = activeAtStart === 'a' ? gains.b : gains.a
@@ -2561,44 +3289,51 @@ export class MixEngine {
         const echoAmt = echoSendAtProgress({
           echoSend: this.mixIntel?.echoSend ?? 0,
           outgoingGain,
-          progress: fadeProgress,
+          progress: audibleFade,
           mixSec,
           beatSec,
         })
         this.setEchoSend(outDeckId, echoAmt, echoDelaySec)
 
-        const eqCurve = intelligentDeckMixAtProgress({
-          progress: eqProgress,
-          style: plan.style,
-          outBias: this.deckEqBase[outDeckId],
-          inBias: this.deckEqBase[inDeckId],
-          intel: this.mixIntel ?? undefined,
-        })
-        const duck =
-          plan.style === 'crossfade'
-            ? 0
-            : (this.mixIntel?.lowDuckDb ?? 0) * incomingGain
-        eqCurve.outgoing = {
-          ...eqCurve.outgoing,
-          low: eqCurve.outgoing.low - duck,
-        }
-        this.applyDeckEq(outDeckId, eqCurve.outgoing, opts)
-        this.applyDeckEq(inDeckId, eqCurve.incoming, opts)
+        // Smooth/crossfade = channel gains only. EQ dials stay on the strip.
+        // Filter / Cut / Bass-swap still own their EQ + filter envelopes.
+        const eqP = overlapPhaseLocked || audibleFade > 0.08 ? eqProgress : 0
+        if (plan.style === 'crossfade' || !plan.style) {
+          this.applyDeckEq(outDeckId, this.deckUserEq[outDeckId], opts)
+          this.applyDeckEq(inDeckId, this.deckUserEq[inDeckId], opts)
+          this.applyDeckFilters(outDeckId, { hpfHz: 20, lpfHz: 20000 }, opts)
+          this.applyDeckFilters(inDeckId, { hpfHz: 20, lpfHz: 20000 }, opts)
+        } else {
+          const eqCurve = intelligentDeckMixAtProgress({
+            progress: eqP,
+            style: plan.style,
+            outBias: this.deckEqBase[outDeckId],
+            inBias: this.deckEqBase[inDeckId],
+            intel: this.mixIntel ?? undefined,
+          })
+          const duck = (this.mixIntel?.lowDuckDb ?? 0) * incomingGain
+          eqCurve.outgoing = {
+            ...eqCurve.outgoing,
+            low: eqCurve.outgoing.low - duck,
+          }
+          this.applyDeckEq(outDeckId, eqCurve.outgoing, opts)
+          this.applyDeckEq(inDeckId, eqCurve.incoming, opts)
 
-        const outFilters = deckFiltersAtProgress({
-          progress: eqProgress,
-          style: plan.style,
-          role: 'outgoing',
-          intel: this.mixIntel ?? undefined,
-        })
-        const inFilters = deckFiltersAtProgress({
-          progress: eqProgress,
-          style: plan.style,
-          role: 'incoming',
-          intel: this.mixIntel ?? undefined,
-        })
-        this.applyDeckFilters(outDeckId, outFilters, opts)
-        this.applyDeckFilters(inDeckId, inFilters, opts)
+          const outFilters = deckFiltersAtProgress({
+            progress: eqP,
+            style: plan.style,
+            role: 'outgoing',
+            intel: this.mixIntel ?? undefined,
+          })
+          const inFilters = deckFiltersAtProgress({
+            progress: eqP,
+            style: plan.style,
+            role: 'incoming',
+            intel: this.mixIntel ?? undefined,
+          })
+          this.applyDeckFilters(outDeckId, outFilters, opts)
+          this.applyDeckFilters(inDeckId, inFilters, opts)
+        }
 
         quality.push({
           phaseErrSec: phaseErr,
@@ -2620,7 +3355,12 @@ export class MixEngine {
           ? raw >= 0.88 ? 0.04 : 0.024
           : raw >= 0.88 ? 0.032 : 0.018
         if (this.manualXfOverride && this.lastManualXf != null) {
-          const { a, b } = equalPowerGains(this.lastManualXf)
+          const { a, b } = styleMixGains(
+            'crossfade',
+            this.lastManualXf,
+            undefined,
+            this.blendAutomation,
+          )
           this.applyDeckGains(a, b, { tau: gainTau })
         } else if (activeAtStart === 'a') {
           this.applyDeckGains(gains.a, gains.b, { tau: gainTau })
@@ -2639,18 +3379,55 @@ export class MixEngine {
           finish()
           return
         }
-        this.fadeRaf = requestAnimationFrame(tick)
+        this.armMixTick(tick)
       }
-      this.fadeRaf = requestAnimationFrame(tick)
+      this.armMixTick(tick)
     })
   }
 
-  stopMix() {
+  private settleMixWaiter(ok: boolean) {
+    const resolve = this.mixResolve
+    this.mixResolve = null
+    if (resolve) resolve(ok)
+  }
+
+  /** Cancel fade/settle and fail the awaiting startTransition / prepareAndTransition. */
+  private abortInFlightMix() {
+    this.mixGeneration += 1
     this.clearFade()
-    this.clearDeferredPause()
     this.clearHandoffSettle()
+    this.settleMixWaiter(false)
+  }
+
+  /**
+   * Stop BufferSources and park the audible clock back on the live HTML element.
+   * Call before AutoDJ off / iDJ take-over / hard skip so a paused element is
+   * not left under a still-running source.
+   */
+  releaseBufferClockToHtml(opts?: { resumeLive?: boolean }): number {
+    const liveEl = this.getActiveElement()
+    const media = this.deckMediaTime(this.active, liveEl)
     this.stopPlayheadStamp()
     this.disposeIncomingBuffer()
+    this.pendingIncomingBuffer = null
+    try {
+      if (Number.isFinite(media) && media >= 0) liveEl.currentTime = media
+    } catch {
+      /* ignore */
+    }
+    if (opts?.resumeLive !== false && this.getActiveTrack()) {
+      try {
+        if (liveEl.paused) void liveEl.play().catch(() => {})
+      } catch {
+        /* ignore */
+      }
+    }
+    return Number.isFinite(media) ? media : 0
+  }
+
+  stopMix() {
+    this.abortInFlightMix()
+    this.clearDeferredPause()
     this.setEchoSend(this.active, 0, 0.25)
     this.restoreIncomingStretch()
     if (this.dormantStretch) {
@@ -2659,8 +3436,9 @@ export class MixEngine {
       this.teardownStretchChain(deck, chain)
     }
     this.mixLock = false
+    this.flushUserEq({ instant: true })
     this.resetBlendStage()
-    // Abort: silence idle channel but keep it running (mixer style)
+    this.releaseBufferClockToHtml({ resumeLive: Boolean(this.getActiveTrack()) })
     const idle = this.getIdleElement()
     if (this.active === 'a') this.applyDeckGains(1, 0, { tau: 0.03 })
     else this.applyDeckGains(0, 1, { tau: 0.03 })
@@ -2669,9 +3447,8 @@ export class MixEngine {
   }
 
   dispose() {
-    this.clearFade()
+    this.abortInFlightMix()
     this.clearDeferredPause()
-    this.clearHandoffSettle()
     this.stopPlayheadStamp()
     this.disposeIncomingBuffer()
     this.restoreIncomingStretch()
@@ -2688,6 +3465,7 @@ export class MixEngine {
       this.sourceB?.disconnect()
       this.sumNode?.disconnect()
       this.compressor?.disconnect()
+      this.masterGain?.disconnect()
       this.delayNode?.disconnect()
       this.delaySend?.disconnect()
       this.delayTap.a?.disconnect()

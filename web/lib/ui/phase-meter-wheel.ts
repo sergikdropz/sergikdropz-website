@@ -11,14 +11,21 @@ export type PhaseJogFeel = 'fine' | 'normal' | 'coarse'
 export const PHASE_WHEEL_FINE_SCALE = 0.035
 /** Alt holds the jog down to sub-millisecond steps. */
 export const PHASE_WHEEL_SUPERFINE_SCALE = 0.009
-/** Drag gear — still finer than raw strip mapping, like a light jog touch. */
-export const PHASE_DRAG_SCALE = 0.32
+/** Drag gear — light jog touch; finer than older coarse×4 defaults. */
+export const PHASE_DRAG_SCALE = 0.22
 /** Cap per wheel event so momentum flings stay smooth. */
-export const PHASE_WHEEL_MAX_STEP_PX = 20
+export const PHASE_WHEEL_MAX_STEP_PX = 16
 /** Soft-response exponent (<1 damps big flicks, keeps tiny ticks alive). */
-export const PHASE_JOG_SOFT_EXP = 0.72
+export const PHASE_JOG_SOFT_EXP = 0.78
 /** Magnetic snap width as a fraction of one beat (matches the green LOCK band). */
 export const PHASE_JOG_SNAP_BEAT_FRAC = 0.02
+/**
+ * Manual platter-edge bend ceiling (±10%). Wider than MixEngine's auto vinyl
+ * chase (1.2%) — this is a hand on the CDJ outer ring, not a micro-nudge.
+ */
+export const PHASE_PLATTER_BEND_MAX = 0.1
+/** How hard strip-widths/sec map into bend (1.0 strip/s ≈ this fraction of max). */
+export const PHASE_PLATTER_BEND_GAIN = 0.45
 
 /** Multipliers applied on top of the base wheel / drag gears. */
 export const PHASE_JOG_FEEL_SCALES: Record<
@@ -115,6 +122,55 @@ export function phaseDragPixels(
   return softPhaseJogPixels(dx) * PHASE_DRAG_SCALE * scales.drag * resolveSensitivity(sensitivity)
 }
 
+/**
+ * CDJ outer-platter bend from finger velocity.
+ * Drag right → speed up (>1); left → slow down (<1). Stationary → 1 (no bend).
+ * Does **not** seek — rate only, so the platter never stops.
+ */
+export function phasePlatterBendMultiplier(params: {
+  deltaPx: number
+  dtMs: number
+  widthPx: number
+  feel?: PhaseJogFeel
+  sensitivity?: number
+}): number {
+  const { deltaPx, dtMs, widthPx } = params
+  if (!(dtMs > 0) || !Number.isFinite(deltaPx) || !deltaPx) return 1
+  if (!(widthPx > 0)) return 1
+  const vel = deltaPx / (dtMs / 1000) // px/s
+  const stripsPerSec = vel / widthPx
+  // Soft-shape strip velocity so flicks ease off like a physical platter rim.
+  const shaped =
+    Math.sign(stripsPerSec) * Math.pow(Math.abs(stripsPerSec), PHASE_JOG_SOFT_EXP)
+  const scales = PHASE_JOG_FEEL_SCALES[params.feel ?? 'normal'] ?? PHASE_JOG_FEEL_SCALES.normal
+  const sens = resolveSensitivity(params.sensitivity)
+  const raw = shaped * PHASE_PLATTER_BEND_GAIN * scales.drag * sens
+  return 1 + clamp(raw, -PHASE_PLATTER_BEND_MAX, PHASE_PLATTER_BEND_MAX)
+}
+
+/**
+ * Short wheel flick → temporary platter bend (same sign convention as drag).
+ * `pixels` is already geared via {@link phaseWheelPixels}.
+ */
+export function phaseWheelBendMultiplier(params: {
+  pixels: number
+  widthPx: number
+  feel?: PhaseJogFeel
+  sensitivity?: number
+}): number {
+  const { pixels, widthPx } = params
+  if (!Number.isFinite(pixels) || !pixels || !(widthPx > 0)) return 1
+  // Treat one geared wheel step as a brief spin over ~80ms of strip motion.
+  const equivDx = pixels * 14
+  return phasePlatterBendMultiplier({
+    deltaPx: equivDx,
+    dtMs: 80,
+    widthPx,
+    feel: params.feel,
+    sensitivity: params.sensitivity,
+  })
+}
+
 /** Horizontal pixels → seconds, using the beats currently spanned by the strip. */
 export function phaseNudgeSecFromPixels({
   pixels,
@@ -133,11 +189,22 @@ export function phaseNudgeSecFromPixels({
 }
 
 /**
- * How displayed phase error moves when the deck's grid offset is nudged.
- * +1 → offset↑ raises err (live sync master); −1 → offset↑ lowers err
- * (idle sync / local grid).
+ * How displayed phase error moves when the deck's *platter* (media time) is
+ * jogged. Historically the strip nudged `beat_grid_offset`; platter seek uses
+ * the opposite sign so the same gesture still closes the needle toward zero.
+ *
+ * +1 → offset↑ raised err (live sync master) → seek↓ raises err the same way
+ * −1 → offset↑ lowered err (idle / local grid) → seek↓ lowers err the same way
+ *
+ * Therefore: `seekDeltaSec = phaseNudgeToPlatterSeekSec(offsetNudgeSec)`.
  */
 export type PhaseNudgePolarity = 1 | -1
+
+/** Map a legacy offset-style nudge onto a media-time platter seek. */
+export function phaseNudgeToPlatterSeekSec(offsetNudgeSec: number): number {
+  if (!Number.isFinite(offsetNudgeSec) || !offsetNudgeSec) return 0
+  return -offsetNudgeSec
+}
 
 /**
  * Magnetic center snap: when a jog step would cross or land inside the lock

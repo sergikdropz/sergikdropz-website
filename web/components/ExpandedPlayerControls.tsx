@@ -42,6 +42,8 @@ interface ExpandedPlayerControlsProps {
   onTapTempo: (deck: DeckChannelId) => void
   onTempoChange: (deck: DeckChannelId, tempoValue: number) => void
   onChangePlaybackRate: (deck: DeckChannelId, rate: number) => void
+  /** Toggle MASTER TEMPO / key lock for a deck (default on). */
+  onKeyLockChange?: (deck: DeckChannelId, enabled: boolean) => void
   getTempoPercentage: (rate: number) => number
   getAdjustedBPM: (originalBPM: number | null, rate: number) => number | null
   rateToTempoValue: (rate: number) => number
@@ -91,6 +93,9 @@ interface ExpandedPlayerControlsProps {
   deckContinuousPlay?: { a: boolean; b: boolean }
   onToggleDeckContinuousPlay?: (deck: DeckChannelId) => void
   cueJumpPlay?: boolean
+  cueMenuLaunch?: boolean
+  onCueJumpPlayChange?: (enabled: boolean) => void
+  onCueMenuLaunchChange?: (enabled: boolean) => void
   /** Drop library tracks onto the cue (non-live) deck. */
   onCueDeckLibraryDrop?: (
     trackIds: string[],
@@ -102,6 +107,8 @@ type ActiveDial = null | {
   deck: DeckChannelId
   dial: 'tempo' | 'eq'
   anchorRect?: DOMRect | null
+  /** Live anchor for mixer-strip tempo popups (remeasured on scroll/resize). */
+  anchorEl?: HTMLElement | null
 }
 
 type OpenEqFader = {
@@ -110,6 +117,19 @@ type OpenEqFader = {
   el: HTMLElement
   /** Opened by a dial drag — closes again when the drag releases. */
   transient?: boolean
+}
+
+/** CDJ-style pitch fader ranges (%). Tap ± labels to cycle. */
+const TEMPO_RANGE_STEPS = [6, 10, 16, 50] as const
+type TempoRangePct = (typeof TEMPO_RANGE_STEPS)[number]
+
+function nextTempoRange(current: TempoRangePct): TempoRangePct {
+  const i = TEMPO_RANGE_STEPS.indexOf(current)
+  return TEMPO_RANGE_STEPS[(i + 1) % TEMPO_RANGE_STEPS.length]!
+}
+
+function formatTempoRangeLabel(range: TempoRangePct, sign: '+' | '−'): string {
+  return `${sign}${range}%`
 }
 
 const EQ_BAND_META = {
@@ -442,6 +462,7 @@ export default function ExpandedPlayerControls({
   onTapTempo,
   onTempoChange,
   onChangePlaybackRate,
+  onKeyLockChange,
   getTempoPercentage,
   getAdjustedBPM,
   rateToTempoValue,
@@ -484,6 +505,9 @@ export default function ExpandedPlayerControls({
   deckContinuousPlay,
   onToggleDeckContinuousPlay,
   cueJumpPlay = false,
+  cueMenuLaunch = true,
+  onCueJumpPlayChange,
+  onCueMenuLaunchChange,
   onCueDeckLibraryDrop,
 }: ExpandedPlayerControlsProps) {
   /** Shared CDJ strip: ORIG/ADJ · SET/CUE · EQ · XF (iDJ interactive XF; Auto DJ meter). */
@@ -499,6 +523,8 @@ export default function ExpandedPlayerControls({
   const [portalReady, setPortalReady] = useState(false)
   /** Mobile mixer strip: one deck's SET/CUE + EQ at a time. */
   const [mobileMixerDeck, setMobileMixerDeck] = useState<DeckChannelId>('a')
+  /** Pitch fader range (±N%) — tap the ± labels to cycle 6 → 10 → 16 → 50. */
+  const [tempoRangePct, setTempoRangePct] = useState<TempoRangePct>(50)
   const tempoTitleId = useId()
   const eqTitleId = useId()
 
@@ -507,12 +533,28 @@ export default function ExpandedPlayerControls({
     ? getTempoPercentage(activeDeckConfig.playbackRate)
     : 0
   const activeAdjustedBpm = activeDeckConfig
-    ? getAdjustedBPM(activeDeckConfig.detectedBPM, activeDeckConfig.playbackRate)
+    ? getAdjustedBPM(
+        activeDeckConfig.catalogBpm ?? activeDeckConfig.detectedBPM,
+        activeDeckConfig.playbackRate,
+      )
     : null
   const activeTempoSliderValue = activeDeckConfig
     ? rateToTempoValue(activeDeckConfig.playbackRate)
     : 0
   const activeEqGains = activeDeckConfig?.eqGains ?? { low: 0, mid: 0, high: 0 }
+  const clampedTempoSliderValue = Math.min(
+    tempoRangePct,
+    Math.max(-tempoRangePct, activeTempoSliderValue),
+  )
+
+  const cycleTempoRange = useCallback(() => {
+    const next = nextTempoRange(tempoRangePct)
+    setTempoRangePct(next)
+    // UI clamp only — do not write rate when outside the new window (avoids mid-set BPM snap).
+  }, [tempoRangePct])
+
+  const tempoRangeToggleClass =
+    'font-mono font-bold text-white hover:text-white/90 active:scale-95 touch-manipulation tabular-nums'
 
   useEffect(() => {
     setPortalReady(true)
@@ -530,11 +572,17 @@ export default function ExpandedPlayerControls({
   useLockBodyScroll(Boolean(activeDial) && !mixerStripActive)
 
   useEffect(() => {
-    if (!mixerStripActive) setOpenEqFaders([])
+    if (!mixerStripActive) {
+      setOpenEqFaders([])
+      return
+    }
+    // Mixer strip uses openEqFaders for EQ — clear legacy single-EQ dial.
+    setActiveDial((prev) => (prev?.dial === 'eq' ? null : prev))
   }, [mixerStripActive])
 
+  const mixerTempoOpen = mixerStripActive && activeDial?.dial === 'tempo'
   useEffect(() => {
-    if (!mixerStripActive || openEqFaders.length === 0) return
+    if (!mixerStripActive || (openEqFaders.length === 0 && !mixerTempoOpen)) return
     const bump = () => setEqFaderTick((n) => n + 1)
     window.addEventListener('resize', bump)
     window.addEventListener('scroll', bump, true)
@@ -542,7 +590,7 @@ export default function ExpandedPlayerControls({
       window.removeEventListener('resize', bump)
       window.removeEventListener('scroll', bump, true)
     }
-  }, [mixerStripActive, openEqFaders.length])
+  }, [mixerStripActive, openEqFaders.length, mixerTempoOpen])
 
   const deckChromeRef = useRef<HTMLDivElement>(null)
   const crossfaderRef = useRef<HTMLDivElement>(null)
@@ -553,6 +601,14 @@ export default function ExpandedPlayerControls({
     const onWheel = (e: WheelEvent) => {
       const target = e.target as HTMLElement | null
       if (target?.closest('[data-waveform-stage]')) return
+      // XF / phase meters / dial popups / EQ+tempo knobs own their gestures.
+      if (
+        target?.closest(
+          '[data-mix-crossfader], [data-phase-meter], [data-allow-scroll-when-locked], [data-eq-dials], [data-eq-dial], [data-deck-tempo]',
+        )
+      ) {
+        return
+      }
       e.preventDefault()
       e.stopPropagation()
       const scrollParent = el.closest('[data-scroll-lock-root]') as HTMLElement | null
@@ -566,6 +622,8 @@ export default function ExpandedPlayerControls({
       const target = e.target as HTMLElement | null
       if (target?.closest('[data-waveform-stage]')) return
       if (target?.closest('[data-allow-scroll-when-locked]')) return
+      if (target?.closest('[data-mix-crossfader]')) return
+      if (target?.closest('[data-eq-dials], [data-eq-dial], [data-deck-tempo]')) return
       e.preventDefault()
     }
 
@@ -622,10 +680,26 @@ export default function ExpandedPlayerControls({
     }
   }
 
-  const openTempoDial = useCallback((deck: DeckChannelId, anchorEl?: HTMLElement | null) => {
-    const anchorRect = anchorEl?.getBoundingClientRect() ?? null
-    setActiveDial({ deck, dial: 'tempo', anchorRect })
-  }, [])
+  const openTempoDial = useCallback(
+    (
+      deck: DeckChannelId,
+      anchorEl?: HTMLElement | null,
+      opts?: { toggle?: boolean },
+    ) => {
+      const anchorRect = anchorEl?.getBoundingClientRect() ?? null
+      if (mixerStripActive) {
+        setActiveDial((prev) => {
+          if (opts?.toggle !== false && prev?.dial === 'tempo' && prev.deck === deck) {
+            return null
+          }
+          return { deck, dial: 'tempo', anchorRect, anchorEl: anchorEl ?? null }
+        })
+        return
+      }
+      setActiveDial({ deck, dial: 'tempo', anchorRect, anchorEl: anchorEl ?? null })
+    },
+    [mixerStripActive],
+  )
 
   /** Double-click the ADJ readout: beatmatch this deck to the other one. */
   const peerTempoMatch = useCallback(
@@ -711,10 +785,19 @@ export default function ExpandedPlayerControls({
     ? activeDeckConfig.catalogBpm ?? activeDeckConfig.detectedBPM
     : null
   const dialIsDetecting = activeDeckConfig?.isDetectingBPM ?? false
+  const liveTempoAnchorRect = (() => {
+    if (activeDial?.dial !== 'tempo') return null
+    const el = activeDial.anchorEl
+    if (el?.isConnected) {
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) return r
+    }
+    return activeDial.anchorRect ?? null
+  })()
   const anchoredTempo =
     activeDial?.dial === 'tempo' &&
-    activeDial.anchorRect != null &&
-    activeDial.anchorRect.width > 0
+    liveTempoAnchorRect != null &&
+    liveTempoAnchorRect.width > 0
   const anchoredEq =
     activeDial?.dial === 'eq' &&
     activeDial.anchorRect != null &&
@@ -725,21 +808,32 @@ export default function ExpandedPlayerControls({
     activeDial &&
     activeDeckConfig &&
     createPortal(
-      <div className="fixed inset-0 z-[10050]" role="presentation">
-        <button
-          type="button"
-          className="absolute inset-0 bg-black/55"
-          aria-label="Close dial"
-          onClick={() => setActiveDial(null)}
-        />
+      <div
+        className={
+          mixerStripActive
+            ? 'pointer-events-none fixed inset-0 z-[10050]'
+            : 'fixed inset-0 z-[10050]'
+        }
+        role="presentation"
+      >
+        {!mixerStripActive ? (
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55"
+            aria-label="Close dial"
+            onClick={() => setActiveDial(null)}
+          />
+        ) : null}
         {anchoredTempo ? (
           <div
-            className="fixed z-10 flex w-[5.5rem] flex-col items-center rounded-xl border border-gray-700 bg-gray-950 px-2 pb-2 pt-2 shadow-2xl touch-manipulation"
+            className={`fixed z-10 flex w-[5.5rem] flex-col items-center rounded-xl border border-gray-700 bg-gray-950 px-2 pb-2 pt-2 shadow-2xl touch-manipulation ${
+              mixerStripActive ? 'pointer-events-auto' : ''
+            }`}
             role="dialog"
-            aria-modal="true"
+            aria-modal={mixerStripActive ? undefined : true}
             aria-labelledby={tempoTitleId}
             data-allow-scroll-when-locked=""
-            style={anchorTempoPopupStyle(activeDial.anchorRect!)}
+            style={anchorTempoPopupStyle(liveTempoAnchorRect!)}
           >
             <div className="mb-1 flex w-full items-center justify-between gap-1">
               <span id={tempoTitleId} className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
@@ -775,22 +869,57 @@ export default function ExpandedPlayerControls({
             >
               {activeAdjustedBpm?.toFixed(0) || '---'}
             </div>
-            <div className="flex flex-col items-center gap-1 text-[8px] text-gray-500">
-              <span>+50%</span>
+            <button
+              type="button"
+              title={
+                activeDeckConfig.keyLock !== false
+                  ? 'Key lock on — tempo without pitch shift'
+                  : 'Key lock off — vinyl pitch with tempo'
+              }
+              aria-pressed={activeDeckConfig.keyLock !== false}
+              onClick={() =>
+                onKeyLockChange?.(dialDeck, !(activeDeckConfig.keyLock !== false))
+              }
+              className={`mb-1 w-full rounded-md px-1 py-1 text-[9px] font-semibold uppercase tracking-wide touch-manipulation ${
+                activeDeckConfig.keyLock !== false
+                  ? 'bg-emerald-900/50 text-emerald-300 ring-1 ring-emerald-600/50'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+              }`}
+            >
+              Key lock
+            </button>
+            <div className="flex flex-col items-center gap-1 text-[8px]">
+              <button
+                type="button"
+                title={`Pitch range ±${tempoRangePct}% — tap to cycle (${TEMPO_RANGE_STEPS.join(' → ')})`}
+                aria-label={`Tempo range plus ${tempoRangePct} percent. Tap to change range.`}
+                onClick={cycleTempoRange}
+                className={`${tempoRangeToggleClass} text-[8px]`}
+              >
+                {formatTempoRangeLabel(tempoRangePct, '+')}
+              </button>
               <VerticalFader
-                min={-50}
-                max={50}
+                min={-tempoRangePct}
+                max={tempoRangePct}
                 step={0.1}
-                value={activeTempoSliderValue}
+                value={clampedTempoSliderValue}
                 onChange={(v) => onTempoChange(dialDeck, v)}
                 ariaLabel={`Adjust tempo deck ${activeDeckConfig.deckLabel}`}
                 accent="blue"
                 size="compact"
               />
-              <span>−50%</span>
+              <button
+                type="button"
+                title={`Pitch range ±${tempoRangePct}% — tap to cycle (${TEMPO_RANGE_STEPS.join(' → ')})`}
+                aria-label={`Tempo range minus ${tempoRangePct} percent. Tap to change range.`}
+                onClick={cycleTempoRange}
+                className={`${tempoRangeToggleClass} text-[8px]`}
+              >
+                {formatTempoRangeLabel(tempoRangePct, '−')}
+              </button>
             </div>
           </div>
-        ) : anchoredEq ? (
+        ) : mixerStripActive ? null : anchoredEq ? (
           <div
             className="fixed z-10 w-[5.5rem] rounded-xl border border-gray-700 bg-gray-950 px-2 pb-2 pt-2 shadow-2xl touch-manipulation"
             role="dialog"
@@ -873,7 +1002,25 @@ export default function ExpandedPlayerControls({
                   <h3 id={tempoTitleId} className="text-sm font-semibold text-white">
                     Deck {activeDeckConfig.deckLabel} · Tempo
                   </h3>
-                  <p className="text-[10px] text-emerald-300/90 uppercase tracking-wide">Key lock</p>
+                  <button
+                    type="button"
+                    title={
+                      activeDeckConfig.keyLock !== false
+                        ? 'Key lock on — tempo without pitch shift'
+                        : 'Key lock off — vinyl pitch with tempo'
+                    }
+                    aria-pressed={activeDeckConfig.keyLock !== false}
+                    onClick={() =>
+                      onKeyLockChange?.(dialDeck, !(activeDeckConfig.keyLock !== false))
+                    }
+                    className={`mt-0.5 text-[10px] uppercase tracking-wide touch-manipulation ${
+                      activeDeckConfig.keyLock !== false
+                        ? 'text-emerald-300/90'
+                        : 'text-gray-500 line-through'
+                    }`}
+                  >
+                    Key lock {activeDeckConfig.keyLock !== false ? 'on' : 'off'}
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -920,18 +1067,34 @@ export default function ExpandedPlayerControls({
                     <p className="pt-1 text-[10px] text-gray-500">Formant EQ active</p>
                   )}
                 </div>
-                <div className="flex flex-col items-center gap-2 justify-self-center text-[10px] text-gray-500">
-                  <span>+50%</span>
+                <div className="flex flex-col items-center gap-2 justify-self-center text-[10px]">
+                  <button
+                    type="button"
+                    title={`Pitch range ±${tempoRangePct}% — tap to cycle (${TEMPO_RANGE_STEPS.join(' → ')})`}
+                    aria-label={`Tempo range plus ${tempoRangePct} percent. Tap to change range.`}
+                    onClick={cycleTempoRange}
+                    className={`${tempoRangeToggleClass} text-[10px]`}
+                  >
+                    {formatTempoRangeLabel(tempoRangePct, '+')}
+                  </button>
                   <VerticalFader
-                    min={-50}
-                    max={50}
+                    min={-tempoRangePct}
+                    max={tempoRangePct}
                     step={0.1}
-                    value={activeTempoSliderValue}
+                    value={clampedTempoSliderValue}
                     onChange={(v) => onTempoChange(dialDeck, v)}
                     ariaLabel={`Adjust tempo deck ${activeDeckConfig.deckLabel}`}
                     accent="blue"
                   />
-                  <span>−50%</span>
+                  <button
+                    type="button"
+                    title={`Pitch range ±${tempoRangePct}% — tap to cycle (${TEMPO_RANGE_STEPS.join(' → ')})`}
+                    aria-label={`Tempo range minus ${tempoRangePct} percent. Tap to change range.`}
+                    onClick={cycleTempoRange}
+                    className={`${tempoRangeToggleClass} text-[10px]`}
+                  >
+                    {formatTempoRangeLabel(tempoRangePct, '−')}
+                  </button>
                 </div>
                 <div className="flex flex-col items-center gap-3 justify-self-start pl-1">
                   <div className="flex shrink-0 items-center gap-2.5 rounded-lg bg-gray-800/80 px-2.5 py-1.5">
@@ -1131,14 +1294,14 @@ export default function ExpandedPlayerControls({
         eqDialOpen={activeDial?.deck === deck && activeDial.dial === 'eq'}
         focusedEqBand={focusedEqBand}
         openEqBands={openEqFaders.filter((f) => f.deck === deck).map((f) => f.band)}
-        onOpenTempoDial={(opts) => openTempoDial(deck, opts?.anchorEl)}
+        onOpenTempoDial={(opts) => openTempoDial(deck, opts?.anchorEl, { toggle: true })}
         onOpenEqDial={(band, opts) => openEqDial(deck, band, opts?.anchorEl)}
         onSetEqGain={onDeckEqGains ? (band, gain) => setEqBandGain(deck, band, gain) : undefined}
         onEqDragStart={(band, anchorEl) => beginEqDialDrag(deck, band, anchorEl)}
         onEqDragEnd={(band) => endEqDialDrag(deck, band)}
         onTapTempo={() => onTapTempo(deck)}
         onTempoChange={(pct) => onTempoChange(deck, pct)}
-        onTempoDragStart={(anchorEl) => openTempoDial(deck, anchorEl)}
+        onTempoDragStart={(anchorEl) => openTempoDial(deck, anchorEl, { toggle: false })}
         onBPMUpdate={canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate(deck, bpm) : undefined}
         peerDeckLabel={decks[deck === 'a' ? 'b' : 'a'].deckLabel}
         peerMatchBpm={peerTempoMatch(deck)?.matchedBpm ?? null}
@@ -1202,6 +1365,9 @@ export default function ExpandedPlayerControls({
             : undefined
         }
         cueJumpPlay={cueJumpPlay}
+        cueMenuLaunch={cueMenuLaunch}
+        onCueJumpPlayChange={onCueJumpPlayChange}
+        onCueMenuLaunchChange={onCueMenuLaunchChange}
         hotCues={deckHotCues?.[deck]}
         onLaunchHotCue={
           onLaunchDeckHotCue ? (slot) => onLaunchDeckHotCue(deck, slot) : undefined
@@ -1246,6 +1412,45 @@ export default function ExpandedPlayerControls({
     />
   )
 
+  const renderDeckTempo = (
+    deck: DeckChannelId,
+    opts?: { forceDetails?: boolean; reverse?: boolean; className?: string },
+  ) => {
+    const peer = deck === 'a' ? 'b' : 'a'
+    return (
+      <DeckTempoControls
+        className={opts?.className ?? 'shrink-0'}
+        deckLabel={decks[deck].deckLabel}
+        tempoPct={getTempoPercentage(decks[deck].playbackRate)}
+        adjustedBpm={getAdjustedBPM(
+          decks[deck].catalogBpm ?? decks[deck].detectedBPM,
+          decks[deck].playbackRate,
+        )}
+        origBpm={decks[deck].catalogBpm ?? decks[deck].detectedBPM}
+        isDetectingBPM={decks[deck].isDetectingBPM}
+        tempoDialOpen={activeDial?.deck === deck && activeDial.dial === 'tempo'}
+        isMixing={Boolean(decks[deck].isMixing)}
+        mixRole={decks[deck].mixRole ?? null}
+        tapTempoTaps={decks[deck].tapTempoTaps}
+        tapTempoBPM={decks[deck].tapTempoBPM}
+        tapTempoSectionsCompleted={decks[deck].tapTempoSectionsCompleted ?? 0}
+        canEditOrigBpm={canEditOrigBpm}
+        onBPMUpdate={
+          canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate(deck, bpm) : undefined
+        }
+        onOpenTempoDial={(o) => openTempoDial(deck, o?.anchorEl, { toggle: true })}
+        onTapTempo={() => onTapTempo(deck)}
+        onTempoChange={(pct) => onTempoChange(deck, pct)}
+        onTempoDragStart={(anchorEl) => openTempoDial(deck, anchorEl, { toggle: false })}
+        peerDeckLabel={decks[peer].deckLabel}
+        peerMatchBpm={peerTempoMatch(deck)?.matchedBpm ?? null}
+        onMatchPeerTempo={() => matchPeerTempo(deck)}
+        forceDetails={opts?.forceDetails}
+        reverse={opts?.reverse}
+      />
+    )
+  }
+
   const renderMixCrossfader = (className = '') => (
     <MixCrossfader
       className={className}
@@ -1270,7 +1475,25 @@ export default function ExpandedPlayerControls({
 
   const idjEqPopupPortal = useMemo(() => {
     if (!portalReady || !mixerStripActive || openEqFaders.length === 0) return null
-    const connected = openEqFaders.filter((fader) => fader.el.isConnected)
+    const connected = openEqFaders.filter((fader) => {
+      if (!fader.el.isConnected) return false
+      const rect = fader.el.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    })
+    if (connected.length === 0) return null
+
+    let keepOut: { left: number; right: number } | null = null
+    if (typeof document !== 'undefined') {
+      const tracks = document.querySelectorAll<HTMLElement>('[data-mix-crossfader]')
+      for (const track of tracks) {
+        const r = track.getBoundingClientRect()
+        if (r.width > 0 && r.height > 0) {
+          keepOut = { left: r.left - 8, right: r.right + 8 }
+          break
+        }
+      }
+    }
+
     const boxes = layoutEqPopupBoxes(
       connected.map((fader) => {
         const rect = fader.el.getBoundingClientRect()
@@ -1283,6 +1506,7 @@ export default function ExpandedPlayerControls({
         }
       }),
       typeof window === 'undefined' ? 1200 : window.innerWidth,
+      keepOut,
     )
     const boxByKey = new Map(boxes.map((box) => [box.key, box]))
     return createPortal(
@@ -1394,16 +1618,12 @@ export default function ExpandedPlayerControls({
       </div>
 
       {mixerStripActive && (
-        <div
-          ref={crossfaderRef}
-          className="mt-2"
-          data-idj-crossfader=""
-          data-mixer-crossfader={idjActive ? 'idj' : 'auto-dj'}
-        >
+        <div className="mt-2">
           {/* Mobile: one deck's transport+EQ via A/B toggle; XF full width above. */}
           <div className="flex flex-col gap-1.5 md:hidden" data-mixer-mobile="">
             <div className="w-full min-w-0">{renderMixCrossfader()}</div>
             <div className="flex w-full items-center gap-2">
+              {renderDeckTempo(mobileMixerDeck)}
               <div
                 className="flex shrink-0 overflow-hidden rounded-lg border border-gray-700 bg-gray-900/80"
                 role="group"
@@ -1440,79 +1660,47 @@ export default function ExpandedPlayerControls({
             </div>
           </div>
 
-          {/* Desktop / tablet: both decks + center XF */}
-          <div className="hidden w-full items-center gap-2 sm:gap-3 md:flex">
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-              <DeckTempoControls
-                className="shrink-0"
-                deckLabel={decks.a.deckLabel}
-                tempoPct={getTempoPercentage(decks.a.playbackRate)}
-                adjustedBpm={getAdjustedBPM(
-                  decks.a.catalogBpm ?? decks.a.detectedBPM,
-                  decks.a.playbackRate,
-                )}
-                origBpm={decks.a.catalogBpm ?? decks.a.detectedBPM}
-                isDetectingBPM={decks.a.isDetectingBPM}
-                tempoDialOpen={activeDial?.deck === 'a' && activeDial.dial === 'tempo'}
-                isMixing={Boolean(decks.a.isMixing)}
-                mixRole={decks.a.mixRole ?? null}
-                tapTempoTaps={decks.a.tapTempoTaps}
-                tapTempoBPM={decks.a.tapTempoBPM}
-                tapTempoSectionsCompleted={decks.a.tapTempoSectionsCompleted ?? 0}
-                canEditOrigBpm={canEditOrigBpm}
-                onBPMUpdate={
-                  canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate('a', bpm) : undefined
-                }
-                onOpenTempoDial={(opts) => openTempoDial('a', opts?.anchorEl)}
-                onTapTempo={() => onTapTempo('a')}
-                onTempoChange={(pct) => onTempoChange('a', pct)}
-                onTempoDragStart={(anchorEl) => openTempoDial('a', anchorEl)}
-                peerDeckLabel={decks.b.deckLabel}
-                peerMatchBpm={peerTempoMatch('a')?.matchedBpm ?? null}
-                onMatchPeerTempo={() => matchPeerTempo('a')}
-                forceDetails
-              />
-              <div className="flex min-w-0 flex-1 items-center justify-center">
-                {renderDeckTransport('a')}
+          {/* Desktop / tablet: same 2-col grid as waveforms — SET/CUE centered under each deck. */}
+          <div
+            className="relative hidden w-full items-center gap-3 md:grid md:grid-cols-2"
+            data-mixer-desktop-strip=""
+          >
+            {/* Deck A — ORIG left edge, SET/CUE column-centered, EQ toward XF */}
+            <div className="relative flex min-h-[3.25rem] min-w-0 items-center gap-2 pr-24 sm:gap-3">
+              {renderDeckTempo('a', { forceDetails: true, className: 'relative z-[1] shrink-0' })}
+              <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+                <div className="pointer-events-auto">
+                  {renderDeckTransport('a')}
+                </div>
               </div>
-              {renderDeckEq('a')}
+              <div className="relative z-[1] ml-auto flex shrink-0 items-center">
+                {renderDeckEq('a')}
+              </div>
             </div>
-            <div className="w-40 shrink-0">{renderMixCrossfader()}</div>
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-              {renderDeckEq('b')}
-              <div className="flex min-w-0 flex-1 items-center justify-center">
-                {renderDeckTransport('b')}
+            {/* Deck B — EQ toward XF, SET/CUE column-centered, ORIG right edge */}
+            <div className="relative flex min-h-[3.25rem] min-w-0 items-center gap-2 pl-24 sm:gap-3">
+              <div className="relative z-[1] flex shrink-0 items-center">
+                {renderDeckEq('b')}
               </div>
-              <DeckTempoControls
-                className="shrink-0"
-                deckLabel={decks.b.deckLabel}
-                tempoPct={getTempoPercentage(decks.b.playbackRate)}
-                adjustedBpm={getAdjustedBPM(
-                  decks.b.catalogBpm ?? decks.b.detectedBPM,
-                  decks.b.playbackRate,
-                )}
-                origBpm={decks.b.catalogBpm ?? decks.b.detectedBPM}
-                isDetectingBPM={decks.b.isDetectingBPM}
-                tempoDialOpen={activeDial?.deck === 'b' && activeDial.dial === 'tempo'}
-                isMixing={Boolean(decks.b.isMixing)}
-                mixRole={decks.b.mixRole ?? null}
-                tapTempoTaps={decks.b.tapTempoTaps}
-                tapTempoBPM={decks.b.tapTempoBPM}
-                tapTempoSectionsCompleted={decks.b.tapTempoSectionsCompleted ?? 0}
-                canEditOrigBpm={canEditOrigBpm}
-                onBPMUpdate={
-                  canEditOrigBpm && onBPMUpdate ? (bpm) => onBPMUpdate('b', bpm) : undefined
-                }
-                onOpenTempoDial={(opts) => openTempoDial('b', opts?.anchorEl)}
-                onTapTempo={() => onTapTempo('b')}
-                onTempoChange={(pct) => onTempoChange('b', pct)}
-                onTempoDragStart={(anchorEl) => openTempoDial('b', anchorEl)}
-                peerDeckLabel={decks.a.deckLabel}
-                peerMatchBpm={peerTempoMatch('b')?.matchedBpm ?? null}
-                onMatchPeerTempo={() => matchPeerTempo('b')}
-                forceDetails
-                reverse
-              />
+              <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+                <div className="pointer-events-auto">
+                  {renderDeckTransport('b')}
+                </div>
+              </div>
+              {renderDeckTempo('b', {
+                forceDetails: true,
+                reverse: true,
+                className: 'relative z-[1] ml-auto shrink-0',
+              })}
+            </div>
+            {/* XF sits on the column seam so deck centers stay under the waveforms */}
+            <div
+              ref={crossfaderRef}
+              className="pointer-events-none absolute left-1/2 top-1/2 z-[2] w-40 -translate-x-1/2 -translate-y-1/2"
+              data-idj-crossfader=""
+              data-mixer-crossfader={idjActive ? 'idj' : 'auto-dj'}
+            >
+              <div className="pointer-events-auto">{renderMixCrossfader()}</div>
             </div>
           </div>
         </div>

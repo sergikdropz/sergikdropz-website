@@ -4,8 +4,11 @@ test.describe.configure({ timeout: 120_000 })
 
 async function unlockVault(page: Page) {
   // Pre-grant consent so the banner can't mount late and swallow the first click.
+  // Clear sticky DJ modes so library continuous / AutoDJ tests start clean.
   await page.addInitScript(() => {
     window.localStorage.setItem('analytics_consent', 'granted')
+    window.localStorage.setItem('idjEnabled', '0')
+    window.localStorage.setItem('autoDJEnabled', '0')
   })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   const email = `e2e-autodj-${Date.now()}@example.com`
@@ -322,5 +325,56 @@ test.describe('Auto DJ player chrome', () => {
     }
     await expect(page.getByText(/Application error/i)).toHaveCount(0)
     await expect(page.getByText(/Minified React error/i)).toHaveCount(0)
+  })
+
+  test('Auto DJ mix/ended advances the live track without stopping', async ({ page }) => {
+    await unlockVault(page)
+    const enable = await playFirstVaultTrack(page)
+    await enable.click()
+    await expect(page.getByRole('button', { name: /Disable Auto DJ/i }).first()).toBeVisible()
+
+    type NowPlaying = {
+      id: string | null
+      isPlaying: boolean
+      paused: boolean
+      duration: number | null
+    }
+    const nowPlaying = () =>
+      page.evaluate(() => {
+        const e2e = (
+          window as unknown as {
+            __SERGIK_E2E__?: { nowPlaying?: () => NowPlaying | null }
+          }
+        ).__SERGIK_E2E__
+        return e2e?.nowPlaying?.() ?? null
+      })
+
+    await expect.poll(async () => Boolean((await nowPlaying())?.id), { timeout: 30_000 }).toBe(true)
+    await expect
+      .poll(async () => {
+        const np = await nowPlaying()
+        return Boolean(np && np.duration && np.duration > 1 && np.isPlaying)
+      }, { timeout: 30_000 })
+      .toBe(true)
+
+    const before = await nowPlaying()
+    await page.evaluate(() => {
+      const e2e = (
+        window as unknown as {
+          __SERGIK_E2E__?: {
+            seekLiveNearEnd?: () => boolean
+            fireMediaEnded?: (deck: 'live' | 'idle') => void
+          }
+        }
+      ).__SERGIK_E2E__
+      if (!e2e?.seekLiveNearEnd?.()) return
+      e2e.fireMediaEnded?.('live')
+    })
+
+    await expect
+      .poll(async () => (await nowPlaying())?.id ?? '', { timeout: 30_000 })
+      .not.toBe(before?.id ?? '')
+    await expect.poll(async () => (await nowPlaying())?.isPlaying === true, { timeout: 15_000 }).toBe(true)
+    await expect(page.getByText(/Application error/i)).toHaveCount(0)
   })
 })

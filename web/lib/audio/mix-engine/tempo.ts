@@ -15,6 +15,19 @@ export const MIX_RATE_SLEW = 0.018
 export const TEMPO_GLIDE_SOFT_KNEE = 0.06
 /** Smallest rate delta worth writing (see applyDeckTempo). */
 export const TEMPO_RATE_WRITE_EPSILON = 0.0002
+/** UI tempo faders — coarser than audio writes so micro-bend never jitters the strip. */
+export const MIX_UI_RATE_NOTIFY_EPSILON = 0.0015
+
+/** True when planned mix rates moved enough to bother the deck tempo UI. */
+export function shouldNotifyMixUiRate(
+  prev: number,
+  next: number,
+  eps = MIX_UI_RATE_NOTIFY_EPSILON,
+): boolean {
+  if (!Number.isFinite(next)) return false
+  if (!Number.isFinite(prev)) return true
+  return Math.abs(next - prev) >= eps
+}
 
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x))
@@ -217,8 +230,9 @@ export function computeMixDeckRates(params: {
 }
 
 /**
- * Tempo crossfade: hold beatmatch, then glide a shared master clock toward
- * incoming native BPM. Both decks follow the master so phase stays locked.
+ * Tempo crossfade: hold beatmatch for the entire overlap (incoming matches
+ * outgoing BPM). Native-tempo settle happens after handoff — see
+ * `postHandoffNativeGlideMs` (default 4 bars on the live deck).
  */
 export function computeTempoCrossfadePlan(params: {
   outgoingBpm: number | null | undefined
@@ -249,30 +263,12 @@ export function computeTempoCrossfadePlan(params: {
   const mixStartRate = armed
   const masterStartBpm = outBpm * outRate
   const masterEndBpm = inBpm * inTarget
-  const bpmRel =
-    masterStartBpm > 0 ? Math.abs(masterEndBpm - masterStartBpm) / masterStartBpm : 0
   // Shared master clock keeps both decks on the same effective BPM through the blend.
   const dual = params.dualMasterGlide !== false
 
-  // Hold beatmatch through the first half+ of the blend, then glide.
-  // Smooth crossfade holds longer; large ΔBPM holds even longer.
-  const style = params.style ?? 'crossfade'
-  let glideStart =
-    style === 'cut'
-      ? 0.67
-      : style === 'crossfade'
-        ? 0.58
-        : style === 'filter-eq'
-          ? 0.54
-          : 0.5
-  if (bpmRel > MASTER_GLIDE_BPM_REL_CAP) glideStart = Math.max(glideStart, 0.68)
-  else if (bpmRel < 0.02) glideStart = 0.78
-  const knees = [0.5, 0.54, 0.58, 0.67, 0.68, 0.78]
-  glideStart = knees.reduce((best, k) =>
-    Math.abs(k - glideStart) < Math.abs(best - glideStart) ? k : best,
-  )
-
-  const outEndRate = clampTempoRate(masterEndBpm / Math.max(1e-6, outBpm))
+  // Hold beatmatch for the full overlap — soft knee past 1.0 so tempoMixProgress
+  // never leaves 0 while both decks are audible. Native glide is post-handoff.
+  const glideStart = 1 + TEMPO_GLIDE_SOFT_KNEE
 
   return {
     outgoingRate: outRate,
@@ -286,8 +282,16 @@ export function computeTempoCrossfadePlan(params: {
     masterStartBpm,
     masterEndBpm,
     dualMasterGlide: dual,
-    outEndRate,
+    // Outgoing stays at its rate until parked — no mid-mix chase to incoming.
+    outEndRate: outRate,
   }
+}
+
+/** Wall-clock ms to glide live deck from beatmatch → native over N bars (4/4). */
+export function postHandoffNativeGlideMs(bpm: number, bars = 4): number {
+  const b = Math.max(60, Number.isFinite(bpm) && bpm > 0 ? bpm : 120)
+  const barCount = Math.max(1, bars)
+  return Math.round((60 / b) * 4 * barCount * 1000)
 }
 
 /** Master BPM along the shared clock (hold then perceptual log-linear glide). */

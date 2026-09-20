@@ -7,11 +7,13 @@ export default function IDJSettingsPanel({
   onPatch,
   onCenterCrossfader,
   onResetEq,
+  onResetDjModes,
 }: {
   config: IDJConfig
   onPatch: (patch: Partial<IDJConfig>) => void
   onCenterCrossfader: () => void
   onResetEq: () => void
+  onResetDjModes?: () => void
 }) {
   const setContinuous = (deck: IDJDeckId, on: boolean) => {
     onPatch({
@@ -60,9 +62,26 @@ export default function IDJSettingsPanel({
           className="mt-0.5 accent-violet-500"
         />
         <span>
-          <span className="font-medium text-white">CUE jumps and plays</span>
+          <span className="font-medium text-white">Cue play</span>
           <span className="mt-0.5 block text-[10px] text-gray-500">
-            Off: CUE seeks to the memory point and pauses. On: seek and play from there.
+            On: CUE seeks and plays. Off: Cue stop — seek and pause (CDJ-style). Also on the
+            CUE button menu.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-[11px] text-gray-300">
+        <input
+          type="checkbox"
+          checked={config.cueMenuLaunch}
+          onChange={(e) => onPatch({ cueMenuLaunch: e.target.checked })}
+          className="mt-0.5 accent-violet-500"
+        />
+        <span>
+          <span className="font-medium text-white">Cue launch from menu</span>
+          <span className="mt-0.5 block text-[10px] text-gray-500">
+            On: picking a cue in the CUE menu jumps there now. Off: arm only — tap CUE later
+            to fire.
           </span>
         </span>
       </label>
@@ -117,6 +136,17 @@ export default function IDJSettingsPanel({
           Reset EQ
         </button>
       </div>
+
+      {onResetDjModes && (
+        <button
+          type="button"
+          onClick={onResetDjModes}
+          className="h-8 w-full rounded-md border border-amber-800/60 bg-amber-950/30 text-[10px] font-semibold text-amber-100 hover:bg-amber-900/40"
+          title="Turn off iDJ and Auto DJ so the queue plays continuously"
+        >
+          Reset DJ modes (library continuous)
+        </button>
+      )}
     </div>
   )
 }

@@ -8,7 +8,7 @@
  *   redefine phrase-1 origin.
  */
 
-import { beatPeriodSec, resolveTapeAlignedGrid } from '@/lib/audio/beat-grid'
+import { beatPeriodSec } from '@/lib/audio/beat-grid'
 import { extractMeasured } from '@/lib/audio/sonic-dna-quality'
 import { resolvePlaybackBpm } from '@/lib/audio/sonic-dna-mix'
 import { toPhaseOnlyOffsetSec } from './phrase-lattice'
@@ -98,7 +98,7 @@ export function readDnaGridOffsetSec(sonicDna: unknown): number | null {
   return readDnaBeatPhaseSec(sonicDna, beatSec)
 }
 
-/** Stored / DNA offset folded to within-beat phase. Safe for tape paint and IN cues. */
+/** Stored catalog offset folded to within-beat phase. Unset → 0 ms (file t=0). */
 export function playbackGridPhaseSec(
   track: Pick<MixTrackRef, 'beat_grid_offset' | 'sonic_dna' | 'bpm'>,
   bpm?: number | null,
@@ -111,7 +111,9 @@ export function playbackGridPhaseSec(
   if (!isUnsetOffset(track.beat_grid_offset)) {
     return toPhaseOnlyOffsetSec(track.beat_grid_offset!, beatSec)
   }
-  return readDnaBeatPhaseSec(track.sonic_dna, beatSec) ?? 0
+  // Audio / waveform / playhead / beatgrid share media t=0 until the user
+  // locks a downbeat (Align Grid / Set Downbeat). DNA phase is analysis-only.
+  return 0
 }
 
 export type MixTapeGrid = {
@@ -123,46 +125,26 @@ export type MixTapeGrid = {
  * Peak-measured tempo + within-beat phase for paint and mix planning.
  *
  * CDJ contract: catalog `beat_grid_offset` (including explicit 0 ms) is the
- * source of truth for both decks. Peak re-align only fills **unset** grids —
- * never invent a new phase that would desync UI paint from mix planning.
+ * source of truth for both decks. Unset grids stay at file t=0 — never invent
+ * a DNA/peak phase that would desync beat lines from audio + playhead.
  */
 export function resolveMixTapeGrid(
   track: MixTrackRef,
   peaks?: MixGridPeaks | null,
 ): MixTapeGrid {
+  void peaks
   const catalogBpm =
     resolvePlaybackBpm(track) ?? (typeof track.bpm === 'number' && track.bpm > 0 ? track.bpm : 120)
   const beatSec = beatPeriodSec(catalogBpm) ?? 0.5
 
   const storedRaw = track.beat_grid_offset
-  const storedPhase = !isUnsetOffset(storedRaw)
-    ? toPhaseOnlyOffsetSec(storedRaw!, beatSec)
-    : null
-
-  // Catalog / manual phase (incl. 0) wins — matches MusicPlayer.cacheMixGridOffset.
-  if (storedPhase != null) {
-    return { offsetSec: storedPhase, bpm: catalogBpm }
-  }
-
-  if (peaks?.peaks?.length && peaks.durationSec > 0) {
-    const tape = resolveTapeAlignedGrid({
-      peaks: peaks.peaks,
-      durationSec: peaks.durationSec,
+  if (!isUnsetOffset(storedRaw)) {
+    return {
+      offsetSec: toPhaseOnlyOffsetSec(storedRaw!, beatSec),
       bpm: catalogBpm,
-      storedPhaseSec: null,
-      sonicDna: track.sonic_dna,
-    })
-    if (tape) {
-      const tapeBeat = beatPeriodSec(tape.bpm) ?? beatSec
-      return {
-        offsetSec: toPhaseOnlyOffsetSec(tape.offsetSec, tapeBeat),
-        bpm: tape.bpm,
-      }
     }
   }
 
-  const dnaPhase = readDnaBeatPhaseSec(track.sonic_dna, beatSec)
-  if (dnaPhase != null) return { offsetSec: dnaPhase, bpm: catalogBpm }
   return { offsetSec: 0, bpm: catalogBpm }
 }
 

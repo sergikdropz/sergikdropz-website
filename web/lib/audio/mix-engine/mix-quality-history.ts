@@ -138,3 +138,42 @@ export function consecutiveWeakMixCount(
   }
   return n
 }
+
+/**
+ * Average grade penalty for a specific outgoing→incoming pair from history.
+ * Returns 0 when unknown; negative when that pair has mixed poorly before.
+ */
+export function pairHistoryScoreBias(
+  history: MixQualityHistoryEntry[],
+  outgoingTrackId: string | null | undefined,
+  incomingTrackId: string | null | undefined,
+): number {
+  if (!outgoingTrackId || !incomingTrackId || !history.length) return 0
+  const hits = history.filter(
+    (e) => e.outgoingTrackId === outgoingTrackId && e.incomingTrackId === incomingTrackId,
+  )
+  if (!hits.length) return 0
+  let sum = 0
+  for (const e of hits) {
+    if (e.grade === 'poor') sum -= 0.22
+    else if (e.grade === 'fair') sum -= 0.1
+    else if (e.grade === 'good') sum += 0.04
+    else if (e.grade === 'excellent') sum += 0.08
+  }
+  return sum / hits.length
+}
+
+/** True when this exact pair has a recent poor mix — prefer a different next track. */
+export function shouldAvoidPairFromHistory(
+  history: MixQualityHistoryEntry[],
+  outgoingTrackId: string | null | undefined,
+  incomingTrackId: string | null | undefined,
+): boolean {
+  if (!outgoingTrackId || !incomingTrackId) return false
+  const recent = history
+    .filter((e) => e.outgoingTrackId === outgoingTrackId && e.incomingTrackId === incomingTrackId)
+    .slice(0, 3)
+  if (!recent.length) return false
+  const poor = recent.filter((e) => e.grade === 'poor' || e.grade === 'fair').length
+  return poor >= 2 || (recent[0]?.grade === 'poor' && recent.length >= 1)
+}

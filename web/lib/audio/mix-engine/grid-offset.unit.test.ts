@@ -129,7 +129,7 @@ describe('resolveMixGridOffset', () => {
     expect(offset).toBe(0)
   })
 
-  it('peak-aligns only when catalog phase is unset', () => {
+  it('keeps file t=0 when catalog phase is unset (no DNA/peak invent)', () => {
     const bpm = 120
     const beat = 60 / bpm
     const durationSec = 24
@@ -148,7 +148,7 @@ describe('resolveMixGridOffset', () => {
       },
       { peaks, durationSec },
     )
-    expect(offset).toBeCloseTo(truePhase, 1)
+    expect(offset).toBe(0)
   })
 
   it('folds legacy absolute stored offset into phase', () => {
@@ -210,5 +210,16 @@ describe('playbackGridPhaseSec', () => {
         beat_grid_offset: 3.2,
       }),
     ).toBeCloseTo(0.2, 5)
+  })
+
+  it('returns 0 ms when catalog offset is unset (shared media origin)', () => {
+    expect(
+      playbackGridPhaseSec({
+        bpm: 120,
+        sonic_dna: {
+          measured: { bpm: 120, gridOffsetSec: 0.18, kickOnsetSec: [0.18, 0.68] },
+        },
+      }),
+    ).toBe(0)
   })
 })

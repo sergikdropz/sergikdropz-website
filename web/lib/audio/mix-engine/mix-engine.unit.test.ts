@@ -128,7 +128,7 @@ describe('deriveDeckCues / buildMixPlan', () => {
     expect(cues.mixInSec).toBeCloseTo(0.05, 2)
   })
 
-  it('uses DNA grid phase (not absolute kick) when beat_grid_offset unset', () => {
+  it('uses file t=0 when beat_grid_offset unset (no DNA invent)', () => {
     const track = {
       id: 't',
       file: '/t.mp3',
@@ -144,8 +144,7 @@ describe('deriveDeckCues / buildMixPlan', () => {
       },
     }
     const cues = deriveDeckCues(track, 8)
-    // Phase of 3.2s @ 120 BPM = 0.2s — phrase 1 stays near track start
-    expect(cues.gridOffsetSec).toBeCloseTo(0.2, 5)
+    expect(cues.gridOffsetSec).toBe(0)
     expect(cues.mixInSec).toBeLessThan(1)
   })
 

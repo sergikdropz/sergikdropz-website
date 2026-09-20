@@ -28,6 +28,7 @@ import { readPairBpmConfidence } from './alignment'
 import { normalizeDjOverlapBars, PHRASE_CELL_BARS } from './phrase-mix-doctrine'
 import { resolveMixGridOffset } from './grid-offset'
 import { toPhaseOnlyOffsetSec } from './phrase-lattice'
+import { readOutgoingOutroStartSec } from './section-style'
 import type { DeckCues, InPhraseBars, MixPlan, MixStyle, MixTrackRef, OutPhraseBars, PhraseBars } from './types'
 
 const DEFAULT_PHRASE_BARS: PhraseBars = 8
@@ -633,12 +634,23 @@ export function buildMixPlan(params: {
   const mathOnly = canonical || !kickCueNudge
 
   // Prefer last-phrase OUT; fall back if cues invalid.
+  // Section-aware: when DNA marks an outro start near the end, prefer that
+  // phrase cell over a pure math last-N-bars OUT (cleaner outro→intro blends).
   let mixOut = outCues.mixOutSec
+  const outroPref = readOutgoingOutroStartSec(params.outgoing)
   if (!(mixOut >= 0 && mixOut < duration - 0.5) || canonical) {
-    const idealOut = Math.max(
+    let idealOut = Math.max(
       outCues.gridOffsetSec,
       duration - Math.max(alignPhraseSec, overlapPhraseSec),
     )
+    if (
+      typeof outroPref === 'number' &&
+      outroPref > outCues.gridOffsetSec &&
+      outroPref < duration - overlapPhraseSec * 0.5
+    ) {
+      // Snap toward DNA outro, but never later than the last-phrase ideal.
+      idealOut = Math.min(idealOut, Math.max(outCues.gridOffsetSec, outroPref))
+    }
     mixOut = snapToMixPhraseBoundary({
       timeSec: idealOut,
       bpm: bpmOut,

@@ -137,7 +137,8 @@ export async function cueIdleEarly(
     plan.incomingStartSec = cueSec
     plan.resolvedIncomingSec = cueSec
     await engine.enterPreArm(plan, deps.withMixGrid(nextTrack), url, mixStartRate)
-    deps.clearIdleWarmed()
+    // Do not clearIdleWarmed — that forces parkAndWarm on the next tick and
+    // throws away the pre-arm phase lock (doctrine: never park after nudge).
 
     if (
       deps.phaseMeterEnabled() &&
@@ -152,7 +153,10 @@ export async function cueIdleEarly(
         deps.getDetectedBpm() ??
         120
       const inBpm = resolvePlaybackBpm(nextTrack, null) ?? nextTrack.bpm ?? outBpm
-      const gridAlign = plan.gridAlign ?? phaseMeterWindowToGridAlign(meter.windowId)
+      const gridAlign =
+        plan.phrase1Lock !== false
+          ? 'phrase'
+          : (plan.gridAlign ?? phaseMeterWindowToGridAlign(meter.windowId))
       engine.nudgeIdleToMaster({
         outgoingTimeSec: engine.getActiveMediaTime(),
         outgoingBpm: outBpm,
@@ -163,7 +167,7 @@ export async function cueIdleEarly(
           typeof nextTrack.beat_grid_offset === 'number' ? nextTrack.beat_grid_offset : undefined,
         incomingRate: mixStartRate,
         gridAlign,
-        gridPhraseBars: plan.gridPhraseBars ?? meter.phraseBars,
+        gridPhraseBars: plan.gridPhraseBars ?? meter.phraseBars ?? 8,
       })
     }
 
@@ -189,13 +193,22 @@ export async function cueIdleEarly(
       outTrack?.bpm ??
       deps.getDetectedBpm() ??
       120
-    const aligned = alignMixOverlayToBeatGrid({
-      mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
-      mixDurationSec: plan.mixDurationSec,
-      bpm,
-      offsetSec: deps.getBeatGridOffsetSec(),
-      overlapBars: plan.overlapBars ?? deps.getDefaultOverlapBars(),
-    })
+    const aligned =
+      plan.phrase1Lock !== false
+        ? {
+            // Frozen / phrase-1: do not re-snap overlay (thrash vs sticky OUT).
+            mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
+            mixStartSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
+            mixEndSec:
+              (plan.mixOutMarkerSec ?? plan.startAtOutgoingSec) + plan.mixDurationSec,
+          }
+        : alignMixOverlayToBeatGrid({
+            mixOutSec: plan.mixOutMarkerSec ?? plan.startAtOutgoingSec,
+            mixDurationSec: plan.mixDurationSec,
+            bpm,
+            offsetSec: deps.getBeatGridOffsetSec(),
+            overlapBars: plan.overlapBars ?? deps.getDefaultOverlapBars(),
+          })
     deps.setMixOverlay({
       active: true,
       mixOutSec: aligned.mixOutSec,

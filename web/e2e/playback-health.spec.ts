@@ -72,6 +72,8 @@ test('vault track reaches real playback progress, not just a network request', a
 }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem('analytics_consent', 'granted')
+    window.localStorage.setItem('idjEnabled', '0')
+    window.localStorage.setItem('autoDJEnabled', '0')
     // Track every AudioContext the app creates so a stalled media element can be
     // attributed to a suspended graph rather than a network/codec problem.
     const Native = window.AudioContext || (window as any).webkitAudioContext
@@ -199,4 +201,77 @@ test('vault track reaches real playback progress, not just a network request', a
   expect(afterStamp!.src.split('?')[0], 'catalog stamp reloaded a different src').toBe(
     src1.split('?')[0],
   )
+})
+
+test('library playback advances to the next queued track and stays playing', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('analytics_consent', 'granted')
+    window.localStorage.setItem('idjEnabled', '0')
+    window.localStorage.setItem('autoDJEnabled', '0')
+  })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await unlockVault(page)
+  await page.goto('/music-library', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: /SERGIK Music Vault/i })).toBeVisible({
+    timeout: 90_000,
+  })
+  await dismissConsent(page)
+
+  await page.getByRole('button', { name: /^Songs$/i }).click({ force: true })
+  const trackRow = page.getByRole('row', { name: /Dmn8r|FTP 2|One Of Those Nights/i }).first()
+  await expect(trackRow).toBeVisible({ timeout: 60_000 })
+  await trackRow.dblclick()
+
+  type NowPlaying = {
+    id: string | null
+    isPlaying: boolean
+    paused: boolean
+    duration: number | null
+  }
+  const nowPlaying = () =>
+    page.evaluate(() => {
+      const e2e = (
+        window as unknown as {
+          __SERGIK_E2E__?: { nowPlaying?: () => NowPlaying | null }
+        }
+      ).__SERGIK_E2E__
+      return e2e?.nowPlaying?.() ?? null
+    })
+
+  await expect.poll(async () => Boolean((await nowPlaying())?.id), { timeout: 30_000 }).toBe(true)
+  await expect
+    .poll(async () => {
+      const np = await nowPlaying()
+      return Boolean(np && np.duration && np.duration > 1 && np.isPlaying && !np.paused)
+    }, { timeout: 30_000 })
+    .toBe(true)
+
+  // Vault playTrack turns iDJ off — confirm library continuous mode.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => window.localStorage.getItem('idjEnabled') !== '1'),
+      { timeout: 10_000 },
+    )
+    .toBe(true)
+
+  const before = await nowPlaying()
+  await page.evaluate(() => {
+    const e2e = (
+      window as unknown as {
+        __SERGIK_E2E__?: {
+          seekLiveNearEnd?: () => boolean
+          fireMediaEnded?: (deck: 'live' | 'idle') => void
+        }
+      }
+    ).__SERGIK_E2E__
+    if (!e2e?.seekLiveNearEnd?.()) return
+    e2e.fireMediaEnded?.('live')
+  })
+
+  await expect
+    .poll(async () => (await nowPlaying())?.id ?? '', { timeout: 30_000 })
+    .not.toBe(before?.id ?? '')
+  const after = await nowPlaying()
+  expect(after?.isPlaying, 'library next-track should keep isPlaying true').toBe(true)
 })

@@ -19,8 +19,18 @@ export type IDJConfig = {
   continuousPlay: IDJContinuousPlay
   /** Snap waveform pointer / SET / hot cues to the visible beat grid. */
   snapToGrid: boolean
-  /** CUE seeks then plays. Off seeks and pauses (CDJ-style). */
+  /**
+   * CUE / hot-cue launch after seek:
+   * - true → play from the cue (Cue play)
+   * - false → pause on the cue (Cue stop, CDJ-style)
+   */
   cueJumpPlay: boolean
+  /**
+   * Picking a cue in the CUE menu:
+   * - true → arm + jump now (Cue launch)
+   * - false → arm only; CUE button fires later
+   */
+  cueMenuLaunch: boolean
   /** New track on a deck starts at its memory cue when one exists. */
   startOnCue: boolean
 }
@@ -28,7 +38,9 @@ export type IDJConfig = {
 export const DEFAULT_IDJ_CONFIG: IDJConfig = {
   continuousPlay: { a: false, b: false },
   snapToGrid: true,
-  cueJumpPlay: false,
+  /** Cue play by default — Cue stop on the master is a set-killer mid-performance. */
+  cueJumpPlay: true,
+  cueMenuLaunch: true,
   startOnCue: true,
 }
 
@@ -74,7 +86,9 @@ export function readIDJConfigFromStorage(): IDJConfig {
     return {
       continuousPlay: normalizeContinuousPlay(parsed.continuousPlay),
       snapToGrid: parsed.snapToGrid !== false,
-      cueJumpPlay: parsed.cueJumpPlay === true,
+      // Default on (Cue play) — missing key must not force Cue stop.
+      cueJumpPlay: parsed.cueJumpPlay !== false,
+      cueMenuLaunch: parsed.cueMenuLaunch !== false,
       startOnCue: parsed.startOnCue !== false,
     }
   } catch {
