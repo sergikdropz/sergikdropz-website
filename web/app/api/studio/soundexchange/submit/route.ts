@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { createSoundExchangeClient } from '@/lib/studio/soundexchange'
+import {
+  artistFromContributors,
+  createSoundExchangeClient,
+  normalizeIsrcInput,
+} from '@/lib/studio/soundexchange'
+import { US_ISRC_REGISTRANT } from '@/lib/studio/isrc-format'
 import { logActivity } from '@/lib/activity-log'
 
 /**
  * POST /api/studio/soundexchange/submit
- * Submit ISRC data to SoundExchange
+ * Body: { trackId }
+ * Records SoundExchange submission (local registry when remote API unset).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -16,17 +22,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { trackId } = await request.json()
-
     if (!trackId) {
-      return NextResponse.json(
-        { error: 'trackId required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'trackId required' }, { status: 400 })
     }
 
     const supabase = createSupabaseServerClient()
-
-    // Get track with ISRC
     const { data: track, error: trackError } = await supabase
       .from('distribution_tracks')
       .select('*')
@@ -34,95 +34,74 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (trackError || !track) {
-      return NextResponse.json(
-        { error: 'Track not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Track not found' }, { status: 404 })
     }
 
-    if (!track.isrc_full) {
-      return NextResponse.json(
-        { error: 'Track does not have an ISRC assigned' },
-        { status: 400 }
-      )
+    const isrc = normalizeIsrcInput(track.isrc_full)
+    if (!isrc) {
+      return NextResponse.json({ error: 'Track does not have a valid ISRC' }, { status: 400 })
     }
 
-    // Get release if track is part of one
-    let release = null
+    let release: { title?: string | null; release_date?: string | null; genre?: string | null; album_artist?: string | null } | null =
+      null
     if (track.release_id) {
       const { data: releaseData } = await supabase
         .from('distribution_releases')
-        .select('*')
+        .select('title, release_date, genre, album_artist')
         .eq('id', track.release_id)
         .single()
       release = releaseData
     }
 
-    // Create SoundExchange client
     const soundExchange = createSoundExchangeClient()
-    if (!soundExchange) {
-      return NextResponse.json(
-        { 
-          error: 'SoundExchange API not configured. Set SOUNDEXCHANGE_API_KEY or SOUNDEXCHANGE_ACCOUNT_ID environment variables.',
-          configured: false,
-        },
-        { status: 500 }
-      )
-    }
-
-    // Parse contributors from JSONB
-    const contributors = Array.isArray(track.contributors) 
-      ? track.contributors 
-      : []
-
-    // Prepare submission data
+    const contributors = Array.isArray(track.contributors) ? track.contributors : []
     const submissionData = {
-      isrc: track.isrc_full,
+      isrc,
       title: track.title,
-      artist: 'SERGIK', // Default artist, could be from track metadata
+      artist:
+        release?.album_artist ||
+        artistFromContributors(contributors, US_ISRC_REGISTRANT.recordingArtist),
       duration: track.duration || undefined,
       releaseTitle: release?.title || undefined,
       releaseDate: release?.release_date || undefined,
-      genre: release?.genre || track.metadata?.genre || undefined,
-      explicit: track.explicit || false,
-      contributors: contributors.map((c: any) => ({
-        name: c.name || c,
-        role: c.role || 'artist',
-      })),
+      genre: release?.genre || undefined,
+      explicit: Boolean(track.explicit),
+      contributors: contributors.map((c: { name?: string; role?: string } | string) =>
+        typeof c === 'string'
+          ? { name: c, role: 'artist' }
+          : { name: c.name || 'Unknown', role: c.role || 'artist' },
+      ),
     }
 
-    // Submit to SoundExchange
     const result = await soundExchange.submitISRC(submissionData)
-
-    // Store submission record (fire and forget)
-    const submissionId = `sx-submission-${Date.now()}`
-    const insertPromise = supabase
-      .from('soundexchange_submissions')
-      .insert({
+    const submissionId = result.submissionId || `sx-submission-${Date.now()}`
+    const { error: insertError } = await supabase.from('soundexchange_submissions').upsert(
+      {
         id: submissionId,
         track_id: trackId,
-        isrc: track.isrc_full,
+        isrc,
         status: result.success ? 'submitted' : 'error',
         submitted_at: new Date().toISOString(),
         response: result,
-        error: result.success ? null : result.message,
-      })
-    
-    // Handle promise (fire and forget)
-    Promise.resolve(insertPromise).catch((err) => {
-      // Table might not exist yet, that's okay
-      console.warn('Could not save SoundExchange submission record:', err)
-    })
+        error: result.success ? null : result.message || null,
+      },
+      { onConflict: 'id' },
+    )
 
-    // Log activity
+    if (insertError) {
+      console.warn('Could not save SoundExchange submission record:', insertError.message)
+    }
+
     await logActivity({
       actionType: 'submit_soundexchange',
       resourceType: 'track',
       resourceId: trackId,
-      details: { 
-        isrc: track.isrc_full,
+      details: {
+        isrc,
         success: result.success,
         submissionId: result.submissionId,
+        mode: result.mode,
+        persisted: !insertError,
       },
     })
 
@@ -130,12 +109,14 @@ export async function POST(request: NextRequest) {
       success: result.success,
       submissionId: result.submissionId,
       message: result.message,
+      mode: result.mode,
+      persisted: !insertError,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('SoundExchange submission error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to submit to SoundExchange' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Failed to submit to SoundExchange' },
+      { status: 500 },
     )
   }
 }

@@ -29,6 +29,154 @@ import {
 const EP_COVER_TILES = collectEpCoverTiles()
 const RELEASE_COVER_TILES = collectReleaseCoverTiles()
 const MOTION_VARIANT_COUNT = 8
+/** Keep in sync with `.mosaic-tile-crossfade-*` duration in globals.css */
+const MOSAIC_CROSSFADE_MS = 3200
+const MOSAIC_SWAP_INTERVAL_MS = 9000
+
+type MosaicLayer = {
+  key: string
+  id: string
+  src: string
+  alt: string
+  role: 'stable' | 'incoming' | 'outgoing'
+}
+
+type MosaicCellProps = {
+  tile: BackgroundTile
+  imageUrl: string
+  enableCrossfade: boolean
+  enableTileMotion: boolean
+  motionVariant: number
+  motionDelay?: string
+  imageQuality: number
+  imageSizes: string
+  priority: boolean
+  fetchPriority: 'high' | 'auto'
+  loading: 'eager' | 'lazy'
+  onError: (id: string) => void
+}
+
+function MosaicCrossfadeCell({
+  tile,
+  imageUrl,
+  enableCrossfade,
+  enableTileMotion,
+  motionVariant,
+  motionDelay,
+  imageQuality,
+  imageSizes,
+  priority,
+  fetchPriority,
+  loading,
+  onError,
+}: MosaicCellProps) {
+  const layerKey = `${tile.id}-${imageUrl}`
+  const [layers, setLayers] = useState<MosaicLayer[]>(() => [
+    {
+      key: layerKey,
+      id: tile.id,
+      src: imageUrl,
+      alt: tile.alt,
+      role: 'stable',
+    },
+  ])
+
+  useEffect(() => {
+    setLayers((prev) => {
+      const top = prev[prev.length - 1]
+      if (top?.key === layerKey) return prev
+
+      if (!enableCrossfade || !top) {
+        return [
+          {
+            key: layerKey,
+            id: tile.id,
+            src: imageUrl,
+            alt: tile.alt,
+            role: 'stable',
+          },
+        ]
+      }
+
+      const outgoing = prev.find((layer) => layer.role !== 'incoming') ?? top
+      return [
+        { ...outgoing, role: 'outgoing' },
+        {
+          key: layerKey,
+          id: tile.id,
+          src: imageUrl,
+          alt: tile.alt,
+          role: 'incoming',
+        },
+      ]
+    })
+  }, [layerKey, tile.id, tile.alt, imageUrl, enableCrossfade])
+
+  const finishCrossfade = (finishedKey: string) => {
+    setLayers((prev) => {
+      const incoming = prev.find((layer) => layer.key === finishedKey && layer.role === 'incoming')
+      if (!incoming) return prev
+      return [{ ...incoming, role: 'stable' }]
+    })
+  }
+
+  // Safety net if animationend is skipped (tab backgrounded, CSS override).
+  useEffect(() => {
+    const fading = layers.find((layer) => layer.role === 'incoming')
+    if (!fading) return
+    const timeoutId = window.setTimeout(
+      () => finishCrossfade(fading.key),
+      MOSAIC_CROSSFADE_MS + 200,
+    )
+    return () => window.clearTimeout(timeoutId)
+  }, [layers])
+
+  const motionClass = enableTileMotion
+    ? `mosaic-tile-motion mosaic-tile-motion-${motionVariant}`
+    : ''
+
+  return (
+    <div className="relative overflow-hidden">
+      {layers.map((layer) => {
+        const fadeClass =
+          layer.role === 'incoming'
+            ? 'mosaic-tile-crossfade-in'
+            : layer.role === 'outgoing'
+              ? 'mosaic-tile-crossfade-out'
+              : ''
+        return (
+          <div
+            key={layer.key}
+            className={`absolute inset-0 ${fadeClass}`}
+            onAnimationEnd={
+              layer.role === 'incoming'
+                ? (event) => {
+                    if (event.target !== event.currentTarget) return
+                    finishCrossfade(layer.key)
+                  }
+                : undefined
+            }
+          >
+            <Image
+              src={layer.src}
+              alt={layer.alt}
+              fill
+              className={`object-cover blur-none opacity-60 ${motionClass}`}
+              style={enableTileMotion ? { animationDelay: motionDelay } : undefined}
+              quality={imageQuality}
+              sizes={imageSizes}
+              unoptimized={shouldUnoptimizeImage(layer.src)}
+              priority={priority && layer.key === layerKey}
+              fetchPriority={layer.key === layerKey ? fetchPriority : 'auto'}
+              loading={layer.key === layerKey ? loading : 'lazy'}
+              onError={() => onError(layer.id)}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 function subscribeNoop() {
   return () => {}
@@ -41,6 +189,19 @@ function getMobileSnapshot() {
 function subscribeResize(onStoreChange: () => void) {
   window.addEventListener('resize', onStoreChange)
   return () => window.removeEventListener('resize', onStoreChange)
+}
+
+function getReducedMotionSnapshot() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+function subscribeReducedMotion(onStoreChange: () => void) {
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+  mq.addEventListener('change', onStoreChange)
+  return () => mq.removeEventListener('change', onStoreChange)
 }
 
 function subscribeLiveCovers(onStoreChange: () => void) {
@@ -56,6 +217,11 @@ export default function BackgroundImages() {
 
   const isWebKit = useSyncExternalStore(subscribeNoop, isSafariOrIOSWebKit, () => false)
   const isMobile = useSyncExternalStore(subscribeResize, getMobileSnapshot, () => false)
+  const prefersReducedMotion = useSyncExternalStore(
+    subscribeReducedMotion,
+    getReducedMotionSnapshot,
+    () => false,
+  )
   const liveCovers = useSyncExternalStore(
     subscribeLiveCovers,
     getLiveMosaicCovers,
@@ -116,6 +282,7 @@ export default function BackgroundImages() {
   const coverMosaic = variant !== 'gallery'
   const enableTileMotion = hasHydrated && !isWebKit && !isMobile
   const enableTileSwap = hasHydrated && !isWebKit
+  const enableCrossfade = enableTileSwap && !prefersReducedMotion
 
   const [gridImageIndices, setGridImageIndices] = useState<number[]>([])
 
@@ -128,13 +295,8 @@ export default function BackgroundImages() {
   }, [availableImages.length, gridImageCount, gridCols, variant, liveCovers.length])
 
   useEffect(() => {
-    if (!enableTileSwap) return
+    if (!enableTileSwap || prefersReducedMotion) return
     if (gridImageIndices.length === 0 || availableImages.length === 0) return
-
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReducedMotion) return
 
     let visible = document.visibilityState === 'visible'
     const onVisibility = () => {
@@ -148,16 +310,22 @@ export default function BackgroundImages() {
       const cols = gridCols
       setGridImageIndices((prev) => {
         if (prev.length === 0 || poolSize === 0) return prev
-        const cellsToChange = Math.min(prev.length, Math.floor(Math.random() * 2) + 1)
-        return swapMosaicCells(prev, poolSize, cols, cellsToChange)
+        return swapMosaicCells(prev, poolSize, cols, 1)
       })
-    }, 5500 + Math.random() * 2500)
+    }, MOSAIC_SWAP_INTERVAL_MS)
 
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [enableTileSwap, gridImageIndices.length, availableImages.length, variant, gridCols])
+  }, [
+    enableTileSwap,
+    prefersReducedMotion,
+    gridImageIndices.length,
+    availableImages.length,
+    variant,
+    gridCols,
+  ])
 
   // When a new cover is ingested, inject it into at least one visible mosaic cell.
   useEffect(() => {
@@ -203,37 +371,23 @@ export default function BackgroundImages() {
           const imageUrl = resolveImageUrl(img.src)
           const eager = index < priorityCount
           const motionVariant = index % MOTION_VARIANT_COUNT
-          const motionClass = enableTileMotion
-            ? `mosaic-tile-motion mosaic-tile-motion-${motionVariant}`
-            : ''
-          const revealClass = isWebKit ? '' : 'animate-fade-in'
 
           return (
-            <div
+            <MosaicCrossfadeCell
               key={`grid-${variant}-${index}`}
-              className="relative overflow-hidden"
-            >
-              <div key={`${img.id}-${imageUrl}`} className={`absolute inset-0 ${revealClass}`}>
-                <Image
-                  src={imageUrl}
-                  alt={img.alt}
-                  fill
-                  className={`object-cover blur-none opacity-60 ${motionClass}`}
-                  style={
-                    enableTileMotion
-                      ? { animationDelay: `${-((index * 3.7) % 16)}s` }
-                      : undefined
-                  }
-                  quality={imageQuality}
-                  sizes={imageSizes}
-                  unoptimized={shouldUnoptimizeImage(imageUrl)}
-                  priority={eager}
-                  fetchPriority={index === 0 ? 'high' : eager ? 'high' : 'auto'}
-                  loading={eager ? 'eager' : 'lazy'}
-                  onError={() => setImageErrors((prev) => new Set(prev).add(img.id))}
-                />
-              </div>
-            </div>
+              tile={img}
+              imageUrl={imageUrl}
+              enableCrossfade={enableCrossfade}
+              enableTileMotion={enableTileMotion}
+              motionVariant={motionVariant}
+              motionDelay={`${-((index * 3.7) % 16)}s`}
+              imageQuality={imageQuality}
+              imageSizes={imageSizes}
+              priority={eager}
+              fetchPriority={index === 0 ? 'high' : eager ? 'high' : 'auto'}
+              loading={eager ? 'eager' : 'lazy'}
+              onError={(id) => setImageErrors((prev) => new Set(prev).add(id))}
+            />
           )
         })}
       </div>

@@ -8,6 +8,21 @@ export const dynamic = 'force-dynamic'
 // Cache gallery images for 10 minutes to reduce database load
 export const revalidate = 600
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/** GET returns `id` as image_id (slug); clients may pass that slug or a real UUID. */
+function applyGalleryImageIdFilter<T extends { eq: (column: string, value: string) => T }>(
+  query: T,
+  id: string | null,
+  imageId: string | null
+): T {
+  if (imageId) return query.eq('image_id', imageId)
+  if (!id) return query
+  if (UUID_RE.test(id)) return query.eq('id', id)
+  return query.eq('image_id', id)
+}
+
 /**
  * GET /api/gallery/db
  * Fetch all gallery images from Supabase database (source of truth)
@@ -218,14 +233,11 @@ export async function PUT(request: NextRequest) {
     if (updates.storage_url !== undefined) updateData.storage_url = updates.storage_url
     if (updates.metadata !== undefined) updateData.metadata = updates.metadata
 
-    let query = supabase.from('gallery_images').update(updateData)
-
-    // Use image_id if provided, otherwise use id (UUID)
-    if (image_id) {
-      query = query.eq('image_id', image_id)
-    } else {
-      query = query.eq('id', id)
-    }
+    const query = applyGalleryImageIdFilter(
+      supabase.from('gallery_images').update(updateData),
+      typeof id === 'string' ? id : null,
+      typeof image_id === 'string' ? image_id : null
+    )
 
     const { data, error } = await query.select().single()
 
@@ -280,18 +292,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Use image_id if provided, otherwise use id (UUID)
-    let query: any = supabase.from('gallery_images')
-
-    if (image_id) {
-      query = query.eq('image_id', image_id)
-    } else {
-      query = query.eq('id', id)
-    }
-
     if (hard_delete) {
       // Hard delete - permanently remove from database
-      const { error } = await query.delete()
+      const { data, error } = await applyGalleryImageIdFilter(
+        supabase.from('gallery_images').delete(),
+        id,
+        image_id
+      ).select('id')
+
       if (error) {
         console.error('Database error:', error)
         return NextResponse.json(
@@ -299,15 +307,26 @@ export async function DELETE(request: NextRequest) {
           { status: 500 }
         )
       }
+      if (!data?.length) {
+        return NextResponse.json({ error: 'Gallery image not found' }, { status: 404 })
+      }
     } else {
       // Soft delete - set is_active = false
-      const { error } = await query.update({ is_active: false })
+      const { data, error } = await applyGalleryImageIdFilter(
+        supabase.from('gallery_images').update({ is_active: false }),
+        id,
+        image_id
+      ).select('id')
+
       if (error) {
         console.error('Database error:', error)
         return NextResponse.json(
           { error: 'Failed to deactivate gallery image', details: error.message },
           { status: 500 }
         )
+      }
+      if (!data?.length) {
+        return NextResponse.json({ error: 'Gallery image not found' }, { status: 404 })
       }
     }
 

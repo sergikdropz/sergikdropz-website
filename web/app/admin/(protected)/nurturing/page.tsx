@@ -72,7 +72,7 @@ export default function NurturingHub() {
                 <FaRocket className="text-purple-400" /> Release Pipeline
               </h2>
               <Link
-                href="/studio/releases/pipeline"
+                href="/studio/pipeline?tab=marketing"
                 className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1 transition"
               >
                 View Pipeline <FaArrowRight className="text-xs" />
@@ -125,7 +125,7 @@ export default function NurturingHub() {
                     </div>
                     {!release.campaign && (
                       <Link
-                        href="/studio/releases/pipeline"
+                        href="/studio/pipeline?tab=marketing"
                         className="text-xs text-purple-400 hover:text-purple-300 mt-1.5 inline-block transition"
                       >
                         Set Up Marketing

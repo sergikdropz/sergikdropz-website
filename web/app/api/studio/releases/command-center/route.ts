@@ -2,12 +2,83 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getCopyrightReadinessByReleaseIds } from '@/lib/studio/copyright-pipeline'
+import {
+  integrationRiskBoost,
+  summarizePipelineIntegrationAlerts,
+  type PipelineCollabMeta,
+} from '@/lib/studio/pipeline-integrations'
 
 function daysUntil(releaseDate: string | null) {
   if (!releaseDate) return 999
   const now = Date.now()
   const target = new Date(releaseDate).getTime()
   return Math.ceil((target - now) / (1000 * 60 * 60 * 24))
+}
+
+async function loadStoreLinkCounts(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  releaseIds: string[]
+): Promise<{ total: Map<string, number>; live: Map<string, number> }> {
+  const total = new Map<string, number>()
+  const live = new Map<string, number>()
+  if (!releaseIds.length) return { total, live }
+  const { data } = await supabase
+    .from('distribution_store_links')
+    .select('release_id, verification_status')
+    .in('release_id', releaseIds)
+  for (const row of data || []) {
+    const id = String(row.release_id)
+    total.set(id, (total.get(id) || 0) + 1)
+    const status = String((row as { verification_status?: string | null }).verification_status || '')
+    if (status === 'live' || status === 'reachable') {
+      live.set(id, (live.get(id) || 0) + 1)
+    }
+  }
+  return { total, live }
+}
+
+async function loadCollabMeta(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  releaseIds: string[]
+): Promise<Map<string, PipelineCollabMeta>> {
+  const meta = new Map<string, PipelineCollabMeta>()
+  if (!releaseIds.length) return meta
+
+  for (const id of releaseIds) {
+    meta.set(id, { collaboratorCount: 0, pendingReviews: 0, messageCount: 0 })
+  }
+
+  const [{ data: collabs, error: cErr }, { data: reviews, error: rErr }, { data: messages }] =
+    await Promise.all([
+      supabase.from('release_collaborators').select('release_id').in('release_id', releaseIds),
+      supabase.from('release_collab_reviews').select('release_id,status').in('release_id', releaseIds),
+      supabase.from('release_collab_messages').select('release_id').in('release_id', releaseIds),
+    ])
+
+  // Collab tables may be missing until migration — fail soft.
+  if (cErr || rErr) return meta
+
+  for (const row of collabs || []) {
+    const id = String(row.release_id)
+    const current = meta.get(id) || { collaboratorCount: 0, pendingReviews: 0, messageCount: 0 }
+    current.collaboratorCount += 1
+    meta.set(id, current)
+  }
+  for (const row of reviews || []) {
+    if (String(row.status) !== 'pending') continue
+    const id = String(row.release_id)
+    const current = meta.get(id) || { collaboratorCount: 0, pendingReviews: 0, messageCount: 0 }
+    current.pendingReviews += 1
+    meta.set(id, current)
+  }
+  for (const row of messages || []) {
+    const id = String(row.release_id)
+    const current = meta.get(id) || { collaboratorCount: 0, pendingReviews: 0, messageCount: 0 }
+    current.messageCount = (current.messageCount || 0) + 1
+    meta.set(id, current)
+  }
+
+  return meta
 }
 
 export async function GET(request: NextRequest) {
@@ -34,10 +105,11 @@ export async function GET(request: NextRequest) {
     }
 
     const releaseIds = (releases || []).map((r) => r.id)
-    const readinessByRelease = await getCopyrightReadinessByReleaseIds(
-      supabase,
-      releaseIds
-    )
+    const [readinessByRelease, storeCounts, collabByRelease] = await Promise.all([
+      getCopyrightReadinessByReleaseIds(supabase, releaseIds),
+      loadStoreLinkCounts(supabase, releaseIds),
+      loadCollabMeta(supabase, releaseIds),
+    ])
 
     const now = Date.now()
     const rows = (releases || [])
@@ -54,12 +126,27 @@ export async function GET(request: NextRequest) {
           (readiness?.blockers.length || 0) > 0 &&
           eta <= 14 &&
           release.distributor_status !== 'live'
+        const collab = collabByRelease.get(release.id) || {
+          collaboratorCount: 0,
+          pendingReviews: 0,
+          messageCount: 0,
+        }
+        const storeLinkCount = storeCounts.total.get(release.id) || 0
+        const storeLiveCount = storeCounts.live.get(release.id) || 0
+        const integrationInput = {
+          copyright: readiness,
+          storeLinkCount,
+          storeLiveCount,
+          collab,
+          distributorStatus: release.distributor_status,
+        }
         const risk =
           (readiness?.blockers.length || 0) * 10 +
           (eta <= 14 ? 35 : 0) +
           ((readiness?.readiness_score || 0) < 70 ? 25 : 0) +
           (isOverdue ? 20 : 0) +
-          (release.distributor_status === 'error' ? 15 : 0)
+          (release.distributor_status === 'error' ? 15 : 0) +
+          integrationRiskBoost(integrationInput, eta)
 
         return {
           ...release,
@@ -69,6 +156,9 @@ export async function GET(request: NextRequest) {
           is_overdue: isOverdue,
           is_at_risk: isAtRisk,
           copyright: readiness,
+          store_link_count: storeLinkCount,
+          store_live_count: storeLiveCount,
+          collab,
         }
       })
       .filter((row) => !queue || row.copyright?.ops?.role_queue === queue)
@@ -89,6 +179,15 @@ export async function GET(request: NextRequest) {
       due_soon_count: rows.filter(
         (row) => row.due_in_days !== null && row.due_in_days >= 0 && row.due_in_days <= 3
       ).length,
+      ...summarizePipelineIntegrationAlerts(
+        rows.map((row) => ({
+          copyright: row.copyright,
+          storeLinkCount: row.store_link_count,
+          storeLiveCount: row.store_live_count,
+          collab: row.collab,
+          distributorStatus: row.distributor_status,
+        }))
+      ),
     }
 
     return NextResponse.json({ releases: rows, alerts })

@@ -1011,7 +1011,7 @@ export async function createFolder(folder: Partial<FolderItem>): Promise<FolderI
 export async function updateFolder(
   id: string,
   updates: Partial<Omit<FolderItem, 'artwork'>> & { artwork?: string | null }
-): Promise<FolderItem | null> {
+): Promise<(FolderItem & { publishVersion?: number | null }) | null> {
   if (!USE_API) {
     console.warn('API not enabled, cannot update folder')
     return null
@@ -1026,7 +1026,10 @@ export async function updateFolder(
 
     if (response.ok) {
       const data = await response.json()
-      return data.folder
+      return {
+        ...(data.folder || {}),
+        publishVersion: data.publishVersion ?? null,
+      }
     }
 
     const error = await response.json()
@@ -1445,7 +1448,7 @@ export async function deletePlaylist(id: string, options?: { hard?: boolean }): 
 // iTunes-style browse, play tracking, ratings
 // ============================================
 
-export type BrowseView = 'songs' | 'albums' | 'artists' | 'genres'
+export type BrowseView = 'songs' | 'all-songs' | 'albums' | 'artists' | 'genres'
 
 export interface BrowseOptions {
   view: BrowseView

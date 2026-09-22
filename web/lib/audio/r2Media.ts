@@ -1,4 +1,7 @@
-import { GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { createHash } from 'crypto'
+import { createReadStream, statSync } from 'fs'
+import { PassThrough } from 'stream'
 
 export type R2MediaConfig = {
   accountId: string
@@ -98,6 +101,129 @@ export async function r2ObjectExists(relativePath: string): Promise<boolean> {
     if (error?.$metadata?.httpStatusCode === 404) return false
     return false
   }
+}
+
+/**
+ * List object keys under an `audio/<prefix>/` path.
+ * Returns vault-relative paths (no leading `audio/`).
+ */
+export async function listR2Prefix(
+  relativePrefix: string,
+  opts?: { maxKeys?: number },
+): Promise<string[]> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) return []
+  const prefix = r2ObjectKey(relativePrefix).replace(/\/?$/, '/')
+  const out: string[] = []
+  let ContinuationToken: string | undefined
+  const maxKeys = opts?.maxKeys ?? 1000
+  do {
+    const res = await clientFor(cfg).send(
+      new ListObjectsV2Command({
+        Bucket: cfg.bucket,
+        Prefix: prefix,
+        ContinuationToken,
+        MaxKeys: Math.min(1000, maxKeys - out.length),
+      }),
+    )
+    for (const obj of res.Contents || []) {
+      if (!obj.Key || obj.Key.endsWith('/')) continue
+      const relative = obj.Key.replace(/^audio\//i, '')
+      out.push(relative)
+      if (out.length >= maxKeys) return out
+    }
+    ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
+  } while (ContinuationToken)
+  return out
+}
+
+function contentTypeForPath(relativePath: string, fallback?: string | null): string {
+  const ext = relativePath.split('.').pop()?.toLowerCase() || ''
+  if (ext === 'wav') return 'audio/wav'
+  if (ext === 'mp3') return 'audio/mpeg'
+  if (ext === 'flac') return 'audio/flac'
+  if (ext === 'm4a') return 'audio/mp4'
+  if (ext === 'aac') return 'audio/aac'
+  if (ext === 'ogg' || ext === 'oga') return 'audio/ogg'
+  return fallback || 'application/octet-stream'
+}
+
+/** Same-origin media proxy URL for a vault-relative path (R2-backed). */
+export function vaultMediaProxyUrl(relativePath: string): string {
+  const cleaned = relativePath.replace(/^\/+/, '').replace(/^audio\//i, '')
+  return `/api/audio/media/${cleaned.split('/').map(encodeURIComponent).join('/')}`
+}
+
+/**
+ * Upload bytes to Cloudflare R2 under `audio/<relativePath>` (same layout as the Music Vault).
+ * Overwrites existing objects.
+ */
+export async function putR2Object(
+  relativePath: string,
+  body: Buffer | Uint8Array,
+  opts?: { contentType?: string | null; cacheControl?: string | null },
+): Promise<{ key: string; bytes: number }> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) {
+    throw new Error('Cloudflare R2 is not configured (R2_ACCOUNT_ID / KEY / SECRET / BUCKET)')
+  }
+  const Key = r2ObjectKey(relativePath)
+  const contentType = opts?.contentType || contentTypeForPath(relativePath)
+  const cacheControl =
+    opts?.cacheControl ??
+    (contentType.startsWith('audio/') ? 'public, max-age=31536000, immutable' : undefined)
+  await clientFor(cfg).send(
+    new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key,
+      Body: body,
+      ContentType: contentType,
+      ...(cacheControl ? { CacheControl: cacheControl } : {}),
+    }),
+  )
+  return { key: Key, bytes: body.byteLength }
+}
+
+/**
+ * Stream a local file into R2 (avoids loading large WAV masters into memory).
+ * Returns SHA-256 of the bytes as they stream.
+ */
+export async function putR2ObjectFromFile(
+  relativePath: string,
+  absPath: string,
+  opts?: { contentType?: string | null; cacheControl?: string | null },
+): Promise<{ key: string; bytes: number; sha256: string }> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) {
+    throw new Error('Cloudflare R2 is not configured (R2_ACCOUNT_ID / KEY / SECRET / BUCKET)')
+  }
+  const Key = r2ObjectKey(relativePath)
+  const contentType = opts?.contentType || contentTypeForPath(relativePath)
+  const cacheControl =
+    opts?.cacheControl ??
+    (contentType.startsWith('audio/') ? 'public, max-age=31536000, immutable' : undefined)
+  const st = statSync(absPath)
+  const hash = createHash('sha256')
+  const fileStream = createReadStream(absPath)
+  const body = new PassThrough()
+  fileStream.on('data', (chunk: Buffer | string) => {
+    const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+    hash.update(buf)
+  })
+  fileStream.on('error', (err) => body.destroy(err))
+  fileStream.pipe(body)
+
+  await clientFor(cfg).send(
+    new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key,
+      Body: body,
+      ContentLength: st.size,
+      ContentType: contentType,
+      ...(cacheControl ? { CacheControl: cacheControl } : {}),
+    }),
+  )
+  return { key: Key, bytes: st.size, sha256: hash.digest('hex') }
 }
 
 export async function fetchR2Object(

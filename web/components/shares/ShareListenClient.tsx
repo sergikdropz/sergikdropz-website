@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import ShareMiniPlayer, { type ShareScrubApi } from '@/components/shares/ShareMiniPlayer'
+import ShareStoryClipPicker from '@/components/shares/ShareStoryClipPicker'
 import ShareVinylStage from '@/components/shares/ShareVinylStage'
 import { useAlbumAccents } from '@/hooks/useAlbumAccents'
+import { exportShareStoryFromPayload } from '@/lib/shares/client'
 import { rgbToCss } from '@/lib/shares/album-accents'
+import { STORY_SNIPPET_DURATION_SEC } from '@/lib/shares/story-snippet'
 import { pickShareArtwork, shareDisplayArtworkUrl, type ResolvedSharePayload } from '@/lib/shares/types'
 
 function formatDuration(sec: number): string {
@@ -37,6 +40,11 @@ export default function ShareListenClient({
   const [activeIndex, setActiveIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [stageMode, setStageMode] = useState<StageMode>('vinyl')
+  const [clipPickerOpen, setClipPickerOpen] = useState(false)
+  const [clipInitialStart, setClipInitialStart] = useState(0)
+  const [clipTrackDuration, setClipTrackDuration] = useState(0)
+  const [igBusy, setIgBusy] = useState(false)
+  const [igNotice, setIgNotice] = useState<string | null>(null)
   const scrubApiRef = useRef<ShareScrubApi | null>(null)
   const scrubWasPlayingRef = useRef(false)
 
@@ -104,6 +112,62 @@ export default function ShareListenClient({
     scrubApiRef.current?.endVinylScrub(scrubWasPlayingRef.current)
     scrubWasPlayingRef.current = false
   }, [])
+
+  const openClipPicker = useCallback(() => {
+    if (!data || igBusy) return
+    const pos = scrubApiRef.current?.getPosition()
+    const track = data.tracks[activeIndex]
+    const dur = pos?.duration || track?.duration || 0
+    const current = pos?.currentTime ?? 0
+    // Center the 15s window on the playhead when possible.
+    const idealStart = Math.max(0, current - STORY_SNIPPET_DURATION_SEC / 2)
+    const maxStart = Math.max(0, dur - STORY_SNIPPET_DURATION_SEC)
+    setClipTrackDuration(dur)
+    setClipInitialStart(Math.min(idealStart, maxStart))
+    scrubApiRef.current?.pause()
+    setClipPickerOpen(true)
+    setIgNotice(null)
+  }, [activeIndex, data, igBusy])
+
+  const shareToInstagram = useCallback(
+    async (startSec: number) => {
+      if (!data || igBusy) return
+      const track = data.tracks[activeIndex]
+      setIgBusy(true)
+      setIgNotice('Rendering 15s MP4…')
+      try {
+        const result = await exportShareStoryFromPayload(data, {
+          trackId: track?.id,
+          layout: 'vinyl',
+          startSec,
+          durationSec: STORY_SNIPPET_DURATION_SEC,
+          onProgress: (phase, ratio) => {
+            if (phase === 'recording' && typeof ratio === 'number') {
+              setIgNotice(`Recording Story… ${Math.round(ratio * 100)}%`)
+            } else if (phase === 'encoding' && typeof ratio === 'number') {
+              setIgNotice(`Encoding MPEG-4… ${Math.round(ratio * 100)}%`)
+            } else if (phase === 'loading' || phase === 'share') {
+              setIgNotice('Preparing Instagram Story…')
+            }
+          },
+        })
+        setClipPickerOpen(false)
+        const isMp4 = result.snippet.mimeType.toLowerCase().includes('mp4')
+        setIgNotice(
+          result.delivery === 'shared'
+            ? `Story ${isMp4 ? 'MP4' : 'video'} shared — paste the Link sticker (listen URL copied).`
+            : `Story ${isMp4 ? 'MP4' : 'video'} downloaded — post to IG, then add a Link sticker (URL copied).`,
+        )
+        window.setTimeout(() => setIgNotice(null), 8000)
+      } catch (err: any) {
+        setIgNotice(err?.message || 'Failed to render Instagram Story')
+        window.setTimeout(() => setIgNotice(null), 6000)
+      } finally {
+        setIgBusy(false)
+      }
+    },
+    [activeIndex, data, igBusy],
+  )
 
   if (loading) {
     return (
@@ -291,6 +355,27 @@ export default function ShareListenClient({
               {data.share.kind === 'folder' && activeTrack && data.tracks.length > 1 && (
                 <p className="mt-2 text-xs text-zinc-500">Now playing · {activeTrack.title}</p>
               )}
+              {variant === 'page' && (
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={igBusy || !activeTrack}
+                    onClick={openClipPicker}
+                    className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[11px] uppercase tracking-[0.16em] text-white/85 transition hover:border-white/35 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {igBusy ? 'Rendering…' : 'Share to Instagram'}
+                  </button>
+                  {igNotice ? (
+                    <p className="max-w-sm text-center text-xs leading-relaxed text-zinc-400" role="status">
+                      {igNotice}
+                    </p>
+                  ) : (
+                    <p className="max-w-xs text-center text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                      Pick 15s · export MP4 · link copied for sticker
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -343,6 +428,22 @@ export default function ShareListenClient({
           scrubApiRef={scrubApiRef}
         />
       </div>
+
+      {variant === 'page' && activeTrack && (
+        <ShareStoryClipPicker
+          open={clipPickerOpen}
+          title={activeTrack.title || data.share.title}
+          artist={activeTrack.artist || artist}
+          trackDurationSec={clipTrackDuration || activeTrack.duration || 0}
+          initialStartSec={clipInitialStart}
+          busy={igBusy}
+          busyLabel={igBusy ? igNotice : null}
+          onCancel={() => {
+            if (!igBusy) setClipPickerOpen(false)
+          }}
+          onConfirm={(startSec) => void shareToInstagram(startSec)}
+        />
+      )}
     </div>
   )
 }

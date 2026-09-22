@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T23:44:23.437Z",
+  "generatedAt": "2026-09-21T08:11:16.151Z",
   "method": "dsp-audit-v1",
   "pipeline": [
     "16-step kick/snare/hat fold from audio",
@@ -16,10 +16,10 @@
     "Gold-set tracks still need ear confirmation."
   ],
   "counts": {
-    "measuredFiles": 390,
+    "measuredFiles": 394,
     "catalogTracks": 379,
     "libraryTracks": 243,
-    "withAuditedDescription": 390,
+    "withAuditedDescription": 394,
     "unpitched": 36,
     "goldSet": 7
   },
@@ -30,11 +30,11 @@
     },
     {
       "label": "Reggae",
-      "value": 95
+      "value": 97
     },
     {
       "label": "Experimental Bass",
-      "value": 83
+      "value": 85
     },
     {
       "label": "Hip-Hop",
@@ -72,19 +72,19 @@
   "drumFamilies": [
     {
       "label": "four-on-the-floor",
-      "value": 209
+      "value": 210
     },
     {
       "label": "breakbeat",
-      "value": 85
+      "value": 86
     },
     {
       "label": "half-time",
-      "value": 75
+      "value": 76
     },
     {
       "label": "one-drop",
-      "value": 19
+      "value": 20
     },
     {
       "label": "boom-bap",
@@ -94,21 +94,21 @@
   "hatGrids": [
     {
       "label": "eighths",
-      "value": 206
+      "value": 208
     },
     {
       "label": "sparse-accents",
-      "value": 117
+      "value": 118
     },
     {
       "label": "offbeat-hats",
-      "value": 67
+      "value": 68
     }
   ],
   "bassLocks": [
     {
       "label": "offbeat-syncopated",
-      "value": 383
+      "value": 387
     },
     {
       "label": "pedal-root",
@@ -130,7 +130,7 @@
     },
     {
       "label": "G minor",
-      "value": 34
+      "value": 35
     },
     {
       "label": "D minor",
@@ -150,7 +150,7 @@
     },
     {
       "label": "G# major",
-      "value": 15
+      "value": 16
     },
     {
       "label": "D# major",
@@ -181,18 +181,18 @@
       "value": 8
     },
     {
-      "label": "D major",
-      "value": 7
+      "label": "B minor",
+      "value": 8
     }
   ],
   "instruments": [
     {
       "label": "Kick drum",
-      "value": 390
+      "value": 394
     },
     {
       "label": "Sub / 808 bass",
-      "value": 388
+      "value": 392
     },
     {
       "label": "Bass",
@@ -206,7 +206,7 @@
   "bpmBuckets": [
     {
       "label": "120–124",
-      "value": 196
+      "value": 197
     },
     {
       "label": "125–129",
@@ -217,12 +217,12 @@
       "value": 37
     },
     {
-      "label": "140–144",
+      "label": "80–84",
       "value": 24
     },
     {
-      "label": "80–84",
-      "value": 22
+      "label": "140–144",
+      "value": 24
     },
     {
       "label": "115–119",
@@ -261,11 +261,11 @@
       "value": 1
     },
     {
-      "label": "110–114",
+      "label": "170–174",
       "value": 1
     },
     {
-      "label": "160–164",
+      "label": "110–114",
       "value": 1
     }
   ],

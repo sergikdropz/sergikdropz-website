@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { FaSpotify, FaApple, FaAmazon, FaMusic, FaYoutube, FaSoundcloud, FaInstagram, FaLink, FaHome, FaFacebook, FaTwitter } from 'react-icons/fa'
+import { artistPlatformUrl } from '@/lib/artist-platforms'
 
 export default function Follow() {
   const streamingPlatforms = [
     {
       name: 'Spotify',
-      url: 'https://open.spotify.com/artist/7MnvMhWoSe4wYXuiI6iQ8H',
+      url: artistPlatformUrl('spotify'),
       icon: FaSpotify,
       color: 'text-green-500 hover:text-green-400',
       bgColor: 'hover:bg-green-500/10',
@@ -15,7 +16,7 @@ export default function Follow() {
     },
     {
       name: 'Apple Music',
-      url: 'https://music.apple.com/us/artist/sergik/1577778284',
+      url: artistPlatformUrl('apple_music'),
       icon: FaApple,
       color: 'text-pink-500 hover:text-pink-400',
       bgColor: 'hover:bg-pink-500/10',
@@ -23,7 +24,7 @@ export default function Follow() {
     },
     {
       name: 'Amazon Music',
-      url: 'https://music.amazon.com/artists/B09B2LNNSF/sergik',
+      url: artistPlatformUrl('amazon_music'),
       icon: FaAmazon,
       color: 'text-orange-500 hover:text-orange-400',
       bgColor: 'hover:bg-orange-500/10',
@@ -31,7 +32,7 @@ export default function Follow() {
     },
     {
       name: 'TIDAL',
-      url: 'https://tidal.com/artist/27288636',
+      url: artistPlatformUrl('tidal'),
       icon: FaMusic,
       color: 'text-blue-400 hover:text-blue-300',
       bgColor: 'hover:bg-blue-500/10',
@@ -39,7 +40,7 @@ export default function Follow() {
     },
     {
       name: 'DEEZER',
-      url: 'https://www.deezer.com/us/artist/140080312',
+      url: artistPlatformUrl('deezer'),
       icon: FaMusic,
       color: 'text-purple-500 hover:text-purple-400',
       bgColor: 'hover:bg-purple-500/10',
@@ -47,7 +48,7 @@ export default function Follow() {
     },
     {
       name: 'Pandora',
-      url: 'https://www.pandora.com/artist/sergik/ARz95KfVdbj3P5Z',
+      url: artistPlatformUrl('pandora'),
       icon: FaMusic,
       color: 'text-blue-500 hover:text-blue-400',
       bgColor: 'hover:bg-blue-500/10',
@@ -55,15 +56,31 @@ export default function Follow() {
     },
     {
       name: 'Beatport',
-      url: 'https://www.beatport.com/artist/sergik/1002796',
+      url: artistPlatformUrl('beatport'),
       icon: FaMusic,
       color: 'text-yellow-500 hover:text-yellow-400',
       bgColor: 'hover:bg-yellow-500/10',
       description: 'DJ-focused platform - tracks, releases, charts'
     },
     {
+      name: 'Traxsource',
+      url: artistPlatformUrl('traxsource'),
+      icon: FaMusic,
+      color: 'text-orange-400 hover:text-orange-300',
+      bgColor: 'hover:bg-orange-500/10',
+      description: 'House and DJ storefront - tracks and charts'
+    },
+    {
+      name: 'Bandcamp',
+      url: artistPlatformUrl('bandcamp'),
+      icon: FaMusic,
+      color: 'text-cyan-400 hover:text-cyan-300',
+      bgColor: 'hover:bg-cyan-500/10',
+      description: 'Direct-to-fan releases and merch'
+    },
+    {
       name: 'YouTube Music',
-      url: 'https://music.youtube.com/channel/UCBWcROfNv8PeY6KdrnNM_pw',
+      url: artistPlatformUrl('youtube_music'),
       icon: FaYoutube,
       color: 'text-red-500 hover:text-red-400',
       bgColor: 'hover:bg-red-500/10',
@@ -71,26 +88,34 @@ export default function Follow() {
     },
     {
       name: 'Shazam',
-      url: 'https://www.shazam.com/artist/sergik/1577778284',
+      url: artistPlatformUrl('shazam'),
       icon: FaMusic,
       color: 'text-cyan-500 hover:text-cyan-400',
       bgColor: 'hover:bg-cyan-500/10',
       description: 'Music discovery - top songs, latest releases'
     },
-  ]
+  ].filter((platform): platform is typeof platform & { url: string } => Boolean(platform.url))
 
   const socialPlatforms = [
     {
       name: 'SoundCloud',
-      url: 'https://soundcloud.com/sergikdropz',
+      url: artistPlatformUrl('soundcloud'),
       icon: FaSoundcloud,
       color: 'text-orange-500 hover:text-orange-400',
       bgColor: 'hover:bg-orange-500/10',
       description: 'Personal profile - all tracks and playlists'
     },
     {
+      name: 'Mixcloud',
+      url: artistPlatformUrl('mixcloud'),
+      icon: FaMusic,
+      color: 'text-violet-400 hover:text-violet-300',
+      bgColor: 'hover:bg-violet-500/10',
+      description: 'DJ mixes and radio shows'
+    },
+    {
       name: 'YouTube',
-      url: 'https://youtube.com/@sergikdropz',
+      url: artistPlatformUrl('youtube'),
       icon: FaYoutube,
       color: 'text-red-500 hover:text-red-400',
       bgColor: 'hover:bg-red-500/10',
@@ -98,7 +123,7 @@ export default function Follow() {
     },
     {
       name: 'Instagram',
-      url: 'https://instagram.com/sergikdropz',
+      url: artistPlatformUrl('instagram'),
       icon: FaInstagram,
       color: 'text-pink-500 hover:text-pink-400',
       bgColor: 'hover:bg-pink-500/10',
@@ -106,7 +131,7 @@ export default function Follow() {
     },
     {
       name: 'Linktree',
-      url: 'https://linktr.ee/sergikdropz',
+      url: artistPlatformUrl('linktree'),
       icon: FaLink,
       color: 'text-green-400 hover:text-green-300',
       bgColor: 'hover:bg-green-500/10',
@@ -114,7 +139,7 @@ export default function Follow() {
     },
     {
       name: 'Facebook',
-      url: 'https://www.facebook.com/sergikdropz',
+      url: artistPlatformUrl('facebook'),
       icon: FaFacebook,
       color: 'text-blue-500 hover:text-blue-400',
       bgColor: 'hover:bg-blue-500/10',
@@ -122,7 +147,7 @@ export default function Follow() {
     },
     {
       name: 'TikTok',
-      url: 'https://www.tiktok.com/@sergikdropz',
+      url: artistPlatformUrl('tiktok'),
       icon: FaMusic,
       color: 'text-black hover:text-gray-800',
       bgColor: 'hover:bg-gray-500/10',
@@ -130,7 +155,7 @@ export default function Follow() {
     },
     {
       name: 'Twitter',
-      url: 'https://twitter.com/sergikdropz',
+      url: artistPlatformUrl('twitter'),
       icon: FaTwitter,
       color: 'text-blue-400 hover:text-blue-300',
       bgColor: 'hover:bg-blue-500/10',
@@ -138,19 +163,18 @@ export default function Follow() {
     },
     {
       name: 'Discord',
-      url: 'https://discord.gg/QhfSmbek',
+      url: artistPlatformUrl('discord'),
       icon: FaLink,
       color: 'text-indigo-500 hover:text-indigo-400',
       bgColor: 'hover:bg-indigo-500/10',
       description: 'Join the community server'
     },
-  ]
+  ].filter((platform): platform is typeof platform & { url: string } => Boolean(platform.url))
 
   return (
     <div className="pt-20 min-h-screen relative">
       <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16 relative z-10">
         <div className="max-w-4xl mx-auto">
-          {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4">Follow SERGIK</h1>
             <p className="text-gray-400 text-lg leading-relaxed">
@@ -158,9 +182,8 @@ export default function Follow() {
             </p>
           </div>
 
-          {/* Streaming Platforms */}
           <section className="mb-16">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-center">🎵 Streaming Platforms</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-center">Streaming Platforms</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {streamingPlatforms.map((platform) => {
                 const Icon = platform.icon
@@ -183,9 +206,8 @@ export default function Follow() {
             </div>
           </section>
 
-          {/* Social Media */}
           <section className="mb-16">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-center">📱 Social Media</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-center">Social Media</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {socialPlatforms.map((platform) => {
                 const Icon = platform.icon
@@ -208,7 +230,6 @@ export default function Follow() {
             </div>
           </section>
 
-          {/* Back to Home */}
           <div className="text-center">
             <Link
               href="/"
@@ -223,4 +244,3 @@ export default function Follow() {
     </div>
   )
 }
-

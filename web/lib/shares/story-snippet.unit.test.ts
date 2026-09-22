@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { VINYL_33_RPM_SEC } from './vinyl-spin-clock'
 import {
   clampSnippetWindow,
   pickRecorderMimeType,
@@ -6,6 +7,7 @@ import {
   sanitizeStoryFilenamePart,
   STORY_SNIPPET_DURATION_SEC,
   storySnippetFilename,
+  vinylStoryRotationDeg,
 } from './story-snippet'
 
 describe('story snippet helpers', () => {
@@ -37,7 +39,16 @@ describe('story snippet helpers', () => {
 
   it('picks the first supported recorder mime', () => {
     expect(pickRecorderMimeType((m) => m === 'video/webm')).toBe('video/webm')
+    expect(pickRecorderMimeType((m) => m.startsWith('video/mp4'))).toBe(
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    )
     expect(pickRecorderMimeType(() => false)).toBeNull()
+  })
+
+  it('prefers MPEG-4 over WebM when both are supported', () => {
+    expect(
+      pickRecorderMimeType((m) => m === 'video/mp4' || m === 'video/webm'),
+    ).toBe('video/mp4')
   })
 
   it('proxies artwork through the same-origin share proxy', () => {
@@ -47,5 +58,19 @@ describe('story snippet helpers', () => {
     expect(proxiedArtworkUrl('/api/shares/artwork-proxy?src=x')).toBe(
       '/api/shares/artwork-proxy?src=x',
     )
+  })
+
+  it('keeps same-origin relative artwork paths unproxied', () => {
+    expect(
+      proxiedArtworkUrl(
+        '/images/audio/unreleased/eps/SERGIK%20-%20Soul%20Candy/cover.jpeg',
+      ),
+    ).toBe('/images/audio/unreleased/eps/SERGIK%20-%20Soul%20Candy/cover.jpeg')
+  })
+
+  it('rotates vinyl story frames at 33⅓ RPM', () => {
+    expect(vinylStoryRotationDeg(0)).toBe(0)
+    expect(vinylStoryRotationDeg(VINYL_33_RPM_SEC)).toBeCloseTo(360, 5)
+    expect(vinylStoryRotationDeg(VINYL_33_RPM_SEC / 2)).toBeCloseTo(180, 5)
   })
 })

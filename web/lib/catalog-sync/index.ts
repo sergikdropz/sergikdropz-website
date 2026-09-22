@@ -15,6 +15,7 @@ export {
   playerTrackMatchesCoverEvent,
   stampAllTrackArtwork,
   isUploadedFolderArtwork,
+  trackHasAssignedArtwork,
   trackHasOwnArtwork,
   trackLooksLikeEp,
   trackShouldUseCrateMosaic,
@@ -54,4 +55,7 @@ export {
   subscribeLiveMosaicCovers,
   mergeMosaicTiles,
   hydrateLiveMosaicCovers,
+  suppressMosaicPath,
+  isMosaicPathSuppressed,
+  resetLiveMosaicCoversForTests,
 } from './live-mosaic-covers'

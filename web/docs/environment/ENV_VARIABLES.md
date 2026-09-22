@@ -32,11 +32,35 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 
 # ============================================
-# SPOTIFY API (Optional - for discography)
+# SPOTIFY API (Optional - discography + Release Studio DSP connect)
 # ============================================
 # Get these from: https://developer.spotify.com/dashboard
+# Used by /api/spotify-discography and Release Studio Delivery → Connect stores (ISRC/UPC lookup).
+# Apple Music + Deezer resolve without extra keys.
+# song.link / Odesli fan-out runs by default (rate-limited). Optional private key raises limits.
+# Disable with DSP_ODESLI=0. Optional: ODESLI_API_KEY / SONG_LINK_API_KEY from developers@song.link.
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+# ODESLI_API_KEY=
+# DSP_ODESLI=0
+# DSP_USER_COUNTRY=US
+# DSP_MUSICBRAINZ=0
+
+# ============================================
+# REVELATOR AGGREGATOR (Optional - DSP delivery)
+# ============================================
+# Release Studio Delivery → Distribute to stores.
+# Without keys, aggregator mode dry-runs (validates payload, queues curated store IDs locally).
+# Request partner/sandbox: support@revelator.com — then set keys and REVELATOR_DRY_RUN=0.
+# Docs: https://api-docs.revelator.com/v2/en/getting-started/
+# REVELATOR_API_KEY=
+# REVELATOR_PARTNER_USER_ID=
+# REVELATOR_API_SECRET=          # legacy alias for PARTNER_USER_ID
+# REVELATOR_BASE_URL=https://api.revelator.com
+# REVELATOR_PLATFORM_URL=https://platform.revelator.com
+# REVELATOR_ENTERPRISE_ID=
+# REVELATOR_DRY_RUN=1            # force dry-run even when keys are set
+# REVELATOR_REQUIRE_LIVE=0       # set 1 to refuse dry-run (API returns 500 without keys)
 
 # ============================================
 # YOUTUBE API (Optional - for videos)
@@ -79,8 +103,11 @@ FTP_ROOT_PATH=/
 # ============================================
 # Resend API key (used by lib/email.ts)
 RESEND_API_KEY=re_...
-# Default sender email for campaigns
+# Default sender email for campaigns / fan mail
 NEXT_PUBLIC_FROM_EMAIL=noreply@sergikdropz.com
+# Resend webhook signing secret (Svix) for /api/webhooks/resend — opens/bounces on Release Collab
+# RESEND_WEBHOOK_SECRET=whsec_...
+# Release Collab outbound From is hardcoded to release.studio@sergikdropz.com (verify in Resend)
 
 # ============================================
 # AI — Admin assistant + Sonic DNA review/challenge (Optional)
@@ -104,6 +131,17 @@ ADMIN_AI_CHAT_PROVIDER=anthropic
 # CROWELOGIC_API_KEY=your-key
 # CROWELOGIC_MODEL=auto
 # Aliases: CROWE_API_KEY, CROWE_LOGIC_URL, CROWE_LOGIC_KEY, FOUNDRY_BASE_URL
+
+# ============================================
+# ISRC (Optional — Studio assign defaults to QTA53)
+# ============================================
+# US ISRC Agency Rights Owner prefix allocated 2026-09-17 to Jordan Caboga.
+# ISRC_PREFIX=QTA53
+
+# SoundExchange / US ISRC (optional — Pipeline → ISRCs works in local registry mode without these)
+# SOUNDEXCHANGE_API_KEY=
+# SOUNDEXCHANGE_ACCOUNT_ID=
+# SOUNDEXCHANGE_BASE_URL=https://api.soundexchange.com
 ```
 
 ## Quick Setup

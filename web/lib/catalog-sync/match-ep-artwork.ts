@@ -1,4 +1,4 @@
-import { isUploadedFolderArtwork, stripArtworkCacheBust } from './artwork'
+import { isUploadedFolderArtwork, stripArtworkCacheBust, trackHasOwnArtwork } from './artwork'
 import { releaseArtworkKey } from '@/lib/marketing/release-artwork'
 
 const VERSION_TAIL =
@@ -148,7 +148,8 @@ export function applyEpArtworkToTracks<
   const next = tracks.map((track) => {
     const hit = matchEpArtworkForTrack(track, index)
     if (!hit) return track
-    const keepOwn = track.artwork && isUploadedFolderArtwork(track.artwork)
+    // Keep unique track art; replace crate/folder stamps so EP covers can show in crates.
+    const keepOwn = trackHasOwnArtwork(track)
     const artwork = keepOwn ? track.artwork : hit.artwork
     const album = shouldReplaceAlbum(track.album, opts?.crateNames) ? hit.epName : track.album
     const albumType = album === hit.epName ? 'ep' : track.albumType

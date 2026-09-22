@@ -11,6 +11,7 @@ import SoundCloudEmbed from '@/components/SoundCloudEmbed'
 import NavigationButtons from '@/components/NavigationButtons'
 import { PlatformCollapse, PlatformLinkPanel } from '@/components/PlatformCollapse'
 import artistData from '@/data/artist.json'
+import { artistDspProfileUrl } from '@/lib/artist-platforms'
 import type { PublicLiveRelease } from '@/lib/marketing/public-releases'
 
 // Filter playlists that have URLs and sort by featured
@@ -292,7 +293,7 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
             onToggle={() => setBeatportExpanded((v) => !v)}
           >
             <PlatformLinkPanel
-              href="https://www.beatport.com/artist/sergik/1002796"
+              href={artistDspProfileUrl('beatport') || 'https://www.beatport.com/artist/sergik/1002796'}
               label="Open on Beatport"
               accentClassName="text-[#94D500] hover:text-lime-300"
             />

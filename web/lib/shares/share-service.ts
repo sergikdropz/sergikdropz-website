@@ -47,6 +47,40 @@ function mapTrackRow(track: any, audio?: any, folder?: any): ShareTrackPayload {
   }
 }
 
+/** Fill missing track/collection art from audio_files when library rows have none. */
+async function enrichArtworkFromAudioFiles(
+  tracks: ShareTrackPayload[],
+): Promise<ShareTrackPayload[]> {
+  const missingIds = [
+    ...new Set(
+      tracks
+        .filter((t) => !t.artwork && t.audioFileId)
+        .map((t) => String(t.audioFileId)),
+    ),
+  ]
+  if (!missingIds.length) return tracks
+
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('audio_files')
+    .select('id,artwork_url')
+    .in('id', missingIds)
+  if (error || !data?.length) return tracks
+
+  const byId = new Map<string, string>()
+  for (const row of data) {
+    const raw = row?.artwork_url ? String(row.artwork_url).trim() : ''
+    if (raw) byId.set(String(row.id), resolveImageUrl(raw))
+  }
+  if (!byId.size) return tracks
+
+  return tracks.map((track) => {
+    if (track.artwork || !track.audioFileId) return track
+    const art = byId.get(String(track.audioFileId))
+    return art ? { ...track, artwork: art } : track
+  })
+}
+
 async function attachPlaybackUrls(tracks: ShareTrackPayload[]): Promise<ShareTrackPayload[]> {
   return Promise.all(
     tracks.map(async (track) => {
@@ -98,7 +132,9 @@ async function loadFolderShare(folderId: string): Promise<{
     .order('track_number', { ascending: true })
     .order('title', { ascending: true })
 
-  const tracks = (trackRows || []).map((row) => mapTrackRow(row, null, folder))
+  const tracks = await enrichArtworkFromAudioFiles(
+    (trackRows || []).map((row) => mapTrackRow(row, null, folder)),
+  )
   const artwork = folder.artwork_url
     ? resolveImageUrl(folder.artwork_url)
     : tracks.find((t) => t.artwork)?.artwork
@@ -135,13 +171,16 @@ async function loadTrackShare(trackId: string): Promise<{
 
   const folderRaw = track.music_library_folders
   const folder = Array.isArray(folderRaw) ? folderRaw[0] : folderRaw
-  const mapped = mapTrackRow(track, null, folder)
+  let mapped = mapTrackRow(track, null, folder)
+  ;[mapped] = await enrichArtworkFromAudioFiles([mapped])
   const collection: ShareCollectionPayload | null = folder
     ? {
         id: String(folder.id),
         title: String(folder.name || ''),
         type: String(folder.type || 'folder'),
-        artwork: folder.artwork_url ? resolveImageUrl(folder.artwork_url) : mapped.artwork,
+        artwork: folder.artwork_url
+          ? resolveImageUrl(folder.artwork_url)
+          : mapped.artwork,
         artist: mapped.artist,
         year: folder.year ?? null,
         trackCount: 1,

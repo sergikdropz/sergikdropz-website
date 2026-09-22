@@ -22,17 +22,33 @@ export async function POST(
     const supabase = createSupabaseServerClient()
     const id = `${params.id}-${store}-${Date.now()}`
 
-    const { data, error } = await supabase
+    const baseRow = {
+      id,
+      release_id: params.id,
+      store,
+      url,
+      verified_at: null as string | null,
+    }
+
+    let data = null
+    let error = null as { message: string } | null
+    ;({ data, error } = await supabase
       .from('distribution_store_links')
       .insert({
-        id,
-        release_id: params.id,
-        store,
-        url,
-        verified_at: new Date().toISOString(),
+        ...baseRow,
+        verification_status: 'unverified',
+        verification_detail: null,
       })
       .select()
-      .single()
+      .single())
+
+    if (error && /verification_status|verification_detail/i.test(error.message)) {
+      ;({ data, error } = await supabase
+        .from('distribution_store_links')
+        .insert(baseRow)
+        .select()
+        .single())
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

@@ -14,6 +14,10 @@ export type StudioRelease = {
   copyright?: {
     readiness_score?: number
     blockers?: string[]
+    next_best_action?: {
+      kind?: string
+      label?: string
+    } | null
   } | null
 }
 

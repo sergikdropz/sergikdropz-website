@@ -19,10 +19,17 @@ describe('resolveImageUrl', () => {
     )
   })
 
-  it('maps gallery-images photos onto /images/gallery', () => {
+  it('keeps remote gallery photo URLs (uploads live only in Storage)', () => {
     const src =
       'https://example.supabase.co/storage/v1/object/public/gallery-images/logo.png'
-    expect(resolveImageUrl(src)).toBe('/images/gallery/logo.png')
+    expect(resolveImageUrl(src)).toBe(src)
+  })
+
+  it('maps relative gallery-images photo paths onto /images/gallery', () => {
+    // Rare non-absolute storage paths — local fallback only when not a full URL.
+    expect(resolveImageUrl('/object/public/gallery-images/logo.png')).toBe(
+      '/images/gallery/logo.png',
+    )
   })
 
   it('encodes local EP paths for next/image', () => {

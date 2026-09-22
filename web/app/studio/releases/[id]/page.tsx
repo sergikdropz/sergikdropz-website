@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useAuth } from '@/contexts/AdminAuthContext'
 import { useParams } from 'next/navigation'
 import ReleaseStudioWorkspace from '@/components/studio/ReleaseStudioWorkspace'
@@ -22,7 +23,15 @@ export default function ReleaseDetailPage() {
 
   return (
     <StudioPageShell subtitle="Workflow: catalog → rights → copy → delivery → launch">
-      <ReleaseStudioWorkspace releaseId={releaseId} />
+      <Suspense
+        fallback={
+          <div className="min-h-[30vh] flex items-center justify-center text-zinc-500">
+            Loading workspace…
+          </div>
+        }
+      >
+        <ReleaseStudioWorkspace releaseId={releaseId} />
+      </Suspense>
     </StudioPageShell>
   )
 }

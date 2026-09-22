@@ -1,8 +1,9 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { assignISRC } from '@/lib/studio/isrc'
+import { assignISRC, resolveIsrcPrefix } from '@/lib/studio/isrc'
 import type { MarketingCopy } from '@/lib/studio/constants'
 import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
+import { mergeUgcPack, parseUgcPack } from '@/lib/studio/ugc-pack'
 
 const MARKETING_COPY_KEYS = [
   'elevator_pitch',
@@ -26,6 +27,10 @@ const COPYRIGHT_CHECKLIST_FIELDS = [
   'producer_agreement_status',
   'sample_clearance_status',
   'due_date',
+  'ugc_pack',
+  'publisher_name',
+  'publisher_ipi',
+  'writer_ipi',
 ] as const
 
 type CopyrightField = (typeof COPYRIGHT_CHECKLIST_FIELDS)[number]
@@ -41,8 +46,9 @@ function pickMarketingCopy(raw: Record<string, unknown>): MarketingCopy {
 }
 
 function pickCopyrightUpdates(raw: Record<string, unknown>) {
-  const updates: Partial<Record<CopyrightField, boolean | string>> = {}
+  const updates: Partial<Record<CopyrightField, boolean | string | ReturnType<typeof parseUgcPack>>> = {}
   for (const field of COPYRIGHT_CHECKLIST_FIELDS) {
+    if (field === 'ugc_pack') continue
     if (typeof raw[field] === 'boolean') {
       updates[field] = raw[field]
     }
@@ -52,11 +58,17 @@ function pickCopyrightUpdates(raw: Record<string, unknown>) {
         field === 'split_sheet_status' ||
         field === 'producer_agreement_status' ||
         field === 'sample_clearance_status' ||
-        field === 'due_date') &&
+        field === 'due_date' ||
+        field === 'publisher_name' ||
+        field === 'publisher_ipi' ||
+        field === 'writer_ipi') &&
       typeof raw[field] === 'string'
     ) {
       updates[field] = raw[field]
     }
+  }
+  if (raw.ugc_pack && typeof raw.ugc_pack === 'object') {
+    updates.ugc_pack = parseUgcPack(raw.ugc_pack)
   }
   return updates
 }
@@ -132,6 +144,12 @@ export async function previewUpdateCopyrightChecklist(params: {
 
   const supabase = createSupabaseServerClient()
   const before = await getSingleReleaseCopyrightReadiness(supabase, params.releaseId)
+  if (!before) {
+    throw new Error('Release not found')
+  }
+  if (updates.ugc_pack) {
+    updates.ugc_pack = mergeUgcPack(before.ugc_pack, params.updates.ugc_pack)
+  }
 
   return {
     releaseId: params.releaseId,
@@ -215,10 +233,7 @@ export async function previewAssignIsrcs(params: { releaseId?: string; trackIds?
 }
 
 export async function applyAssignIsrcs(params: { releaseId?: string; trackIds?: string[] }) {
-  const prefix = process.env.ISRC_PREFIX
-  if (!prefix) {
-    throw new Error('ISRC_PREFIX not configured')
-  }
+  const prefix = resolveIsrcPrefix()
 
   const preview = await previewAssignIsrcs(params)
   const ids = preview.tracksToAssign.map((t) => t.id)

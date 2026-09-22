@@ -1327,6 +1327,29 @@ export default function SergBrowser({
     invalidateMusicLibraryCache()
   }, [])
 
+  const applyTracksRemovedFromFolder = useCallback((folderId: string, trackIds: string[]) => {
+    if (!trackIds.length) return
+    const drop = new Set(trackIds)
+    setTracks((prev) => prev.filter((t) => !drop.has(t.id)))
+    setAlbumTracks((prev) => prev.filter((t) => !drop.has(t.id)))
+    setTotal((prev) => Math.max(0, prev - trackIds.length))
+    setAlbumTracksByFolder((prev) => {
+      const next = { ...prev }
+      const list = next[folderId]
+      if (list) next[folderId] = list.filter((t) => !drop.has(t.id))
+      return next
+    })
+    const linkedPlaylistId = playlistIdForFolder(folderId)
+    setCuratedPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === linkedPlaylistId || p.id === folderId
+          ? { ...p, trackIds: p.trackIds.filter((id) => !drop.has(id)) }
+          : p,
+      ),
+    )
+    invalidateMusicLibraryCache()
+  }, [])
+
   const addTracksToCuratedPlaylist = useCallback(async (playlistId: string, ids: string[]) => {
     const unique = Array.from(new Set(ids.map(String).filter(Boolean)))
     if (!unique.length) return
@@ -1902,7 +1925,11 @@ export default function SergBrowser({
 
   useEffect(() => subscribeCatalogSync(applyCatalogEvent), [applyCatalogEvent])
 
-  const applyFolderPatch = useCallback((id: string, patch: Partial<AlbumTile>) => {
+  const applyFolderPatch = useCallback((
+    id: string,
+    patch: Partial<AlbumTile>,
+    publishVersion?: number | null,
+  ) => {
     emitCatalogSync({
       entity: 'folder',
       entityId: id,
@@ -1914,6 +1941,7 @@ export default function SergBrowser({
         albumArtist: patch.albumArtist,
         hidden: patch.hidden,
       },
+      publishVersion,
     })
   }, [])
 
@@ -2194,6 +2222,38 @@ export default function SergBrowser({
         ? tracks
         : []
   const epContentFlush = Boolean(epStageAlbum)
+
+  const activeSongsPlaylistContext = useMemo(() => {
+    if (activeCuratedPlaylist) {
+      const pl = curatedPlaylists.find((p) => p.id === activeCuratedPlaylist)
+      return pl ? { id: pl.id, name: pl.name } : null
+    }
+    if (activeSidebarAlbum) {
+      const pl = curatedPlaylists.find(
+        (p) => p.id === playlistIdForFolder(activeSidebarAlbum) || p.id === activeSidebarAlbum,
+      )
+      return pl ? { id: pl.id, name: pl.name } : null
+    }
+    if (selectedAlbumId) {
+      const pl = curatedPlaylists.find(
+        (p) => p.id === playlistIdForFolder(selectedAlbumId) || p.id === selectedAlbumId,
+      )
+      return pl ? { id: pl.id, name: pl.name } : null
+    }
+    return null
+  }, [activeCuratedPlaylist, activeSidebarAlbum, selectedAlbumId, curatedPlaylists])
+
+  const activeSongsFolderContext = useMemo(() => {
+    if (activeSidebarAlbum) {
+      const album = sidebarAlbums.find((a: any) => a.id === activeSidebarAlbum)
+      return { id: activeSidebarAlbum, name: album?.name || 'this list' }
+    }
+    if (selectedAlbumId) {
+      const album = albums.find((a) => a.id === selectedAlbumId)
+      return { id: selectedAlbumId, name: album?.name || 'this list' }
+    }
+    return null
+  }, [activeSidebarAlbum, selectedAlbumId, sidebarAlbums, albums])
 
   const sidebarPlaylists = useMemo(() => {
     const releaseFolderIds = new Set<string>()
@@ -2902,16 +2962,11 @@ export default function SergBrowser({
                         adminCatalog={isAdminCatalog}
                         onTrackUpdated={applyTrackPatch}
                         onTrackArchived={applyTrackArchived}
-                        playlistContext={
-                          activeCuratedPlaylist
-                            ? (() => {
-                                const pl = curatedPlaylists.find((p) => p.id === activeCuratedPlaylist)
-                                return pl ? { id: pl.id, name: pl.name } : null
-                              })()
-                            : null
-                        }
+                        playlistContext={activeSongsPlaylistContext}
+                        folderContext={activeSongsFolderContext}
                         onTrackRemovedFromPlaylist={applyTrackRemovedFromPlaylist}
                         onTracksRemovedFromPlaylist={applyTracksRemovedFromPlaylist}
+                        onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                         onPlaylistReorder={
                           isAdminCatalog && activeCuratedPlaylist ? applyPlaylistReorder : undefined
                         }
@@ -2938,16 +2993,11 @@ export default function SergBrowser({
                   adminCatalog={isAdminCatalog}
                   onTrackUpdated={applyTrackPatch}
                   onTrackArchived={applyTrackArchived}
-                  playlistContext={
-                    activeCuratedPlaylist
-                      ? (() => {
-                          const pl = curatedPlaylists.find((p) => p.id === activeCuratedPlaylist)
-                          return pl ? { id: pl.id, name: pl.name } : null
-                        })()
-                      : null
-                  }
+                  playlistContext={activeSongsPlaylistContext}
+                  folderContext={activeSongsFolderContext}
                   onTrackRemovedFromPlaylist={applyTrackRemovedFromPlaylist}
                   onTracksRemovedFromPlaylist={applyTracksRemovedFromPlaylist}
+                  onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                   onPlaylistReorder={
                     isAdminCatalog && activeCuratedPlaylist ? applyPlaylistReorder : undefined
                   }
@@ -2993,6 +3043,7 @@ export default function SergBrowser({
                       adminCatalog={isAdminCatalog}
                       onTrackUpdated={applyTrackPatch}
                       onTrackArchived={applyTrackArchived}
+                      onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                       onFolderUpdated={applyFolderPatch}
                       onFolderArchived={applyFolderArchived}
                       onTracksReordered={applyFolderTracks}
@@ -3039,6 +3090,11 @@ export default function SergBrowser({
                       playerSource={selectedAlbumId ? { type: 'folder', id: selectedAlbumId } : null}
                       onTrackUpdated={applyTrackPatch}
                       onTrackArchived={applyTrackArchived}
+                      playlistContext={activeSongsPlaylistContext}
+                      folderContext={activeSongsFolderContext}
+                      onTrackRemovedFromPlaylist={applyTrackRemovedFromPlaylist}
+                      onTracksRemovedFromPlaylist={applyTracksRemovedFromPlaylist}
+                      onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                     />
                   </EpReleaseStage>
                 ) : (
@@ -3062,6 +3118,11 @@ export default function SergBrowser({
                     playerSource={selectedAlbumId ? { type: 'folder', id: selectedAlbumId } : null}
                     onTrackUpdated={applyTrackPatch}
                     onTrackArchived={applyTrackArchived}
+                    playlistContext={activeSongsPlaylistContext}
+                    folderContext={activeSongsFolderContext}
+                    onTrackRemovedFromPlaylist={applyTrackRemovedFromPlaylist}
+                    onTracksRemovedFromPlaylist={applyTracksRemovedFromPlaylist}
+                    onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                   />
                 )
               )}
@@ -3336,8 +3397,10 @@ function SongsTable({
   onTrackUpdated,
   onTrackArchived,
   playlistContext = null,
+  folderContext = null,
   onTrackRemovedFromPlaylist,
   onTracksRemovedFromPlaylist,
+  onTracksRemovedFromFolder,
   onPlaylistReorder,
   acceptVaultFileDrop = false,
   vaultDropActive = false,
@@ -3364,8 +3427,11 @@ function SongsTable({
   onTrackUpdated?: (track: Track) => void
   onTrackArchived?: (trackId: string) => void
   playlistContext?: { id: string; name: string } | null
+  /** When set, Remove from list unassigns tracks from this crate/EP folder. */
+  folderContext?: { id: string; name: string } | null
   onTrackRemovedFromPlaylist?: (playlistId: string, trackId: string) => void
   onTracksRemovedFromPlaylist?: (playlistId: string, trackIds: string[]) => void
+  onTracksRemovedFromFolder?: (folderId: string, trackIds: string[]) => void
   onPlaylistReorder?: (playlistId: string, orderedTrackIds: string[]) => void | Promise<void>
   /** Admin: drop OS audio — match vault or auto-ingest, then populate playlist */
   acceptVaultFileDrop?: boolean
@@ -3486,11 +3552,16 @@ function SongsTable({
   const rowDragActiveRef = useRef(false)
 
   const playlistOrganize = Boolean(playlistContext && onPlaylistReorder)
+  const listContext = folderContext || playlistContext
+  const canRemoveFromList = Boolean(
+    adminCatalog && listContext && (folderContext || playlistContext),
+  )
+  const listContextName = folderContext?.name || playlistContext?.name || 'this list'
 
   useEffect(() => {
     setSelectedIds(new Set())
     setSelectionAnchorId(null)
-  }, [playlistContext?.id, tracks.length])
+  }, [playlistContext?.id, folderContext?.id, tracks.length])
 
   const markTableActive = useCallback(() => {
     activeSongsTableId = tableIdRef.current
@@ -4112,27 +4183,48 @@ function SongsTable({
   }
 
   const removeSelectionFromPlaylist = async () => {
-    if (!playlistContext || !menuTargetTracks.length) return
+    if (!canRemoveFromList || !menuTargetTracks.length) return
     setAdminBusy(true)
     try {
       const ids = menuTargetTracks.map((t) => t.id)
-      const list = catalogPlaylists || (await fetchPlaylists({ includeArchived: false }))
-      const playlist = list.find((p) => p.id === playlistContext.id)
-      if (!playlist) throw new Error('Playlist not found')
       const drop = new Set(ids)
-      const nextTrackIds = playlist.trackIds.filter((id) => !drop.has(id))
-      await updatePlaylist(playlistContext.id, { trackIds: nextTrackIds })
-      if (onTracksRemovedFromPlaylist) {
-        onTracksRemovedFromPlaylist(playlistContext.id, ids)
-      } else {
-        for (const id of ids) onTrackRemovedFromPlaylist?.(playlistContext.id, id)
+
+      if (folderContext) {
+        await Promise.all(ids.map((id) => updateTrack(id, { folderId: null as any })))
+        const linkedPlaylistId =
+          playlistContext?.id || playlistIdForFolder(folderContext.id)
+        try {
+          const list = catalogPlaylists || (await fetchPlaylists({ includeArchived: false }))
+          const playlist =
+            list.find((p) => p.id === linkedPlaylistId) ||
+            list.find((p) => p.id === folderContext.id)
+          if (playlist) {
+            const nextTrackIds = playlist.trackIds.filter((id) => !drop.has(id))
+            await updatePlaylist(playlist.id, { trackIds: nextTrackIds })
+          }
+        } catch {
+          /* playlist sync is best-effort; folder unassign already succeeded */
+        }
+        onTracksRemovedFromFolder?.(folderContext.id, ids)
+      } else if (playlistContext) {
+        const list = catalogPlaylists || (await fetchPlaylists({ includeArchived: false }))
+        const playlist = list.find((p) => p.id === playlistContext.id)
+        if (!playlist) throw new Error('Playlist not found')
+        const nextTrackIds = playlist.trackIds.filter((id) => !drop.has(id))
+        await updatePlaylist(playlistContext.id, { trackIds: nextTrackIds })
+        if (onTracksRemovedFromPlaylist) {
+          onTracksRemovedFromPlaylist(playlistContext.id, ids)
+        } else {
+          for (const id of ids) onTrackRemovedFromPlaylist?.(playlistContext.id, id)
+        }
       }
+
       invalidateMusicLibraryCache()
       setSelectedIds(new Set())
       setTrackMenu(null)
       setRemoveFromPlaylistConfirm(false)
     } catch (err: any) {
-      setAdminError(err?.message || 'Failed to remove from playlist')
+      setAdminError(err?.message || 'Failed to remove from list')
     } finally {
       setAdminBusy(false)
     }
@@ -4154,7 +4246,7 @@ function SongsTable({
         clearSelection()
         return
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && playlistContext && selectedCount > 0) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && canRemoveFromList && selectedCount > 0) {
         e.preventDefault()
         setRemoveFromPlaylistConfirm(true)
         if (!trackMenu && selectedTracks[0]) {
@@ -4168,7 +4260,7 @@ function SongsTable({
     displayTracks.length,
     selectAllTracks,
     clearSelection,
-    playlistContext,
+    canRemoveFromList,
     selectedCount,
     selectedTracks,
     trackMenu,
@@ -5248,6 +5340,48 @@ function SongsTable({
                 <FaPlus className="h-3 w-3 text-gray-500" />
                 Add to Up Next
               </button>
+              {canRemoveFromList && (
+                <>
+                  {!removeFromPlaylistConfirm ? (
+                    <button
+                      type="button"
+                      disabled={adminBusy}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-300 hover:bg-gray-800/80 disabled:opacity-50"
+                      onClick={() => setRemoveFromPlaylistConfirm(true)}
+                    >
+                      <FaMinus className="h-3 w-3" />
+                      {selectedCount > 1
+                        ? `Remove ${selectedCount} Songs from List`
+                        : 'Remove from list'}
+                    </button>
+                  ) : (
+                    <div className="px-3 py-2">
+                      <p className="mb-2 text-xs text-gray-400">
+                        Remove {selectedCount > 1 ? `${selectedCount} songs` : 'this song'} from
+                        &ldquo;{listContextName}&rdquo;? Tracks stay in the library.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={adminBusy}
+                          className="flex-1 rounded-md border border-gray-700 px-2 py-1.5 text-xs text-gray-300 hover:bg-gray-800/80 disabled:opacity-50"
+                          onClick={() => setRemoveFromPlaylistConfirm(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={adminBusy}
+                          className="flex-1 rounded-md bg-red-600/90 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                          onClick={() => void removeSelectionFromPlaylist()}
+                        >
+                          Yes, remove
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               {selectedCount > 1 && (
                 <button
                   type="button"
@@ -5521,49 +5655,6 @@ function SongsTable({
                     </button>
                   ))}
                 </div>
-              )}
-              {playlistContext && (
-                <>
-                  <div className="my-1 border-t border-gray-800" />
-                  {!removeFromPlaylistConfirm ? (
-                    <button
-                      type="button"
-                      disabled={adminBusy}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-300 hover:bg-gray-800/80 disabled:opacity-50"
-                      onClick={() => setRemoveFromPlaylistConfirm(true)}
-                    >
-                      <FaMinus className="h-3 w-3" />
-                      {selectedCount > 1
-                        ? `Remove ${selectedCount} Songs from Playlist`
-                        : 'Remove from playlist'}
-                    </button>
-                  ) : (
-                    <div className="px-3 py-2">
-                      <p className="mb-2 text-xs text-gray-400">
-                        Remove {selectedCount > 1 ? `${selectedCount} songs` : 'this song'} from
-                        &ldquo;{playlistContext.name}&rdquo;? Tracks stay in the library.
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={adminBusy}
-                          className="flex-1 rounded-md border border-gray-700 px-2 py-1.5 text-xs text-gray-300 hover:bg-gray-800/80 disabled:opacity-50"
-                          onClick={() => setRemoveFromPlaylistConfirm(false)}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          disabled={adminBusy}
-                          className="flex-1 rounded-md bg-red-600/90 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
-                          onClick={() => void removeSelectionFromPlaylist()}
-                        >
-                          Yes, remove
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
               )}
               <div className="my-1 border-t border-gray-800" />
               <button
@@ -6540,7 +6631,7 @@ function SongsTable({
           >
             Up Next
           </button>
-          {playlistContext && (
+          {canRemoveFromList && (
             <button
               type="button"
               className="rounded-md border border-amber-500/40 px-2 py-1 text-amber-200 hover:bg-amber-500/10"
@@ -6551,7 +6642,7 @@ function SongsTable({
                 }
               }}
             >
-              Remove
+              Remove from list
             </button>
           )}
           {adminCatalog && selectedCount > 1 && (
@@ -7277,7 +7368,7 @@ function AdminFolderChrome({
   children: React.ReactNode
   tracks?: Track[]
   hidden?: boolean
-  onUpdated?: (id: string, patch: Partial<AlbumTile>) => void
+  onUpdated?: (id: string, patch: Partial<AlbumTile>, publishVersion?: number | null) => void
   onArchived?: (id: string) => void
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
   onVisibilityChange?: (id: string, hidden: boolean) => void
@@ -7586,7 +7677,7 @@ function AdminFolderChrome({
       const artworkUrl = stripArtworkCacheBust(String(data.artworkUrl))
       const busted = withArtworkCacheBust(artworkUrl)
       setDraft((d) => ({ ...d, artwork: busted }))
-      onUpdated?.(album.id, { artwork: busted })
+      onUpdated?.(album.id, { artwork: busted }, data.publishVersion ?? null)
       setChooseArtOpen(false)
     } catch (err: any) {
       setDraft((d) => (d.artwork === localPreview ? { ...d, artwork: folderArtworkSrc(album, orderedTracks) } : d))
@@ -7621,7 +7712,7 @@ function AdminFolderChrome({
     setBusy(true)
     setError(null)
     try {
-      await updateFolder(album.id, {
+      const saved = await updateFolder(album.id, {
         name: draft.name.trim(),
         type: draft.type,
         year,
@@ -7650,13 +7741,17 @@ function AdminFolderChrome({
         onTracksReordered?.(album.id, withAlbumName(withTrackOrder(orderedTracks), draft.name.trim(), album.type))
       }
       invalidateMusicLibraryCache()
-      onUpdated?.(album.id, {
-        name: draft.name.trim(),
-        type: draft.type,
-        year,
-        albumArtist: draft.albumArtist.trim() || 'SERGIK',
-        artwork: artworkToSave ? withArtworkCacheBust(artworkToSave) : undefined,
-      })
+      onUpdated?.(
+        album.id,
+        {
+          name: draft.name.trim(),
+          type: draft.type,
+          year,
+          albumArtist: draft.albumArtist.trim() || 'SERGIK',
+          artwork: artworkToSave ? withArtworkCacheBust(artworkToSave) : undefined,
+        },
+        saved?.publishVersion ?? null,
+      )
       setEditOpen(false)
     } catch (err: any) {
       setError(err?.message || 'Failed to save folder')
@@ -9616,7 +9711,7 @@ function AlbumSection({
   tracksHydrating?: boolean
   onOpen: (id: string) => void
   adminCatalog?: boolean
-  onFolderUpdated?: (id: string, patch: Partial<AlbumTile>) => void
+  onFolderUpdated?: (id: string, patch: Partial<AlbumTile>, publishVersion?: number | null) => void
   onFolderArchived?: (id: string) => void
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
   onVisibilityChange?: (id: string, hidden: boolean) => void
@@ -9752,6 +9847,7 @@ function AlbumCatalog({
   adminCatalog = false,
   onTrackUpdated,
   onTrackArchived,
+  onTracksRemovedFromFolder,
   onFolderUpdated,
   onFolderArchived,
   onTracksReordered,
@@ -9772,7 +9868,8 @@ function AlbumCatalog({
   adminCatalog?: boolean
   onTrackUpdated?: (track: Track) => void
   onTrackArchived?: (trackId: string) => void
-  onFolderUpdated?: (id: string, patch: Partial<AlbumTile>) => void
+  onTracksRemovedFromFolder?: (folderId: string, trackIds: string[]) => void
+  onFolderUpdated?: (id: string, patch: Partial<AlbumTile>, publishVersion?: number | null) => void
   onFolderArchived?: (id: string) => void
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
   onVisibilityChange?: (id: string, hidden: boolean) => void
@@ -9876,6 +9973,8 @@ function AlbumCatalog({
                       playerSource={{ type: 'folder', id: album.id }}
                       onTrackUpdated={onTrackUpdated}
                       onTrackArchived={onTrackArchived}
+                      folderContext={{ id: album.id, name: album.name }}
+                      onTracksRemovedFromFolder={onTracksRemovedFromFolder}
                     />
                   </EpReleaseStage>
                 )
@@ -9899,6 +9998,8 @@ function AlbumCatalog({
                     playerSource={{ type: 'folder', id: album.id }}
                     onTrackUpdated={onTrackUpdated}
                     onTrackArchived={onTrackArchived}
+                    folderContext={{ id: album.id, name: album.name }}
+                    onTracksRemovedFromFolder={onTracksRemovedFromFolder}
                   />
                 </section>
               )

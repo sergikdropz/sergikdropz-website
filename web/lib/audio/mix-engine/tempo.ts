@@ -11,10 +11,22 @@ export const TEMPO_MIN = 0.5
 export const TEMPO_MAX = 1.5
 /** Max single-frame rate step during a mix (micro-nudge smoothing). */
 export const MIX_RATE_SLEW = 0.018
+/**
+ * Softer per-frame step under MASTER TEMPO. Browser preservesPitch reconfigures
+ * on every playbackRate write — large jumps warble; CDJ-like feel needs fine slew.
+ */
+export const KEYLOCK_RATE_SLEW = 0.0045
 /** Soft blend into tempo glide — avoids a hard snap at the phrase knee. */
 export const TEMPO_GLIDE_SOFT_KNEE = 0.06
-/** Smallest rate delta worth writing (see applyDeckTempo). */
+/** Smallest rate delta worth writing without key-lock (vinyl / pitch-linked). */
 export const TEMPO_RATE_WRITE_EPSILON = 0.0002
+/**
+ * Key-lock write gate. Chrome/Safari time-stretch chirps on every rate touch;
+ * ~0.12% steps keep the stretcher stable while still feeling continuous.
+ */
+export const KEYLOCK_RATE_WRITE_EPSILON = 0.0012
+/** Quantize key-lock targets so drag jitter does not thrash the stretcher. */
+export const KEYLOCK_RATE_QUANTUM = 0.0005
 /** UI tempo faders — coarser than audio writes so micro-bend never jitters the strip. */
 export const MIX_UI_RATE_NOTIFY_EPSILON = 0.0015
 
@@ -40,6 +52,12 @@ function clamp(n: number, lo: number, hi: number) {
 export function clampTempoRate(rate: number): number {
   if (!Number.isFinite(rate) || rate <= 0) return 1
   return clamp(rate, TEMPO_MIN, TEMPO_MAX)
+}
+
+/** Snap rate to the key-lock quantum (stable stretcher updates). */
+export function quantizeKeyLockRate(rate: number): number {
+  const q = KEYLOCK_RATE_QUANTUM
+  return clampTempoRate(Math.round(clampTempoRate(rate) / q) * q)
 }
 
 export function tempoPercentToRate(percent: number): number {
@@ -82,8 +100,8 @@ export function configureKeyLock(element: HTMLAudioElement, enabled = true): voi
 const RATE_WRITE_EPSILON = TEMPO_RATE_WRITE_EPSILON
 
 /**
- * EQ offsets (dB) to keep time-stretched audio clear — lifts air when slowed,
- * tames harshness when sped up. Add on top of user EQ.
+ * EQ offsets (dB) for BufferSource key-lock only (no HTML preservesPitch).
+ * Kept gentle — aggressive shelves on top of a stretcher sound like warble.
  */
 export function formantCompensationGains(rate: number): {
   low: number
@@ -92,13 +110,13 @@ export function formantCompensationGains(rate: number): {
 } {
   const r = clampTempoRate(rate)
   const dev = r - 1
-  if (Math.abs(dev) < 0.006) return { low: 0, mid: 0, high: 0 }
+  if (Math.abs(dev) < 0.01) return { low: 0, mid: 0, high: 0 }
   const slow = dev < 0 ? -dev : 0
   const fast = dev > 0 ? dev : 0
   return {
-    low: slow * 2.4 - fast * 1.0,
-    mid: slow * 0.6 - fast * 1.8,
-    high: slow * 3.8 - fast * 1.2,
+    low: slow * 1.1 - fast * 0.45,
+    mid: slow * 0.25 - fast * 0.7,
+    high: slow * 1.4 - fast * 0.55,
   }
 }
 
@@ -143,7 +161,8 @@ export function applyDeckTempo(
 ): number {
   const keyLock = opts?.keyLock !== false
   configureKeyLock(element, keyLock)
-  const target = clampTempoRate(rate)
+  let target = clampTempoRate(rate)
+  if (keyLock) target = quantizeKeyLockRate(target)
   const current =
     typeof opts?.currentRate === 'number' && opts.currentRate > 0
       ? opts.currentRate
@@ -152,16 +171,27 @@ export function applyDeckTempo(
         : 1
   let next = target
   if (!opts?.instant) {
-    const slew = typeof opts?.slew === 'number' && opts.slew > 0 ? opts.slew : MIX_RATE_SLEW
+    // UI drag / glide: soft steps. Under key-lock use a finer slew so the
+    // browser stretcher is not reconfigured in large jumps (warble).
+    const slew =
+      typeof opts?.slew === 'number' && opts.slew > 0
+        ? opts.slew
+        : keyLock
+          ? KEYLOCK_RATE_SLEW
+          : MIX_RATE_SLEW
     const delta = target - current
     if (Math.abs(delta) <= slew) next = target
     else next = current + Math.sign(delta) * slew
   }
-  next = clampTempoRate(next)
+  next = keyLock ? quantizeKeyLockRate(next) : clampTempoRate(next)
+  const writeEps = keyLock ? KEYLOCK_RATE_WRITE_EPSILON : RATE_WRITE_EPSILON
   try {
-    // Skip inaudible deltas so a 60fps caller doesn't thrash the stretcher.
-    if (Math.abs(element.playbackRate - next) >= RATE_WRITE_EPSILON) {
+    if (Math.abs(element.playbackRate - next) >= writeEps) {
       element.playbackRate = next
+    } else {
+      // Hold the last written rate — returning the unsounded target would make
+      // callers think we landed and skip further slewing.
+      next = Number.isFinite(element.playbackRate) ? element.playbackRate : next
     }
   } catch {
     /* ignore */

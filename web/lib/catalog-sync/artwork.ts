@@ -103,8 +103,9 @@ export function isUploadedFolderArtwork(url?: string | null): boolean {
 
 /**
  * True when the track carries unique cover art (not a stamped folder / crate cover).
- * Folder systemic covers use `folder-{id}.*` filenames and should fall back to mosaics.
- * EP release paths under `/unreleased/eps/` count as real artwork.
+ * Folder systemic covers use `folder-{id}.*` filenames and should fall back to mosaics
+ * in crate lists. EP release paths under `/unreleased/eps/` count as real artwork.
+ * EP folder stamps still display when {@link trackLooksLikeEp} is true (e.g. after EP match).
  */
 export function trackHasOwnArtwork(track: {
   artwork?: string | null
@@ -145,7 +146,12 @@ export function trackLooksLikeEp(track: {
   return false
 }
 
-/** EPs keep a single release cover; crates / bare tracks without own art use mosaics. */
+/**
+ * Crate mosaics for tracks without their own cover.
+ * - Shared folder / crate stamps → mosaic (not the same cover on every row)
+ * - Unique track art or EP release art → show that cover
+ * - EP-matched crate tracks (`albumType: ep`) → show EP cover even inside a crate
+ */
 export function trackShouldUseCrateMosaic(track: {
   artwork?: string | null
   albumType?: string | null
@@ -156,6 +162,13 @@ export function trackShouldUseCrateMosaic(track: {
   if (!track) return false
   if (trackLooksLikeEp(track)) return false
   return !trackHasOwnArtwork(track)
+}
+
+/** @deprecated Prefer {@link trackHasOwnArtwork} / {@link trackShouldUseCrateMosaic}. */
+export function trackHasAssignedArtwork(track: {
+  artwork?: string | null
+} | null | undefined): boolean {
+  return Boolean(typeof track?.artwork === 'string' && track.artwork.trim())
 }
 
 const IMAGE_FILE_EXT = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|webp)$/i

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { assignISRC } from '@/lib/studio/isrc'
+import { assignISRC, resolveIsrcPrefix } from '@/lib/studio/isrc'
 import { logActivity } from '@/lib/activity-log'
 import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
 
@@ -17,14 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { trackId } = await request.json()
-    const prefix = process.env.ISRC_PREFIX
-
-    if (!prefix) {
-      return NextResponse.json(
-        { error: 'ISRC_PREFIX not configured. Please set ISRC_PREFIX environment variable.' },
-        { status: 500 }
-      )
-    }
+    const prefix = resolveIsrcPrefix()
 
     if (!trackId) {
       return NextResponse.json(

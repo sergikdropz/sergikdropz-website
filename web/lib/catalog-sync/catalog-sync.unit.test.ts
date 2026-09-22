@@ -57,12 +57,30 @@ describe('catalog-sync artwork helpers', () => {
     ).toBe(true)
     expect(trackHasOwnArtwork({ artwork: '', folderId: 'x' })).toBe(false)
     expect(
+      trackHasOwnArtwork({
+        artwork: '/images/audio/unreleased/eps/SERGIK%20-%20FTP/cover.jpeg',
+        folderId: 'collection-unreleased-eps-sergik---ftp-',
+      }),
+    ).toBe(true)
+  })
+
+  it('uses crate mosaics for folder stamps; shows EP / own art', () => {
+    // Shared crate/folder stamp → mosaic (not the same cover on every row).
+    expect(
       trackShouldUseCrateMosaic({
         artwork: '/images/audio/artwork/folder-1789130620706.jpg',
         folderId: '1789130620706',
         albumType: 'album',
       }),
     ).toBe(true)
+    expect(
+      trackShouldUseCrateMosaic({
+        artwork: '',
+        folderId: 'crate-1',
+        albumType: 'album',
+      }),
+    ).toBe(true)
+    // EP folders / EP-matched tracks keep a single release cover.
     expect(
       trackShouldUseCrateMosaic({
         artwork: '/images/audio/artwork/folder-daze.jpg',
@@ -76,12 +94,22 @@ describe('catalog-sync artwork helpers', () => {
         folderId: 'collection-unreleased-eps-sergik---ftp-',
       }),
     ).toBe(false)
+    // EP release path shows even when the track sits in a crate folder id.
     expect(
-      trackHasOwnArtwork({
+      trackShouldUseCrateMosaic({
         artwork: '/images/audio/unreleased/eps/SERGIK%20-%20FTP/cover.jpeg',
-        folderId: 'collection-unreleased-eps-sergik---ftp-',
+        folderId: 'deep-n-funky-crate',
+        albumType: 'album',
       }),
-    ).toBe(true)
+    ).toBe(false)
+    // Unique non-folder art shows in crates.
+    expect(
+      trackShouldUseCrateMosaic({
+        artwork: '/images/audio/artwork/track-abc123.jpg',
+        folderId: 'deep-n-funky-crate',
+        albumType: 'album',
+      }),
+    ).toBe(false)
   })
 
   it('rejects HEIC uploads that would be stored as a broken JPEG', () => {

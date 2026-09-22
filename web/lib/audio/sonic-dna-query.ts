@@ -33,3 +33,23 @@ export function appendSonicDnaLookupParams(
   if (title) params.set('title', title)
   return params
 }
+
+/** Fan encyclopedia for a library track (`SergBrowser` opens the DNA report). */
+export function musicLibrarySonicDnaHref(libraryTrackId: string | null | undefined): string {
+  const id = String(libraryTrackId || '').trim()
+  if (!id) return '/music-library'
+  return `/music-library?dna=${encodeURIComponent(id)}`
+}
+
+export function parseMusicLibraryDnaQuery(search: string | null | undefined): string | null {
+  if (!search) return null
+  const raw = String(search).trim()
+  if (!raw) return null
+  try {
+    const params = new URLSearchParams(raw.startsWith('?') ? raw.slice(1) : raw)
+    const id = String(params.get('dna') || '').trim()
+    return id || null
+  } catch {
+    return null
+  }
+}

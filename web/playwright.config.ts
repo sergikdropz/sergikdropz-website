@@ -44,7 +44,7 @@ export default defineConfig({
               },
               {
                 name: 'chromium-admin',
-                testMatch: /admin-(authenticated|ui-crawl)\.spec\.ts/,
+                testMatch: /admin-(authenticated|ui-crawl)\.spec\.ts|studio-(social-promo|dsp-connect|dsp-package|distrokid-import|ugc-pack|soundexchange|revelator-distribute)\.spec\.ts/,
                 dependencies: ['setup'],
                 use: {
                   ...chrome,

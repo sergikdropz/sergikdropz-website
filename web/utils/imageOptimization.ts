@@ -13,6 +13,10 @@ const OPTIMIZABLE_HOSTS = [
   '.instagram.com',
   '.trycloudflare.com',
   '.sndcdn.com',
+  // DistroKid / Fandalism artwork (also allowlisted in next.config.js)
+  's3.amazonaws.com',
+  '.amazonaws.com',
+  '.fandalism.com',
 ]
 
 /**

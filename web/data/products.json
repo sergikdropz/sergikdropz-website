@@ -104,7 +104,7 @@
       "description": "Full EP download — all tracks in WAV + MP3 format. Hypnotic minimal grooves for late-night floors.",
       "price": 9.99,
       "checkout_method": "stripe",
-      "artwork": "/images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+      "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
       "formats": [
         "WAV",
         "MP3"

@@ -4,6 +4,14 @@ import Link from 'next/link'
 import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import type { LaunchHandoffStatus } from '@/lib/studio/launch-handoff'
 import { vaultSoftReadiness } from '@/lib/studio/vault-import'
+import { studioPipelineHref } from '@/lib/studio/studio-ia'
+import {
+  DEFAULT_INGEST_ATTESTATIONS,
+  type IngestAttestations,
+} from '@/lib/studio/dsp-ingest'
+import { IngestAttestationsSection } from './CopyrightPanel'
+import SocialPromoPanel from './SocialPromoPanel'
+import StreamContinuityPanel from './StreamContinuityPanel'
 import {
   FaCheckCircle,
   FaExclamationTriangle,
@@ -45,6 +53,10 @@ type Props = {
   onGoLive: (force?: boolean) => void
   onEnsureHandoff: () => void
   handoffLoading?: boolean
+  attestations?: IngestAttestations
+  onAttestationsChange?: (next: IngestAttestations) => void
+  previouslyReleased?: boolean | null
+  onContinuityUpdated?: () => void
 }
 
 export default function LaunchPanel({
@@ -65,6 +77,10 @@ export default function LaunchPanel({
   onGoLive,
   onEnsureHandoff,
   handoffLoading,
+  attestations = DEFAULT_INGEST_ATTESTATIONS,
+  onAttestationsChange,
+  previouslyReleased,
+  onContinuityUpdated,
 }: Props) {
   const soft = vaultSoftReadiness(tracks, hasArtwork ? 'yes' : null)
 
@@ -79,6 +95,9 @@ export default function LaunchPanel({
       id: 'isrc',
       label: 'ISRCs assigned',
       ok: Boolean(copyright?.checks.tracks_have_isrc),
+      hint: copyright?.checks.tracks_have_isrc
+        ? 'QTA53 codes on every track'
+        : 'Assign QTA53 codes in Rights',
     },
     {
       id: 'audio',
@@ -123,6 +142,53 @@ export default function LaunchPanel({
             : undefined,
     },
     {
+      id: 'ingest',
+      label: 'DSP ingest fields',
+      ok: Boolean(copyright?.checks.dsp_ingest_passed),
+      hint: copyright?.ingest?.blockers[0] || copyright?.ingest?.warnings[0],
+    },
+    {
+      id: 'street-date',
+      label: 'Street date ≥ 7 days',
+      ok: copyright?.ingest?.checks.street_date_lead !== false,
+      soft: true,
+      hint:
+        copyright?.ingest?.issues.find((item) => item.id === 'date-lead')?.label ||
+        'One week of lead time helps playlist pitching.',
+    },
+    {
+      id: 'artist-profiles',
+      label: 'YouTube / Instagram / Facebook artist match',
+      ok: copyright?.ingest?.checks.artist_profiles !== false,
+      soft: true,
+      hint: 'Delivery → already on these stores, so the release lands on existing SERGIK pages.',
+    },
+    {
+      id: 'preview-clip',
+      label: 'Preview clip start',
+      ok: copyright?.ingest?.checks.preview_clip !== false,
+      soft: true,
+      hint: 'Catalog → credits. Auto is fine; a custom start is better for Apple/TikTok.',
+    },
+    {
+      id: 'radio-pair',
+      label: 'Radio edit ISRC pair',
+      ok: copyright?.ingest?.checks.radio_pair !== false,
+      soft: true,
+      hint: 'If this is a radio edit, point it at the explicit version’s ISRC.',
+    },
+    {
+      id: 'ugc',
+      label: 'SERGIK UGC pack',
+      ok: !copyright?.ugc_pack?.opted_in || copyright?.ugc_pack?.status === 'live',
+      soft: true,
+      hint: copyright?.ugc_pack?.opted_in
+        ? copyright.ugc_pack.status === 'live'
+          ? 'Live through SERGIK'
+          : 'Enrolled on Rights — mark Live after SERGIK fingerprints this master'
+        : 'Optional — Rights → SERGIK UGC pack',
+    },
+    {
       id: 'vault',
       label: 'Music Vault linked',
       ok: soft.vaultLinked || trackCount === 0,
@@ -150,6 +216,13 @@ export default function LaunchPanel({
 
   return (
     <div className="space-y-6">
+      {(previouslyReleased || copyright?.ingest?.issues.some((i) => i.id.startsWith('switch-'))) && (
+        <StreamContinuityPanel
+          releaseId={releaseId}
+          previouslyReleased={previouslyReleased ?? true}
+          onUpdated={onContinuityUpdated}
+        />
+      )}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
           <div>
@@ -159,7 +232,7 @@ export default function LaunchPanel({
                 ? `"${title}" is live on SERGIK.`
                 : ready
                   ? softWarnings.length
-                    ? 'Hard checks green — soft vault/master hints remain.'
+                    ? 'Hard checks green — recommended street date, preview clip, and artist match still open.'
                     : 'All checks green — publish when ready.'
                   : `${blockers.length} item(s) still open before a clean go-live.`}
             </p>
@@ -216,6 +289,16 @@ export default function LaunchPanel({
             </li>
           ))}
         </ul>
+
+        {!isLive && (
+          <div className="mb-6">
+            <IngestAttestationsSection
+              attestations={attestations}
+              saving={goingLive}
+              onChange={onAttestationsChange}
+            />
+          </div>
+        )}
 
         {!isLive && (
           <div className="flex flex-wrap gap-2">
@@ -312,13 +395,19 @@ export default function LaunchPanel({
             {handoffLoading ? 'Working…' : 'Ensure campaign + smart link'}
           </button>
           <Link
-            href="/studio/releases/pipeline"
+            href={studioPipelineHref('marketing')}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-zinc-700 text-sm text-zinc-400 hover:text-white"
           >
             Open marketing pipeline
           </Link>
         </div>
       </div>
+
+      <SocialPromoPanel
+        releaseId={releaseId}
+        title={title}
+        artworkUrl={tracks.find((t) => t.artwork_url)?.artwork_url || null}
+      />
     </div>
   )
 }

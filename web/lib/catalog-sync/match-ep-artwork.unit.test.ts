@@ -90,7 +90,7 @@ describe('matchEpArtworkForTrack', () => {
 })
 
 describe('applyEpArtworkToTracks', () => {
-  it('stamps EP art and album on crate rows without overwriting uploaded art', () => {
+  it('stamps EP art on crate rows; keeps unique track art; replaces folder stamps', () => {
     const index = indexFrom([
       {
         id: 'soul-candy',
@@ -107,7 +107,15 @@ describe('applyEpArtworkToTracks', () => {
           id: 'c',
           title: 'All The Vibes',
           album: 'Deep n Funky',
-          artwork: '/images/audio/artwork/folder-own.jpg',
+          // Crate/folder stamp must yield to the matched EP cover.
+          artwork: '/images/audio/artwork/folder-crate-stamp.jpg',
+        },
+        {
+          id: 'd',
+          title: 'All The Vibes',
+          album: 'Deep n Funky',
+          // Unique non-folder art stays on the row.
+          artwork: '/images/audio/artwork/track-d-unique.jpg',
         },
       ],
       index,
@@ -118,8 +126,10 @@ describe('applyEpArtworkToTracks', () => {
     expect((next[0] as { albumType?: string }).albumType).toBe('ep')
     expect(next[1].artwork).toBeUndefined()
     expect(next[1].album).toBe('Deep n Funky')
-    expect(next[2].artwork).toBe('/images/audio/artwork/folder-own.jpg')
+    expect(next[2].artwork).toBe(soulCandy)
     expect(next[2].album).toBe('Soul Candy')
+    expect(next[3].artwork).toBe('/images/audio/artwork/track-d-unique.jpg')
+    expect(next[3].album).toBe('Soul Candy')
   })
 })
 

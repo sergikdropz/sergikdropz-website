@@ -45,6 +45,7 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/audio/upload', method: 'POST', access: 'admin_write', reason: 'Audio upload' },
   { path: '/api/audio/upload-with-pipeline', method: 'POST', access: 'admin_write', reason: 'Upload with analysis pipeline' },
   { path: '/api/audio/replace', method: 'POST', access: 'admin_write', reason: 'Replace audio file' },
+  { path: '/api/studio/tracks/[id]/replace-wav', method: 'POST', access: 'admin_write', reason: 'Replace catalog master WAV and vault audio' },
   { path: '/api/audio/reprocess-track', method: 'POST', access: 'admin_write', reason: 'Reprocess track' },
   { path: '/api/audio/artwork', method: 'POST', access: 'admin_write', reason: 'Artwork extraction/upload' },
   { path: '/api/audio/update-bpm', method: 'POST', access: 'admin_write', reason: 'Persist BPM' },
@@ -86,6 +87,17 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/shares/[token]', method: 'DELETE', access: 'admin_write', reason: 'Revoke share link' },
   { path: '/api/shares/artwork-proxy', method: 'GET', access: 'public', reason: 'Same-origin artwork proxy for accent sampling and story canvas' },
   { path: '/api/oembed', method: 'GET', access: 'public', reason: 'oEmbed for share listen URLs' },
+
+  // Release Collab (studio thread + magic-link portal + Resend webhooks)
+  { path: '/api/studio/collab', method: 'GET', access: 'admin_read', reason: 'Release Collab hub overview' },
+  { path: '/api/studio/releases/[id]/collab', method: 'GET', access: 'admin_read', reason: 'Release Collab bundle' },
+  { path: '/api/studio/releases/[id]/collab/collaborators', method: 'POST', access: 'admin_write', reason: 'Add/update release collaborator' },
+  { path: '/api/studio/releases/[id]/collab/collaborators', method: 'DELETE', access: 'admin_write', reason: 'Remove release collaborator' },
+  { path: '/api/studio/releases/[id]/collab/messages', method: 'POST', access: 'admin_write', reason: 'Post studio collab message (+ optional email notify)' },
+  { path: '/api/studio/releases/[id]/collab/invites', method: 'POST', access: 'admin_write', reason: 'Send magic-link review invite' },
+  { path: '/api/collab/[token]', method: 'GET', access: 'public', reason: 'Magic-link review portal payload' },
+  { path: '/api/collab/[token]', method: 'POST', access: 'public', reason: 'Collaborator message or approve/request changes' },
+  { path: '/api/webhooks/resend', method: 'POST', access: 'public', reason: 'Resend delivery/open/bounce webhooks for collab sends' },
 ] as const
 
 export function getPrivilegedAudioPolicies(): RoutePolicyEntry[] {

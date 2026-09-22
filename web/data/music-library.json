@@ -258,6 +258,7 @@
               "type": "ep",
               "year": 2026,
               "albumArtist": "SERGIK",
+              "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
               "tracks": [
                 {
                   "id": "track-unreleased-eps-SERGIK - Daze-sergik-x-auxlee---the-conex-in-collection-unreleased-eps-sergik---daze-",
@@ -266,7 +267,7 @@
                   "duration": 329,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/eps/SERGIK%20-%20Daze/SERGIK%20x%20AUXLEE%20-%20The%20Conex.mp3",
                   "bpm": 159,
-                  "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+                  "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
                   "key_signature": "F minor",
                   "sonic_dna": {
                     "genres": {
@@ -312,7 +313,7 @@
                   "duration": 197,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/eps/SERGIK%20-%20Daze/SERGIK%20x%20Bones%20-%20Momentum.mp3",
                   "bpm": 168,
-                  "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+                  "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
                   "key_signature": "F# major",
                   "sonic_dna": {
                     "genres": {
@@ -379,7 +380,7 @@
                   "duration": 225,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/eps/SERGIK%20-%20Daze/SERGIK%20-%20Crawling%20Vines.mp3",
                   "bpm": 143,
-                  "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+                  "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
                   "key_signature": "D minor",
                   "sonic_dna": {
                     "genres": {
@@ -425,7 +426,7 @@
                   "duration": 251,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/eps/SERGIK%20-%20Daze/SERGIK%20-%20Daze%20V2.mp3",
                   "bpm": 155,
-                  "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+                  "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
                   "key_signature": "E major",
                   "sonic_dna": {
                     "genres": {
@@ -471,7 +472,7 @@
                   "duration": 259,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/eps/SERGIK%20-%20Daze/SERGIK%20-%20Forza.mp3",
                   "bpm": 129,
-                  "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+                  "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
                   "key_signature": "A minor",
                   "sonic_dna": {
                     "genres": {
@@ -512,7 +513,7 @@
                   "duration": 304,
                   "file": "https://storage.local.invalid/storage/v1/object/public/audio-files/unreleased/eps/SERGIK - Daze/SERGIK - What Is What Xtendo.mp3",
                   "bpm": 139,
-                  "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+                  "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
                   "key_signature": "D minor",
                   "sonic_dna": {
                     "genres": {
@@ -13823,7 +13824,7 @@
       "id": "playlist-collection-unreleased-eps-sergik---daze-",
       "name": "Daze",
       "description": "Daze EP",
-      "artwork": "https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG",
+      "artwork": "/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg",
       "trackIds": [
         "track-unreleased-eps-SERGIK - Daze-sergik-x-auxlee---the-conex-in-collection-unreleased-eps-sergik---daze-",
         "track-unreleased-eps-SERGIK - Daze-sergik-x-bones---momentum-in-collection-unreleased-eps-sergik---daze-",

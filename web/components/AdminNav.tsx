@@ -75,7 +75,7 @@ export default function AdminNav() {
   }
 
   function isActive(href: string) {
-    if (href === '/admin') return pathname === '/admin'
+    if (href === '/admin' || href === '/studio') return pathname === href
     return pathname.startsWith(href)
   }
 

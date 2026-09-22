@@ -19,6 +19,7 @@ const privilegedAudioChecks: Array<{ method: 'GET' | 'POST'; path: string }> = [
   { method: 'POST', path: '/api/audio/regenerate-all-sonic-dna' },
   { method: 'POST', path: '/api/audio/artifacts' },
   { method: 'POST', path: '/api/audio/replace' },
+  { method: 'POST', path: '/api/studio/tracks/test/replace-wav' },
   { method: 'POST', path: '/api/audio/reprocess-track' },
   { method: 'POST', path: '/api/audio/update-bpm' },
 ]
@@ -77,6 +78,61 @@ test.describe('admin API (unauthenticated)', () => {
 
   test('POST /api/studio/releases returns 401', async ({ request }) => {
     const res = await request.post('/api/studio/releases', { data: {} })
+    expect(res.status()).toBe(401)
+  })
+
+  test('GET /api/studio/release-pipeline returns 401', async ({ request }) => {
+    const res = await request.get('/api/studio/release-pipeline')
+    expect(res.status()).toBe(401)
+  })
+
+  test('GET /api/studio/releases/test/social-promo returns 401', async ({ request }) => {
+    const res = await request.get('/api/studio/releases/test/social-promo')
+    expect(res.status()).toBe(401)
+  })
+
+  test('PUT /api/studio/releases/test/social-promo returns 401', async ({ request }) => {
+    const res = await request.put('/api/studio/releases/test/social-promo', {
+      data: { generate: true },
+    })
+    expect(res.status()).toBe(401)
+  })
+
+  test('GET /api/studio/releases/test/dsp-connect returns 401', async ({ request }) => {
+    const res = await request.get('/api/studio/releases/test/dsp-connect')
+    expect(res.status()).toBe(401)
+  })
+
+  test('POST /api/studio/releases/test/dsp-connect returns 401', async ({ request }) => {
+    const res = await request.post('/api/studio/releases/test/dsp-connect', {
+      data: { seedUrl: 'https://open.spotify.com/album/x', persist: false },
+    })
+    expect(res.status()).toBe(401)
+  })
+
+  test('POST /api/studio/releases/from-distrokid returns 401', async ({ request }) => {
+    const res = await request.post('/api/studio/releases/from-distrokid', {
+      data: { catalog: { version: 2, source: 'distrokid', extracted_at: '', releases: [] }, dryRun: true },
+    })
+    expect(res.status()).toBe(401)
+  })
+
+  test('PUT /api/studio/releases/test/copyright returns 401', async ({ request }) => {
+    const res = await request.put('/api/studio/releases/test/copyright', {
+      data: { ugc_pack: { opted_in: true } },
+    })
+    expect(res.status()).toBe(401)
+  })
+
+  test('GET /api/studio/soundexchange/registry returns 401', async ({ request }) => {
+    const res = await request.get('/api/studio/soundexchange/registry')
+    expect(res.status()).toBe(401)
+  })
+
+  test('POST /api/studio/soundexchange/batch-submit returns 401', async ({ request }) => {
+    const res = await request.post('/api/studio/soundexchange/batch-submit', {
+      data: { trackIds: ['x'] },
+    })
     expect(res.status()).toBe(401)
   })
 

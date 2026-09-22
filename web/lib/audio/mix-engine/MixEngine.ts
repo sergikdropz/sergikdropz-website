@@ -823,14 +823,16 @@ export class MixEngine {
 
   /**
    * Keep key-lock honest on every audible path:
-   * - HTML: preservesPitch (applyDeckTempo)
-   * - BufferSource: formant EQ offset + stretch pitch-cancel (no preservesPitch)
+   * - HTML MES: browser preservesPitch only — do NOT stack formant EQ (warble)
+   * - BufferSource: gentle formant EQ + stretch pitch-cancel (no preservesPitch)
    * Never bakes formant into deckUserEq / dial state.
    */
   private syncKeyLockAudio(deck: DeckId, rate: number) {
     const keyLock = this.deckKeyLock[deck]
     const formantMul = this.mixIntel?.incomingStretch.formantGain ?? 1
-    if (keyLock) {
+    // Formant shelves only when BufferSource owns pitch (HTML stretcher already
+    // preserves formants; stacking EQ on top is the “warbly CDJ clone” sound).
+    if (keyLock && this.hasBufferClock(deck)) {
       const scaled = scaleFormantGains(formantCompensationGains(rate), formantMul)
       this.deckFormantOffset[deck] = scaled
     } else {
@@ -839,7 +841,6 @@ export class MixEngine {
     if (!this.mixLock) {
       this.writeEffectiveEq(deck)
     }
-    // Stretch worklet can cancel BufferSource pitch when present.
     if (
       this.stretchInsertedDeck === deck &&
       this.incomingStretch &&
@@ -1716,8 +1717,22 @@ export class MixEngine {
 
   /** Mute the idle channel (including deck A via externalGainA). */
   silenceIdle(opts?: { instant?: boolean }) {
-    if (this.active === 'a') this.applyDeckGains(1, 0, { instant: opts?.instant !== false, tau: 0.012 })
-    else this.applyDeckGains(0, 1, { instant: opts?.instant !== false, tau: 0.012 })
+    const instant = opts?.instant !== false
+    const tau = 0.012
+    // Respect manual XF — only duck the idle rail; do not snap live to full.
+    if (this.lastManualXf != null) {
+      const { a, b } = styleMixGains(
+        'crossfade',
+        this.lastManualXf,
+        undefined,
+        this.blendAutomation,
+      )
+      if (this.active === 'a') this.applyDeckGains(a, 0, { instant, tau })
+      else this.applyDeckGains(0, b, { instant, tau })
+      return
+    }
+    if (this.active === 'a') this.applyDeckGains(1, 0, { instant, tau })
+    else this.applyDeckGains(0, 1, { instant, tau })
   }
 
   /**
@@ -2340,6 +2355,53 @@ export class MixEngine {
       deck: this.active,
       trackId: this.getActiveTrack()?.id ?? null,
     })
+  }
+
+  /**
+   * Point UI / clock at a deck without muting the other platter or moving XF.
+   * iDJ same-deck skip and gapless promote use this instead of {@link soloDeck}.
+   */
+  focusDeck(deck: DeckId) {
+    if (this.mixLock && !this.manualXfOverride) return
+    const changed = this.active !== deck
+    this.active = deck
+    this.ensureDeckChain('a')
+    this.ensureDeckChain('b')
+    // Re-assert current XF / faders — never snap to live-only 1/0.
+    if (this.lastManualXf != null) {
+      const { a, b } = styleMixGains(
+        'crossfade',
+        this.lastManualXf,
+        undefined,
+        this.blendAutomation,
+      )
+      this.applyDeckGains(a, b, { instant: true })
+    } else {
+      this.applyDeckGains(this.faderA, this.faderB, { instant: true })
+    }
+    this.applyDeckEq(deck, this.deckUserEq[deck], { instant: true })
+    if (changed) {
+      this.emit({
+        type: 'active-deck',
+        deck: this.active,
+        trackId: this.getActiveTrack()?.id ?? null,
+      })
+    }
+  }
+
+  /**
+   * Kill everything audible on one platter only — BufferSource + HTML element.
+   * Does not touch the other deck, XF, or active-deck identity.
+   * Use before same-deck skip so the previous song cannot ghost under MES.
+   */
+  hardStopDeck(deck: DeckId) {
+    this.stopDeckBuffer(deck)
+    const el = deck === 'a' ? this.deckA : this.deckB
+    try {
+      el.pause()
+    } catch {
+      /* ignore */
+    }
   }
 
   /** Load a track onto the idle deck (preload / cue). */

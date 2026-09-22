@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { logActivity } from '@/lib/activity-log'
+import {
+  indexVaultLinks,
+  isStudioVaultLibraryFolderType,
+  studioVaultCatalogKind,
+  studioVaultCatalogLabel,
+  STUDIO_VAULT_LIBRARY_FOLDER_TYPES,
+  vaultLinkForTrack,
+  vaultTrackAvailability,
+} from '@/lib/studio/vault-picker'
+import {
+  enrichDistributionTracksWithVaultIdentity,
+  persistDistributionTrackIdentitiesFromVault,
+} from '@/lib/studio/vault-import-server'
+import { linkDspMastersForRelease } from '@/lib/studio/link-dsp-masters-server'
 
 /**
  * GET /api/studio/releases/[id]/tracks?available=true
@@ -33,48 +47,166 @@ export async function GET(
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
-      return NextResponse.json({ tracks: data || [] })
+      const tracks = await enrichDistributionTracksWithVaultIdentity(
+        supabase,
+        (data || []) as Array<Record<string, unknown>>,
+      )
+      return NextResponse.json({ tracks })
     }
 
     if (source === 'vault') {
-      const { data: linked } = await supabase
-        .from('distribution_tracks')
-        .select('music_library_track_id')
-        .not('music_library_track_id', 'is', null)
+      const q = (searchParams.get('q') || '').trim().toLowerCase()
+      const kindRaw = (searchParams.get('kind') || 'all').toLowerCase()
+      const kind = kindRaw === 'single' || kindRaw === 'ep' ? kindRaw : 'all'
 
-      const linkedSet = new Set(
-        (linked || []).map((r) => r.music_library_track_id as string).filter(Boolean),
-      )
-
-      const { data: vaultTracks, error } = await supabase
-        .from('music_library_tracks')
-        .select(
-          'id, title, folder_id, file_url, artwork_url, duration, genre, subgenre, sonic_dna_status, is_archived',
-        )
+      const { data: folders, error: folderError } = await supabase
+        .from('music_library_folders')
+        .select('id, name, type, is_archived, hidden')
+        .in('type', [...STUDIO_VAULT_LIBRARY_FOLDER_TYPES])
         .or('is_archived.is.null,is_archived.eq.false')
-        .order('title', { ascending: true })
-        .limit(500)
+        .order('name', { ascending: true })
+        .limit(400)
 
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+      if (folderError) {
+        return NextResponse.json({ error: folderError.message }, { status: 500 })
       }
 
-      const tracks = (vaultTracks || [])
-        .filter((t) => !linkedSet.has(t.id))
-        .map((t) => ({
-          id: t.id,
-          title: t.title,
-          source: 'vault' as const,
-          folder_id: t.folder_id,
-          isrc_full: null,
-          wav_url: t.file_url,
-          artwork_url: t.artwork_url,
-          duration: t.duration,
-          genre: t.genre,
-          sonic_dna_status: t.sonic_dna_status,
-        }))
+      const catalogFolders = (folders || []).filter((folder) => {
+        if (!isStudioVaultLibraryFolderType(folder.type)) return false
+        if (folder.hidden === true) return false
+        if (kind !== 'all' && studioVaultCatalogKind(folder.type) !== kind) return false
+        return true
+      })
+      const folderById = new Map(catalogFolders.map((folder) => [folder.id, folder]))
+      const folderIds = catalogFolders.map((folder) => folder.id)
 
-      return NextResponse.json({ tracks })
+      if (!folderIds.length) {
+        return NextResponse.json({ tracks: [], scanned: 0, linked: 0, folders: 0 })
+      }
+
+      const linkRows: Array<{
+        music_library_track_id?: string | null
+        release_id?: string | null
+        release_title?: string | null
+      }> = []
+      for (let from = 0; from < 20_000; from += 1000) {
+        const { data, error: linkError } = await supabase
+          .from('distribution_tracks')
+          .select('music_library_track_id, release_id')
+          .not('music_library_track_id', 'is', null)
+          .range(from, from + 999)
+        if (linkError) {
+          return NextResponse.json({ error: linkError.message }, { status: 500 })
+        }
+        if (!data?.length) break
+        linkRows.push(...data)
+        if (data.length < 1000) break
+      }
+      const releaseIds = [
+        ...new Set(
+          linkRows
+            .map((row) => (row.release_id ? String(row.release_id) : ''))
+            .filter(Boolean),
+        ),
+      ]
+      const titleByReleaseId = new Map<string, string>()
+      for (let i = 0; i < releaseIds.length; i += 80) {
+        const slice = releaseIds.slice(i, i + 80)
+        const { data: releaseRows, error: releaseError } = await supabase
+          .from('distribution_releases')
+          .select('id, title')
+          .in('id', slice)
+        if (releaseError) {
+          return NextResponse.json({ error: releaseError.message }, { status: 500 })
+        }
+        for (const row of releaseRows || []) {
+          if (row.id && row.title) titleByReleaseId.set(String(row.id), String(row.title))
+        }
+      }
+      const links = indexVaultLinks(
+        linkRows.map((row) => ({
+          ...row,
+          release_title: row.release_id
+            ? titleByReleaseId.get(String(row.release_id)) || null
+            : null,
+        })),
+      )
+
+      const vaultTracks: Array<{
+        id: string
+        title: string | null
+        folder_id: string | null
+        file_url: string | null
+        artwork_url: string | null
+        duration: number | null
+        genre: string | null
+      }> = []
+      const chunk = 80
+      for (let i = 0; i < folderIds.length; i += chunk) {
+        const slice = folderIds.slice(i, i + chunk)
+        for (let from = 0; from < 20_000; from += 1000) {
+          const { data, error } = await supabase
+            .from('music_library_tracks')
+            .select('id, title, folder_id, file_url, artwork_url, duration, genre, is_archived')
+            .in('folder_id', slice)
+            .or('is_archived.is.null,is_archived.eq.false')
+            .order('title', { ascending: true })
+            .range(from, from + 999)
+          if (error) {
+            return NextResponse.json({ error: error.message }, { status: 500 })
+          }
+          vaultTracks.push(...((data || []) as typeof vaultTracks))
+          if (!data || data.length < 1000) break
+        }
+      }
+
+      const tracks = vaultTracks
+        .map((t) => {
+          const folder = t.folder_id ? folderById.get(t.folder_id) : null
+          if (!folder) return null
+          const availability = vaultTrackAvailability(t.id, params.id, links)
+          if (availability === 'on_this_release') return null
+          const parked = availability === 'on_other_release' ? vaultLinkForTrack(t.id, links) : null
+          const folderName = String(folder.name || '')
+          const folderType = String(folder.type || 'ep')
+          if (q) {
+            const hay = `${t.title || ''} ${folderName} ${t.genre || ''}`.toLowerCase()
+            if (!hay.includes(q)) return null
+          }
+          return {
+            id: t.id,
+            title: t.title || 'Untitled',
+            source: 'vault' as const,
+            folder_id: t.folder_id,
+            folder_name: folderName,
+            folder_type: folderType,
+            catalog_kind: studioVaultCatalogKind(folderType),
+            catalog_label: studioVaultCatalogLabel(folderType),
+            isrc_full: null,
+            wav_url: t.file_url,
+            artwork_url: t.artwork_url,
+            duration: t.duration,
+            genre: t.genre,
+            availability,
+            availability_release_id: parked?.releaseId || null,
+            availability_release_title: parked?.releaseTitle || null,
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+        .sort((a, b) => {
+          const kindRank = a.catalog_kind === 'ep' && b.catalog_kind !== 'ep' ? -1 : a.catalog_kind !== 'ep' && b.catalog_kind === 'ep' ? 1 : 0
+          if (kindRank) return kindRank
+          const folderCmp = a.folder_name.localeCompare(b.folder_name)
+          if (folderCmp) return folderCmp
+          return a.title.localeCompare(b.title)
+        })
+
+      return NextResponse.json({
+        tracks,
+        scanned: vaultTracks.length,
+        linked: links.filter((l) => Boolean(l.releaseId)).length,
+        folders: folderIds.length,
+      })
     }
 
     const { data, error } = await supabase
@@ -134,6 +266,7 @@ export async function POST(
     }
 
     const results: Array<{ track_id: string; status: 'ok' | 'error'; message?: string }> = []
+    const identityPairs: Array<{ distributionTrackId: string; vaultTrackId: string }> = []
 
     if (vaultTrackIds.length) {
       const { data: vaultTracks, error: vaultError } = await supabase
@@ -171,11 +304,12 @@ export async function POST(
             .from('distribution_tracks')
             .update({ release_id: params.id })
             .eq('id', existing.id)
-          results.push(
-            upErr
-              ? { track_id: vaultId, status: 'error', message: upErr.message }
-              : { track_id: existing.id, status: 'ok' },
-          )
+          if (upErr) {
+            results.push({ track_id: vaultId, status: 'error', message: upErr.message })
+          } else {
+            identityPairs.push({ distributionTrackId: existing.id, vaultTrackId: vaultId })
+            results.push({ track_id: existing.id, status: 'ok' })
+          }
           continue
         }
 
@@ -194,11 +328,18 @@ export async function POST(
           explicit: false,
           language: 'en',
         })
-        results.push(
-          insErr
-            ? { track_id: vaultId, status: 'error', message: insErr.message }
-            : { track_id: distId, status: 'ok' },
-        )
+        if (insErr) {
+          results.push({ track_id: vaultId, status: 'error', message: insErr.message })
+        } else {
+          identityPairs.push({ distributionTrackId: distId, vaultTrackId: vaultId })
+          results.push({ track_id: distId, status: 'ok' })
+        }
+      }
+
+      try {
+        await persistDistributionTrackIdentitiesFromVault(supabase, identityPairs)
+      } catch (identityError) {
+        console.error('Failed to persist vault track identity', identityError)
       }
     }
 
@@ -254,11 +395,21 @@ export async function POST(
       details: { trackIds, vaultTrackIds, successful: ok },
     })
 
+    let masters: Awaited<ReturnType<typeof linkDspMastersForRelease>> | null = null
+    if (ok > 0) {
+      try {
+        masters = await linkDspMastersForRelease(supabase, params.id)
+      } catch (mastersError) {
+        console.error('Auto-locate DSP masters failed', mastersError)
+      }
+    }
+
     return NextResponse.json({
       total: results.length,
       successful: ok,
       failed: results.length - ok,
       results,
+      masters,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to attach tracks'

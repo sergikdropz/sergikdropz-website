@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
+import { enrichDistributionTracksWithVaultIdentity } from '@/lib/studio/vault-import-server'
 
 export type ReleaseStudioSnapshot = {
   release: Record<string, unknown>
@@ -32,11 +33,17 @@ export async function fetchReleaseStudioSnapshot(releaseId: string): Promise<Rel
     .select('*')
     .eq('release_id', releaseId)
 
-  const copyright = await getSingleReleaseCopyrightReadiness(supabase, releaseId)
+  const [copyright, enrichedTracks] = await Promise.all([
+    getSingleReleaseCopyrightReadiness(supabase, releaseId),
+    enrichDistributionTracksWithVaultIdentity(
+      supabase,
+      (tracks || []) as Array<Record<string, unknown>>,
+    ),
+  ])
 
   return {
     release: release as Record<string, unknown>,
-    tracks: (tracks || []) as Array<Record<string, unknown>>,
+    tracks: enrichedTracks as Array<Record<string, unknown>>,
     storeLinks: (storeLinks || []) as Array<Record<string, unknown>>,
     copyright: copyright as unknown as Record<string, unknown>,
   }

@@ -1,21 +1,31 @@
 /**
  * SoundCloud-style Instagram Story export: 15s vertical video with
  * cover art + baked-in audio snippet (canvas + MediaRecorder).
+ *
+ * `layout: 'vinyl'` renders a spinning 33⅓ RPM disc + CTA for IG Link stickers.
  */
+
+import { ensureStoryMp4 } from '@/lib/shares/ensure-mp4'
+import { VINYL_DEG_PER_SEC } from '@/lib/shares/vinyl-spin-clock'
 
 export const STORY_SNIPPET_DURATION_SEC = 15
 export const STORY_WIDTH = 1080
 export const STORY_HEIGHT = 1920
 export const STORY_FPS = 30
 
+/** Prefer MPEG-4 for Instagram; WebM is Chromium fallback (transcoded after). */
 const RECORDER_MIME_CANDIDATES = [
+  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+  'video/mp4;codecs=avc1.42001E,mp4a.40.2',
+  'video/mp4',
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',
   'video/webm;codecs=vp9',
   'video/webm;codecs=vp8',
   'video/webm',
-  'video/mp4',
 ] as const
+
+export type StorySnippetLayout = 'cover' | 'vinyl'
 
 export type StorySnippetInput = {
   artworkUrl?: string | null
@@ -28,7 +38,17 @@ export type StorySnippetInput = {
   height?: number
   fps?: number
   brand?: string
+  /** Default `vinyl` — spinning disc trailer for Instagram Stories/Reels. */
+  layout?: StorySnippetLayout
+  /** Overlay under the disc (vinyl layout). */
+  cta?: string
   onProgress?: (phase: string, ratio?: number) => void
+}
+
+/** Clockwise platter degrees for a given audio/story elapsed time. */
+export function vinylStoryRotationDeg(elapsedSec: number): number {
+  const t = Number.isFinite(elapsedSec) ? Math.max(0, elapsedSec) : 0
+  return t * VINYL_DEG_PER_SEC
 }
 
 export type StorySnippetResult = {
@@ -97,14 +117,16 @@ export function proxiedArtworkUrl(artworkUrl: string, pageOrigin?: string): stri
   const raw = String(artworkUrl || '').trim()
   if (!raw) return ''
   if (raw.startsWith('/api/shares/artwork-proxy')) return raw
+  // Relative site paths are already same-origin — proxying re-encodes `%20` → `%2520`
+  // and is unnecessary for canvas/img draws.
+  if (raw.startsWith('/') && !raw.startsWith('//')) return raw
   try {
     const origin =
       pageOrigin ||
       (typeof window !== 'undefined' ? window.location.origin : '') ||
       ''
     if (origin && raw.startsWith(origin)) {
-      // Still proxy absolute same-origin paths that might redirect cross-origin.
-      if (raw.includes('/api/shares/artwork-proxy')) return raw
+      return raw
     }
   } catch {
     /* ignore */
@@ -176,7 +198,121 @@ function wrapText(
   return lines
 }
 
-function paintFrame(
+function paintBlurredBackdrop(
+  ctx: CanvasRenderingContext2D,
+  artwork: HTMLImageElement | null,
+  width: number,
+  height: number,
+) {
+  ctx.fillStyle = '#0a0a0a'
+  ctx.fillRect(0, 0, width, height)
+  if (!artwork) return
+  ctx.save()
+  ctx.filter = 'blur(48px) brightness(0.45) saturate(1.2)'
+  drawCoverFit(ctx, artwork, -width * 0.1, -height * 0.05, width * 1.2, height * 1.1)
+  ctx.restore()
+}
+
+function paintProgressBar(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  progress: number,
+  yRatio: number,
+) {
+  const barW = width * 0.7
+  const barH = Math.max(4, height * 0.004)
+  const barX = (width - barW) / 2
+  const barY = height * yRatio
+  ctx.fillStyle = 'rgba(255,255,255,0.2)'
+  ctx.fillRect(barX, barY, barW, barH)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(barX, barY, barW * Math.min(1, Math.max(0, progress)), barH)
+}
+
+function paintVinylDisc(
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    cx: number
+    cy: number
+    radius: number
+    artwork: HTMLImageElement | null
+    rotationDeg: number
+  },
+) {
+  const { cx, cy, radius, artwork, rotationDeg } = opts
+  const labelR = radius * 0.34
+  const holeR = radius * 0.035
+
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.rotate((rotationDeg * Math.PI) / 180)
+
+  ctx.beginPath()
+  ctx.arc(0, 0, radius, 0, Math.PI * 2)
+  ctx.fillStyle = '#0c0c0c'
+  ctx.shadowColor = 'rgba(0,0,0,0.65)'
+  ctx.shadowBlur = radius * 0.18
+  ctx.shadowOffsetY = radius * 0.06
+  ctx.fill()
+  ctx.shadowColor = 'transparent'
+
+  // Groove rings
+  ctx.strokeStyle = 'rgba(255,255,255,0.055)'
+  ctx.lineWidth = Math.max(1, radius * 0.004)
+  for (let i = 0; i < 28; i++) {
+    const r = labelR + ((radius - labelR - holeR) * (i + 1)) / 29
+    ctx.beginPath()
+    ctx.arc(0, 0, r, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
+  // Outer rim highlight
+  ctx.beginPath()
+  ctx.arc(0, 0, radius * 0.985, 0, Math.PI * 2)
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'
+  ctx.lineWidth = Math.max(2, radius * 0.012)
+  ctx.stroke()
+
+  // Center label
+  ctx.beginPath()
+  ctx.arc(0, 0, labelR, 0, Math.PI * 2)
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fill()
+  if (artwork) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(0, 0, labelR * 0.96, 0, Math.PI * 2)
+    ctx.clip()
+    drawCoverFit(ctx, artwork, -labelR, -labelR, labelR * 2, labelR * 2)
+    ctx.restore()
+  }
+
+  // Spindle hole
+  ctx.beginPath()
+  ctx.arc(0, 0, holeR, 0, Math.PI * 2)
+  ctx.fillStyle = '#050505'
+  ctx.fill()
+
+  ctx.restore()
+
+  // Fixed sheen (does not spin — reads like studio light)
+  ctx.save()
+  ctx.translate(cx, cy)
+  const sheen = ctx.createLinearGradient(-radius, -radius, radius, radius)
+  sheen.addColorStop(0, 'rgba(255,255,255,0)')
+  sheen.addColorStop(0.42, 'rgba(255,255,255,0)')
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0.1)')
+  sheen.addColorStop(0.58, 'rgba(255,255,255,0)')
+  sheen.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.beginPath()
+  ctx.arc(0, 0, radius, 0, Math.PI * 2)
+  ctx.fillStyle = sheen
+  ctx.fill()
+  ctx.restore()
+}
+
+function paintCoverFrame(
   ctx: CanvasRenderingContext2D,
   opts: {
     width: number
@@ -189,15 +325,9 @@ function paintFrame(
   },
 ) {
   const { width, height, artwork, title, artist, brand, progress } = opts
-  ctx.fillStyle = '#0a0a0a'
-  ctx.fillRect(0, 0, width, height)
+  paintBlurredBackdrop(ctx, artwork, width, height)
 
   if (artwork) {
-    ctx.save()
-    ctx.filter = 'blur(48px) brightness(0.45) saturate(1.2)'
-    drawCoverFit(ctx, artwork, -width * 0.1, -height * 0.05, width * 1.2, height * 1.1)
-    ctx.restore()
-
     const artSize = Math.min(width * 0.72, height * 0.38)
     const artX = (width - artSize) / 2
     const artY = height * 0.22
@@ -205,7 +335,6 @@ function paintFrame(
     ctx.shadowColor = 'rgba(0,0,0,0.55)'
     ctx.shadowBlur = 48
     ctx.shadowOffsetY = 18
-    // rounded-ish clip
     const r = Math.max(12, artSize * 0.04)
     ctx.beginPath()
     ctx.moveTo(artX + r, artY)
@@ -247,18 +376,118 @@ function paintFrame(
     ctx.fillText(line, width / 2, textY + width * 0.02)
   }
 
-  const barW = width * 0.7
-  const barH = Math.max(4, height * 0.004)
-  const barX = (width - barW) / 2
-  const barY = height * 0.88
-  ctx.fillStyle = 'rgba(255,255,255,0.2)'
-  ctx.fillRect(barX, barY, barW, barH)
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(barX, barY, barW * Math.min(1, Math.max(0, progress)), barH)
+  paintProgressBar(ctx, width, height, progress, 0.88)
 
   ctx.fillStyle = 'rgba(255,255,255,0.4)'
   ctx.font = `500 ${Math.round(width * 0.028)}px system-ui, -apple-system, sans-serif`
   ctx.fillText('sergikdropz.com', width / 2, height * 0.94)
+}
+
+function paintVinylFrame(
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    width: number
+    height: number
+    artwork: HTMLImageElement | null
+    title: string
+    artist: string
+    brand: string
+    progress: number
+    elapsedSec: number
+    cta: string
+  },
+) {
+  const { width, height, artwork, title, artist, brand, progress, elapsedSec, cta } = opts
+  paintBlurredBackdrop(ctx, artwork, width, height)
+
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.font = `600 ${Math.round(width * 0.035)}px system-ui, -apple-system, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.fillText(brand, width / 2, height * 0.11)
+
+  const discR = Math.min(width * 0.38, height * 0.22)
+  const discCy = height * 0.38
+  paintVinylDisc(ctx, {
+    cx: width / 2,
+    cy: discCy,
+    radius: discR,
+    artwork,
+    rotationDeg: vinylStoryRotationDeg(elapsedSec),
+  })
+
+  const textMax = width * 0.82
+  ctx.fillStyle = '#ffffff'
+  ctx.font = `700 ${Math.round(width * 0.055)}px system-ui, -apple-system, sans-serif`
+  const titleLines = wrapText(ctx, title, textMax, 2)
+  let textY = height * 0.62
+  for (const line of titleLines) {
+    ctx.fillText(line, width / 2, textY)
+    textY += width * 0.07
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.72)'
+  ctx.font = `500 ${Math.round(width * 0.038)}px system-ui, -apple-system, sans-serif`
+  const artistLines = wrapText(ctx, artist, textMax, 1)
+  for (const line of artistLines) {
+    ctx.fillText(line, width / 2, textY + width * 0.015)
+  }
+
+  const ctaY = height * 0.78
+  const ctaPadY = height * 0.014
+  ctx.font = `600 ${Math.round(width * 0.032)}px system-ui, -apple-system, sans-serif`
+  const ctaLines = wrapText(ctx, cta, width * 0.7, 2)
+  const lineH = width * 0.042
+  const boxH = ctaPadY * 2 + ctaLines.length * lineH
+  const boxW = width * 0.78
+  const boxX = (width - boxW) / 2
+  const boxY = ctaY - ctaPadY - lineH * 0.35
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'
+  ctx.beginPath()
+  const rr = Math.max(10, width * 0.02)
+  ctx.moveTo(boxX + rr, boxY)
+  ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, rr)
+  ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, rr)
+  ctx.arcTo(boxX, boxY + boxH, boxX, boxY, rr)
+  ctx.arcTo(boxX, boxY, boxX + boxW, boxY, rr)
+  ctx.closePath()
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = '#ffffff'
+  let cy = ctaY
+  for (const line of ctaLines) {
+    ctx.fillText(line, width / 2, cy)
+    cy += lineH
+  }
+
+  paintProgressBar(ctx, width, height, progress, 0.88)
+
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.font = `500 ${Math.round(width * 0.028)}px system-ui, -apple-system, sans-serif`
+  ctx.fillText('sergikdropz.com · open link to scrub', width / 2, height * 0.94)
+}
+
+function paintFrame(
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    width: number
+    height: number
+    artwork: HTMLImageElement | null
+    title: string
+    artist: string
+    brand: string
+    progress: number
+    elapsedSec: number
+    layout: StorySnippetLayout
+    cta: string
+  },
+) {
+  if (opts.layout === 'vinyl') {
+    paintVinylFrame(ctx, opts)
+    return
+  }
+  paintCoverFrame(ctx, opts)
 }
 
 async function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
@@ -302,6 +531,12 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   const height = input.height || STORY_HEIGHT
   const fps = input.fps || STORY_FPS
   const brand = input.brand || 'SERGIK'
+  const layout: StorySnippetLayout = input.layout === 'cover' ? 'cover' : 'vinyl'
+  const cta =
+    input.cta?.trim() ||
+    (layout === 'vinyl'
+      ? 'Add Link sticker · open to spin & scrub'
+      : '')
   const onProgress = input.onProgress
 
   onProgress?.('loading', 0)
@@ -387,15 +622,22 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
     window.setTimeout(() => resolve(), 120)
   })
 
-  paintFrame(ctx, {
-    width,
-    height,
-    artwork,
-    title: input.title,
-    artist: input.artist,
-    brand,
-    progress: 0,
-  })
+  const paint = (progress: number, elapsedSec: number) => {
+    paintFrame(ctx, {
+      width,
+      height,
+      artwork,
+      title: input.title,
+      artist: input.artist,
+      brand,
+      progress,
+      elapsedSec,
+      layout,
+      cta,
+    })
+  }
+
+  paint(0, 0)
 
   recorder.start(250)
   try {
@@ -411,15 +653,7 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
     const tick = () => {
       const elapsed = (performance.now() - startedAt) / 1000
       const progress = Math.min(1, elapsed / durationSec)
-      paintFrame(ctx, {
-        width,
-        height,
-        artwork,
-        title: input.title,
-        artist: input.artist,
-        brand,
-        progress,
-      })
+      paint(progress, elapsed)
       onProgress?.('recording', progress)
       if (elapsed >= durationSec || audio.ended) {
         resolve()
@@ -432,7 +666,7 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
 
   audio.pause()
   if (recorder.state !== 'inactive') recorder.stop()
-  const blob = await recorded
+  let blob = await recorded
 
   canvasStream.getTracks().forEach((t) => t.stop())
   mediaDest.stream.getTracks().forEach((t) => t.stop())
@@ -440,12 +674,31 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   silentGain.disconnect()
   await audioCtx.close().catch(() => undefined)
 
+  let outMime = blob.type || mimeType
+  let outFilename = filename
+  try {
+    onProgress?.('encoding', 0)
+    const mp4 = await ensureStoryMp4(blob, {
+      filename,
+      mimeType: outMime,
+      onProgress,
+    })
+    blob = mp4.blob
+    outMime = mp4.mimeType
+    outFilename = mp4.filename
+  } catch (err) {
+    // Chromium WebM still downloads if transcode fails — caller surfaces the mime.
+    if (typeof console !== 'undefined') {
+      console.warn('[story-snippet] MP4 convert failed; keeping recorder output', err)
+    }
+  }
+
   onProgress?.('done', 1)
 
   return {
     blob,
-    mimeType: blob.type || mimeType,
-    filename,
+    mimeType: outMime,
+    filename: outFilename,
     durationSec,
     startSec,
   }

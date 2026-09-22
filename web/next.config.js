@@ -69,6 +69,8 @@ const nextConfig = {
       'img.youtube.com',
       'i.ytimg.com',
       'utgwlgcejflqxyalnlze.supabase.co',
+      // DistroKid / Fandalism artwork (path-style S3)
+      's3.amazonaws.com',
     ],
     formats: ['image/avif', 'image/webp'],
     unoptimized: false,
@@ -124,6 +126,20 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.sndcdn.com',
+      },
+      // DistroKid My Music artwork (gather.fandalism.com via path-style S3)
+      {
+        protocol: 'https',
+        hostname: 's3.amazonaws.com',
+        pathname: '/gather.fandalism.com/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.fandalism.com',
       },
       {
         protocol: 'http',

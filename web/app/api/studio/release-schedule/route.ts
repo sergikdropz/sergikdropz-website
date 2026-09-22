@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       release_date,
       presave_date: body.presave_date || null,
       genre: body.genre || null,
-      status: body.status || 'scheduled',
+      status: body.status || 'pending',
       artwork: body.artwork || null,
       smart_link: body.smart_link || null,
       description: body.description || null,

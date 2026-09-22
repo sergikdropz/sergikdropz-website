@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface GalleryImage {
   id: string
@@ -125,6 +126,7 @@ export default function ImageGallery({ images }: ImageGalleryProps) {
                   loading={isPriority ? 'eager' : 'lazy'}
                   priority={isPriority}
                   quality={index < 4 ? 85 : index < 8 ? 75 : 60}
+                  unoptimized={shouldUnoptimizeImage(resolveImageUrl(image.src))}
                 />
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
                   <div className="bg-black/70 backdrop-blur-sm rounded-full p-2">
@@ -184,6 +186,7 @@ export default function ImageGallery({ images }: ImageGalleryProps) {
                   className="object-contain max-h-[90vh] max-w-full w-auto h-auto mx-auto"
                   priority
                   sizes="(max-width: 768px) 100vw, 90vw"
+                  unoptimized={shouldUnoptimizeImage(resolveImageUrl(selectedImage.src))}
                 />
               </div>
 

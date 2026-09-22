@@ -58,16 +58,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Upload file
+    // Upload file — unique object key so re-uploads never collide
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    const fileName = file.name
+    const originalName = file.name || 'upload.jpg'
+    const extMatch = originalName.match(/(\.[a-zA-Z0-9]+)$/)
+    const ext = extMatch ? extMatch[1].toLowerCase() : '.jpg'
+    const base = originalName
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'gallery'
+    const fileName = `photos/${base}-${Date.now()}${ext}`
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('gallery-images')
       .upload(fileName, buffer, {
         contentType: file.type,
-        upsert: true,
+        upsert: false,
       })
 
     if (uploadError) {
@@ -85,7 +93,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      filename: fileName,
+      filename: originalName,
+      storagePath: fileName,
       publicUrl: urlData.publicUrl,
     })
   } catch (error: any) {

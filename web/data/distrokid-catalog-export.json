@@ -1,0 +1,507 @@
+{
+  "version": 2,
+  "source": "distrokid",
+  "extracted_at": "2026-09-18T00:56:21.692Z",
+  "releases": [
+    {
+      "albumuuid": "FCFD5797-2DFF-4EC2-A5AC8F959F458E38",
+      "title": "Soul Candy",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "199083322052",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2DFCFD5797%2D2DFF%2D4EC2%2DA5AC8F959F458E38%2D%2D0%2D%2D14595299%2D%2D09624EA391B34C04A29D23584823FD8B2%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/soul-candy",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Soul Candy",
+          "isrc": "QZES72569811",
+          "download_url": "https://distrokid.com/vault/download/?id=eQeZ9",
+          "credits_url": "https://distrokid.com/credits/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,1"
+        },
+        {
+          "track_number": 2,
+          "title": "Everyday Gratitude",
+          "isrc": "QZES72569812",
+          "download_url": "https://distrokid.com/vault/download/?id=eQe0a",
+          "credits_url": "https://distrokid.com/credits/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,2",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,2"
+        },
+        {
+          "track_number": 3,
+          "title": "Spring Swing",
+          "isrc": "QZES72569813",
+          "download_url": "https://distrokid.com/vault/download/?id=eQe0b",
+          "credits_url": "https://distrokid.com/credits/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,3",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,3"
+        },
+        {
+          "track_number": 4,
+          "title": "Back to the Basics",
+          "isrc": "QZES72569814",
+          "download_url": "https://distrokid.com/vault/download/?id=eQe0c",
+          "credits_url": "https://distrokid.com/credits/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,4",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,4"
+        },
+        {
+          "track_number": 5,
+          "title": "All The Vibes",
+          "isrc": "QZES72569815",
+          "download_url": "https://distrokid.com/vault/download/?id=eQe0d",
+          "credits_url": "https://distrokid.com/credits/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,5",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=FCFD5797-2DFF-4EC2-A5AC8F959F458E38,5"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/2zkqOMl5kMNdTvev330BGY"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/soul-candy-ep/1796383233?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/711004781"
+        }
+      ],
+      "type_hint": "ep"
+    },
+    {
+      "albumuuid": "5C1488FB-FC97-48F3-9336AA68186A845B",
+      "title": "FTP",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "198669278325",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D5C1488FB%2DFC97%2D48F3%2D9336AA68186A845B%2D%2D0%2D%2D2549133%2D%2D4A8196B2EDF94BBFA685D754C455A2A0%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/ftp",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "FTP",
+          "isrc": "QZTAS2424269",
+          "download_url": "https://distrokid.com/vault/download/?id=d8beU",
+          "credits_url": "https://distrokid.com/credits/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,1"
+        },
+        {
+          "track_number": 2,
+          "title": "The Worst",
+          "isrc": "QZTAS2424270",
+          "download_url": "https://distrokid.com/vault/download/?id=d8beV",
+          "credits_url": "https://distrokid.com/credits/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,2",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,2"
+        },
+        {
+          "track_number": 3,
+          "title": "One Of Those Nights",
+          "isrc": "QZTAS2424271",
+          "download_url": "https://distrokid.com/vault/download/?id=d8beW",
+          "credits_url": "https://distrokid.com/credits/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,3",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,3"
+        },
+        {
+          "track_number": 4,
+          "title": "Dmn8r's",
+          "isrc": "QZTAS2424272",
+          "download_url": "https://distrokid.com/vault/download/?id=d8beX",
+          "credits_url": "https://distrokid.com/credits/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,4",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,4"
+        },
+        {
+          "track_number": 5,
+          "title": "Zoned (feat. Lugh Haurie)",
+          "isrc": "QZTAS2424273",
+          "download_url": "https://distrokid.com/vault/download/?id=d8beY",
+          "credits_url": "https://distrokid.com/credits/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,5",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=5C1488FB-FC97-48F3-9336AA68186A845B,5"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/2NkWmlDlwoFYpM2foerkHH"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/ftp-ep/1757184282?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "amazon",
+          "url": "https://www.amazon.com/gp/product/B0D9BGZDWK/?tag=distrokid06-20"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/615102062"
+        },
+        {
+          "store": "iheart",
+          "url": "https://www.iheart.com/artist/id-36587473/albums/id-278836343"
+        }
+      ],
+      "submitted_stores": [
+        "spotify",
+        "apple_music",
+        "youtube_music",
+        "amazon",
+        "tidal",
+        "deezer",
+        "pandora",
+        "iheart",
+        "tiktok",
+        "instagram",
+        "claro_musica",
+        "saavn",
+        "boomplay",
+        "anghami",
+        "netease",
+        "tencent",
+        "qobuz",
+        "joox",
+        "kuack_media",
+        "adaptr",
+        "flo",
+        "medianet"
+      ],
+      "type_hint": "ep"
+    },
+    {
+      "albumuuid": "A0903A83-D23F-42E7-843B99BB1BB6A2C8",
+      "title": "How Ya",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "198470948363",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2DA0903A83%2DD23F%2D42E7%2D843B99BB1BB6A2C8%2D%2D0%2D%2D395738%2D%2DB547AE238EF4433E8BB3FC1FC4B9F81E%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/how-ya",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "How Ya",
+          "isrc": "QZHN92462132",
+          "download_url": "https://distrokid.com/vault/download/?id=dORjx",
+          "credits_url": "https://distrokid.com/credits/track/?id=A0903A83-D23F-42E7-843B99BB1BB6A2C8,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=A0903A83-D23F-42E7-843B99BB1BB6A2C8,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/6QRACta8A1IgBrknNMMndj"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/how-ya-single/1738137618?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/565836051"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "6CC04E1C-2423-4F77-9FE59D48B207C21B",
+      "title": "Like The Ol Days",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "198470949636",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D6CC04E1C%2D2423%2D4F77%2D9FE59D48B207C21B%2D%2D0%2D%2D1564670%2D%2DC968274C007F4B679D02D7C00029E0C3%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/like-the-ol-days",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Like The Ol Days",
+          "isrc": "QZHN92462088",
+          "download_url": "https://distrokid.com/vault/download/?id=dORf9",
+          "credits_url": "https://distrokid.com/credits/track/?id=6CC04E1C-2423-4F77-9FE59D48B207C21B,1",
+          "lyrics_url": null
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/6uQeIlYsRnSjJoHWurrkO5"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/like-the-ol-days-single/1738136650?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/565835891"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "51B93D0A-E2D9-4A79-AEB95524583F052C",
+      "title": "24/7",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "198470950700",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D51B93D0A%2DE2D9%2D4A79%2DAEB95524583F052C%2D%2D0%2D%2D5288351%2D%2DEE5BFC3BE9BA419DA633DB63F3F66687%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/247",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "24/7 mkI",
+          "isrc": "QZHN92461951",
+          "download_url": "https://distrokid.com/vault/download/?id=dOQ9D",
+          "credits_url": "https://distrokid.com/credits/track/?id=51B93D0A-E2D9-4A79-AEB95524583F052C,1",
+          "lyrics_url": null
+        },
+        {
+          "track_number": 2,
+          "title": "24/7 mkII",
+          "isrc": "QZHN92461952",
+          "download_url": "https://distrokid.com/vault/download/?id=dOQ9E",
+          "credits_url": "https://distrokid.com/credits/track/?id=51B93D0A-E2D9-4A79-AEB95524583F052C,2",
+          "lyrics_url": null
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/2dLaHoST8OGkH3d1o6zL33"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/24-7-single/1738136258?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/565834711"
+        }
+      ],
+      "type_hint": "ep"
+    },
+    {
+      "albumuuid": "69B4E190-EB80-416A-8910F976ED612AAB",
+      "title": "HeartBeat (feat. Devotion)",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "196700096617",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D69B4E190%2DEB80%2D416A%2D8910F976ED612AAB%2D%2D0%2D%2D573680%2D%2D7E09035226704B25B938BB7C5EB56F98%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/heartbeat-ft-devotion",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "HeartBeat (feat. Devotion)",
+          "isrc": "QZFZ42286197",
+          "download_url": "https://distrokid.com/vault/download/?id=b8Car",
+          "credits_url": "https://distrokid.com/credits/track/?id=69B4E190-EB80-416A-8910F976ED612AAB,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=69B4E190-EB80-416A-8910F976ED612AAB,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/6QIH9MjFxYsuKJQ5a1tBPF"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/heartbeat-feat-devotion-single/1607839544?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/291830622"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "F658D645-DB7E-47E6-8F0FC160C723DB60",
+      "title": "Dumb",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "196400094005",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2DF658D645%2DDB7E%2D47E6%2D8F0FC160C723DB60%2D%2D1632205703454%2D%2D450AB27E13854F44BAB4CB73B76A4BE8%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/dumb",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Dumb",
+          "isrc": "QZMER2187368",
+          "download_url": "https://distrokid.com/vault/download/?id=bUUdd",
+          "credits_url": "https://distrokid.com/credits/track/?id=F658D645-DB7E-47E6-8F0FC160C723DB60,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=F658D645-DB7E-47E6-8F0FC160C723DB60,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/5IQT0kqZbS3RqwV2hcWRvA"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/dumb-single/1586770312?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/260252052"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "6E3FF8E3-5A64-46F4-80467B2832949E47",
+      "title": "Do You",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "196397613494",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D6E3FF8E3%2D5A64%2D46F4%2D80467B2832949E47%2D%2D1630747908309%2D%2D50437604BE4D4A37966C71D476C0330E%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/do-you",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Do You",
+          "isrc": "QZMEP2100082",
+          "download_url": "https://distrokid.com/vault/download/?id=bTbKo",
+          "credits_url": "https://distrokid.com/credits/track/?id=6E3FF8E3-5A64-46F4-80467B2832949E47,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=6E3FF8E3-5A64-46F4-80467B2832949E47,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/4dpto2W5vg1Yg3EZ4T9pI6"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/do-you-single/1584476676?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/256574632"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "52EE15F0-3D9E-49EB-9BE0F5B4419DDF67",
+      "title": "Recouperate",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "196397683053",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D52EE15F0%2D3D9E%2D49EB%2D9BE0F5B4419DDF67%2D%2D1630677668040%2D%2DC8253F68A2AF42349368F7B571AA82C7%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/recouperate",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Recouperate",
+          "isrc": "QZMEN2188036",
+          "download_url": "https://distrokid.com/vault/download/?id=bS6Hf",
+          "credits_url": "https://distrokid.com/credits/track/?id=52EE15F0-3D9E-49EB-9BE0F5B4419DDF67,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=52EE15F0-3D9E-49EB-9BE0F5B4419DDF67,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/30tQr8g19J8znttYRIUwB5"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/recouperate-single/1584362850?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/256403212"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "8ADB9193-C5BC-4613-BA8430328D609D00",
+      "title": "Get on my vibe",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "196321087353",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D8ADB9193%2DC5BC%2D4613%2DBA8430328D609D00%2D%2D1627306102409%2D%2Dsl1600%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/get-on-my-vibe-2",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Get on my vibe",
+          "isrc": "QZK6K2146356",
+          "download_url": "https://distrokid.com/vault/download/?id=bOXSL",
+          "credits_url": "https://distrokid.com/credits/track/?id=8ADB9193-C5BC-4613-BA8430328D609D00,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=8ADB9193-C5BC-4613-BA8430328D609D00,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/15djTDhhL2QhlN2ZG2Pdpg"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/get-on-my-vibe-single/1578293130?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/247255202"
+        }
+      ],
+      "type_hint": "single"
+    },
+    {
+      "albumuuid": "C8BA9C3D-1C32-4F7B-B18CF01E76CE3450",
+      "title": "This is the sound",
+      "artist": "Sergik",
+      "label": null,
+      "release_date": null,
+      "upload_date": null,
+      "upc": "196321087636",
+      "artwork_url": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2DC8BA9C3D%2D1C32%2D4F7B%2DB18CF01E76CE3450%2D%2D1627305764346%2D%2D07788faddd968a8d1ac4f01452b63a3f%2Ejpg",
+      "hyperfollow_url": "https://distrokid.com/hyperfollow/sergik/this-is-the-sound-2",
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "This is the sound",
+          "isrc": "QZK6K2145090",
+          "download_url": "https://distrokid.com/vault/download/?id=bOXQV",
+          "credits_url": "https://distrokid.com/credits/track/?id=C8BA9C3D-1C32-4F7B-B18CF01E76CE3450,1",
+          "lyrics_url": "https://distrokid.com/lyrics/track/?id=C8BA9C3D-1C32-4F7B-B18CF01E76CE3450,1"
+        }
+      ],
+      "store_links": [
+        {
+          "store": "spotify",
+          "url": "https://open.spotify.com/album/76EywHdjVuuo2koz9WTdLA"
+        },
+        {
+          "store": "apple_music",
+          "url": "https://music.apple.com/us/album/this-is-the-sound-single/1578282116?uo=4&app=music&at=1001lry3&ct=dashboard"
+        },
+        {
+          "store": "deezer",
+          "url": "https://www.deezer.com/album/247236332"
+        }
+      ],
+      "type_hint": "single"
+    }
+  ]
+}

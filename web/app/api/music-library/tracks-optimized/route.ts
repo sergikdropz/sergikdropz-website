@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
-import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
-import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
-import { leanCatalogMetadata } from '@/lib/music-library/track-list-fields'
+import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
 
 // Cookie + vault gating: incompatible with static/ISR. HTTP caching via headers only if needed.
 export const dynamic = 'force-dynamic'
@@ -98,7 +95,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('music_library_tracks')
-      .select(selectFields.join(','))
+      .select(`${selectFields.join(',')}, music_library_folders(id, name, type, artwork_url)`)
 
     // Apply filters
     if (folderId) {
@@ -163,46 +160,40 @@ export async function GET(request: NextRequest) {
     const total = count || 0
     const hasMore = offset + limit < total
 
-    // List loads use key_signature on the track row only — no sonic_dna_cache /
-    // audio_files enrichment (that doubled latency per page for little browse value).
+    // Many vault rows keep length on audio_files.duration_seconds while
+    // music_library_tracks.duration is null — fill only those gaps (lean select).
+    const rows = data || []
+    const audioMap = new Map<string, { id: string; duration_seconds?: number | null }>()
+    const needsAudioDuration = rows.filter((track: any) => {
+      const d = Number(track.duration)
+      return !(Number.isFinite(d) && d > 0) && track.audio_file_id
+    })
+    const audioFileIds = [
+      ...new Set(needsAudioDuration.map((track: any) => track.audio_file_id).filter(Boolean)),
+    ] as string[]
+    if (audioFileIds.length > 0) {
+      const { data: audioMeta } = await supabase
+        .from('audio_files')
+        .select('id, duration_seconds')
+        .in('id', audioFileIds)
+      audioMeta?.forEach((file: any) => audioMap.set(file.id, file))
+    }
+
+    // List loads use key_signature on the track row only — no sonic_dna blobs.
     let keyMissing = 0
-    const tracks = (data || []).map((track: any) => {
-      const keySignature = track.key_signature || undefined
-      if (!keySignature || keySignature === 'Unknown') {
+    const tracks = rows.map((track: any) => {
+      const folder = Array.isArray(track.music_library_folders)
+        ? track.music_library_folders[0]
+        : track.music_library_folders
+      const audio = track.audio_file_id ? audioMap.get(track.audio_file_id) : null
+      const mapped = mapLibraryTrackToListItem(track, {
+        folder: folder || null,
+        audio: audio || null,
+      })
+      if (!mapped.key_signature || mapped.key_signature === 'Unknown') {
         keyMissing += 1
       }
-
-      const metadata = leanCatalogMetadata(track.metadata)
-      return {
-        id: track.id,
-        folderId: track.folder_id,
-        audioFileId: track.audio_file_id,
-        title: track.title,
-        artist: track.artist,
-        duration: track.duration,
-        file: normalizeVaultAudioUrl(track.file_url || ''),
-        artwork: track.artwork_url,
-        bpm: track.bpm,
-        key_signature: keySignature,
-        energy_level: track.energy_level,
-        danceability: track.danceability,
-        created_at: track.created_at,
-        date: track.date || undefined,
-        date_created: track.date_created || undefined,
-        year: track.year ?? undefined,
-        display_order: track.display_order,
-        is_archived: track.is_archived,
-        archived_at: track.archived_at,
-        genre: track.genre,
-        subgenre: track.subgenre,
-        rating: track.rating,
-        play_count: track.play_count,
-        last_played_at: track.last_played_at,
-        track_number: track.track_number,
-        disc_number: track.disc_number,
-        tags: track.tags,
-        ...(metadata ? { metadata } : {}),
-      }
+      return mapped
     })
 
     return NextResponse.json({

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { STUDIO_VAULT_IMPORT_FOLDER_TYPES } from '@/lib/studio/vault-picker'
 
 /**
  * GET /api/studio/vault-folders
- * List Music Vault folders (album/ep/single) for Release Studio import pickers.
+ * List Music Vault EPs and singles for Release Studio import pickers.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -17,10 +18,10 @@ export async function GET(request: NextRequest) {
     const q = (searchParams.get('q') || '').trim().toLowerCase()
     const supabase = createSupabaseServerClient()
 
-    let query = supabase
+    const query = supabase
       .from('music_library_folders')
       .select('id, name, type, artwork_url, year, album_artist, genre, hidden, is_archived')
-      .in('type', ['album', 'ep', 'single', 'remix'])
+      .in('type', [...STUDIO_VAULT_IMPORT_FOLDER_TYPES])
       .or('is_archived.is.null,is_archived.eq.false')
       .order('name', { ascending: true })
       .limit(200)
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    let folders = data || []
+    let folders = (data || []).filter((f) => f.hidden !== true)
     if (q) {
       folders = folders.filter(
         (f) =>
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     // Attach track counts (lightweight)
     const ids = folders.map((f) => f.id)
-    let counts = new Map<string, number>()
+    const counts = new Map<string, number>()
     if (ids.length) {
       const { data: trackRows } = await supabase
         .from('music_library_tracks')

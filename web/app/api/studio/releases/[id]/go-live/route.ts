@@ -10,6 +10,11 @@ import {
 } from '@/lib/studio/launch-handoff'
 import { upsertScheduleFromDistribution } from '@/lib/studio/schedule-bridge'
 import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
+import {
+  marketingCopyWithStreamContinuity,
+  mergeStreamContinuity,
+  streamContinuityFromMarketingCopy,
+} from '@/lib/studio/stream-continuity'
 
 /**
  * POST /api/studio/releases/[id]/go-live
@@ -74,6 +79,22 @@ export async function POST(
 
     const upc = release.upc?.trim() || validation.suggestedUpc
 
+    const existingCopy = (release.marketing_copy as Record<string, unknown>) || {}
+    const continuity = streamContinuityFromMarketingCopy(existingCopy)
+    const nextCopy =
+      release.previously_released || continuity
+        ? marketingCopyWithStreamContinuity(
+            existingCopy,
+            mergeStreamContinuity(continuity, {
+              source: continuity?.source || 'manual',
+              phases: {
+                submitted_new: true,
+                overlap_live: true,
+              },
+            }),
+          )
+        : existingCopy
+
     const { data: updated, error: updateError } = await supabase
       .from('distribution_releases')
       .update({
@@ -81,6 +102,7 @@ export async function POST(
         distribution_mode: 'self',
         distributor_release_id: `self-${params.id}`,
         upc: upc || null,
+        marketing_copy: nextCopy,
       })
       .eq('id', params.id)
       .select()

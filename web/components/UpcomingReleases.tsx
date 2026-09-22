@@ -11,11 +11,11 @@ interface ScheduledRelease {
   track_count: number | null
   release_date: string
   presave_date: string | null
-  genre: string
+  genre: string | null
   status: string
   artwork: string | null
   smart_link: string | null
-  description: string
+  description: string | null
 }
 
 function useCountdown(targetDate: string) {
@@ -176,7 +176,7 @@ export default function UpcomingReleases({
                         {release.title}
                       </h3>
                       <p className="text-gray-500 text-[11px] sm:text-sm line-clamp-1">
-                        {release.type} &middot; {release.genre}
+                        {release.type}{release.genre ? ` · ${release.genre}` : ''}
                       </p>
                     </div>
 

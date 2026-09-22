@@ -3,11 +3,12 @@ import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { logActivity } from '@/lib/activity-log'
 import { importVaultFolderToStudio } from '@/lib/studio/vault-import-server'
+import { upsertScheduleFromDistribution } from '@/lib/studio/schedule-bridge'
 
 /**
  * POST /api/studio/releases/from-vault
  * Body: { folderId: string, releaseId?: string, fillEmptyOnly?: boolean }
- * Creates a draft release (or fills an existing one) from a Music Vault folder + Sonic DNA.
+ * Creates a pending draft release (or fills an existing one) from a Music Vault folder + Sonic DNA.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +29,18 @@ export async function POST(request: NextRequest) {
       releaseId: typeof body.releaseId === 'string' ? body.releaseId : null,
       fillEmptyOnly: body.fillEmptyOnly !== false,
     })
+
+    const release = result.release as {
+      id: string
+      title: string
+      type?: string | null
+      release_date?: string | null
+      artwork_url?: string | null
+      genre?: string | null
+      description?: string | null
+      distributor_status?: string | null
+    }
+    upsertScheduleFromDistribution(release)
 
     await logActivity({
       actionType: result.created ? 'import_vault_folder_to_release' : 'fill_release_from_vault',

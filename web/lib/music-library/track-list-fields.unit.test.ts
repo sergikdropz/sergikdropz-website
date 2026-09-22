@@ -47,6 +47,61 @@ describe('mapLibraryTrackToListItem', () => {
     expect(phase.beat_grid_offset).toBe(0.042)
     expect(phase.grid_manual).toBeUndefined()
   })
+
+  it('fills duration from audio_files when track.duration is null', () => {
+    const row = mapLibraryTrackToListItem(
+      { id: 't1', title: 'No Length', duration: null, audio_file_id: 'a1' },
+      { audio: { duration_seconds: 227 } },
+    )
+    expect(row.duration).toBe(227)
+
+    const prefersAudio = mapLibraryTrackToListItem(
+      { id: 't2', title: 'Both', duration: 0, audio_file_id: 'a2' },
+      { audio: { duration_seconds: 180.4 } },
+    )
+    expect(prefersAudio.duration).toBe(180.4)
+  })
+
+  it('prefers DistroKid release album over playlist folder name', () => {
+    const row = mapLibraryTrackToListItem(
+      {
+        id: 't-dk',
+        title: 'Soul Candy',
+        artist: 'SERGIK',
+        metadata: { album: 'Soul Candy', album_type: 'ep', isrc: 'QZES72569811' },
+      },
+      { folder: { name: 'Distrokid Exports', type: 'folder' } },
+    )
+    expect(row.album).toBe('Soul Candy')
+    expect(row.albumType).toBe('ep')
+  })
+
+  it('marks singles from metadata on playlist dumps', () => {
+    const row = mapLibraryTrackToListItem(
+      {
+        id: 't-single',
+        title: 'How Ya',
+        metadata: { album: 'How Ya', album_type: 'single' },
+      },
+      { folder: { name: 'Distrokid Exports', type: 'folder' } },
+    )
+    expect(row.album).toBe('How Ya')
+    expect(row.albumType).toBe('single')
+  })
+
+  it('does not inherit crate folder cover onto tracks; EP folders still share art', () => {
+    const crate = mapLibraryTrackToListItem(
+      { id: 't-crate', title: 'Loose Cut', folder_id: 'deep-n-funky' },
+      { folder: { name: 'DEEp n FunKy', type: 'album', artwork_url: '/images/audio/artwork/folder-deep.jpg' } },
+    )
+    expect(crate.artwork).toBeUndefined()
+
+    const ep = mapLibraryTrackToListItem(
+      { id: 't-ep', title: 'Soul Candy', folder_id: 'soul-candy' },
+      { folder: { name: 'Soul Candy', type: 'ep', artwork_url: '/images/audio/artwork/folder-soul.jpg' } },
+    )
+    expect(ep.artwork).toContain('/images/audio/artwork/folder-soul.jpg')
+  })
 })
 
 describe('coerceLibraryApiTrack', () => {
@@ -68,6 +123,36 @@ describe('coerceLibraryApiTrack', () => {
     expect(row?.bpm).toBe(140)
     expect(row?.metadata?.catalog_overrides?.genre).toBe('Experimental Bass')
   })
+
+  it('uses EP folder name as album when metadata has no release album', () => {
+    const row = mapLibraryTrackToListItem(
+      {
+        id: 't-ep',
+        title: 'Soul Candy',
+        artist: 'SERGIK',
+        folder_id: 'folder-soul-candy',
+      },
+      { folder: { name: 'Soul Candy', type: 'ep', artwork_url: null } },
+    )
+    expect(row.album).toBe('Soul Candy')
+    expect(row.albumType).toBe('ep')
+  })
+
+  it('reads release title stamped under metadata.distribution', () => {
+    const row = mapLibraryTrackToListItem(
+      {
+        id: 't-dist',
+        title: 'How Ya',
+        artist: 'SERGIK',
+        metadata: {
+          distribution: { releaseTitle: 'How Ya', releaseType: 'single' },
+        },
+      },
+      { folder: { name: 'Distrokid Exports', type: 'folder' } },
+    )
+    expect(row.album).toBe('How Ya')
+    expect(row.albumType).toBe('single')
+  })
 })
 
 describe('leanCatalogMetadata', () => {
@@ -76,10 +161,14 @@ describe('leanCatalogMetadata', () => {
       original_date: '2018-02-02',
       catalog_overrides: { genre: 'Disco' },
       sonic_dna: { measured: { bpm: 120 } },
+      album: 'Soul Candy',
+      album_type: 'ep',
     })
     expect(lean).toEqual({
       original_date: '2018-02-02',
       catalog_overrides: { genre: 'Disco' },
+      album: 'Soul Candy',
+      album_type: 'ep',
     })
   })
 })

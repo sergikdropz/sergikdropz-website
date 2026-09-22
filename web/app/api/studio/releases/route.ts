@@ -7,6 +7,7 @@ import {
 } from '@/lib/auth/idempotency'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getCopyrightReadinessByReleaseIds } from '@/lib/studio/copyright-pipeline'
+import { ALL_DSP_STORE_IDS } from '@/lib/studio/constants'
 
 /**
  * GET /api/studio/releases
@@ -85,6 +86,11 @@ export async function POST(request: NextRequest) {
       genre,
       subgenre,
       label_name,
+      language,
+      previously_released,
+      previous_isrc,
+      previous_upc,
+      artwork_owned,
       marketing_copy,
       distribution_mode,
       target_stores,
@@ -133,9 +139,21 @@ export async function POST(request: NextRequest) {
         genre: genre || null,
         subgenre: subgenre || null,
         label_name: label_name || null,
+        language: language || 'en',
+        previously_released:
+          previously_released === true || previously_released === 'yes'
+            ? true
+            : previously_released === false || previously_released === 'no'
+              ? false
+              : null,
+        previous_isrc: previous_isrc || null,
+        previous_upc: previous_upc || null,
+        artwork_owned: Boolean(artwork_owned),
         marketing_copy: marketing_copy || {},
         distribution_mode: distribution_mode || 'self',
-        target_stores: target_stores || [],
+        target_stores: Array.isArray(target_stores) && target_stores.length
+          ? target_stores
+          : ALL_DSP_STORE_IDS,
         distributor_status: 'draft',
       })
       .select()

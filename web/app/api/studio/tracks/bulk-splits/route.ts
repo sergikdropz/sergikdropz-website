@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { resolveTrackId } from '@/lib/studio/isrc'
 import {
+  normalizeSplitRows,
   parseSplitsImportCsv,
   validateSplitsTotal,
   type SplitRow,
@@ -31,10 +32,14 @@ export async function POST(request: NextRequest) {
         .map((r) => ({
           track_id: r.track_id,
           title: r.title,
-          splits: r.splits,
+          splits: normalizeSplitRows(r.splits),
         }))
     } else if (Array.isArray(body.rows)) {
-      rows = body.rows
+      rows = body.rows.map((row: { track_id?: string; title?: string; splits?: unknown }) => ({
+        track_id: row.track_id,
+        title: row.title,
+        splits: normalizeSplitRows(row.splits),
+      }))
     } else {
       return NextResponse.json({ error: 'Provide csv or rows' }, { status: 400 })
     }

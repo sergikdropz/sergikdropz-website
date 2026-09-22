@@ -1593,17 +1593,12 @@ export default function MusicPlayer({
     return () => window.removeEventListener(BLEND_AUTOMATION_EVENT, apply)
   }, [])
 
-  // BeatSync: nudge decks toward shared beat + phrase.
-  // Auto DJ preArm/pending: PhaseOwner is nudgeIdleToMaster only — never dual-platter
-  // seek the live outgoing deck (that fights doctrine and causes trainwrecks).
-  // iDJ: only while both decks play; slower tick; hold when latch locked.
-  // Skip entirely while the DJ is jogging a phase meter (hand owns the platter).
+  // BeatSync: Auto DJ only. iDJ is manual dual-deck — do not inherit Auto DJ
+  // BeatSync seeks (they fight hand beatmatch on the idle platter).
   useEffect(() => {
-    const beatSyncOn =
-      (isAutoDJEnabled || isIDJEnabled) && autoDJConfig.syncMode === 'beat-sync'
+    const beatSyncOn = isAutoDJEnabled && autoDJConfig.syncMode === 'beat-sync'
     if (!beatSyncOn) return
-    const idjOnly = isIDJEnabled && !isAutoDJEnabled
-    const tickMs = idjOnly ? 80 : 40
+    const tickMs = 40
     const lockedRecheckMs = 250
     let raf = 0
     let lastMs = 0
@@ -1618,11 +1613,10 @@ export default function MusicPlayer({
       if (!engine || engine.isMixing()) return
       // Auto DJ owns phase via controller nudge while cued/pending — skip dual align.
       if (
-        isAutoDJEnabled &&
-        (cuedIdleTrackIdRef.current ||
-          autoDJPendingRef.current ||
-          engine.getBlendStage() === 'preArm' ||
-          engine.getBlendStage() === 'plan')
+        cuedIdleTrackIdRef.current ||
+        autoDJPendingRef.current ||
+        engine.getBlendStage() === 'preArm' ||
+        engine.getBlendStage() === 'plan'
       ) {
         return
       }
@@ -1635,26 +1629,17 @@ export default function MusicPlayer({
       if (!outTrack) return
       const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
       const idleDeck: DeckId = liveDeck === 'a' ? 'b' : 'a'
-      const liveEl = liveDeck === 'a' ? audioRef.current : nextAudioRef.current
       const idleEl = idleDeck === 'a' ? audioRef.current : nextAudioRef.current
-      if (idjOnly) {
-        // Manual dual-deck: never seek unless both platters are audibly running.
-        if (!liveEl || liveEl.paused || !idleEl || idleEl.paused) return
-      } else {
-        const idleHot =
-          !!idleEl &&
-          (!idleEl.paused || engine.hasIncomingReady() || !!cuedIdleTrackIdRef.current)
-        if (!idleHot && !isAutoDJEnabled) return
-      }
+      const idleHot =
+        !!idleEl &&
+        (!idleEl.paused || engine.hasIncomingReady() || !!cuedIdleTrackIdRef.current)
+      if (!idleHot) return
       const q = queueRef.current
       const liveId = outTrack.id
       const liveIdx = q.findIndex((t) => t.id === liveId)
       const inTrack =
         (cuedIdleTrackIdRef.current
           ? q.find((t) => t.id === cuedIdleTrackIdRef.current)
-          : null) ??
-        (idjOnly
-          ? q.find((t) => t.id === idjIdleTrackIdRef.current) ?? null
           : null) ??
         (liveIdx >= 0 && liveIdx + 1 < q.length ? q[liveIdx + 1] : null)
       if (!inTrack) return
@@ -1671,14 +1656,14 @@ export default function MusicPlayer({
             ? inTrack.beat_grid_offset
             : 0,
         phraseBars: 8,
-        allowSilentIdle: Boolean(isAutoDJEnabled && cuedIdleTrackIdRef.current),
+        allowSilentIdle: Boolean(cuedIdleTrackIdRef.current),
       })
     }
     raf = requestAnimationFrame(tick)
     return () => {
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [isAutoDJEnabled, isIDJEnabled, autoDJConfig.syncMode])
+  }, [isAutoDJEnabled, autoDJConfig.syncMode])
 
   useEffect(() => {
     if (!autoDJSettingsMenu) return
@@ -2897,9 +2882,9 @@ export default function MusicPlayer({
   // Flush position on tab hide / unload so reload restores the last playhead
   useEffect(() => {
     const flush = () => {
-      const audio = getPlaybackAudio()
-      if (!audio || !Number.isFinite(audio.currentTime)) return
-      reportPlaybackPosition(audio.currentTime)
+      const t = readLiveNowSec()
+      if (!Number.isFinite(t)) return
+      reportPlaybackPosition(t)
     }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush()
@@ -2910,7 +2895,7 @@ export default function MusicPlayer({
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', flush)
     }
-  }, [reportPlaybackPosition, getPlaybackAudio])
+  }, [reportPlaybackPosition, readLiveNowSec])
   /** Used by player-chrome touch seek to ignore events over the waveform. */
   const waveformContainerRef = useRef<HTMLDivElement>(null)
   const waveformVisibleBarsRef = useRef(0)
@@ -5853,27 +5838,15 @@ export default function MusicPlayer({
   }, [getIdleAudio])
 
   /**
-   * One platter on the speakers. element.volume is a no-op once the deck is
-   * a MediaElementSource, so the cut has to land on the channel gain.
+   * Point UI / MixEngine at a platter without muting the other deck or
+   * moving the crossfader. Used for iDJ same-deck skip and gapless promote.
    */
-  const soloPlaybackDeck = useCallback((deck: DeckId) => {
+  const focusPlaybackDeck = useCallback((deck: DeckId) => {
     playbackDeckRef.current = deck === 'b' ? 'next' : 'main'
-    const xf = deck === 'b' ? 1 : 0
-    idjCrossfadeRef.current = xf
-    setIdjCrossfade(xf)
     const engine = mixEngineRef.current
-    if (engine) {
-      try {
-        engine.soloDeck(deck)
-      } catch {
-        /* ignore */
-      }
-      return
-    }
-    const other = deck === 'a' ? nextAudioRef.current : audioRef.current
+    if (!engine) return
     try {
-      other?.pause()
-      if (other) other.volume = 0
+      engine.focusDeck(deck)
     } catch {
       /* ignore */
     }
@@ -6622,6 +6595,9 @@ export default function MusicPlayer({
     return () => window.removeEventListener(PLAYER_TRANSPORT_EVENT, onCommand)
   }, [])
 
+  const keyLockTempoRafRef = useRef<number | null>(null)
+  const keyLockTempoTargetRef = useRef<Partial<Record<DeckId, number>>>({})
+
   const changeDeckPlaybackRate = useCallback(
     (deck: 'a' | 'b', rate: number) => {
       // Shared master owns both decks mid-blend — fighting it thrash-y fades.
@@ -6629,15 +6605,48 @@ export default function MusicPlayer({
       const clamped = clampTempoRate(rate)
       const keyLock = deckUiRef.current[deck].keyLock !== false
       const el = deck === 'a' ? audioRef.current : nextAudioRef.current
-      if (el) {
-        configureKeyLock(el, keyLock)
-        applyDeckTempo(el, clamped, { keyLock, instant: true })
+      if (el) configureKeyLock(el, keyLock)
+      // One write path. Under key-lock, soft-slew so the browser stretcher does
+      // not chirp on every pointermove (CDJ-stable MASTER TEMPO feel).
+      const engine = mixEngineRef.current
+      if (engine) {
+        engine.setDeckPlaybackRate(deck, clamped, { instant: !keyLock })
+      } else if (el) {
+        applyDeckTempo(el, clamped, { keyLock, instant: !keyLock })
       }
-      mixEngineRef.current?.setDeckPlaybackRate(deck, clamped, { instant: true })
       setDeckUi((prev) => ({
         ...prev,
         [deck]: { ...prev[deck], playbackRate: clamped },
       }))
+      if (keyLock) {
+        keyLockTempoTargetRef.current[deck] = clamped
+        const chase = () => {
+          keyLockTempoRafRef.current = null
+          const eng = mixEngineRef.current
+          let need = false
+          for (const d of ['a', 'b'] as DeckId[]) {
+            const target = keyLockTempoTargetRef.current[d]
+            if (target == null) continue
+            const current = eng?.getDeckPlaybackRate(d) ?? (
+              d === 'a' ? audioRef.current?.playbackRate : nextAudioRef.current?.playbackRate
+            ) ?? 1
+            if (Math.abs(current - target) < 0.0012) {
+              delete keyLockTempoTargetRef.current[d]
+              continue
+            }
+            need = true
+            if (eng) eng.setDeckPlaybackRate(d, target, { instant: false })
+            else {
+              const node = d === 'a' ? audioRef.current : nextAudioRef.current
+              if (node) applyDeckTempo(node, target, { keyLock: true, instant: false })
+            }
+          }
+          if (need) keyLockTempoRafRef.current = requestAnimationFrame(chase)
+        }
+        if (keyLockTempoRafRef.current == null) {
+          keyLockTempoRafRef.current = requestAnimationFrame(chase)
+        }
+      }
       const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
       const idleDeck: DeckId = liveDeck === 'a' ? 'b' : 'a'
       if (
@@ -6724,12 +6733,15 @@ export default function MusicPlayer({
   }, [currentTrack?.id])
 
   useEffect(() => {
+    // Seed idle title once when entering iDJ with an empty cue deck.
+    // Do not re-bind idle to live's nextQueueTrack on every live skip —
+    // that made deck B follow deck A's queue.
     if (!isIDJEnabled || idjIdleTrackIdRef.current) return
     const idle = nextQueueTrack
     if (!idle?.id || idle.id === currentTrack?.id) return
     idjIdleTrackIdRef.current = idle.id
     setIdjIdleTrackId(idle.id)
-  }, [isIDJEnabled, nextQueueTrack, currentTrack?.id])
+  }, [isIDJEnabled])
 
   const memoryCueMarker = useCallback((trackId: string | undefined): WaveformHotCue[] => {
     if (!trackId) return []
@@ -7193,9 +7205,16 @@ export default function MusicPlayer({
       return
     }
     // Re-running this effect (blend end, parent render) must not pull the
-    // fader back to a rail. Snap only when the on-air platter changes.
+    // fader back to a rail. Snap only when the on-air platter changes AND the
+    // XF was already hard against a rail — mid-blend promote must keep position.
     if (idjXfSnapDeckRef.current === liveDeckId) return
     idjXfSnapDeckRef.current = liveDeckId
+    const current = idjCrossfadeRef.current
+    const nearRail = current <= 0.08 || current >= 0.92
+    if (!nearRail) {
+      mixEngineRef.current?.setManualCrossfade(current, { instant: true })
+      return
+    }
     const xf = liveDeckId === 'b' ? 1 : 0
     setIdjCrossfade(xf)
     mixEngineRef.current?.setManualCrossfade(xf)
@@ -7255,15 +7274,21 @@ export default function MusicPlayer({
     (deck: 'a' | 'b') => {
       if (deck === liveDeckIdRef.current) {
         const live = getPlaybackAudio()
-        if (live && !live.paused) return
+        if (live && !live.paused) {
+          snapPlaybackTime(readDeckMediaTime(deck))
+          return
+        }
         void togglePlay()
+        window.requestAnimationFrame(() => {
+          snapPlaybackTime(readDeckMediaTime(deck))
+        })
         return
       }
       const idle = getIdleAudio()
       if (idle && !idle.paused) return
       void toggleIdleDeckPlay()
     },
-    [getPlaybackAudio, getIdleAudio, toggleIdleDeckPlay, togglePlay],
+    [getPlaybackAudio, getIdleAudio, toggleIdleDeckPlay, togglePlay, snapPlaybackTime, readDeckMediaTime],
   )
 
   const pauseDeckPlay = useCallback(
@@ -7564,6 +7589,12 @@ export default function MusicPlayer({
       const sameSrc = mediaUrlsRoughlyEqual(idle.currentSrc || idle.src, url)
       if (!sameSrc) {
         disarmIdjEnded('idle')
+        const idleDeck: DeckId = playbackDeckRef.current === 'next' ? 'a' : 'b'
+        try {
+          mixEngineRef.current?.hardStopDeck(idleDeck)
+        } catch {
+          /* ignore */
+        }
         try {
           idle.pause()
         } catch {
@@ -7710,37 +7741,9 @@ export default function MusicPlayer({
   )
 
   /**
-   * Continuous play: precue the next queue neighbor onto idle ~30s before live ends
-   * so gapless promote almost always has a warm deck.
+   * Continuous-play advance stays on the same platter (stepLiveDeck / stepIdleDeck).
+   * Do NOT precue the other CDJ with the live deck's next track — that coupled A↔B.
    */
-  useEffect(() => {
-    if (!isIDJEnabled) return
-    const timer = window.setInterval(() => {
-      const liveDeck = liveDeckIdRef.current
-      if (!idjConfigRef.current.continuousPlay[liveDeck]) return
-      if (mixEngineRef.current?.isMixing() || phraseMixLockRef.current) return
-      const live = getPlaybackAudio()
-      if (!live || live.paused || live.ended) return
-      const dur = live.duration
-      const t = live.currentTime
-      if (!(dur > 35) || !Number.isFinite(t) || t < 0) return
-      const remain = dur - t
-      if (remain > 30 || remain < 0.4) return
-      const liveId = idjLiveTrackIdRef.current ?? currentTrackRef.current?.id ?? null
-      const next = nextQueueNeighbor(queueRef.current, liveId, null, 1)
-      if (!next?.id || next.id === liveId) return
-      if (idjIdleTrackIdRef.current === next.id) {
-        const idle = getIdleAudio()
-        if (idle && idle.readyState >= 2) return
-      }
-      const gen = ++idleLoadGenRef.current
-      idjIdleTrackIdRef.current = next.id
-      setIdjIdleTrackId(next.id)
-      setCueDeckTrackOverride(next)
-      void loadTrackOntoIdleDeck(next, { play: false, gen })
-    }, 1000)
-    return () => window.clearInterval(timer)
-  }, [isIDJEnabled, getPlaybackAudio, getIdleAudio, loadTrackOntoIdleDeck])
 
   const pinIdleIfNeeded = useCallback((): string | null => {
     if (idjIdleTrackIdRef.current) return idjIdleTrackIdRef.current
@@ -7758,116 +7761,14 @@ export default function MusicPlayer({
     return sequential.id
   }, [])
 
-  /**
-   * Gapless continuous: when the next track is already loaded on the idle element,
-   * promote that platter to live instead of pause→src-swap on the on-air deck.
-   */
-  const promoteIdleTrackToLive = useCallback(
-    async (track: Track, opts?: { play?: boolean }): Promise<boolean> => {
-      if (idjIdleTrackIdRef.current !== track.id) return false
-      if (mixEngineRef.current?.isMixing() || phraseMixLockRef.current) return false
-      const idle = getIdleAudio()
-      const live = getPlaybackAudio()
-      if (!idle || !live || idle.readyState < 2) return false
-      const idleUrl = idle.currentSrc || idle.src
-      const expected = peekSyncPlaybackUrl(track.file, resolvedUrlCacheRef.current)
-      if (expected && idleUrl && !mediaUrlsRoughlyEqual(idleUrl, expected)) return false
-
-      const keepPlaying =
-        opts?.play ?? ((!live.paused && !live.ended) || isPlayingRef.current || idleDeckPlayingRef.current)
-      const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
-      const idleDeck: DeckId = liveDeck === 'a' ? 'b' : 'a'
-      const startSec = memoryCueStartSec(track.id)
-
-      clearSeekTarget()
-      disarmIdjEnded('live')
-      disarmIdjEnded('idle')
-
-      // Drop in-flight cue-deck play() callbacks. They fire after canplay and
-      // stack a second song on top of the skip.
-      const prefetchGen = ++idleLoadGenRef.current
-      idjDeckSkipLockRef.current = true
-      skipSrcReloadRef.current = true
-      lastBoundPlaybackRef.current = { id: track.id, url: idleUrl }
-      soloPlaybackDeck(idleDeck)
-      const engine = mixEngineRef.current
-      if (engine && !engine.isMixing()) {
-        try {
-          engine.setActiveTrack(withMixGrid(track))
-        } catch {
-          /* ignore */
-        }
-      }
-
-      const idx = queueRef.current.findIndex((item) => item.id === track.id)
-      idjLiveTrackIdRef.current = track.id
-      idjIdleTrackIdRef.current = null
-      setIdjIdleTrackId(null)
-      setCueDeckTrackOverride(null)
-      setCurrentTrack(track)
-      setCurrentIndex(idx >= 0 ? idx : 0)
-      snapPlaybackTime(startSec > 0 ? startSec : idle.currentTime || 0)
-      setWaveformMediaSyncKey(`${playbackDeckRef.current}:${track.id}`)
-      if (keepPlaying) setIsPlaying(true)
-      setIdleDeckPlaying(false)
-      armIdjEnded('live')
-
-      const nextIdle = nextQueueNeighbor(queueRef.current, track.id, null, 1)
-      if (nextIdle) {
-        idjIdleTrackIdRef.current = nextIdle.id
-        setIdjIdleTrackId(nextIdle.id)
-        setCueDeckTrackOverride(nextIdle)
-      }
-
-      try {
-        if (startSec > 0 && Math.abs((idle.currentTime || 0) - startSec) > 0.35) {
-          idle.currentTime = startSec
-        }
-      } catch {
-        /* ignore */
-      }
-
-      if (keepPlaying && idle.paused) {
-        try {
-          await idle.play()
-        } catch (err) {
-          if ((err as { name?: string })?.name !== 'AbortError') {
-            console.error('Gapless promote play failed:', err)
-          }
-        }
-      }
-
-      window.setTimeout(() => {
-        if (idjLiveTrackIdRef.current !== track.id) return
-        idjDeckSkipLockRef.current = false
-        skipSrcReloadRef.current = false
-        if (keepPlaying && idle.paused) void idle.play().catch(() => {})
-      }, 0)
-
-      if (nextIdle) {
-        void loadTrackOntoIdleDeck(nextIdle, { play: false, gen: prefetchGen })
-      }
-      return true
-    },
-    [
-      getIdleAudio,
-      getPlaybackAudio,
-      memoryCueStartSec,
-      clearSeekTarget,
-      withMixGrid,
-      snapPlaybackTime,
-      setCurrentTrack,
-      setCurrentIndex,
-      loadTrackOntoIdleDeck,
-      soloPlaybackDeck,
-    ],
-  )
+  // Gapless promote (swap live platter) is intentionally unused in iDJ.
+  // Dual CDJs must stay independent: skip/advance replace one element only.
 
   const applyIDJLiveTrack = useCallback(
     async (track: Track, opts?: { play?: boolean }) => {
-      // Prefer gapless platter promote when idle already holds this track.
-      if (await promoteIdleTrackToLive(track, opts)) return
-
+      // iDJ = two CDJs. Manual skip / continuous-play advance always replace
+      // THIS platter in place. Never promoteIdleTrackToLive (that swapped
+      // liveDeckId A↔B and left the old element ghosting).
       const gen = ++liveLoadGenRef.current
       // Cancel cue-deck play() still waiting on canplay — that is the second song.
       idleLoadGenRef.current += 1
@@ -7885,7 +7786,8 @@ export default function MusicPlayer({
       if (!url || liveLoadGenRef.current !== gen) return
 
       const liveDeck: DeckId = playbackDeckRef.current === 'next' ? 'b' : 'a'
-      soloPlaybackDeck(liveDeck)
+      // Stay on this platter. Do not touch the other deck's src / play state.
+      focusPlaybackDeck(liveDeck)
       const live = getPlaybackAudio()
       if (!live) return
 
@@ -7896,14 +7798,17 @@ export default function MusicPlayer({
       lastBoundPlaybackRef.current = { id: track.id, url }
       disarmIdjEnded('live')
 
-      const sameSrc = mediaUrlsRoughlyEqual(live.currentSrc || live.src, url)
-      // Only pause when we must tear down the resource — same-src restarts stay hot.
-      if (!sameSrc) {
-        try {
-          live.pause()
-        } catch {
-          /* ignore */
-        }
+      // Kill BufferSource + HTML on THIS deck only so the skipped song cannot
+      // keep playing under MES while the UI shows the next title.
+      try {
+        mixEngineRef.current?.hardStopDeck(liveDeck)
+      } catch {
+        /* ignore */
+      }
+      try {
+        live.pause()
+      } catch {
+        /* ignore */
       }
 
       const srcChanged = assignMediaSrcIfChanged(live, url)
@@ -7929,22 +7834,8 @@ export default function MusicPlayer({
       setWaveformMediaSyncKey(`${playbackDeckRef.current}:${track.id}`)
       if (keepPlaying) setIsPlaying(true)
 
-      // Same-deck skip can land on the song the cue deck already shows.
-      // Point that platter at the following neighbor so the on-air title is unique.
-      if (idjIdleTrackIdRef.current === track.id) {
-        const prefetchGen = ++idleLoadGenRef.current
-        const nextIdle = nextQueueNeighbor(queueRef.current, track.id, null, 1)
-        if (nextIdle && nextIdle.id !== track.id) {
-          idjIdleTrackIdRef.current = nextIdle.id
-          setIdjIdleTrackId(nextIdle.id)
-          setCueDeckTrackOverride(nextIdle)
-          void loadTrackOntoIdleDeck(nextIdle, { play: false, gen: prefetchGen })
-        } else {
-          idjIdleTrackIdRef.current = null
-          setIdjIdleTrackId(null)
-          setCueDeckTrackOverride(null)
-        }
-      }
+      // Leave the other deck alone — even if it shows the same title. CDJ A
+      // skip must not rewrite CDJ B's track.
 
       const releaseLiveLoadLocks = () => {
         if (liveLoadGenRef.current !== gen) return
@@ -8014,7 +7905,6 @@ export default function MusicPlayer({
       }, 2500)
     },
     [
-      promoteIdleTrackToLive,
       getPlaybackAudio,
       snapPlaybackTime,
       setCurrentTrack,
@@ -8022,8 +7912,7 @@ export default function MusicPlayer({
       withMixGrid,
       memoryCueStartSec,
       clearSeekTarget,
-      soloPlaybackDeck,
-      loadTrackOntoIdleDeck,
+      focusPlaybackDeck,
     ],
   )
 
@@ -8050,14 +7939,13 @@ export default function MusicPlayer({
       if (mixEngineRef.current?.isMixing() || phraseMixLockRef.current) return
       const q = queueRef.current
       const liveId = idjLiveTrackIdRef.current ?? autoDJCurrentTrackRef.current?.id ?? null
-      // Freeze the idle pick so the other deck does not follow the new live track.
-      pinIdleIfNeeded()
+      // Same platter only — never pin/rewrite the other CDJ.
       const next = nextQueueNeighbor(q, liveId, null, direction)
       if (!next) return
       idjLiveTrackIdRef.current = next.id
       void applyIDJLiveTrack(next, opts)
     },
-    [applyIDJLiveTrack, pinIdleIfNeeded],
+    [applyIDJLiveTrack],
   )
   stepLiveDeckRef.current = stepLiveDeck
 

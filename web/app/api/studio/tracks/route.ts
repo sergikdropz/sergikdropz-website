@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { coerceTriStateBoolean, parseTrackOrigin } from '@/lib/studio/dsp-ingest'
 
 /**
  * GET /api/studio/tracks
@@ -62,6 +63,9 @@ export async function POST(request: NextRequest) {
       explicit,
       language,
       music_library_track_id,
+      origin,
+      writer_legal_names,
+      ai_generated,
     } = body
 
     if (!id || !title || !wav_url) {
@@ -87,6 +91,9 @@ export async function POST(request: NextRequest) {
         explicit: explicit || false,
         language: language || 'en',
         music_library_track_id: music_library_track_id || null,
+        origin: parseTrackOrigin(origin),
+        writer_legal_names: writer_legal_names ? String(writer_legal_names).trim() : null,
+        ai_generated: coerceTriStateBoolean(ai_generated),
       })
       .select()
       .single()

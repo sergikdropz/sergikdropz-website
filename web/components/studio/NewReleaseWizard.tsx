@@ -6,6 +6,8 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import WizardStepBar, { type WizardStep } from './WizardStepBar'
 import VaultImportPanel from './VaultImportPanel'
 import { COPY_TEMPLATES, type MarketingCopy } from '@/lib/studio/constants'
+import { DSP_PRIMARY_GENRES, secondaryGenresFor, streetDateHint } from '@/lib/studio/dsp-ingest'
+import { TRACK_LANGUAGES } from '@/lib/studio/dsp-package'
 import { FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa'
 
 const WIZARD_STEPS: WizardStep[] = [
@@ -38,6 +40,11 @@ export default function NewReleaseWizard() {
     description: '',
     explicit: false,
     label_name: 'SERGIK',
+    language: 'en',
+    previously_released: '' as '' | 'no' | 'yes',
+    previous_isrc: '',
+    previous_upc: '',
+    artwork_owned: false,
   })
 
   useEffect(() => {
@@ -97,6 +104,12 @@ export default function NewReleaseWizard() {
           description: form.description || null,
           explicit: form.explicit,
           label_name: form.label_name || null,
+          language: form.language || 'en',
+          previously_released:
+            form.previously_released === '' ? null : form.previously_released === 'yes',
+          previous_isrc: form.previous_isrc || null,
+          previous_upc: form.previous_upc || null,
+          artwork_owned: form.artwork_owned,
           marketing_copy: marketingCopy,
           distribution_mode: 'self',
         }),
@@ -174,24 +187,69 @@ export default function NewReleaseWizard() {
                 value={form.release_date}
                 onChange={(e) => setForm({ ...form, release_date: e.target.value })}
               />
+              {streetDateHint(form.release_date).warning ? (
+                <p className="text-[11px] text-amber-400/90 mt-1">
+                  {streetDateHint(form.release_date).warning}
+                </p>
+              ) : (
+                <p className="text-[11px] text-zinc-600 mt-1">
+                  Set at least one week ahead for playlist chances.
+                </p>
+              )}
             </div>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-zinc-400">Genre</label>
-              <input
+              <label className="text-sm text-zinc-400">Primary genre</label>
+              <select
                 className={`${inputClass} mt-1`}
                 value={form.genre}
-                onChange={(e) => setForm({ ...form, genre: e.target.value })}
-              />
+                onChange={(e) => {
+                  const next = e.target.value
+                  const allowed = secondaryGenresFor(next)
+                  setForm({
+                    ...form,
+                    genre: next,
+                    subgenre: allowed.includes(form.subgenre) ? form.subgenre : '',
+                  })
+                }}
+              >
+                <option value="">Select DSP genre</option>
+                {DSP_PRIMARY_GENRES.map((genre) => (
+                  <option key={genre} value={genre}>
+                    {genre}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="text-sm text-zinc-400">Subgenre</label>
-              <input
+              <label className="text-sm text-zinc-400">Secondary genre</label>
+              <select
                 className={`${inputClass} mt-1`}
                 value={form.subgenre}
                 onChange={(e) => setForm({ ...form, subgenre: e.target.value })}
-              />
+              >
+                <option value="">Optional</option>
+                {secondaryGenresFor(form.genre).map((genre) => (
+                  <option key={genre} value={genre}>
+                    {genre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-sm text-zinc-400">Language</label>
+              <select
+                className={`${inputClass} mt-1`}
+                value={form.language}
+                onChange={(e) => setForm({ ...form, language: e.target.value })}
+              >
+                {TRACK_LANGUAGES.map((lang) => (
+                  <option key={lang.id} value={lang.id}>
+                    {lang.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div>
@@ -212,6 +270,41 @@ export default function NewReleaseWizard() {
             />
             Explicit content
           </label>
+          <fieldset className="space-y-2 text-sm text-zinc-300">
+            <legend className="text-sm text-zinc-400">Previously released?</legend>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                checked={form.previously_released === 'no'}
+                onChange={() => setForm({ ...form, previously_released: 'no' })}
+              />
+              No
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                checked={form.previously_released === 'yes'}
+                onChange={() => setForm({ ...form, previously_released: 'yes' })}
+              />
+              Yes — reuse existing ISRC/UPC
+            </label>
+            {form.previously_released === 'yes' && (
+              <div className="grid md:grid-cols-2 gap-3">
+                <input
+                  className={inputClass}
+                  value={form.previous_isrc}
+                  onChange={(e) => setForm({ ...form, previous_isrc: e.target.value.toUpperCase() })}
+                  placeholder="Existing ISRC"
+                />
+                <input
+                  className={inputClass}
+                  value={form.previous_upc}
+                  onChange={(e) => setForm({ ...form, previous_upc: e.target.value })}
+                  placeholder="Existing UPC"
+                />
+              </div>
+            )}
+          </fieldset>
         </div>
       )}
 
@@ -240,14 +333,27 @@ export default function NewReleaseWizard() {
               className="mt-4 w-48 h-48 rounded-xl object-cover border border-zinc-700"
             />
           )}
+          <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
+            Stores reject URLs, @handles, store logos, prices, pixelation, and reused covers. You
+            must own everything in the image.
+          </p>
+          <label className="mt-3 flex items-start gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={form.artwork_owned}
+              onChange={(e) => setForm({ ...form, artwork_owned: e.target.checked })}
+              className="mt-0.5 rounded border-zinc-600"
+            />
+            I own this artwork and it has no URLs, @handles, store logos, or prices.
+          </label>
         </div>
       )}
 
       {step === 2 && (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 space-y-6">
           <p className="text-sm text-zinc-500">
-            Selected: {selected.size} track{selected.size !== 1 ? 's' : ''}. Tracks need ISRCs
-            before go-live — assign in catalog import or per-track after create.
+            Selected: {selected.size} track{selected.size !== 1 ? 's' : ''}. Tracks need
+            QTA53 ISRCs before go-live — assign on the Catalog step after create.
           </p>
           {withIsrc.length > 0 && (
             <div>

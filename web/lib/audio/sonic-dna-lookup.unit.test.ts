@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { appendSonicDnaLookupParams, sonicDnaLookupPath } from '@/lib/audio/sonic-dna-query'
+import {
+  appendSonicDnaLookupParams,
+  musicLibrarySonicDnaHref,
+  parseMusicLibraryDnaQuery,
+  sonicDnaLookupPath,
+} from '@/lib/audio/sonic-dna-query'
 import { resolveMeasuredLookupIds } from '@/lib/audio/load-local-measured'
 
 describe('sonicDnaLookupPath', () => {
@@ -42,6 +47,21 @@ describe('appendSonicDnaLookupParams', () => {
       title: 'AHA',
     })
     expect(params.get('path')).toBe('unreleased/eps/SERGIK - AHA.mp3')
+  })
+})
+
+describe('music library Sonic DNA deep link', () => {
+  it('builds a shareable fan href from a library track id', () => {
+    expect(musicLibrarySonicDnaHref('track-foo')).toBe('/music-library?dna=track-foo')
+    expect(musicLibrarySonicDnaHref('a b')).toBe('/music-library?dna=a%20b')
+    expect(musicLibrarySonicDnaHref('')).toBe('/music-library')
+  })
+
+  it('reads dna from a query string', () => {
+    expect(parseMusicLibraryDnaQuery('?dna=track-foo')).toBe('track-foo')
+    expect(parseMusicLibraryDnaQuery('dna=track-foo&view=songs')).toBe('track-foo')
+    expect(parseMusicLibraryDnaQuery('?q=hello')).toBeNull()
+    expect(parseMusicLibraryDnaQuery('')).toBeNull()
   })
 })
 

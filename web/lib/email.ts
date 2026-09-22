@@ -18,6 +18,8 @@ export interface EmailOptions {
   to: string | string[]
   subject: string
   html: string
+  /** Full From header, e.g. `Name <addr@domain>`. Defaults to SERGIK + NEXT_PUBLIC_FROM_EMAIL. */
+  from?: string
   replyTo?: string
   tags?: { name: string; value: string }[]
 }
@@ -29,14 +31,16 @@ export async function sendEmail({
   to,
   subject,
   html,
+  from,
   replyTo,
   tags,
 }: EmailOptions) {
   try {
     const fromEmail = process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@sergikdropz.com'
+    const fromHeader = from?.trim() || `SERGIK <${fromEmail}>`
 
     const response = await getResend().emails.send({
-      from: `SERGIK <${fromEmail}>`,
+      from: fromHeader,
       to: Array.isArray(to) ? to : [to],
       subject,
       html,

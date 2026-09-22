@@ -60,5 +60,15 @@ export const adminNavItems: AdminNavItem[] = [
       { type: 'link', label: 'Logs', href: '/admin/logs' },
     ],
   },
-  { type: 'link', label: 'Release Studio', href: '/studio' },
+  {
+    type: 'group',
+    label: 'Release Studio',
+    items: [
+      { type: 'link', label: 'Home', href: '/studio' },
+      { type: 'link', label: 'Releases', href: '/studio/releases' },
+      { type: 'link', label: 'Create', href: '/studio/create' },
+      { type: 'link', label: 'Pipeline', href: '/studio/pipeline' },
+      { type: 'link', label: 'Release Collab', href: '/studio/collab' },
+    ],
+  },
 ]

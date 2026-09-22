@@ -86,6 +86,41 @@
   animation: fadeIn 0.5s ease-in;
 }
 
+/* Mosaic tile swaps: equal dual-layer crossfade */
+@keyframes mosaicTileCrossfadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mosaicTileCrossfadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.mosaic-tile-crossfade-in,
+.mosaic-tile-crossfade-out {
+  animation-duration: 3.2s;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+  will-change: opacity;
+}
+
+.mosaic-tile-crossfade-in {
+  animation-name: mosaicTileCrossfadeIn;
+}
+
+.mosaic-tile-crossfade-out {
+  animation-name: mosaicTileCrossfadeOut;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mosaic-tile-crossfade-in,
+  .mosaic-tile-crossfade-out {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
 .animate-float-bg {
   animation: floatBackground 20s ease-in-out infinite;
 }
@@ -142,57 +177,81 @@
 .mosaic-tile-motion-6 { animation-name: mosaic-kb-6; animation-duration: 25s; }
 .mosaic-tile-motion-7 { animation-name: mosaic-kb-7; animation-duration: 18s; }
 
-/* EP release stage: per-album Ken Burns paths (pick via .ep-release-cover-drift-N) */
+/* EP release stage: per-album Ken Burns (large A↔B travel, compositor-smooth) */
 @keyframes ep-release-cover-drift-0 {
-  0% { transform: scale(1.16) translate(0%, 0%); }
-  35% { transform: scale(1.32) translate(-6%, 5%); }
-  70% { transform: scale(1.22) translate(4%, -3%); }
-  100% { transform: scale(1.16) translate(0%, 0%); }
+  from { transform: translate3d(0%, 0%, 0) scale(1.16); }
+  to { transform: translate3d(-6%, 5%, 0) scale(1.34); }
 }
 @keyframes ep-release-cover-drift-1 {
-  0% { transform: scale(1.2) translate(0%, 0%); }
-  40% { transform: scale(1.36) translate(6%, -4%); }
-  75% { transform: scale(1.24) translate(-3%, 5%); }
-  100% { transform: scale(1.2) translate(0%, 0%); }
+  from { transform: translate3d(0%, 0%, 0) scale(1.2); }
+  to { transform: translate3d(6%, -4%, 0) scale(1.36); }
 }
 @keyframes ep-release-cover-drift-2 {
-  0% { transform: scale(1.18) translate(0%, 0%); }
-  30% { transform: scale(1.28) translate(-5%, -6%); }
-  65% { transform: scale(1.34) translate(5%, 2%); }
-  100% { transform: scale(1.18) translate(0%, 0%); }
+  from { transform: translate3d(0%, 0%, 0) scale(1.18); }
+  to { transform: translate3d(-5%, -6%, 0) scale(1.32); }
 }
 @keyframes ep-release-cover-drift-3 {
-  0% { transform: scale(1.22) translate(0%, 0%); }
-  45% { transform: scale(1.38) translate(5%, 6%); }
-  80% { transform: scale(1.2) translate(-4%, -2%); }
-  100% { transform: scale(1.22) translate(0%, 0%); }
+  from { transform: translate3d(0%, 0%, 0) scale(1.22); }
+  to { transform: translate3d(5%, 6%, 0) scale(1.38); }
 }
 @keyframes ep-release-cover-drift-4 {
-  0% { transform: scale(1.28) translate(-3%, 2%); }
-  50% { transform: scale(1.14) translate(4%, -5%); }
-  100% { transform: scale(1.28) translate(-3%, 2%); }
+  from { transform: translate3d(-3%, 2%, 0) scale(1.28); }
+  to { transform: translate3d(4%, -5%, 0) scale(1.14); }
 }
 @keyframes ep-release-cover-drift-5 {
-  0% { transform: scale(1.3) translate(4%, -3%); }
-  40% { transform: scale(1.15) translate(-5%, 4%); }
-  100% { transform: scale(1.3) translate(4%, -3%); }
+  from { transform: translate3d(4%, -3%, 0) scale(1.3); }
+  to { transform: translate3d(-5%, 4%, 0) scale(1.15); }
 }
 @keyframes ep-release-cover-drift-6 {
-  0% { transform: scale(1.17) translate(0%, 3%); }
-  33% { transform: scale(1.35) translate(6%, -2%); }
-  66% { transform: scale(1.22) translate(-4%, -5%); }
-  100% { transform: scale(1.17) translate(0%, 3%); }
+  from { transform: translate3d(0%, 3%, 0) scale(1.17); }
+  to { transform: translate3d(6%, -2%, 0) scale(1.35); }
 }
 @keyframes ep-release-cover-drift-7 {
-  0% { transform: scale(1.24) translate(-2%, -4%); }
-  50% { transform: scale(1.12) translate(3%, 5%); }
-  100% { transform: scale(1.24) translate(-2%, -4%); }
+  from { transform: translate3d(-2%, -4%, 0) scale(1.24); }
+  to { transform: translate3d(3%, 5%, 0) scale(1.12); }
+}
+
+/* Mobile: shorter crop window makes the same % travel feel rushed — keep it subtle */
+@keyframes ep-release-cover-drift-m0 {
+  from { transform: translate3d(0%, 0%, 0) scale(1.12); }
+  to { transform: translate3d(-2.5%, 2%, 0) scale(1.2); }
+}
+@keyframes ep-release-cover-drift-m1 {
+  from { transform: translate3d(0%, 0%, 0) scale(1.14); }
+  to { transform: translate3d(2.5%, -2%, 0) scale(1.22); }
+}
+@keyframes ep-release-cover-drift-m2 {
+  from { transform: translate3d(0%, 0%, 0) scale(1.13); }
+  to { transform: translate3d(-2%, -2.5%, 0) scale(1.2); }
+}
+@keyframes ep-release-cover-drift-m3 {
+  from { transform: translate3d(0%, 0%, 0) scale(1.15); }
+  to { transform: translate3d(2%, 2.5%, 0) scale(1.22); }
+}
+@keyframes ep-release-cover-drift-m4 {
+  from { transform: translate3d(-1.5%, 1%, 0) scale(1.18); }
+  to { transform: translate3d(2%, -2%, 0) scale(1.12); }
+}
+@keyframes ep-release-cover-drift-m5 {
+  from { transform: translate3d(2%, -1.5%, 0) scale(1.19); }
+  to { transform: translate3d(-2%, 2%, 0) scale(1.12); }
+}
+@keyframes ep-release-cover-drift-m6 {
+  from { transform: translate3d(0%, 1.5%, 0) scale(1.13); }
+  to { transform: translate3d(2.5%, -1%, 0) scale(1.21); }
+}
+@keyframes ep-release-cover-drift-m7 {
+  from { transform: translate3d(-1%, -2%, 0) scale(1.17); }
+  to { transform: translate3d(1.5%, 2%, 0) scale(1.11); }
 }
 
 .ep-release-cover-drift {
-  animation-timing-function: ease-in-out;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
   animation-iteration-count: infinite;
+  animation-direction: alternate;
   transform-origin: center center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   will-change: transform;
 }
 .ep-release-cover-drift-0 { animation-name: ep-release-cover-drift-0; animation-duration: 28s; }
@@ -203,6 +262,17 @@
 .ep-release-cover-drift-5 { animation-name: ep-release-cover-drift-5; animation-duration: 26s; }
 .ep-release-cover-drift-6 { animation-name: ep-release-cover-drift-6; animation-duration: 30s; }
 .ep-release-cover-drift-7 { animation-name: ep-release-cover-drift-7; animation-duration: 22s; }
+
+@media (max-width: 767px) {
+  .ep-release-cover-drift-0 { animation-name: ep-release-cover-drift-m0; animation-duration: 56s; }
+  .ep-release-cover-drift-1 { animation-name: ep-release-cover-drift-m1; animation-duration: 64s; }
+  .ep-release-cover-drift-2 { animation-name: ep-release-cover-drift-m2; animation-duration: 52s; }
+  .ep-release-cover-drift-3 { animation-name: ep-release-cover-drift-m3; animation-duration: 60s; }
+  .ep-release-cover-drift-4 { animation-name: ep-release-cover-drift-m4; animation-duration: 68s; }
+  .ep-release-cover-drift-5 { animation-name: ep-release-cover-drift-m5; animation-duration: 54s; }
+  .ep-release-cover-drift-6 { animation-name: ep-release-cover-drift-m6; animation-duration: 58s; }
+  .ep-release-cover-drift-7 { animation-name: ep-release-cover-drift-m7; animation-duration: 50s; }
+}
 
 /* Background mosaic: sharp tiles only — no CSS blur on cover art / gallery photos */
 .site-background-mosaic img {
@@ -224,7 +294,9 @@
 
 /* Safari / iOS WebKit: kill Ken Burns + pulse layers (JS also gates these). */
 @supports (-webkit-touch-callout: none) {
-  .site-background-mosaic .animate-fade-in {
+  .site-background-mosaic .animate-fade-in,
+  .site-background-mosaic .mosaic-tile-crossfade-in,
+  .site-background-mosaic .mosaic-tile-crossfade-out {
     animation: none !important;
     opacity: 1 !important;
   }

@@ -25,11 +25,16 @@ CREATE TABLE IF NOT EXISTS distribution_releases (
   distributor_release_id TEXT,
   distributor_status TEXT DEFAULT 'draft' CHECK (distributor_status IN ('draft', 'submitted', 'delivered', 'live', 'error')),
   artwork_url TEXT,
+  artwork_dsp_url TEXT,
   description TEXT,
   explicit BOOLEAN DEFAULT false,
   genre TEXT,
   subgenre TEXT,
   label_name TEXT,
+  artwork_designer TEXT,
+  artwork_photographer TEXT,
+  artwork_illustrator TEXT,
+  social_promo JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -69,7 +74,10 @@ CREATE TABLE IF NOT EXISTS distribution_store_links (
   release_id TEXT REFERENCES distribution_releases(id) ON DELETE CASCADE,
   store TEXT NOT NULL, -- spotify, apple_music, amazon, etc.
   url TEXT NOT NULL,
+  -- Set only after dsp-verify passes (live | reachable) — not on blind insert.
   verified_at TIMESTAMP WITH TIME ZONE,
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  verification_detail TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

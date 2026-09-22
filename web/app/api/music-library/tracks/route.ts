@@ -428,7 +428,7 @@ export async function PUT(request: NextRequest) {
     
     // Map frontend field names to database field names (support both camelCase and snake_case)
     const dbUpdates: any = {}
-    if (updates.folderId !== undefined) dbUpdates.folder_id = updates.folderId
+    if (updates.folderId !== undefined) dbUpdates.folder_id = updates.folderId || null
     if (updates.audioFileId !== undefined) dbUpdates.audio_file_id = updates.audioFileId
     if (updates.title !== undefined) dbUpdates.title = updates.title
     if (updates.artist !== undefined) dbUpdates.artist = updates.artist

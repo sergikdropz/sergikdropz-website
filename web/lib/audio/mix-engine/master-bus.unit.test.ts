@@ -210,8 +210,8 @@ describe('MixEngine symmetric deck bus', () => {
     engine.setDeckPlaybackRate('a', 0.9, { instant: true, notify: false })
     expect(engine.getDeckEqGains('a')).toEqual({ low: -6, mid: 1, high: 3 })
     const lowA = raw.createBiquadFilter.mock.results[0]?.value as { gain: { value: number } }
-    // Slowed + key-lock: formant lifts lows on the node, dial stays at -6.
-    expect(lowA.gain.value).toBeGreaterThan(-6)
+    // HTML preservesPitch path — no formant EQ stacked on the strip.
+    expect(lowA.gain.value).toBe(-6)
   })
 
   it('pulls deck B into the EQ chain when that platter takes the track', () => {
@@ -303,6 +303,46 @@ describe('MixEngine symmetric deck bus', () => {
     expect(deckB.paused).toBe(true)
     expect(deckB.volume).toBe(0)
     expect(gainNodes[0]?.gain.value).toBe(1)
+  })
+
+  it('focusDeck leaves the other platter and XF alone', () => {
+    const deckA = createDeck()
+    const deckB = createDeck()
+    deckA.paused = false
+    deckB.paused = false
+    const engine = new MixEngine(
+      deckA as unknown as HTMLAudioElement,
+      deckB as unknown as HTMLAudioElement,
+    )
+    const { ctx, gainNodes } = mockAudioContext()
+    engine.attachGraph(ctx)
+    engine.setManualCrossfade(0.55, { instant: true })
+    const midA = gainNodes[0]?.gain.value
+    const midB = gainNodes[1]?.gain.value
+    engine.focusDeck('b')
+    expect(engine.getActiveDeck()).toBe('b')
+    expect(deckA.paused).toBe(false)
+    expect(deckB.paused).toBe(false)
+    expect(gainNodes[0]?.gain.value).toBe(midA)
+    expect(gainNodes[1]?.gain.value).toBe(midB)
+  })
+
+  it('hardStopDeck pauses only the targeted platter', () => {
+    const deckA = createDeck()
+    const deckB = createDeck()
+    deckA.paused = false
+    deckB.paused = false
+    const engine = new MixEngine(
+      deckA as unknown as HTMLAudioElement,
+      deckB as unknown as HTMLAudioElement,
+    )
+    const { ctx } = mockAudioContext()
+    engine.attachGraph(ctx)
+    engine.setManualCrossfade(0.4, { instant: true })
+    engine.hardStopDeck('a')
+    expect(deckA.paused).toBe(true)
+    expect(deckB.paused).toBe(false)
+    expect(engine.getActiveDeck()).toBe('a')
   })
 })
 

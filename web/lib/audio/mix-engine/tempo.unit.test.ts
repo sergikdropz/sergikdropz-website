@@ -10,6 +10,7 @@ import {
   MIX_RATE_SLEW,
   pitchCancelSemitones,
   postHandoffNativeGlideMs,
+  quantizeKeyLockRate,
   TEMPO_GLIDE_SOFT_KNEE,
   tempoMixProgress,
 } from './tempo'
@@ -123,6 +124,24 @@ describe('formant compensation stays additive', () => {
     expect(merged.low).not.toBe(base.low)
     expect(Math.abs(merged.low - base.low)).toBeLessThan(8)
     expect(formantCompensationGains(1)).toEqual({ low: 0, mid: 0, high: 0 })
+  })
+})
+
+describe('key-lock rate stability', () => {
+  it('quantizeKeyLockRate snaps to the quantum', () => {
+    expect(quantizeKeyLockRate(1)).toBe(1)
+    expect(quantizeKeyLockRate(1.0012)).toBeCloseTo(1.001, 5)
+  })
+
+  it('soft-slews under key-lock instead of jumping', () => {
+    const deck = createDeck(1)
+    const applied = applyDeckTempo(asElement(deck), 1.08, {
+      keyLock: true,
+      instant: false,
+      currentRate: 1,
+    })
+    expect(applied).toBeGreaterThan(1)
+    expect(applied).toBeLessThan(1.08)
   })
 })
 

@@ -2,34 +2,23 @@ import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { normalizeReleaseKey } from '@/lib/ep-cover-art'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { supabaseIsReachable } from '@/lib/supabaseReachability'
 
 export const dynamic = 'force-dynamic'
 
-type MosaicTile = { id: string; src: string; alt: string }
+type MosaicTile = { id: string; src: string; alt: string; rank: number }
 
 const IMAGE_EXT = /\.(avif|gif|jpe?g|png|webp)$/i
 
 /**
  * GET /api/music-library/mosaic-covers
  * Public cover pool for the site background mosaic (ingested folder art + public releases).
+ * One tile per path and per release label; DB folder rows beat filesystem scans.
  */
 export async function GET() {
-  const tiles: MosaicTile[] = []
-  const seen = new Set<string>()
-
-  const push = (id: string, raw: string | null | undefined, alt: string, bust?: number) => {
-    if (!raw) return
-    const base = resolveImageUrl(raw).split('?')[0]
-    if (!base || seen.has(base)) return
-    seen.add(base)
-    tiles.push({
-      id,
-      src: bust ? `${base}?v=${bust}` : base,
-      alt,
-    })
-  }
+  const candidates: MosaicTile[] = []
 
   // 1) Files written by artwork upload API (always on disk for local/home)
   try {
@@ -44,14 +33,23 @@ export async function GET() {
       } catch {
         /* ignore */
       }
-      const id = file.replace(/\.[^.]+$/, '')
-      push(`fs-${id}`, `/images/audio/artwork/${file}`, 'Album cover art', Math.floor(mtime))
+      const stem = file.replace(/\.[^.]+$/, '')
+      const folderMatch = stem.match(/^folder-(.+)$/i)
+      const id = folderMatch ? `fs-folder-${folderMatch[1]}` : `fs-${stem}`
+      const base = resolveImageUrl(`/images/audio/artwork/${file}`).split('?')[0]
+      if (!base) continue
+      candidates.push({
+        id,
+        src: `${base}?v=${Math.floor(mtime)}`,
+        alt: 'Album cover art',
+        rank: 1,
+      })
     }
   } catch {
     /* directory may not exist yet */
   }
 
-  // 2) DB folder covers (public, non-archived) — names for better alt text
+  // 2) DB folder covers (public, non-archived) — names for better alt text; higher rank
   if (await supabaseIsReachable()) {
     try {
       const supabase = createSupabaseServerClient()
@@ -65,11 +63,52 @@ export async function GET() {
 
       for (const row of data || []) {
         if (row.hidden) continue
-        push(`folder-${row.id}`, row.artwork_url, `${row.name || 'Album'} cover art`)
+        const base = resolveImageUrl(String(row.artwork_url || '')).split('?')[0]
+        if (!base) continue
+        candidates.push({
+          id: `folder-${row.id}`,
+          src: base,
+          alt: `${row.name || 'Album'} cover art`,
+          rank: 3,
+        })
       }
     } catch (err) {
       console.error('[mosaic-covers] folder query failed', err)
     }
+  }
+
+  const byPath = new Map<string, MosaicTile>()
+  const byRelease = new Map<string, MosaicTile>()
+
+  for (const tile of candidates) {
+    const base = tile.src.split('?')[0]
+    const releaseKey = normalizeReleaseKey(tile.alt) || `src:${base}`
+
+    const prevPath = byPath.get(base)
+    if (!prevPath || tile.rank > prevPath.rank) byPath.set(base, tile)
+
+    const prevRelease = byRelease.get(releaseKey)
+    if (!prevRelease || tile.rank > prevRelease.rank) byRelease.set(releaseKey, tile)
+  }
+
+  // Union of winners: prefer release-keyed winners, then any remaining unique paths
+  const tiles: Array<{ id: string; src: string; alt: string }> = []
+  const seenPath = new Set<string>()
+  const seenId = new Set<string>()
+
+  for (const tile of byRelease.values()) {
+    const base = tile.src.split('?')[0]
+    if (seenPath.has(base) || seenId.has(tile.id)) continue
+    seenPath.add(base)
+    seenId.add(tile.id)
+    tiles.push({ id: tile.id, src: tile.src, alt: tile.alt })
+  }
+  for (const tile of byPath.values()) {
+    const base = tile.src.split('?')[0]
+    if (seenPath.has(base) || seenId.has(tile.id)) continue
+    seenPath.add(base)
+    seenId.add(tile.id)
+    tiles.push({ id: tile.id, src: tile.src, alt: tile.alt })
   }
 
   return NextResponse.json(

@@ -2,7 +2,14 @@ import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import ShareListenClient from '@/components/shares/ShareListenClient'
 import { resolveShareByToken } from '@/lib/shares/share-service'
-import { resolvePublicOrigin } from '@/lib/shares/types'
+import {
+  absoluteShareOgImageUrl,
+  pickShareArtwork,
+  resolvePublicOrigin,
+} from '@/lib/shares/types'
+
+/** Bump when OG card design changes so messenger caches re-fetch. */
+const SHARE_OG_VERSION = '20260913a'
 
 type Props = { params: Promise<{ token: string }> }
 
@@ -25,8 +32,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         ? `${payload.collection?.artist || 'SERGIK'} · ${payload.tracks.length} tracks`
         : `${payload.tracks[0]?.artist || 'SERGIK'}`
     const url = `${origin}/s/${encodeURIComponent(token)}`
-    // Dedicated share OG image (cover art card) — never the homepage /og hero.
-    const ogImage = `${origin}/s/${encodeURIComponent(token)}/opengraph-image`
+    // Direct cover first — iMessage/IG often fail closed when only a dynamic OG route is listed.
+    const directCover = absoluteShareOgImageUrl(pickShareArtwork(payload), origin)
+    const brandedOg = `${origin}/s/${encodeURIComponent(token)}/opengraph-image?v=${SHARE_OG_VERSION}`
+
+    const images = [
+      ...(directCover
+        ? [
+            {
+              url: directCover,
+              alt: title,
+            },
+          ]
+        : []),
+      {
+        url: brandedOg,
+        width: 1200,
+        height: 630,
+        alt: title,
+        type: 'image/png' as const,
+      },
+    ]
 
     return {
       metadataBase: new URL(origin),
@@ -42,21 +68,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         url,
         siteName: 'SERGIK',
         type: 'website',
-        images: [
-          {
-            url: ogImage,
-            width: 1200,
-            height: 630,
-            alt: title,
-            type: 'image/png',
-          },
-        ],
+        images,
       },
       twitter: {
         card: 'summary_large_image',
         title,
         description,
-        images: [ogImage],
+        images: images.map((img) => img.url),
       },
     }
   } catch {

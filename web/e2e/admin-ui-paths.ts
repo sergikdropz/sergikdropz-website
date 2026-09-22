@@ -39,4 +39,8 @@ export const ADMIN_UI_CRAWL_PATHS: readonly string[] = [
   '/admin/videos-manager',
   // Linked from admin nav (not under /admin)
   '/studio',
+  '/studio/collab',
+  '/studio/pipeline',
+  '/studio/pipeline?tab=marketing',
+  '/studio/create',
 ]

@@ -1,9 +1,13 @@
 /**
  * Resolve gallery/artwork paths for next/image.
  *
- * Vault cover art was stored in the `gallery-images` bucket. That bucket is
- * not publicly readable in production, so those URLs 403. The files ship with
- * the site under `/images/audio/...` and `/images/gallery/...`.
+ * Vault EP cover art was stored in the `gallery-images` bucket under `audio/…`.
+ * That bucket path is not reliably public in every environment, so those URLs are
+ * rewritten onto shipped files under `/images/audio/…`.
+ *
+ * Admin gallery photo uploads also use `gallery-images/` (top-level). Those files
+ * only exist in Storage — keep the remote public URL. Do not rewrite them to
+ * `/images/gallery/…` unless the caller already passed a local path.
  *
  * Do not rewrite other remote URLs (Spotify, YouTube, audio-files audio).
  */
@@ -97,10 +101,15 @@ function resolveImageUrlUncached(imagePath: string): string {
 
   const galleryRel = galleryRelativePath(pathOnly)
   if (galleryRel) {
-    const local = galleryRel.startsWith('audio/')
-      ? `/images/${galleryRel}`
-      : `/images/gallery/${galleryRel}`
-    return withLocalCacheBust(encodeImagePath(local), bust)
+    // Legacy EP/vault covers lived under gallery-images/audio/… and ship with the site.
+    // Admin photo uploads also land in gallery-images/, but only exist remotely — keep those URLs.
+    if (galleryRel.startsWith('audio/')) {
+      return withLocalCacheBust(encodeImagePath(`/images/${galleryRel}`), bust)
+    }
+    if (pathOnly.startsWith('http://') || pathOnly.startsWith('https://')) {
+      return pathOnly
+    }
+    return withLocalCacheBust(encodeImagePath(`/images/gallery/${galleryRel}`), bust)
   }
 
   if (pathOnly.startsWith('/images/') || pathOnly.startsWith('/audio/')) {

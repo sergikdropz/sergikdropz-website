@@ -1,13 +1,20 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, type DragEvent } from 'react'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaSearch, FaTimes, FaUpload, FaTrash, FaEdit, FaSave, FaPlus } from 'react-icons/fa'
+import { FaSearch, FaTimes, FaUpload, FaTrash, FaEdit, FaSave } from 'react-icons/fa'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
+
+function isFileDrag(e: DragEvent) {
+  return Array.from(e.dataTransfer.types).includes('Files')
+}
+
+function collectImageFiles(fileList: FileList | File[] | null | undefined): File[] {
+  return Array.from(fileList || []).filter((file) => file.type.startsWith('image/'))
+}
 
 type GalleryImage = {
   id: string
@@ -22,7 +29,6 @@ type GalleryImage = {
 
 export default function AdminGallery() {
   const { user, isAdmin, loading } = useAdminAuth()
-  const router = useRouter()
   
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loadingImages, setLoadingImages] = useState(true)
@@ -36,9 +42,11 @@ export default function AdminGallery() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [uploadingToSupabase, setUploadingToSupabase] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
-useEffect(() => {
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false)
+  const dragDepthRef = useRef(0)
+
+  useEffect(() => {
     if (isAdmin) {
       fetchImages()
     }
@@ -47,6 +55,7 @@ useEffect(() => {
   async function fetchImages() {
     try {
       setLoadingImages(true)
+      setImageErrors(new Set())
       // Fetch from Supabase database (source of truth)
       const response = await fetch('/api/gallery/db')
       
@@ -83,53 +92,50 @@ useEffect(() => {
     }
   }
 
-  async function handleUpload() {
-    if (selectedFiles.length === 0) return
+  async function uploadFiles(files: File[]) {
+    const imageFiles = collectImageFiles(files)
+    if (imageFiles.length === 0) return
 
     setUploading(true)
     setUploadProgress(0)
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i]
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i]
         const formData = new FormData()
         formData.append('file', file)
 
-        const xhr = new XMLHttpRequest()
-
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const fileProgress = (e.loaded / e.total) * 100
-            const totalProgress = ((i + fileProgress / 100) / selectedFiles.length) * 100
-            setUploadProgress(totalProgress)
-          }
-        })
-
-        // Upload to Supabase Storage
         const uploadResponse = await fetch('/api/gallery/upload-supabase', {
           method: 'POST',
           body: formData,
         })
 
         if (!uploadResponse.ok) {
-          throw new Error(`Upload failed for ${file.name}`)
+          const err = await uploadResponse.json().catch(() => ({}))
+          throw new Error(err.error || err.details || `Upload failed for ${file.name}`)
         }
 
         const uploadData = await uploadResponse.json()
+        if (!uploadData.publicUrl) {
+          throw new Error(`Upload returned no public URL for ${file.name}`)
+        }
 
-        // Create database entry
-        const imageId = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-        
+        const imageId = `${(file.name.replace(/\.[^/.]+$/, '') || 'image')
+          .replace(/[^a-z0-9-]/gi, '-')
+          .toLowerCase()
+          .slice(0, 60)}-${Date.now().toString(36)}`
+
         const dbResponse = await fetch('/api/gallery/db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image_id: imageId,
-            filename: file.name,
+            filename: uploadData.filename || file.name,
             src: uploadData.publicUrl,
-            alt: file.name.replace(/\.[^/.]+$/, '').replace(/-/g, ' '),
-            category: 'portrait', // Default, can be edited later
+            alt: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' '),
+            category: 'portrait',
             storage_url: uploadData.publicUrl,
+            storage_path: uploadData.storagePath || null,
             is_stored_in_supabase: true,
             size_bytes: file.size,
             mime_type: file.type,
@@ -137,19 +143,23 @@ useEffect(() => {
         })
 
         if (!dbResponse.ok) {
-          console.error('Failed to create database entry for', file.name)
+          const err = await dbResponse.json().catch(() => ({}))
+          throw new Error(err.error || err.details || `Failed to save ${file.name} to gallery`)
         }
 
-        // Update progress
-        const totalProgress = ((i + 1) / selectedFiles.length) * 100
-        setUploadProgress(totalProgress)
+        setUploadProgress(((i + 1) / imageFiles.length) * 100)
       }
 
       setSelectedFiles([])
       setUploadProgress(0)
       setShowUploadModal(false)
-      fetchImages()
-      alert('Images uploaded successfully!')
+      setImageErrors(new Set())
+      await fetchImages()
+      alert(
+        imageFiles.length === 1
+          ? 'Image uploaded successfully!'
+          : `${imageFiles.length} images uploaded successfully!`
+      )
     } catch (error: any) {
       alert('Upload error: ' + error.message)
     } finally {
@@ -158,33 +168,77 @@ useEffect(() => {
     }
   }
 
-  async function handleUploadToSupabase() {
-    // Both upload methods now use Supabase, so they're the same
-    await handleUpload()
+  async function handleUpload() {
+    await uploadFiles(selectedFiles)
+  }
+
+  function resetDragState() {
+    dragDepthRef.current = 0
+    setIsDraggingFiles(false)
+  }
+
+  function handlePageDragEnter(e: DragEvent) {
+    if (!isFileDrag(e) || uploading) return
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepthRef.current += 1
+    setIsDraggingFiles(true)
+  }
+
+  function handlePageDragLeave(e: DragEvent) {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) setIsDraggingFiles(false)
+  }
+
+  function handlePageDragOver(e: DragEvent) {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = uploading ? 'none' : 'copy'
+  }
+
+  function handlePageDrop(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    resetDragState()
+    if (uploading) return
+
+    const imageFiles = collectImageFiles(e.dataTransfer.files)
+    if (imageFiles.length === 0) {
+      alert('Drop image files only (JPG, PNG, WebP, GIF, etc.)')
+      return
+    }
+
+    void uploadFiles(imageFiles)
   }
 
   async function handleDelete(image: GalleryImage) {
     if (!confirm('Are you sure you want to delete this image?')) return
 
     try {
-      // Delete from Supabase database (source of truth)
-      const response = await fetch(`/api/gallery/db?id=${encodeURIComponent(image.id)}&hard_delete=true`, {
-        method: 'DELETE',
-      })
-      
+      // Admin GET maps `id` to gallery_images.image_id (slug), not the UUID column.
+      const response = await fetch(
+        `/api/gallery/db?image_id=${encodeURIComponent(image.id)}&hard_delete=true`,
+        { method: 'DELETE' }
+      )
+
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          fetchImages()
-          alert('Image deleted successfully')
+          setImages((prev) => prev.filter((img) => img.id !== image.id))
           if (selectedImage?.id === image.id) {
             setSelectedImage(null)
           }
+          fetchImages()
+          alert('Image deleted successfully')
         } else {
           alert('Delete failed: ' + (data.error || 'Unknown error'))
         }
       } else {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         alert('Delete failed: ' + (errorData.error || 'Unknown error'))
       }
     } catch (error: any) {
@@ -199,7 +253,7 @@ useEffect(() => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: image.id,
+          image_id: image.id,
           alt: image.alt,
           category: image.category,
           description: image.description,
@@ -273,7 +327,27 @@ useEffect(() => {
 
   return (
     <div className="pt-20 min-h-screen pb-40 relative z-10 bg-black">
-      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8 max-w-7xl relative z-10">
+      <div
+        className={`container mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8 max-w-7xl relative z-10 rounded-xl transition-[box-shadow,background-color] ${
+          isDraggingFiles
+            ? 'bg-yellow-400/5 shadow-[inset_0_0_0_2px_rgba(250,204,21,0.7)]'
+            : ''
+        }`}
+        onDragEnter={handlePageDragEnter}
+        onDragLeave={handlePageDragLeave}
+        onDragOver={handlePageDragOver}
+        onDrop={handlePageDrop}
+      >
+        {isDraggingFiles && (
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-black/70 backdrop-blur-[2px]">
+            <div className="flex flex-col items-center gap-3 border border-dashed border-yellow-400/80 bg-black/60 px-8 py-10 text-center">
+              <FaUpload className="text-3xl text-yellow-400" />
+              <p className="text-lg font-medium text-white">Drop images to upload</p>
+              <p className="text-sm text-gray-400">JPG, PNG, WebP, GIF — multiple files OK</p>
+            </div>
+          </div>
+        )}
+
         {/* Header - Matching Frontend */}
         <div className="mb-8">
           <div className="flex flex-col items-center justify-center mb-4 sm:mb-6 w-full">
@@ -314,21 +388,42 @@ useEffect(() => {
           </div>
 
           {/* Admin Tools Bar */}
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             <button
+              type="button"
               onClick={() => setShowUploadModal(true)}
-              className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-sm flex items-center gap-2"
+              disabled={uploading}
+              className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-sm flex items-center gap-2 disabled:opacity-50"
             >
               <FaUpload />
               Upload Images
             </button>
             <button
+              type="button"
               onClick={fetchImages}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm flex items-center gap-2"
+              disabled={uploading}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm flex items-center gap-2 disabled:opacity-50"
             >
               Refresh
             </button>
+            <p className="text-xs text-gray-500 sm:ml-2">
+              or drag &amp; drop images anywhere on this page
+            </p>
           </div>
+
+          {uploading && (
+            <div className="mb-4">
+              <div className="w-full bg-gray-800 rounded-full h-2 mb-2 overflow-hidden">
+                <div
+                  className="bg-green-600 h-2 rounded-full transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-400">
+                Uploading... {Math.round(uploadProgress)}%
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Filter Buttons - Matching Frontend */}
@@ -401,9 +496,11 @@ useEffect(() => {
                       unoptimized={shouldUnoptimizeImage(image.src)}
                     />
                     {/* Admin Actions Overlay */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20 pointer-events-none group-hover:pointer-events-auto">
                       <button
+                        type="button"
                         onClick={(e) => {
+                          e.preventDefault()
                           e.stopPropagation()
                           setEditingImage(image)
                         }}
@@ -413,9 +510,11 @@ useEffect(() => {
                         <FaEdit />
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => {
+                          e.preventDefault()
                           e.stopPropagation()
-                          handleDelete(image)
+                          void handleDelete(image)
                         }}
                         className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition"
                         title="Delete"
@@ -609,16 +708,27 @@ useEffect(() => {
             <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
               <h2 className="text-xl font-semibold mb-4">Upload Images</h2>
               <div className="space-y-4">
-                <div>
-                  <label htmlFor="upload-files" className="block text-sm mb-1">Image Files (Multiple)</label>
+                <div
+                  className={`rounded-lg border border-dashed p-6 text-center transition-colors ${
+                    isDraggingFiles
+                      ? 'border-yellow-400 bg-yellow-400/10'
+                      : 'border-gray-600 bg-gray-900/40'
+                  }`}
+                >
+                  <FaUpload className="mx-auto mb-3 text-2xl text-gray-400" />
+                  <p className="text-sm text-gray-300 mb-1">Drag &amp; drop images here</p>
+                  <p className="text-xs text-gray-500 mb-4">or choose files below</p>
+                  <label htmlFor="upload-files" className="block text-sm mb-1 sr-only">
+                    Image Files (Multiple)
+                  </label>
                   <input
                     id="upload-files"
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                    onChange={(e) => setSelectedFiles(collectImageFiles(e.target.files))}
                     className="w-full bg-gray-700 rounded p-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                    disabled={uploading || uploadingToSupabase}
+                    disabled={uploading}
                     aria-label="Select image files to upload"
                     title="Select image files to upload"
                   />
@@ -628,7 +738,7 @@ useEffect(() => {
                     </p>
                   )}
                 </div>
-                {(uploading || uploadingToSupabase) && (
+                {uploading && (
                   <div>
                     <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
                       <div
@@ -641,28 +751,22 @@ useEffect(() => {
                     </p>
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleUpload}
-                    disabled={selectedFiles.length === 0 || uploading || uploadingToSupabase}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded flex-1 disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <FaUpload /> Upload to Local
-                  </button>
-                  <button
-                    onClick={handleUploadToSupabase}
-                    disabled={selectedFiles.length === 0 || uploading || uploadingToSupabase}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex-1 disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <FaUpload /> Upload to Supabase
-                  </button>
-                </div>
                 <button
+                  type="button"
+                  onClick={() => void handleUpload()}
+                  disabled={selectedFiles.length === 0 || uploading}
+                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <FaUpload /> Upload
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setShowUploadModal(false)
                     setSelectedFiles([])
                   }}
-                  className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded"
+                  disabled={uploading}
+                  className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded disabled:opacity-50"
                 >
                   Cancel
                 </button>

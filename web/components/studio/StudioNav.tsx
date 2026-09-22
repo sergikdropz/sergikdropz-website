@@ -2,28 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  FaCompactDisc,
-  FaHome,
-  FaRocket,
-  FaDatabase,
-  FaUpload,
-  FaSatellite,
-  FaFileImport,
-  FaCalendarAlt,
-  FaProjectDiagram,
-} from 'react-icons/fa'
+import { FaCompactDisc, FaComments, FaHome, FaPlus, FaProjectDiagram } from 'react-icons/fa'
+import { STUDIO_PATHS, isStudioNavActive, type StudioNavId } from '@/lib/studio/studio-ia'
 
-const links = [
-  { href: '/studio', label: 'Home', icon: FaHome, exact: true },
-  { href: '/studio/releases', label: 'Releases', icon: FaCompactDisc },
-  { href: '/studio/releases/new', label: 'New release', icon: FaRocket },
-  { href: '/studio/catalog/import', label: 'Import', icon: FaFileImport },
-  { href: '/studio/tracks/new', label: 'Upload', icon: FaUpload },
-  { href: '/studio/releases/command-center', label: 'Command', icon: FaSatellite },
-  { href: '/studio/releases/pipeline', label: 'Pipeline', icon: FaProjectDiagram },
-  { href: '/studio/releases/calendar', label: 'Calendar', icon: FaCalendarAlt },
-  { href: '/studio/soundexchange', label: 'SoundExchange', icon: FaDatabase },
+const links: { href: string; label: string; icon: typeof FaHome; id: StudioNavId }[] = [
+  { id: 'home', href: STUDIO_PATHS.home, label: 'Home', icon: FaHome },
+  { id: 'releases', href: STUDIO_PATHS.releases, label: 'Releases', icon: FaCompactDisc },
+  { id: 'create', href: STUDIO_PATHS.create, label: 'Create', icon: FaPlus },
+  { id: 'pipeline', href: STUDIO_PATHS.pipeline, label: 'Pipeline', icon: FaProjectDiagram },
+  { id: 'collab', href: STUDIO_PATHS.collab, label: 'Release Collab', icon: FaComments },
 ]
 
 export default function StudioNav() {
@@ -31,19 +18,8 @@ export default function StudioNav() {
 
   return (
     <nav className="flex flex-wrap gap-2 mb-8" aria-label="Release Studio">
-      {links.map(({ href, label, icon: Icon, exact }) => {
-        const active = exact
-          ? pathname === href
-          : href === '/studio/releases'
-            ? pathname === '/studio/releases' ||
-              Boolean(
-                pathname?.match(/^\/studio\/releases\/[^/]+$/) &&
-                  !pathname?.includes('/new') &&
-                  !pathname?.includes('/pipeline') &&
-                  !pathname?.includes('/calendar') &&
-                  !pathname?.includes('/command-center')
-              )
-            : pathname === href || pathname?.startsWith(`${href}/`)
+      {links.map(({ href, label, icon: Icon, id }) => {
+        const active = isStudioNavActive(id, pathname)
         return (
           <Link
             key={href}

@@ -1,4 +1,18 @@
-export type SplitRow = { name: string; percentage: number }
+export const SPLIT_ROLES = ['performer', 'writer', 'producer', 'publisher'] as const
+export type SplitRole = (typeof SPLIT_ROLES)[number]
+
+export const SPLIT_PROS = ['ASCAP', 'BMI', 'SESAC', 'GMR', 'SOCAN', 'PRS', 'GEMA', 'Other'] as const
+export type SplitPro = (typeof SPLIT_PROS)[number]
+
+export type SplitRow = {
+  name: string
+  percentage: number
+  legal_name?: string | null
+  role?: SplitRole | string | null
+  publisher?: string | null
+  ipi?: string | null
+  pro?: string | null
+}
 
 export type ParsedIsrcRow = {
   line: number
@@ -62,6 +76,48 @@ export function parseSplitsString(raw: string): SplitRow[] {
     }
     return { name: segment, percentage: 0 }
   })
+}
+
+export function isSplitRole(value: string): value is SplitRole {
+  return (SPLIT_ROLES as readonly string[]).includes(value)
+}
+
+export function normalizeSplitRows(raw: unknown): SplitRow[] {
+  if (!Array.isArray(raw)) return []
+  const out: SplitRow[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const name = String((item as SplitRow).name || '').trim()
+    const percentage = Number((item as SplitRow).percentage)
+    if (!name && !Number.isFinite(percentage)) continue
+    const roleRaw = String((item as SplitRow).role || '').trim().toLowerCase()
+    const proRaw = String((item as SplitRow).pro || '').trim()
+    out.push({
+      name,
+      percentage: Number.isFinite(percentage) ? percentage : 0,
+      legal_name: String((item as SplitRow).legal_name || '').trim() || null,
+      role: isSplitRole(roleRaw) ? roleRaw : roleRaw || 'performer',
+      publisher: String((item as SplitRow).publisher || '').trim() || null,
+      ipi: String((item as SplitRow).ipi || '').replace(/\D/g, '') || null,
+      pro: proRaw || null,
+    })
+  }
+  return out
+}
+
+export function formatSplitsString(splits: SplitRow[]): string {
+  return splits
+    .filter((row) => row.name)
+    .map((row) => `${row.name}:${row.percentage}`)
+    .join(', ')
+}
+
+export function equalSplitPercentages(count: number): number[] {
+  const n = Math.max(1, count)
+  const base = Math.floor(10000 / n) / 100
+  return Array.from({ length: n }, (_, index) =>
+    index === n - 1 ? Math.round((100 - base * (n - 1)) * 100) / 100 : base,
+  )
 }
 
 export function validateSplitsTotal(splits: SplitRow[]): string | null {

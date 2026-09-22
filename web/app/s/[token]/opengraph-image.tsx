@@ -33,37 +33,73 @@ async function fetchCoverBytes(artworkUrl: string | null | undefined): Promise<A
   const raw = String(artworkUrl || '').trim()
   if (!raw) return null
 
-  let absolute = raw
-  if (raw.startsWith('/')) {
-    absolute = `${siteOrigin()}${raw}`
-  } else if (raw.startsWith('//')) {
-    absolute = `https:${raw}`
+  const candidates: string[] = []
+  const push = (url: string | null | undefined) => {
+    const v = String(url || '').trim()
+    if (v && !candidates.includes(v)) candidates.push(v)
   }
 
-  try {
-    const res = await fetch(absolute, {
-      headers: { Accept: 'image/*,*/*;q=0.8' },
-      next: { revalidate: 3600 },
-    })
-    if (!res.ok) return null
-    const type = res.headers.get('content-type') || ''
-    if (type && !type.startsWith('image/')) return null
-    return await res.arrayBuffer()
-  } catch {
-    // Local relative art may only exist on this host — try public origin last.
-    if (raw.startsWith('/') && siteOrigin() !== DEFAULT_PUBLIC_SITE_ORIGIN) {
-      try {
-        const res = await fetch(`${DEFAULT_PUBLIC_SITE_ORIGIN}${raw}`, {
-          headers: { Accept: 'image/*,*/*;q=0.8' },
-          next: { revalidate: 3600 },
+  if (raw.startsWith('/')) {
+    // Prefer public CDN for serverless OG (local SITE_URL / cold localhost won't resolve).
+    push(`${DEFAULT_PUBLIC_SITE_ORIGIN}${raw}`)
+    const origin = siteOrigin()
+    if (origin !== DEFAULT_PUBLIC_SITE_ORIGIN) push(`${origin}${raw}`)
+    // Some rows store pre-encoded path segments; also try a decoded form.
+    try {
+      const decoded = raw
+        .split('/')
+        .map((seg) => {
+          if (!seg) return seg
+          try {
+            return encodeURIComponent(decodeURIComponent(seg))
+          } catch {
+            return encodeURIComponent(seg)
+          }
         })
-        if (res.ok) return await res.arrayBuffer()
-      } catch {
-        /* ignore */
+        .join('/')
+      if (decoded !== raw) {
+        push(`${DEFAULT_PUBLIC_SITE_ORIGIN}${decoded}`)
+        if (origin !== DEFAULT_PUBLIC_SITE_ORIGIN) push(`${origin}${decoded}`)
       }
+    } catch {
+      /* ignore */
     }
-    return null
+  } else if (raw.startsWith('//')) {
+    push(`https:${raw}`)
+  } else if (/^https?:\/\//i.test(raw)) {
+    push(raw)
+    // Same-origin proxy helps when storage CDN blocks server-side bots.
+    try {
+      const origin = siteOrigin() || DEFAULT_PUBLIC_SITE_ORIGIN
+      push(`${origin.replace(/\/$/, '')}/api/shares/artwork-proxy?src=${encodeURIComponent(raw)}`)
+      if (origin !== DEFAULT_PUBLIC_SITE_ORIGIN) {
+        push(
+          `${DEFAULT_PUBLIC_SITE_ORIGIN}/api/shares/artwork-proxy?src=${encodeURIComponent(raw)}`,
+        )
+      }
+    } catch {
+      /* ignore */
+    }
+  } else {
+    push(`${DEFAULT_PUBLIC_SITE_ORIGIN}/${raw.replace(/^\/+/, '')}`)
   }
+
+  for (const absolute of candidates) {
+    try {
+      const res = await fetch(absolute, {
+        headers: { Accept: 'image/*,*/*;q=0.8' },
+        next: { revalidate: 3600 },
+      })
+      if (!res.ok) continue
+      const type = res.headers.get('content-type') || ''
+      if (type && !type.startsWith('image/')) continue
+      const buf = await res.arrayBuffer()
+      if (buf.byteLength > 0) return buf
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return null
 }
 
 export default async function ShareOpenGraphImage({
@@ -86,7 +122,11 @@ export default async function ShareOpenGraphImage({
         payload.share.kind === 'folder'
           ? `${payload.collection?.artist || 'SERGIK'} · ${payload.tracks.length} tracks`
           : `${payload.tracks[0]?.artist || 'SERGIK'}`
-      const art = payload.collection?.artwork || payload.tracks[0]?.artwork || null
+      const art =
+        payload.collection?.artwork ||
+        payload.tracks.find((t) => t.artwork)?.artwork ||
+        payload.tracks[0]?.artwork ||
+        null
       cover = await fetchCoverBytes(art)
     }
   } catch {

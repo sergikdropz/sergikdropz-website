@@ -1,4 +1,19 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { currentIsrcYear, parseISRC } from '@/lib/studio/isrc-format'
+
+export {
+  US_ISRC_REGISTRANT,
+  buildUsisrcLockerCsv,
+  currentIsrcYear,
+  durationToSeconds,
+  formatDurationMmSs,
+  formatISRC,
+  formatISRCDisplay,
+  parseISRC,
+  resolveIsrcPrefix,
+  resolveSoundExchangeAccountId,
+  validateISRC,
+} from '@/lib/studio/isrc-format'
 
 export interface ISRCAssignment {
   isrc: string
@@ -15,7 +30,7 @@ export async function assignISRC(
   prefix: string
 ): Promise<ISRCAssignment> {
   const supabase = createSupabaseServerClient()
-  const year = new Date().getFullYear() % 100
+  const year = currentIsrcYear()
 
   const { data, error } = await supabase.rpc('assign_isrc', {
     p_prefix: prefix,
@@ -36,34 +51,6 @@ export async function assignISRC(
     prefix: data.prefix,
     year: data.year,
     serial: data.serial,
-  }
-}
-
-export function formatISRC(prefix: string, year: number, serial: number): string {
-  const yearStr = String(year).padStart(2, '0')
-  const serialStr = String(serial).padStart(5, '0')
-  return `${prefix}${yearStr}${serialStr}`
-}
-
-export function validateISRC(isrc: string): boolean {
-  const normalized = isrc.replace(/-/g, '').toUpperCase()
-  const isrcRegex = /^[A-Z0-9]{5}[0-9]{7}$/
-  return isrcRegex.test(normalized)
-}
-
-export function parseISRC(isrc: string): {
-  prefix: string
-  year: number
-  serial: number
-  isrc_full: string
-} | null {
-  const normalized = isrc.replace(/-/g, '').toUpperCase()
-  if (!validateISRC(normalized)) return null
-  return {
-    prefix: normalized.slice(0, 5),
-    year: parseInt(normalized.slice(5, 7), 10),
-    serial: parseInt(normalized.slice(7), 10),
-    isrc_full: normalized,
   }
 }
 

@@ -7,13 +7,13 @@ import StudioPageShell from '@/components/studio/StudioPageShell'
 import ReleaseReadinessRing from '@/components/studio/ReleaseReadinessRing'
 import { WORKFLOW_STEPS } from '@/lib/studio/constants'
 import {
-  FaUpload,
-  FaFileImport,
   FaCompactDisc,
   FaRocket,
-  FaSatellite,
+  FaPlus,
   FaArrowRight,
+  FaComments,
 } from 'react-icons/fa'
+import { STUDIO_PATHS, studioCreateHref, studioPipelineHref } from '@/lib/studio/studio-ia'
 
 export default function StudioDashboard() {
   const { user, isAdmin, loading } = useAuth()
@@ -70,46 +70,32 @@ export default function StudioDashboard() {
 
   const actions = [
     {
-      href: '/studio/releases/new',
-      title: 'New release',
-      desc: 'Package tracks, artwork, metadata',
-      icon: FaCompactDisc,
+      href: studioCreateHref('release'),
+      title: 'Create',
+      desc: 'New release, upload a track, or bulk-import ISRCs',
+      icon: FaPlus,
       gradient: 'from-violet-600 to-indigo-600',
     },
     {
-      href: '/studio/catalog/import',
-      title: 'Bulk import',
-      desc: 'ISRCs & split sheets via CSV',
-      icon: FaFileImport,
-      gradient: 'from-cyan-600 to-blue-600',
+      href: STUDIO_PATHS.releases,
+      title: 'Releases',
+      desc: 'Drafts through go-live',
+      icon: FaCompactDisc,
+      gradient: 'from-zinc-600 to-zinc-800',
     },
     {
-      href: '/studio/tracks/new',
-      title: 'Upload track',
-      desc: 'WAV + metadata',
-      icon: FaUpload,
-      gradient: 'from-teal-600 to-cyan-600',
-    },
-    {
-      href: '/studio/releases/command-center',
-      title: 'Command center',
-      desc: 'Rights, risk, and ops queues',
-      icon: FaSatellite,
-      gradient: 'from-fuchsia-600 to-pink-600',
-    },
-    {
-      href: '/studio/releases/pipeline',
-      title: 'Marketing pipeline',
-      desc: 'Campaigns + smart links for dated releases',
+      href: studioPipelineHref('ops'),
+      title: 'Pipeline',
+      desc: 'Ops, marketing, calendar, and ISRCs',
       icon: FaRocket,
       gradient: 'from-amber-600 to-orange-600',
     },
     {
-      href: '/studio/releases',
-      title: 'All releases',
-      desc: 'Drafts through go-live',
-      icon: FaCompactDisc,
-      gradient: 'from-zinc-600 to-zinc-800',
+      href: STUDIO_PATHS.collab,
+      title: 'Release Collab',
+      desc: 'Collaborators, thread, and review invites',
+      icon: FaComments,
+      gradient: 'from-fuchsia-700 to-violet-800',
     },
   ]
 
@@ -122,7 +108,7 @@ export default function StudioDashboard() {
         {[
           { label: 'Tracks', value: stats.totalTracks },
           { label: 'Releases', value: stats.totalReleases },
-          { label: 'In draft', value: stats.draftReleases, accent: 'text-amber-400' },
+          { label: 'Pending', value: stats.draftReleases, accent: 'text-amber-400' },
           { label: 'Live', value: stats.liveReleases, accent: 'text-emerald-400' },
         ].map((s) => (
           <div
@@ -141,7 +127,7 @@ export default function StudioDashboard() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4 mb-12">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
         {actions.map((a) => {
           const Icon = a.icon
           return (

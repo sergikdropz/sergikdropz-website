@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useState, useEffect, memo } from 'react'
 import { FaSpotify, FaApple, FaAmazon, FaSoundcloud, FaYoutube, FaInstagram, FaLink, FaMusic } from 'react-icons/fa'
 import SoundCloudEmbed from './SoundCloudEmbed'
-import artistData from '@/data/artist.json'
+import { artistDspProfileUrl, artistPlatformUrl } from '@/lib/artist-platforms'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
@@ -142,59 +142,69 @@ function ReleaseCard({
     if (platformName === 'Spotify') {
       return (release.spotify_url && release.spotify_url.trim() !== '') 
         ? release.spotify_url 
-        : artistData.platforms.spotify || null
+        : artistDspProfileUrl('spotify') || null
     }
     
     if (platformName === 'SoundCloud') {
       return (release.soundcloud_url && release.soundcloud_url.trim() !== '') 
         ? release.soundcloud_url 
-        : artistData.platforms.soundcloud || null
+        : artistDspProfileUrl('soundcloud') || null
     }
     
     if (platformName === 'Apple Music') {
-      // Create Apple Music search URL with release title and artist name
-      const searchQuery = encodeURIComponent(`${release.title} SERGIK`)
-      return `https://music.apple.com/search?term=${searchQuery}`
+      return artistDspProfileUrl('apple_music') || null
     }
     
     if (platformName === 'Amazon Music') {
-      return 'https://music.amazon.com/artists/B09B2LNNSF/sergik'
+      return artistDspProfileUrl('amazon') || null
     }
     
     if (platformName === 'TIDAL') {
-      return 'https://tidal.com/artist/27288636'
+      return artistDspProfileUrl('tidal') || null
     }
     
     if (platformName === 'DEEZER') {
-      return 'https://www.deezer.com/us/artist/140080312'
+      return artistDspProfileUrl('deezer') || null
     }
     
     if (platformName === 'Pandora') {
-      return 'https://www.pandora.com/artist/sergik/ARz95KfVdbj3P5Z'
+      return artistDspProfileUrl('pandora') || null
     }
     
     if (platformName === 'Beatport') {
-      return 'https://www.beatport.com/artist/sergik/1002796'
+      return artistDspProfileUrl('beatport') || null
+    }
+
+    if (platformName === 'Traxsource') {
+      return artistDspProfileUrl('traxsource') || null
+    }
+
+    if (platformName === 'Bandcamp') {
+      return artistDspProfileUrl('bandcamp') || null
+    }
+
+    if (platformName === 'Mixcloud') {
+      return artistDspProfileUrl('mixcloud') || null
     }
     
     if (platformName === 'YouTube Music') {
-      return 'https://music.youtube.com/channel/UCBWcROfNv8PeY6KdrnNM_pw'
+      return artistDspProfileUrl('youtube_music') || null
     }
     
     if (platformName === 'Shazam') {
-      return 'https://www.shazam.com/artist/sergik/1577778284'
+      return artistDspProfileUrl('shazam') || null
     }
     
     if (platformName === 'YouTube') {
-      return artistData.platforms.youtube || null
+      return artistDspProfileUrl('youtube') || null
     }
     
     if (platformName === 'Instagram') {
-      return artistData.platforms.instagram || null
+      return artistPlatformUrl('instagram') || null
     }
     
     if (platformName === 'Linktree') {
-      return artistData.platforms.linktree || null
+      return artistPlatformUrl('linktree') || null
     }
     
     return null

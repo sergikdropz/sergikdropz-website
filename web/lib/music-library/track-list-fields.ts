@@ -23,6 +23,12 @@ function numOrNull(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** Prefer a positive length; fall back to any finite value (including 0). */
+function pickDurationSeconds(...values: unknown[]): number | null {
+  const nums = values.map(numOrNull).filter((n): n is number => n != null)
+  return nums.find((n) => n > 0) ?? nums[0] ?? null
+}
+
 function measuredOf(sonicDna: unknown): Record<string, any> | null {
   if (!sonicDna || typeof sonicDna !== 'object') return null
   const measured = (sonicDna as any).measured
@@ -58,12 +64,59 @@ export function leanCatalogMetadata(metadata: unknown): Record<string, unknown> 
       out.original_date_source = src.original_date_source
     }
   }
+  const album = clean(src.album) || clean(src.album_title)
+  if (album) out.album = album
+  const albumType = clean(src.album_type) || clean(src.release_type) || clean(src.type_hint)
+  if (albumType) out.album_type = albumType
   if (overrides) {
     const hasField = ['bpm', 'key_signature', 'genre', 'subgenre', 'title', 'artist', 'year']
       .some((key) => overrides[key as keyof typeof overrides] != null && overrides[key as keyof typeof overrides] !== '')
     if (hasField) out.catalog_overrides = overrides
   }
   return Object.keys(out).length ? out : undefined
+}
+
+function isPlaylistContainerFolder(folder: TrackListFolder | null | undefined): boolean {
+  if (!folder) return false
+  const type = clean(folder.type).toLowerCase()
+  if (!type || type === 'folder' || type === 'playlist') return true
+  const name = clean(folder.name).toLowerCase()
+  return name === 'distrokid exports' || name.endsWith(' exports')
+}
+
+function releaseAlbumFields(track: any): { album?: string; albumType?: string } {
+  const meta =
+    track.metadata && typeof track.metadata === 'object' && !Array.isArray(track.metadata)
+      ? (track.metadata as Record<string, unknown>)
+      : {}
+  const distribution =
+    meta.distribution && typeof meta.distribution === 'object' && !Array.isArray(meta.distribution)
+      ? (meta.distribution as Record<string, unknown>)
+      : {}
+  const album =
+    clean(meta.album) ||
+    clean(meta.album_title) ||
+    clean(distribution.release_title) ||
+    clean(distribution.releaseTitle) ||
+    clean(distribution.album) ||
+    clean(track.album) ||
+    undefined
+  let albumType =
+    clean(meta.album_type) ||
+    clean(meta.release_type) ||
+    clean(meta.type_hint) ||
+    clean(distribution.release_type) ||
+    clean(distribution.releaseType) ||
+    clean(track.albumType) ||
+    clean(track.album_type) ||
+    undefined
+  if (albumType) {
+    const normalized = albumType.toLowerCase()
+    if (normalized === 'single' || normalized === 'ep' || normalized === 'album') {
+      albumType = normalized
+    }
+  }
+  return { album, albumType }
 }
 
 /** Pull list-safe display fields from sonic DNA without shipping the full blob. */
@@ -133,7 +186,16 @@ export function mapLibraryTrackToListItem(
     track.year ??
     (originalDate ? Number(originalDate.slice(0, 4)) : undefined)
 
-  const artworkRaw = track.artwork_url || audio?.artwork_url || folder?.artwork_url || undefined
+  // Crate folders use mosaics for unassigned rows — don't inherit the folder tile
+  // cover onto every track (that made one unassigned cover appear on all rows).
+  // EP / single / remix folders still share release art with their tracks.
+  const folderType = clean(folder?.type).toLowerCase()
+  const inheritFolderArt = folderType !== 'album'
+  const artworkRaw =
+    track.artwork_url ||
+    audio?.artwork_url ||
+    (inheritFolderArt ? folder?.artwork_url : null) ||
+    undefined
   const metadata =
     opts?.includeFullMetadata && track.metadata && typeof track.metadata === 'object'
       ? track.metadata
@@ -142,13 +204,24 @@ export function mapLibraryTrackToListItem(
           ...(originalDate ? { original_date: originalDate } : {}),
         })
 
+  const release = releaseAlbumFields(track)
+  const folderIsPlaylistDump = isPlaylistContainerFolder(folder)
+  const album =
+    release.album ||
+    (!folderIsPlaylistDump ? clean(folder?.name) : '') ||
+    undefined
+  const albumType =
+    release.albumType ||
+    (!folderIsPlaylistDump && !release.album ? clean(folder?.type) : '') ||
+    undefined
+
   return {
     id: track.id,
     folderId: track.folder_id,
     audioFileId: track.audio_file_id,
     title,
     artist,
-    duration: audio?.duration_seconds || track.duration || null,
+    duration: pickDurationSeconds(audio?.duration_seconds, track.duration),
     file: normalizeVaultAudioUrl(track.file_url || ''),
     artwork: artworkRaw ? resolveImageUrl(artworkRaw) : undefined,
     bpm: bpm ?? undefined,
@@ -165,8 +238,8 @@ export function mapLibraryTrackToListItem(
     archived_at: track.archived_at,
     genre,
     subgenre,
-    album: folder?.name || track.album || undefined,
-    albumType: folder?.type || track.albumType || undefined,
+    album,
+    albumType,
     track_number: track.track_number,
     disc_number: track.disc_number,
     rating: track.rating,

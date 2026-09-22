@@ -54,6 +54,7 @@ Preview → Approve flow.
 This repo ships **ground truth for assistants** (structured JSON + index). Fine-tuning or hosted embedding pipelines are **not** defined here; ingest `knowledge/generated/site-knowledge.json` and markdown under `knowledge/` into your vector store or tooling if you want RAG beyond Cursor.
 
 - **Admin UI and Studio:** `web/middleware.ts` requires an admin-capable session for `/admin/*` (except `/admin/login`, `/admin/setup`), `/studio/*`, and `/api/admin/*`. Unauthenticated users are redirected to `/admin/login` (401 for APIs).
+- **Release Collab portal:** `/collab/[token]` and `/api/collab/[token]` are **public** (magic-link review — listen + approve). Studio hub `/studio/collab` stays admin-only. Outbound From: `release.studio@sergikdropz.com`. Resend delivery webhooks: `/api/webhooks/resend`.
 - **Fan:** `/fan/*`, `/api/fan/*` get session refresh behavior when matched; see middleware source for full conditions.
 - **Music library:** gated flows for `/music-library` and `/api/music-library/*` (refresh + access rules in middleware).
 - **Membership:** `/api/membership/status` and `/shop/membership/manage` participate in refresh logic.
@@ -77,7 +78,8 @@ Static admin paths crawled in UI tests: `web/e2e/admin-ui-paths.ts` (`ADMIN_UI_C
 | Fan portal | `/fan/*` | `web/app/fan/` |
 | Admin CMS | `/admin/*` | `web/app/admin/`, `web/components/admin-nav-items.ts` |
 | Release Studio | `/studio/*` | `web/app/studio/`, `web/app/api/studio/` |
-| Integrations | Stripe, Supabase, Resend, Instagram helpers | `web/app/api/`, `web/lib/` |
+| Release Collab portal | `/collab/[token]` | `web/app/collab/`, `web/app/api/collab/`, `web/lib/studio/release-collab*.ts` |
+| Integrations | Stripe, Supabase, Resend, Instagram helpers, Release Studio DSP connect (iTunes/Deezer + optional Spotify/YouTube) | `web/app/api/`, `web/lib/` |
 
 ## Stack (frozen summary)
 

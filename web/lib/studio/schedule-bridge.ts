@@ -35,7 +35,7 @@ export function writeReleaseSchedule(data: { schedule: ScheduleRelease[] }): voi
   fs.writeFileSync(SCHEDULE_PATH, `${JSON.stringify(data, null, 2)}\n`)
 }
 
-function mapDistributorStatusToSchedule(status: string | null | undefined): string {
+export function mapDistributorStatusToSchedule(status: string | null | undefined): string {
   switch (status) {
     case 'live':
       return 'released'
@@ -43,10 +43,29 @@ function mapDistributorStatusToSchedule(status: string | null | undefined): stri
     case 'submitted':
       return 'scheduled'
     case 'error':
-      return 'draft'
+      return 'pending'
+    case 'draft':
+    case 'pending':
+      return 'pending'
     default:
-      return status || 'draft'
+      return status || 'pending'
   }
+}
+
+/** Safe calendar label — empty / invalid dates never render as "Invalid Date". */
+export function formatScheduleDateLabel(value: string | null | undefined): string {
+  const raw = String(value || '').trim()
+  if (!raw) return 'Date TBD'
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
+  const parsed = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return 'Date TBD'
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 export function distributionToScheduleShape(release: {
@@ -109,8 +128,10 @@ export function upsertScheduleFromDistribution(release: {
     status:
       release.distributor_status === 'live'
         ? 'released'
-        : existing.status || mapped.status,
-    source: existing.source || 'schedule',
+        : existing.status === 'scheduled'
+          ? 'pending'
+          : existing.status || mapped.status,
+    source: 'distribution',
     distributor_status: mapped.distributor_status,
   }
   data.schedule[index] = merged
@@ -122,7 +143,10 @@ export type PipelineReleaseRef = {
   id: string
   title: string
   type: string
+  /** Street / go-live date from distribution when present; empty when TBD. */
   release_date: string
+  /** Calendar slate date from release-schedule.json (may be a placeholder). */
+  slate_date: string | null
   presave_date: string | null
   genre: string | null
   status: string
@@ -130,6 +154,8 @@ export type PipelineReleaseRef = {
   smart_link: string | null
   description: string | null
   source: 'schedule' | 'distribution'
+  distributor_status: string | null
+  target_stores?: unknown
 }
 
 /**
@@ -148,6 +174,7 @@ export async function resolvePipelineRelease(
       title: fromSchedule.title,
       type: fromSchedule.type,
       release_date: fromSchedule.release_date || '',
+      slate_date: fromSchedule.release_date || null,
       presave_date: fromSchedule.presave_date || null,
       genre: fromSchedule.genre || null,
       status: fromSchedule.status,
@@ -155,13 +182,14 @@ export async function resolvePipelineRelease(
       smart_link: fromSchedule.smart_link || null,
       description: fromSchedule.description || null,
       source: 'schedule',
+      distributor_status: fromSchedule.distributor_status || null,
     }
   }
 
   const { data, error } = await supabase
     .from('distribution_releases')
     .select(
-      'id, title, type, release_date, artwork_url, genre, description, distributor_status'
+      'id, title, type, release_date, artwork_url, genre, description, distributor_status, target_stores'
     )
     .eq('id', releaseId)
     .maybeSingle()
@@ -174,6 +202,7 @@ export async function resolvePipelineRelease(
     title: mapped.title,
     type: mapped.type,
     release_date: mapped.release_date,
+    slate_date: null,
     presave_date: null,
     genre: mapped.genre || null,
     status: mapped.status,
@@ -181,11 +210,14 @@ export async function resolvePipelineRelease(
     smart_link: null,
     description: mapped.description || null,
     source: 'distribution',
+    distributor_status: mapped.distributor_status || null,
+    target_stores: (data as { target_stores?: unknown }).target_stores,
   }
 }
 
 /**
  * Merge calendar JSON + distribution_releases for the marketing pipeline board.
+ * Street date prefers distribution; schedule date is kept as slate_date only.
  */
 export async function listMergedPipelineReleases(
   supabase: SupabaseClient
@@ -196,7 +228,7 @@ export async function listMergedPipelineReleases(
   const { data: distReleases } = await supabase
     .from('distribution_releases')
     .select(
-      'id, title, type, release_date, artwork_url, genre, description, distributor_status'
+      'id, title, type, release_date, artwork_url, genre, description, distributor_status, target_stores'
     )
     .order('release_date', { ascending: true })
 
@@ -208,6 +240,7 @@ export async function listMergedPipelineReleases(
         title: r.title,
         type: r.type,
         release_date: r.release_date || '',
+        slate_date: r.release_date || null,
         presave_date: r.presave_date || null,
         genre: r.genre || null,
         status: r.status,
@@ -215,23 +248,29 @@ export async function listMergedPipelineReleases(
         smart_link: r.smart_link || null,
         description: r.description || null,
         source: 'schedule' as const,
+        distributor_status: r.distributor_status || null,
       }
     }
+    // Prefer distribution street date. Do not inherit calendar placeholders when DB is null.
+    const streetDate = dist.release_date || ''
     return {
       id: r.id,
       title: dist.title || r.title,
       type: dist.type || r.type,
-      release_date: dist.release_date || r.release_date || '',
+      release_date: streetDate,
+      slate_date: r.release_date || null,
       presave_date: r.presave_date || null,
       genre: dist.genre || r.genre || null,
       status:
         dist.distributor_status === 'live'
           ? 'released'
-          : r.status || mapDistributorStatusToSchedule(dist.distributor_status),
+          : mapDistributorStatusToSchedule(dist.distributor_status) || r.status,
       artwork: dist.artwork_url || r.artwork || null,
       smart_link: r.smart_link || null,
       description: dist.description || r.description || null,
-      source: 'schedule' as const,
+      source: 'distribution' as const,
+      distributor_status: dist.distributor_status || null,
+      target_stores: dist.target_stores,
     }
   })
 
@@ -245,6 +284,7 @@ export async function listMergedPipelineReleases(
       title: mapped.title,
       type: mapped.type,
       release_date: mapped.release_date,
+      slate_date: null,
       presave_date: null,
       genre: mapped.genre || null,
       status: mapped.status,
@@ -252,6 +292,8 @@ export async function listMergedPipelineReleases(
       smart_link: null,
       description: mapped.description || null,
       source: 'distribution',
+      distributor_status: mapped.distributor_status || null,
+      target_stores: (dist as { target_stores?: unknown }).target_stores,
     })
   }
 

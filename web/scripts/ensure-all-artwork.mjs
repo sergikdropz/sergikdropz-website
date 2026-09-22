@@ -45,7 +45,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 // EP artwork mapping
 const EP_ARTWORK_MAP = {
   'Are We Awake': 'audio/unreleased/eps/SERGIK - Are We Awake/64804719-FCBB-4F62-B570-DC695D1DC699.PNG',
-  'Daze': 'audio/unreleased/eps/SERGIK - Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG',
+  'Daze': 'images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg',
   'In The Streets': 'audio/unreleased/eps/SERGIK - In The Streets/1FF2EF20-92A7-4FF6-8850-6FA3987CAC74.png',
   'Inspire': 'audio/unreleased/eps/SERGIK - Inspire/720426BD-0BE7-4582-A072-2E014DB9E2BC.PNG',
   'Soul Candy': 'audio/unreleased/eps/SERGIK - Soul Candy/57A67CAB-0A23-4AB6-AE83-C840B0E0D3E4.jpeg',
@@ -59,7 +59,10 @@ const EP_ARTWORK_MAP = {
 function getSupabaseArtworkUrl(epName) {
   const storagePath = EP_ARTWORK_MAP[epName]
   if (!storagePath) return null
-  
+  if (storagePath.startsWith('images/') || storagePath.startsWith('/images/')) {
+    return storagePath.startsWith('/') ? storagePath : `/${storagePath}`
+  }
+
   const { data } = supabase.storage
     .from(BUCKET_NAME)
     .getPublicUrl(storagePath)

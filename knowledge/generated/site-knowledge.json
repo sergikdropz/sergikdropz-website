@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-09-20T14:16:03.811Z",
+    "generatedAt": "2026-09-20T14:16:20.765Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -11,26 +11,26 @@
       "name": "sergik-web",
       "version": "0.1.0",
       "next": "^14.2.0",
-      "dependencyCount": 28,
+      "dependencyCount": 32,
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 82,
-      "appRouterRouteHandlers": 242,
-      "componentsTsx": 155,
-      "libTs": 451
+      "appRouterPages": 86,
+      "appRouterRouteHandlers": 265,
+      "componentsTsx": 171,
+      "libTs": 535
     },
     "pagesByCategory": {
       "fan": 5,
       "music_library": 2,
-      "public": 15,
+      "public": 16,
       "debug": 1,
       "tooling": 1,
       "shop": 9,
       "admin": 39,
-      "studio": 10
+      "studio": 13
     },
-    "contentHash": "a7122744b1e376fe"
+    "contentHash": "44c55d7b19551c2f"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -55,7 +55,7 @@
   "e2e": {
     "playwrightConfig": "web/playwright.config.ts",
     "adminCrawlListFile": "web/e2e/admin-ui-paths.ts",
-    "adminCrawlPathCount": 37,
+    "adminCrawlPathCount": 41,
     "drift": {
       "crawlPathsMissingMatchingAdminPage": [],
       "adminPagesNotInCrawlList": []
@@ -418,6 +418,11 @@
         "category": "admin"
       },
       {
+        "urlPath": "/collab/[token]",
+        "file": "web/app/collab/[token]/page.tsx",
+        "category": "public"
+      },
+      {
         "urlPath": "/embed/[token]",
         "file": "web/app/embed/[token]/page.tsx",
         "category": "public"
@@ -433,8 +438,23 @@
         "category": "studio"
       },
       {
+        "urlPath": "/studio/collab",
+        "file": "web/app/studio/collab/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/create",
+        "file": "web/app/studio/create/page.tsx",
+        "category": "studio"
+      },
+      {
         "urlPath": "/studio",
         "file": "web/app/studio/page.tsx",
+        "category": "studio"
+      },
+      {
+        "urlPath": "/studio/pipeline",
+        "file": "web/app/studio/pipeline/page.tsx",
         "category": "studio"
       },
       {
@@ -1010,6 +1030,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/collab/[token]",
+        "file": "web/app/api/collab/[token]/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/cron/admin-ai-digest",
         "file": "web/app/api/cron/admin-ai-digest/route.ts",
         "category": "api"
@@ -1510,6 +1535,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/collab",
+        "file": "web/app/api/studio/collab/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/isrc/assign",
         "file": "web/app/api/studio/isrc/assign/route.ts",
         "category": "api"
@@ -1517,6 +1547,11 @@
       {
         "urlPath": "/api/studio/isrc/bulk-assign",
         "file": "web/app/api/studio/isrc/bulk-assign/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/isrc/config",
+        "file": "web/app/api/studio/isrc/config/route.ts",
         "category": "api"
       },
       {
@@ -1545,6 +1580,31 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/[id]/collab/collaborators",
+        "file": "web/app/api/studio/releases/[id]/collab/collaborators/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/collab/invites",
+        "file": "web/app/api/studio/releases/[id]/collab/invites/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/collab/messages",
+        "file": "web/app/api/studio/releases/[id]/collab/messages/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/collab",
+        "file": "web/app/api/studio/releases/[id]/collab/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/contracts/send",
+        "file": "web/app/api/studio/releases/[id]/contracts/send/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/[id]/copy-from-dna",
         "file": "web/app/api/studio/releases/[id]/copy-from-dna/route.ts",
         "category": "api"
@@ -1560,13 +1620,48 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/[id]/dsp-artwork",
+        "file": "web/app/api/studio/releases/[id]/dsp-artwork/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/dsp-connect",
+        "file": "web/app/api/studio/releases/[id]/dsp-connect/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/dsp-verify",
+        "file": "web/app/api/studio/releases/[id]/dsp-verify/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/[id]/go-live",
         "file": "web/app/api/studio/releases/[id]/go-live/route.ts",
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/[id]/locate-masters",
+        "file": "web/app/api/studio/releases/[id]/locate-masters/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/press-notes",
+        "file": "web/app/api/studio/releases/[id]/press-notes/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/refine-copy",
+        "file": "web/app/api/studio/releases/[id]/refine-copy/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/[id]",
         "file": "web/app/api/studio/releases/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/social-promo",
+        "file": "web/app/api/studio/releases/[id]/social-promo/route.ts",
         "category": "api"
       },
       {
@@ -1580,6 +1675,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/[id]/stream-continuity",
+        "file": "web/app/api/studio/releases/[id]/stream-continuity/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/[id]/tracks",
         "file": "web/app/api/studio/releases/[id]/tracks/route.ts",
         "category": "api"
@@ -1590,8 +1690,28 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/from-distrokid",
+        "file": "web/app/api/studio/releases/from-distrokid/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/from-distrokid/wavs",
+        "file": "web/app/api/studio/releases/from-distrokid/wavs/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/from-store-url",
+        "file": "web/app/api/studio/releases/from-store-url/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/from-vault",
         "file": "web/app/api/studio/releases/from-vault/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/migrate-scheduled",
+        "file": "web/app/api/studio/releases/migrate-scheduled/route.ts",
         "category": "api"
       },
       {
@@ -1615,6 +1735,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/soundexchange/registry",
+        "file": "web/app/api/studio/soundexchange/registry/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/soundexchange/submissions",
         "file": "web/app/api/studio/soundexchange/submissions/route.ts",
         "category": "api"
@@ -1622,6 +1747,11 @@
       {
         "urlPath": "/api/studio/soundexchange/submit",
         "file": "web/app/api/studio/soundexchange/submit/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/tracks/[id]/replace-wav",
+        "file": "web/app/api/studio/tracks/[id]/replace-wav/route.ts",
         "category": "api"
       },
       {
@@ -1667,6 +1797,11 @@
       {
         "urlPath": "/api/videos/upload",
         "file": "web/app/api/videos/upload/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/webhooks/resend",
+        "file": "web/app/api/webhooks/resend/route.ts",
         "category": "api"
       },
       {

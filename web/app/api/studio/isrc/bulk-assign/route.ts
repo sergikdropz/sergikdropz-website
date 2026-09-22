@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import {
   assignISRC,
+  resolveIsrcPrefix,
   resolveTrackId,
   setExistingISRC,
   validateISRC,
@@ -23,13 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const prefix = process.env.ISRC_PREFIX
-    if (!prefix) {
-      return NextResponse.json(
-        { error: 'ISRC_PREFIX not configured in environment' },
-        { status: 500 }
-      )
-    }
+    const prefix = resolveIsrcPrefix()
 
     const body = (await request.json()) as BulkBody
     const supabase = createSupabaseServerClient()

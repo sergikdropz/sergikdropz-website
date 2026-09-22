@@ -107,8 +107,8 @@ export default function VaultImportPanel({ releaseId, onImported, compact }: Pro
             {releaseId ? 'Fill from Music Vault' : 'Import from Music Vault'}
           </h3>
           <p className="text-xs text-zinc-500 mt-1">
-            Pull title, artwork, genre/subgenre (Sonic DNA), dates, and link vault tracks.
-            Master WAV / ISRC / UPC stay in Release Studio.
+            Pull title, artwork, genre/subgenre (Sonic DNA), dates, and link vault tracks
+            from EPs and singles. Crates and playlists stay in Music Vault.
           </p>
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function VaultImportPanel({ releaseId, onImported, compact }: Pro
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search EPs, albums, singles…"
+            placeholder="Search EPs and singles…"
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500"
           />
           <select
@@ -131,10 +131,10 @@ export default function VaultImportPanel({ releaseId, onImported, compact }: Pro
             onChange={(e) => setSelectedId(e.target.value)}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500"
           >
-            <option value="">Select a vault folder…</option>
+            <option value="">Select an EP or single…</option>
             {filtered.map((f) => (
               <option key={f.id} value={f.id}>
-                {f.name} ({f.type}
+                {f.name} ({f.type === 'single' ? 'single' : 'EP'}
                 {f.trackCount != null ? ` · ${f.trackCount} tracks` : ''}
                 {f.year ? ` · ${f.year}` : ''})
               </option>

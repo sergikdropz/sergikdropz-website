@@ -13,6 +13,7 @@ import {
   renderStorySnippet,
   shareOrDownloadBlob,
   STORY_SNIPPET_DURATION_SEC,
+  type StorySnippetLayout,
   type StorySnippetResult,
 } from '@/lib/shares/story-snippet'
 
@@ -133,29 +134,29 @@ export type ExportShareStoryResult = {
   delivery: 'shared' | 'downloaded'
 }
 
-/**
- * Create/reuse a share link, render a 15s IG Story video, download/share it,
- * and copy the listen URL for an Instagram Link sticker.
- */
-export async function exportShareStorySnippet(opts: {
-  kind: ShareKind
-  targetId: string
+export type ExportShareStoryOpts = {
   trackId?: string | null
-  visibility?: ShareVisibility
+  /** Default `vinyl` — spinning disc trailer for Instagram. */
+  layout?: StorySnippetLayout
   durationSec?: number
   startSec?: number
   onProgress?: (phase: string, ratio?: number) => void
-}): Promise<ExportShareStoryResult> {
+}
+
+/**
+ * Render an IG Story/Reel trailer from an already-loaded share payload
+ * (listen page). Copies the listen URL for a Link sticker.
+ */
+export async function exportShareStoryFromPayload(
+  payloadIn: ResolvedSharePayload,
+  opts: ExportShareStoryOpts = {},
+): Promise<ExportShareStoryResult> {
   opts.onProgress?.('share', 0)
-  const payload = await createMusicShare({
-    kind: opts.kind,
-    targetId: opts.targetId,
-    visibility: opts.visibility,
-  })
+  const payload = withBrowserOrigin(payloadIn)
   const track = pickStoryTrack(payload, opts.trackId)
   const audioUrl = storyAudioUrlForTrack(track)
-  const artworkUrl =
-    track.artwork || payload.collection?.artwork || null
+  const artworkUrl = track.artwork || payload.collection?.artwork || null
+  const layout: StorySnippetLayout = opts.layout === 'cover' ? 'cover' : 'vinyl'
 
   const snippet = await renderStorySnippet({
     artworkUrl,
@@ -164,6 +165,7 @@ export async function exportShareStorySnippet(opts: {
     audioUrl,
     durationSec: opts.durationSec ?? STORY_SNIPPET_DURATION_SEC,
     startSec: opts.startSec ?? 0,
+    layout,
     onProgress: opts.onProgress,
   })
 
@@ -179,8 +181,37 @@ export async function exportShareStorySnippet(opts: {
     blob: snippet.blob,
     filename: snippet.filename,
     title: `${track.title} — SERGIK`,
-    text: `Listen: ${payload.urls.listen}`,
+    text: `Listen & scrub: ${payload.urls.listen}`,
   })
 
   return { payload, track, snippet, delivery }
+}
+
+/**
+ * Create/reuse a share link, render a 15s IG Story video, download/share it,
+ * and copy the listen URL for an Instagram Link sticker.
+ */
+export async function exportShareStorySnippet(opts: {
+  kind: ShareKind
+  targetId: string
+  trackId?: string | null
+  visibility?: ShareVisibility
+  layout?: StorySnippetLayout
+  durationSec?: number
+  startSec?: number
+  onProgress?: (phase: string, ratio?: number) => void
+}): Promise<ExportShareStoryResult> {
+  opts.onProgress?.('share', 0)
+  const payload = await createMusicShare({
+    kind: opts.kind,
+    targetId: opts.targetId,
+    visibility: opts.visibility,
+  })
+  return exportShareStoryFromPayload(payload, {
+    trackId: opts.trackId,
+    layout: opts.layout,
+    durationSec: opts.durationSec,
+    startSec: opts.startSec,
+    onProgress: opts.onProgress,
+  })
 }
