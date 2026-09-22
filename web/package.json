@@ -108,7 +108,7 @@
     "wavesurfer.js": "^7.12.1"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.10.1",
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.49.1",
     "@tanstack/react-query-devtools": "^5.91.2",
     "@types/node": "^20",
