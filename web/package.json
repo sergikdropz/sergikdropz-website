@@ -87,7 +87,7 @@
     "basic-ftp": "^5.2.2",
     "dotenv": "^17.2.3",
     "fflate": "^0.8.3",
-    "framer-motion": "^10.16.16",
+    "framer-motion": "^13.4.0",
     "music-metadata": "^11.12.3",
     "next": "^14.2.0",
     "peaks.js": "^4.0.0",
