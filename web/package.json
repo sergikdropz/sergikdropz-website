@@ -98,7 +98,7 @@
     "react-window-infinite-loader": "^2.0.1",
     "realtime-bpm-analyzer": "^5.0.0",
     "recharts": "^3.6.0",
-    "resend": "^3.2.0",
+    "resend": "^6.28.1",
     "sharp": "^0.35.4",
     "signalsmith-stretch-js": "^0.2.0",
     "stripe": "^14.25.0",
