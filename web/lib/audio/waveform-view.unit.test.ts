@@ -29,6 +29,7 @@ import {
   normalizeWaveformLayerLayout,
   usesSeparatedLaneLayout,
   usesOverlayMergedLayout,
+  drumHatRgb,
   zoomToVisibleRatio,
 } from './waveform-view'
 
@@ -238,6 +239,14 @@ describe('cdjEnergyColor / multiBandRgbColor', () => {
     expect(r).toBeGreaterThan(180)
     expect(b).toBeLessThan(120)
   })
+
+  it('lightens hat blue as high-band energy rises', () => {
+    const deep = drumHatRgb(0.05)
+    const air = drumHatRgb(0.95)
+    expect(air[0] + air[1] + air[2]).toBeGreaterThan(deep[0] + deep[1] + deep[2])
+    expect(air[2]).toBeGreaterThan(180)
+    expect(deep[2]).toBeGreaterThan(deep[0])
+  })
 })
 
 describe('normalizeWaveformColorMode', () => {
@@ -340,9 +349,9 @@ describe('resolveWaveformColor', () => {
       },
       'drums'
     )
-    const [sr, , sb] = snare.match(/\d+/g)!.map(Number)
-    expect(sr).toBeGreaterThan(100)
-    expect(sb).toBeGreaterThan(80)
+    const [sr, sg, sb] = snare.match(/\d+/g)!.map(Number)
+    expect(sg).toBeGreaterThan(sr)
+    expect(sg).toBeGreaterThan(sb)
 
     const clap = resolveWaveformColor(
       {
@@ -355,6 +364,7 @@ describe('resolveWaveformColor', () => {
       'drums'
     )
     const [cr, cg] = clap.match(/\d+/g)!.map(Number)
+    expect(cg).toBeGreaterThan(cr)
     expect(cg).toBeGreaterThan(80)
 
     const hat = resolveWaveformColor(
@@ -367,10 +377,24 @@ describe('resolveWaveformColor', () => {
       },
       'drums'
     )
-    const [, , hb] = hat.match(/\d+/g)!.map(Number)
+    const [, hg, hb] = hat.match(/\d+/g)!.map(Number)
+    expect(hb).toBeGreaterThan(hg)
     expect(hb).toBeGreaterThan(100)
 
-    const spectral = resolveWaveformColor(
+    const lowSpectral = resolveWaveformColor(
+      {
+        positive: 0.85,
+        negative: 0.8,
+        color: 'rgb(0,0,0)',
+        bands: { low: 0.95, mid: 0.12, high: 0.08 },
+      },
+      'drums'
+    )
+    const [lr, lg, lb] = lowSpectral.match(/\d+/g)!.map(Number)
+    expect(lr).toBeGreaterThan(lg)
+    expect(lr).toBeGreaterThan(lb)
+
+    const highSpectral = resolveWaveformColor(
       {
         positive: 0.7,
         negative: 0.65,
@@ -379,7 +403,9 @@ describe('resolveWaveformColor', () => {
       },
       'drums'
     )
-    expect(spectral).toMatch(/rgb\(/)
+    expect(highSpectral).toMatch(/rgb\(/)
+    const [, , hsb] = highSpectral.match(/\d+/g)!.map(Number)
+    expect(hsb).toBeGreaterThan(80)
   })
 })
 

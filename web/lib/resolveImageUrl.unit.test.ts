@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { encodeImagePath, resolveImageUrl } from '@/utils/resolveImageUrl'
-import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import { clearResolveImageUrlCache, encodeImagePath, resolveImageUrl } from '@/utils/resolveImageUrl'
+import {
+  isSafeNextImageSrc,
+  shouldUnoptimizeHeroCover,
+  shouldUnoptimizeImage,
+} from '@/utils/imageOptimization'
 
 describe('resolveImageUrl', () => {
   it('maps home-server gallery-images hosts onto shipped /images/audio files', () => {
@@ -54,6 +58,52 @@ describe('resolveImageUrl', () => {
     )
   })
 
+  it('rewrites normalized folder cover png/webp masters onto .jpg', () => {
+    clearResolveImageUrlCache()
+    expect(resolveImageUrl('/images/audio/artwork/folder-1789905818849.png?v=1')).toBe(
+      '/images/audio/artwork/folder-1789905818849.jpg?v=1',
+    )
+  })
+
+  it('maps remote Storage folder png covers onto local JPEG masters', () => {
+    clearResolveImageUrlCache()
+    expect(
+      resolveImageUrl(
+        'https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/audio-files/artwork/folder-collection-unreleased-eps-sergik---staying-a-vibe.png',
+      ),
+    ).toBe('/images/audio/artwork/folder-collection-unreleased-eps-sergik---staying-a-vibe.jpg')
+    expect(
+      resolveImageUrl(
+        'https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/audio-files/artwork/folder-collection-unreleased-eps-sergik---in-the-streets-.png',
+      ),
+    ).toBe('/images/audio/artwork/folder-collection-unreleased-eps-sergik---in-the-streets.jpg')
+  })
+
+  it('strips trailing-dash typos on local folder JPEG masters', () => {
+    clearResolveImageUrlCache()
+    expect(
+      resolveImageUrl('/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze-.jpg'),
+    ).toBe('/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg')
+  })
+
+  it('rewrites the retired Daze astronaut cover onto the current folder art', () => {
+    clearResolveImageUrlCache()
+    expect(
+      resolveImageUrl(
+        '/images/audio/unreleased/eps/SERGIK%20-%20Daze/89D09194-956E-422F-A040-8A9DEC10C3DD.PNG',
+      ),
+    ).toBe('/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg')
+  })
+
+  it('forces Happy Camper onto the current jpg even when a stale png URL is cached', () => {
+    clearResolveImageUrlCache()
+    expect(
+      resolveImageUrl(
+        'https://example.supabase.co/storage/v1/object/public/audio-files/artwork/folder-1787720929879.png',
+      ),
+    ).toBe('/images/audio/artwork/folder-1787720929879.jpg')
+  })
+
   it('does not double-encode', () => {
     const once = resolveImageUrl('/images/audio/unreleased/eps/SERGIK - Daze/a.PNG')
     expect(resolveImageUrl(once)).toBe(once)
@@ -68,7 +118,7 @@ describe('encodeImagePath', () => {
 })
 
 describe('shouldUnoptimizeImage', () => {
-  it('skips the optimizer for vault cover files', () => {
+  it('skips the optimizer for heavy unreleased EP masters', () => {
     expect(
       shouldUnoptimizeImage(
         '/images/audio/unreleased/eps/SERGIK%20-%20The%20Chan%20Suk%20Legend/the-chan-suk-legend.png',
@@ -76,12 +126,13 @@ describe('shouldUnoptimizeImage', () => {
     ).toBe(true)
   })
 
-  it('skips the optimizer for supabase storage hosts', () => {
+  it('serves local folder artwork natively (next/image rejects ?v= bust URLs)', () => {
+    expect(shouldUnoptimizeImage('/images/audio/artwork/folder-daze.jpg?v=1')).toBe(true)
     expect(
       shouldUnoptimizeImage(
-        'https://utgwlgcejflqxyalnlze.supabase.co/storage/v1/object/public/audio-files/artwork/x.jpg',
+        'https://utgwlgcejflqxyalnlze.supabase.co/storage/v1/object/public/audio-files/artwork/folder-x.jpg',
       ),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('never sends placeholder storage hosts to next/image', () => {
@@ -89,5 +140,21 @@ describe('shouldUnoptimizeImage', () => {
       'https://storage.local.invalid/storage/v1/object/public/gallery-images/audio/x.png'
     expect(isSafeNextImageSrc(dead)).toBe(false)
     expect(isSafeNextImageSrc(resolveImageUrl(dead))).toBe(true)
+  })
+})
+
+describe('shouldUnoptimizeHeroCover', () => {
+  it('serves folder JPEG masters without optimizer re-encode', () => {
+    expect(shouldUnoptimizeHeroCover('/images/audio/artwork/folder-collection-unreleased-eps-sergik---daze.jpg')).toBe(
+      true,
+    )
+  })
+
+  it('still uses native masters for unreleased EP paths', () => {
+    expect(
+      shouldUnoptimizeHeroCover(
+        '/images/audio/unreleased/eps/SERGIK%20-%20The%20Chan%20Suk%20Legend/the-chan-suk-legend.png',
+      ),
+    ).toBe(true)
   })
 })

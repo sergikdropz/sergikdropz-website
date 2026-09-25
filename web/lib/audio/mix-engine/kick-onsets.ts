@@ -248,9 +248,127 @@ export function buildGridOnsetBundle(params: {
   }
 }
 
+/** Bin-center index for a time on a uniform peak tape (matches `indexToTimeSec`). */
+function onsetBinIndex(timeSec: number, sampleCount: number, durationSec: number): number {
+  if (sampleCount <= 0 || durationSec <= 0) return 0
+  return Math.max(0, Math.min(sampleCount - 1, Math.round((timeSec / durationSec) * sampleCount - 0.5)))
+}
+
+type RemeshablePeak = {
+  positive: number
+  negative: number
+  rms?: number
+  flux?: number
+  bands?: { low: number; mid: number; high: number }
+  timeSec?: number
+}
+
+function peakAmp(s: RemeshablePeak): number {
+  return Math.max(s.positive, s.negative, s.rms ?? 0)
+}
+
+/**
+ * Move crest energy onto kick/snare onset bins so the painted silhouette
+ * locks to transients (visual only — does not change MixEngine math).
+ */
+export function remeshPeaksOntoOnsets<T extends RemeshablePeak>(
+  samples: T[],
+  onsetsSec: number[],
+  durationSec: number,
+  options?: { searchSec?: number; boost?: number },
+): T[] {
+  if (!samples.length || !onsetsSec.length || !(durationSec > 0)) return samples
+  const n = samples.length
+  const searchSec = Math.max(0.018, Math.min(0.08, options?.searchSec ?? 0.048))
+  const boost = options?.boost ?? 0.28
+  const out = samples.map((s) => ({ ...s }))
+  const hasTime = typeof out[0]?.timeSec === 'number'
+  const searchBins = Math.max(1, Math.round((searchSec / durationSec) * n))
+  const boostRadius = Math.max(1, Math.round(n * 0.0012))
+
+  const indexNearTime = (t: number): number => {
+    if (!hasTime) return onsetBinIndex(t, n, durationSec)
+    // Monotonic tape — binary search closest timeSec.
+    let lo = 0
+    let hi = n - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if ((out[mid]!.timeSec ?? 0) < t) lo = mid + 1
+      else hi = mid
+    }
+    const i = lo
+    if (i > 0) {
+      const a = Math.abs((out[i - 1]!.timeSec ?? 0) - t)
+      const b = Math.abs((out[i]!.timeSec ?? 0) - t)
+      if (a <= b) return i - 1
+    }
+    return i
+  }
+
+  for (const t of onsetsSec) {
+    if (!Number.isFinite(t) || t < 0 || t > durationSec) continue
+    const target = indexNearTime(t)
+    let maxI = target
+    let maxA = peakAmp(out[target]!)
+    const iLo = Math.max(0, target - searchBins)
+    const iHi = Math.min(n - 1, target + searchBins)
+    for (let i = iLo; i <= iHi; i++) {
+      const a = peakAmp(out[i]!)
+      if (a > maxA) {
+        maxA = a
+        maxI = i
+      }
+    }
+
+    if (maxI !== target && maxA > 0.04) {
+      const crest = out[maxI]!
+      const dest = out[target]!
+      out[target] = {
+        ...dest,
+        positive: Math.max(dest.positive, crest.positive),
+        negative: Math.max(dest.negative, crest.negative),
+        rms: Math.max(dest.rms ?? 0, crest.rms ?? 0) || dest.rms,
+        flux: Math.max(dest.flux ?? 0, crest.flux ?? 0, 0.55) || dest.flux,
+        bands: crest.bands
+          ? {
+              low: Math.max(dest.bands?.low ?? 0, crest.bands.low),
+              mid: Math.max(dest.bands?.mid ?? 0, crest.bands.mid),
+              high: Math.max(dest.bands?.high ?? 0, crest.bands.high),
+            }
+          : dest.bands,
+      }
+      // Soften the old crest so the silhouette doesn't double-hit.
+      out[maxI] = {
+        ...crest,
+        positive: crest.positive * 0.52,
+        negative: crest.negative * 0.52,
+        rms: crest.rms != null ? crest.rms * 0.55 : crest.rms,
+        flux: crest.flux != null ? crest.flux * 0.45 : crest.flux,
+      }
+    }
+
+    for (let d = -boostRadius; d <= boostRadius; d++) {
+      const i = target + d
+      if (i < 0 || i >= n) continue
+      const w = 1 - Math.abs(d) / (boostRadius + 1)
+      const cur = out[i]!
+      const p = Math.min(1, cur.positive + (1 - cur.positive) * boost * w)
+      const neg = Math.min(1, cur.negative + (1 - cur.negative) * boost * w * 0.85)
+      out[i] = {
+        ...cur,
+        positive: p,
+        negative: neg,
+        flux: Math.max(cur.flux ?? 0, 0.4 * w) || cur.flux,
+      }
+    }
+  }
+  return out
+}
+
 /**
  * Boost peak samples nearest to onset times so waveform paint lines up with
  * the beat grid / transient pocket (visual lock — does not change MixEngine math).
+ * Prefer `remeshPeaksOntoOnsets` when full sample objects are available.
  */
 export function emphasizePeaksNearOnsets(
   peaks: number[],
@@ -259,21 +377,9 @@ export function emphasizePeaksNearOnsets(
   boost = 0.35,
 ): number[] {
   if (!peaks.length || !onsetsSec.length || !(durationSec > 0)) return peaks
-  const n = peaks.length
-  const out = peaks.slice()
-  const radius = Math.max(1, Math.round(n * 0.0015))
-  for (const t of onsetsSec) {
-    if (!Number.isFinite(t) || t < 0 || t > durationSec) continue
-    const center = Math.round((t / durationSec) * (n - 1))
-    for (let d = -radius; d <= radius; d++) {
-      const i = center + d
-      if (i < 0 || i >= n) continue
-      const w = 1 - Math.abs(d) / (radius + 1)
-      const cur = out[i]!
-      out[i] = Math.min(1, cur + (1 - cur) * boost * w)
-    }
-  }
-  return out
+  const asSamples = peaks.map((positive) => ({ positive, negative: positive * 0.85 }))
+  const remeshed = remeshPeaksOntoOnsets(asSamples, onsetsSec, durationSec, { boost })
+  return remeshed.map((s) => s.positive)
 }
 
 /** Stored kick onsets on DNA (empty when only peak-derived). */

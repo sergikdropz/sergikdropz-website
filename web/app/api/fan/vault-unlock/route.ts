@@ -9,6 +9,7 @@ import {
   hostnameFromRequest,
   sealFanVaultUnlock,
 } from '@/lib/fan-vault-unlock-cookie'
+import { emailFromGoogleAccessToken } from '@/lib/youtube/subscribe-gate'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +34,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const email = normalizeEmail(body.email)
+    let email = normalizeEmail(body.email)
+    if (!email && typeof body.accessToken === 'string') {
+      email = await emailFromGoogleAccessToken(body.accessToken)
+    }
     if (!email) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 })
     }

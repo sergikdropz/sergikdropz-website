@@ -1,16 +1,53 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Component, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useMusicPlayer, hasPersistedMusicTrack } from '@/contexts/MusicPlayerContext'
+import { importWithChunkRetry, isLikelyChunkLoadError } from '@/lib/chunk-import-retry'
 
-const GlobalMusicPlayer = dynamic(() => import('@/components/GlobalMusicPlayer'), {
-  ssr: false,
-  loading: () => null,
-})
+const GlobalMusicPlayer = dynamic(
+  () => importWithChunkRetry(() => import('@/components/GlobalMusicPlayer')),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+)
 
 function subscribeNoop() {
   return () => {}
+}
+
+class MusicPlayerChunkBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError(error: unknown) {
+    if (isLikelyChunkLoadError(error)) return { failed: true }
+    return null
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-500/40 bg-gray-950/95 px-4 py-3 text-center text-sm text-amber-100"
+          role="status"
+        >
+          Music player failed to load (stale app bundle).{' '}
+          <button
+            type="button"
+            className="underline font-medium text-white hover:text-amber-50"
+            onClick={() => window.location.reload()}
+          >
+            Reload page
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 /**
@@ -74,5 +111,9 @@ export default function LazyGlobalMusicPlayer() {
     )
   }
 
-  return <GlobalMusicPlayer />
+  return (
+    <MusicPlayerChunkBoundary>
+      <GlobalMusicPlayer />
+    </MusicPlayerChunkBoundary>
+  )
 }

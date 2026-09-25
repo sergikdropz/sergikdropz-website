@@ -70,6 +70,57 @@
   animation: pulse-glow 8s ease-in-out infinite;
 }
 
+/* Sunlight sliding across gold lettering. Angle and position drift on an uneven
+   path so the highlight visits every letter without blinking the whole word. */
+@property --sun-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 108deg;
+}
+
+@keyframes exclusive-musicbank-sun {
+  0%   { --sun-angle: 108deg; background-position: 6% 82%; }
+  13%  { --sun-angle: 92deg;  background-position: 28% 24%; }
+  27%  { --sun-angle: 146deg; background-position: 64% 70%; }
+  41%  { --sun-angle: 78deg;  background-position: 96% 18%; }
+  54%  { --sun-angle: 132deg; background-position: 72% 94%; }
+  68%  { --sun-angle: 64deg;  background-position: 18% 46%; }
+  81%  { --sun-angle: 158deg; background-position: 84% 36%; }
+  100% { --sun-angle: 108deg; background-position: 6% 82%; }
+}
+
+.exclusive-musicbank-glow {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(
+    var(--sun-angle),
+    #6a4e10 0%,
+    #b8922e 14%,
+    #f6e29a 24%,
+    #fffdf4 29%,
+    #e4c15a 36%,
+    #8c6a16 50%,
+    #f0d27a 64%,
+    #fff6d0 70%,
+    #c6a03a 80%,
+    #6e5414 100%
+  );
+  background-size: 280% 280%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 7px rgba(250, 204, 21, 0.28));
+  animation: exclusive-musicbank-sun 32s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exclusive-musicbank-glow {
+    animation: none;
+    --sun-angle: 112deg;
+    background-position: 40% 40%;
+  }
+}
+
 .animate-float-gradient {
   animation: float-gradient 12s ease-in-out infinite;
 }
@@ -381,6 +432,9 @@
   --radius-panel: 0.75rem;
   --shell-nav-width: 14rem;
   --shell-top-height: 3.5rem;
+  /* Public site header — Header.tsx updates these as it shows/hides on scroll */
+  --site-header-height: 5rem;
+  --site-header-offset: 5rem;
   --motion-ui: 150ms;
   --motion-panel: 200ms;
 }
@@ -694,15 +748,19 @@ textarea,
       animation: none !important;
     }
     
-    /* Reduce transition durations */
-    *:not([class*="mosaic-tile-motion"]) {
+    /* Reduce transition durations — keep intentional slow brand / cover motion at full speed */
+    *:not([class*='mosaic-tile-motion']):not([class*='ep-release-cover-drift']):not(
+        .exclusive-musicbank-glow
+      ):not([class*='mosaic-tile-crossfade']) {
       transition-duration: 0.2s !important;
       animation-duration: 0.3s !important;
     }
   }
-  
+
   /* Disable hover transform resets on layout-positioned elements (e.g. -translate-x centering) */
-  *:hover:not([class*="mosaic-tile-motion"]):not([class*="-translate-"]) {
+  *:hover:not([class*='mosaic-tile-motion']):not([class*='ep-release-cover-drift']):not(
+      [class*='-translate-']
+    ) {
     transform: none !important;
   }
   

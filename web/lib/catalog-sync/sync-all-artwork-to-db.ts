@@ -3,7 +3,7 @@ import { join } from 'path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { persistSystemicCover } from './persist-systemic-cover'
 import { persistEpArtworkOntoCrateTracks } from './persist-crate-ep-artwork'
-import { stripArtworkCacheBust } from './artwork'
+import { forceArtworkCacheBust, stripArtworkCacheBust } from './artwork'
 import { isLocalHomeSupabase } from '@/lib/supabase'
 import { uploadLocalArtworkFile } from './publish-artwork-to-storage'
 
@@ -158,7 +158,12 @@ export async function syncAllArtworkToDatabase(
       result.skipped += 1
       continue
     }
-    const written = await persistSystemicCover(supabase, folder.id, artworkUrl)
+    const stamped =
+      artworkUrl.startsWith('/images/audio/artwork/') ||
+      /\/audio-files\/artwork\//i.test(artworkUrl)
+        ? forceArtworkCacheBust(artworkUrl)
+        : artworkUrl
+    const written = await persistSystemicCover(supabase, folder.id, stamped)
     result.foldersWritten += 1
     result.tracksUpdated += written.tracksUpdated
     result.audioFilesUpdated += written.audioFilesUpdated

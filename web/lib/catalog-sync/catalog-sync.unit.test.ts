@@ -5,6 +5,7 @@ import {
   normalizeArtworkPatch,
   playlistIdForFolder,
   stripArtworkCacheBust,
+  artworkUrlForCatalogStorage,
   subscribeCatalogSync,
   withArtworkCacheBust,
   isUploadedFolderArtwork,
@@ -12,18 +13,36 @@ import {
   playerTrackMatchesCoverEvent,
   catalogItemMatchesCoverEvent,
   collectionIdFromArtwork,
+  artworkFileIdFromUrl,
   stampAllTrackArtwork,
   trackHasOwnArtwork,
   trackShouldUseCrateMosaic,
 } from '@/lib/catalog-sync'
 
 describe('catalog-sync artwork helpers', () => {
+  it('canonicalizes artwork for catalog storage', () => {
+    expect(
+      artworkUrlForCatalogStorage('/images/audio/artwork/folder-1.jpg?v=99'),
+    ).toBe('/images/audio/artwork/folder-1.jpg')
+    expect(
+      artworkUrlForCatalogStorage(
+        'http://localhost:3001/_next/image?url=%2Fimages%2Faudio%2Fartwork%2Ffolder-1.jpg%3Fv%3D1&w=1920&q=75',
+      ),
+    ).toBe('/images/audio/artwork/folder-1.jpg')
+    expect(artworkUrlForCatalogStorage('blob:http://localhost/x')).toBeNull()
+  })
+
   it('strips and re-busts artwork urls', () => {
     expect(stripArtworkCacheBust('/images/audio/artwork/foo.png?v=1')).toBe(
       '/images/audio/artwork/foo.png',
     )
-    const busted = withArtworkCacheBust('/images/audio/artwork/foo.png?v=old')
-    expect(busted.startsWith('/images/audio/artwork/foo.png?v=')).toBe(true)
+    // Preserve existing bust tokens (do not mint a new Date.now() each call).
+    expect(withArtworkCacheBust('/images/audio/artwork/foo.png?v=old')).toBe(
+      '/images/audio/artwork/foo.png?v=old',
+    )
+    expect(withArtworkCacheBust('/images/audio/artwork/foo.png')).toBe(
+      '/images/audio/artwork/foo.png?v=1',
+    )
     expect(normalizeArtworkPatch('/images/audio/artwork/foo.png')).toMatch(
       /^\/images\/audio\/artwork\/foo\.png\?v=\d+$/,
     )
@@ -40,6 +59,19 @@ describe('catalog-sync artwork helpers', () => {
     ).toBe(true)
     expect(isUploadedFolderArtwork('/images/audio/unreleased/eps/cover.jpg')).toBe(false)
     expect(isUploadedFolderArtwork('')).toBe(false)
+  })
+
+  it('extracts folder artwork file ids from local and storage urls', () => {
+    expect(artworkFileIdFromUrl('/images/audio/artwork/folder-1787720929879.jpg?v=1')).toBe(
+      'folder-1787720929879',
+    )
+    expect(
+      artworkFileIdFromUrl(
+        'https://example.supabase.co/storage/v1/object/public/audio-files/artwork/folder-collection-unreleased-playlists-deep-n-funky-.jpg',
+      ),
+    ).toBe('folder-collection-unreleased-playlists-deep-n-funky-')
+    expect(artworkFileIdFromUrl('/images/audio/unreleased/eps/cover.jpg')).toBeNull()
+    expect(collectionIdFromArtwork('/images/audio/artwork/folder-abc.jpg')).toBe('abc')
   })
 
   it('detects stamped folder covers vs track-own artwork', () => {

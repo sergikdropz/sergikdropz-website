@@ -7,6 +7,7 @@ import {
   resolveSnareClapOnsetSec,
   buildGridOnsetBundle,
   emphasizePeaksNearOnsets,
+  remeshPeaksOntoOnsets,
   isGridLocked,
   withGridLockOnDna,
   withGridAnalysisOnDna,
@@ -162,6 +163,21 @@ describe('emphasizePeaksNearOnsets', () => {
     const out = emphasizePeaksNearOnsets(peaks, [0.5], 1, 0.5)
     const mid = out[50]!
     expect(mid).toBeGreaterThan(0.2)
+  })
+})
+
+describe('remeshPeaksOntoOnsets', () => {
+  it('moves a nearby crest onto the onset bin', () => {
+    const samples = Array.from({ length: 100 }, (_, i) => ({
+      positive: i === 47 ? 0.95 : 0.15,
+      negative: i === 47 ? 0.9 : 0.12,
+      timeSec: (i + 0.5) / 100,
+    }))
+    const out = remeshPeaksOntoOnsets(samples, [0.5], 1, { searchSec: 0.08, boost: 0.2 })
+    // Crest at bin 47 should land on the sample nearest t=0.5 (~49/50).
+    const near = [48, 49, 50].map((i) => out[i]!.positive)
+    expect(Math.max(...near)).toBeGreaterThan(0.9)
+    expect(out[47]!.positive).toBeLessThan(0.6)
   })
 })
 

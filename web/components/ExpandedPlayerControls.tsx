@@ -27,6 +27,7 @@ import { matchDeckTempoRate } from '@/lib/audio/mix-engine/tempo-match'
 import type { HotCueSlot, HotCueSlots } from '@/lib/audio/hot-cues'
 import type { IDJActiveCue } from '@/lib/audio/idj-preferences'
 import type { DeckJumpCue } from '@/lib/audio/mix-engine/cues'
+import MobileDjModeBadge from '@/components/music/MobileDjModeBadge'
 
 interface ExpandedPlayerControlsProps {
   decks: { a: DeckChannelConfig; b: DeckChannelConfig }
@@ -67,6 +68,8 @@ interface ExpandedPlayerControlsProps {
   idjActive?: boolean
   /** Auto DJ — same compact mixer strip layout; XF is a blend meter only. */
   autoDjActive?: boolean
+  /** Native volume crossfade on phone — lock-screen safe; EQ visual-only. */
+  mobileDjModeActive?: boolean
   onIdjCrossfade?: (progress: number) => void
   /** Auto DJ on, but user owns XF. */
   autoDjXfUnlocked?: boolean
@@ -482,6 +485,7 @@ export default function ExpandedPlayerControls({
   mixCrossfadeActive = false,
   idjActive = false,
   autoDjActive = false,
+  mobileDjModeActive = false,
   onIdjCrossfade,
   autoDjXfUnlocked = false,
   onUnlockCrossfaderFromAutoDj,
@@ -1619,6 +1623,11 @@ export default function ExpandedPlayerControls({
 
       {mixerStripActive && (
         <div className="mt-2">
+          {mobileDjModeActive ? (
+            <div className="mb-1.5 flex justify-center md:justify-start">
+              <MobileDjModeBadge />
+            </div>
+          ) : null}
           {/* Mobile: one deck's transport+EQ via A/B toggle; XF full width above. */}
           <div className="flex flex-col gap-1.5 md:hidden" data-mixer-mobile="">
             <div className="w-full min-w-0">{renderMixCrossfader()}</div>

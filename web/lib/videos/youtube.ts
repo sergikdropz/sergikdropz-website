@@ -56,6 +56,14 @@ export function youtubeThumbnailUrls(youtubeId: string): string[] {
   ]
 }
 
+/**
+ * YouTube answers missing maxres/sddefault thumbs with HTTP 200 and a 120×90 gray frame.
+ * `onError` never fires, so callers must skip that image and try the next URL.
+ */
+export function isYouTubePlaceholderThumbnail(naturalWidth: number): boolean {
+  return naturalWidth > 0 && naturalWidth <= 120
+}
+
 export function slugifyVideoTitle(title: string): string {
   const slug = title
     .toLowerCase()

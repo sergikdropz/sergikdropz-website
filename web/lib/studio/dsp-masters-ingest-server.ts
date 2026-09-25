@@ -9,11 +9,15 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { closeSync, openSync, readSync, statSync } from 'fs'
+import { readFile } from 'fs/promises'
 import {
   cacheBustMediaUrl,
 } from '@/lib/audio/replace-audio-file'
+import { saveLocalVaultAudioFile } from '@/lib/music-library/ingest-vault-audio'
+import { planImportedAudio, transcodeAudioToMp3 } from '@/lib/audio/stream-master'
 import {
   getR2MediaConfig,
+  putR2Object,
   putR2ObjectFromFile,
   publicR2MediaUrl,
   r2ObjectExists,
@@ -324,6 +328,29 @@ export async function ingestDspMaster(
   const fileUrl = cacheBustMediaUrl(
     publicR2MediaUrl(relativePath) || vaultMediaProxyUrl(relativePath),
   )
+  const planned = planImportedAudio({
+    fileName: relativePath.split('/').pop() || trackTitle,
+    vaultRelativePath: relativePath,
+  })
+  let streamUrl = fileUrl
+  if (planned.isWav) {
+    try {
+      const wavBytes = await readFile(input.hit.absPath)
+      const mp3 = await transcodeAudioToMp3(wavBytes)
+      await saveLocalVaultAudioFile(planned.streamRelativePath, mp3)
+      if (getR2MediaConfig()) {
+        await putR2Object(planned.streamRelativePath, mp3, { contentType: 'audio/mpeg' })
+      }
+      streamUrl = cacheBustMediaUrl(
+        publicR2MediaUrl(planned.streamRelativePath) || vaultMediaProxyUrl(planned.streamRelativePath),
+      )
+    } catch (err) {
+      console.warn(
+        '[dsp-masters] MP3 stream encode failed, website will use the WAV until re-ingest:',
+        err instanceof Error ? err.message : err,
+      )
+    }
+  }
   const duration = knownDuration ?? wavDurationSec
   const artist = input.artist?.trim() || 'Sergik'
 
@@ -363,7 +390,7 @@ export async function ingestDspMaster(
     await supabase
       .from('music_library_tracks')
       .update({
-        file_url: fileUrl,
+        file_url: streamUrl,
         duration: duration ?? undefined,
         metadata: {
           ...prevMeta,
@@ -382,10 +409,10 @@ export async function ingestDspMaster(
       await supabase
         .from('audio_files')
         .update({
-          file_url: fileUrl,
-          file_path: relativePath,
+          file_url: streamUrl,
+          file_path: streamUrl === fileUrl ? relativePath : planned.streamRelativePath,
           file_name: relativePath.split('/').pop(),
-          format: 'WAV',
+          format: streamUrl === fileUrl ? 'WAV' : 'MP3',
           size_bytes: sizeBytes,
           size_mb: parseFloat((sizeBytes / (1024 * 1024)).toFixed(2)),
           ...(duration != null ? { duration_seconds: duration } : {}),
@@ -405,9 +432,9 @@ export async function ingestDspMaster(
       await supabase
         .from('audio_files')
         .update({
-          file_url: fileUrl,
+          file_url: streamUrl,
           file_name: relativePath.split('/').pop(),
-          format: 'WAV',
+          format: streamUrl === fileUrl ? 'WAV' : 'MP3',
           size_bytes: sizeBytes,
           size_mb: parseFloat((sizeBytes / (1024 * 1024)).toFixed(2)),
           ...(duration != null ? { duration_seconds: duration } : {}),
@@ -420,9 +447,9 @@ export async function ingestDspMaster(
           title: trackTitle,
           artist,
           file_name: relativePath.split('/').pop(),
-          file_path: relativePath,
-          file_url: fileUrl,
-          format: 'WAV',
+          file_path: streamUrl === fileUrl ? relativePath : planned.streamRelativePath,
+          file_url: streamUrl,
+          format: streamUrl === fileUrl ? 'WAV' : 'MP3',
           size_bytes: sizeBytes,
           size_mb: parseFloat((sizeBytes / (1024 * 1024)).toFixed(2)),
           duration_seconds: duration,
@@ -460,7 +487,7 @@ export async function ingestDspMaster(
       await supabase
         .from('music_library_tracks')
         .update({
-          file_url: fileUrl,
+          file_url: streamUrl,
           title: trackTitle,
           artist,
           duration,
@@ -486,7 +513,7 @@ export async function ingestDspMaster(
         audio_file_id: audioFileId,
         title: trackTitle,
         artist,
-        file_url: fileUrl,
+        file_url: streamUrl,
         duration,
         metadata: {
           source: 'dsp-masters',

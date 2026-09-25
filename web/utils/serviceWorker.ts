@@ -2,6 +2,8 @@
  * Service Worker registration and management utilities
  */
 
+import { isCacheableCoverUrl } from '@/lib/media/cover-cache'
+
 let registration: ServiceWorkerRegistration | null = null
 
 /**
@@ -21,18 +23,14 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
   try {
     registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/'
+      scope: '/',
     })
 
-    // Silently register - no console logs in production
-
-    // Check for updates
     registration.addEventListener('updatefound', () => {
       const newWorker = registration!.installing
       if (newWorker) {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // New service worker available - only log in development
             if (process.env.NODE_ENV === 'development') {
               console.log('New Service Worker available')
             }
@@ -74,7 +72,7 @@ export async function unregisterServiceWorker(): Promise<boolean> {
 /**
  * Preload next tracks in queue
  */
-export async function preloadTracks(trackUrls: string[]): Promise<void> {
+export async function preloadTracks(trackUrls: string[], limit?: number): Promise<void> {
   if (!registration || !registration.active) {
     return
   }
@@ -82,10 +80,32 @@ export async function preloadTracks(trackUrls: string[]): Promise<void> {
   try {
     registration.active.postMessage({
       type: 'PRELOAD_TRACKS',
-      tracks: trackUrls
+      tracks: trackUrls,
+      limit,
     })
   } catch (error) {
     console.error('Failed to preload tracks:', error)
+  }
+}
+
+/**
+ * Prefetch busted cover-art URLs into the SW cover cache.
+ * Only URLs that pass {@link isCacheableCoverUrl} are sent.
+ */
+export async function preloadCovers(coverUrls: string[]): Promise<void> {
+  if (!registration || !registration.active) {
+    return
+  }
+  const urls = coverUrls.filter((u) => isCacheableCoverUrl(u)).slice(0, 32)
+  if (!urls.length) return
+
+  try {
+    registration.active.postMessage({
+      type: 'PRELOAD_COVERS',
+      urls,
+    })
+  } catch (error) {
+    console.error('Failed to preload covers:', error)
   }
 }
 
@@ -99,16 +119,13 @@ export async function clearAudioCache(): Promise<boolean> {
 
   return new Promise((resolve) => {
     const messageChannel = new MessageChannel()
-    
+
     messageChannel.port1.onmessage = (event) => {
       resolve(event.data.success || false)
     }
 
     try {
-      registration!.active!.postMessage(
-        { type: 'CLEAR_CACHE' },
-        [messageChannel.port2]
-      )
+      registration!.active!.postMessage({ type: 'CLEAR_CACHE' }, [messageChannel.port2])
     } catch (error) {
       console.error('Failed to clear cache:', error)
       resolve(false)
@@ -131,16 +148,13 @@ export async function getCacheInfo(): Promise<{
 
   return new Promise((resolve) => {
     const messageChannel = new MessageChannel()
-    
+
     messageChannel.port1.onmessage = (event) => {
       resolve(event.data)
     }
 
     try {
-      registration!.active!.postMessage(
-        { type: 'GET_CACHE_INFO' },
-        [messageChannel.port2]
-      )
+      registration!.active!.postMessage({ type: 'GET_CACHE_INFO' }, [messageChannel.port2])
     } catch (error) {
       console.error('Failed to get cache info:', error)
       resolve(null)
@@ -161,4 +175,3 @@ export function isServiceWorkerSupported(): boolean {
 export function isServiceWorkerActive(): boolean {
   return registration !== null && registration.active !== null
 }
-

@@ -12,6 +12,29 @@ type MosaicTile = { id: string; src: string; alt: string; rank: number }
 
 const IMAGE_EXT = /\.(avif|gif|jpe?g|png|webp)$/i
 
+/** Humanize `folder-collection-…---daze.jpg` stems; leave numeric upload ids generic. */
+function altFromArtworkFilename(file: string): string {
+  const stem = file.replace(/\.[^.]+$/, '')
+  const folderMatch = stem.match(/^folder-(.+)$/i)
+  if (!folderMatch) return 'Album cover art'
+  let rest = folderMatch[1]
+  const parts = rest.split('---')
+  if (parts.length > 1) {
+    rest = (parts[parts.length - 1] || '').replace(/-+$/g, '')
+  } else {
+    rest = rest
+      .replace(/^collection-unreleased-eps-sergik-+/i, '')
+      .replace(/^collection-unreleased-playlists-+/i, '')
+      .replace(/-+$/g, '')
+  }
+  if (!rest || /^\d+$/.test(rest)) return 'Album cover art'
+  const title = rest
+    .replace(/-+/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+    .trim()
+  return title ? `${title} cover art` : 'Album cover art'
+}
+
 /**
  * GET /api/music-library/mosaic-covers
  * Public cover pool for the site background mosaic (ingested folder art + public releases).
@@ -20,10 +43,12 @@ const IMAGE_EXT = /\.(avif|gif|jpe?g|png|webp)$/i
 export async function GET() {
   const candidates: MosaicTile[] = []
 
-  // 1) Files written by artwork upload API (always on disk for local/home)
+  // 1) Files written by artwork upload API (always on disk for local/home).
+  // Prefer the newest extension per folder-* stem so an old .png cannot outrank a new .jpg.
   try {
     const dir = join(process.cwd(), 'public', 'images', 'audio', 'artwork')
     const files = await readdir(dir)
+    const bestByStem = new Map<string, { file: string; mtime: number }>()
     for (const file of files) {
       if (!IMAGE_EXT.test(file)) continue
       const full = join(dir, file)
@@ -33,6 +58,11 @@ export async function GET() {
       } catch {
         /* ignore */
       }
+      const stem = file.replace(/\.[^.]+$/, '').toLowerCase()
+      const prev = bestByStem.get(stem)
+      if (!prev || mtime >= prev.mtime) bestByStem.set(stem, { file, mtime })
+    }
+    for (const { file, mtime } of bestByStem.values()) {
       const stem = file.replace(/\.[^.]+$/, '')
       const folderMatch = stem.match(/^folder-(.+)$/i)
       const id = folderMatch ? `fs-folder-${folderMatch[1]}` : `fs-${stem}`
@@ -41,7 +71,7 @@ export async function GET() {
       candidates.push({
         id,
         src: `${base}?v=${Math.floor(mtime)}`,
-        alt: 'Album cover art',
+        alt: altFromArtworkFilename(file),
         rank: 1,
       })
     }
@@ -63,12 +93,15 @@ export async function GET() {
 
       for (const row of data || []) {
         if (row.hidden) continue
+        const name = String(row.name || '').trim()
+        // Empty duplicate crates like "Happy Camper (copy)" steal another EP's art into the mosaic.
+        if (/\(\s*copy\s*\)/i.test(name)) continue
         const base = resolveImageUrl(String(row.artwork_url || '')).split('?')[0]
         if (!base) continue
         candidates.push({
           id: `folder-${row.id}`,
           src: base,
-          alt: `${row.name || 'Album'} cover art`,
+          alt: `${name || 'Album'} cover art`,
           rank: 3,
         })
       }

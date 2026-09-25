@@ -5,17 +5,69 @@ export function stripArtworkCacheBust(url: string): string {
   return url.trim().split('?')[0]
 }
 
-export function withArtworkCacheBust(url: string): string {
-  const base = stripArtworkCacheBust(url)
+/**
+ * Canonical cover URL for Postgres / Storage (no cache bust, no localhost host,
+ * decoded `/images/…` paths). Accepts next/image proxy URLs from copy-paste.
+ */
+export function artworkUrlForCatalogStorage(artwork: string | null | undefined): string | null {
+  const trimmed = typeof artwork === 'string' ? artwork.trim() : ''
+  if (!trimmed || trimmed.startsWith('blob:')) return null
+
+  let raw = trimmed
+  if (raw.includes('/_next/image')) {
+    try {
+      const parsed = new URL(raw, 'http://local.invalid')
+      const inner = parsed.searchParams.get('url')
+      if (inner) raw = decodeURIComponent(inner)
+    } catch {
+      /* keep raw */
+    }
+  }
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const parsed = new URL(raw)
+      if (parsed.pathname.startsWith('/images/') || parsed.pathname.startsWith('/audio/')) {
+        raw = parsed.pathname
+      } else {
+        raw = `${parsed.origin}${parsed.pathname}`
+      }
+    } catch {
+      /* keep raw */
+    }
+  }
+
+  const resolved = stripArtworkCacheBust(resolveImageUrl(raw) || raw)
+  return resolved || null
+}
+
+/**
+ * Ensure a cover URL carries `?v=` for SW / next/image cache safety.
+ * Preserves an existing bust token unless `version` is provided (use after overwrite).
+ */
+export function withArtworkCacheBust(url: string, version?: number | string): string {
+  const trimmed = url.trim()
+  const base = stripArtworkCacheBust(trimmed)
   if (!base) return ''
-  return `${base}?v=${Date.now()}`
+  if (version != null && `${version}` !== '') {
+    return `${base}?v=${version}`
+  }
+  const existing = trimmed.match(/[?&]v=([^&]+)/)?.[1]
+  if (existing) return `${base}?v=${existing}`
+  // Stable default for bare paths — forceArtworkCacheBust after upload/overwrite.
+  return `${base}?v=1`
+}
+
+/** Always mint a fresh bust (cover file bytes changed). */
+export function forceArtworkCacheBust(url: string): string {
+  return withArtworkCacheBust(url, Date.now())
 }
 
 export function normalizeArtworkPatch(artwork: string | null | undefined): string | undefined {
   if (artwork == null) return undefined
   const base = stripArtworkCacheBust(artwork)
   if (!base) return undefined
-  return withArtworkCacheBust(base)
+  return forceArtworkCacheBust(base)
 }
 
 /** Strip `playlist-` / `folder-` prefixes so collection ids compare equal. */
@@ -29,6 +81,15 @@ export function collectionIdFromArtwork(artwork?: string | null): string | null 
   if (!artwork) return null
   const path = stripArtworkCacheBust(artwork)
   const match = path.match(/(?:^|\/)folder-([^/.]+)\.[a-z0-9]+$/i) || path.match(/folder-([^/.]+)/i)
+  return match?.[1] || null
+}
+
+/** Storage / local file stem like `folder-1787720929879` from a cover URL. */
+export function artworkFileIdFromUrl(artwork?: string | null): string | null {
+  if (!artwork) return null
+  // Use the raw path (not resolveImageUrl) so trailing-dash Storage stems stay intact.
+  const path = stripArtworkCacheBust(artwork)
+  const match = path.match(/(?:^|\/)(folder-[^/?#]+)\.[a-z0-9]+$/i)
   return match?.[1] || null
 }
 

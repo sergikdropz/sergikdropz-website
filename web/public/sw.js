@@ -16,6 +16,13 @@ const PRELOAD_COUNT = 3 // Keep in sync with MusicPlayer queue prefetch (CDN URL
 const API_CACHE_NAME = 'sergik-api-cache-v3'
 const API_MAX_ITEMS = 500 // High cap; browser may still evict
 
+// Cover art — only busted artwork URLs (`?v=`). Never bare /images paths.
+const COVER_CACHE_NAME = 'sergik-cover-cache-v1'
+const COVER_MAX_ITEMS = 200
+const COVER_MAX_SIZE = 80 * 1024 * 1024 // ~80MB
+const COVER_PRELOAD_COUNT = 24
+const COVER_METADATA_KEY = 'cover-cache-metadata'
+
 // Track cache metadata
 const CACHE_METADATA_KEY = 'cache-metadata'
 
@@ -132,8 +139,13 @@ self.addEventListener('activate', (event) => {
           .filter((name) => {
             if (name === CACHE_NAME) return false
             if (name === API_CACHE_NAME) return false
+            if (name === COVER_CACHE_NAME) return false
             // Delete only old sergik caches, leave unrelated caches alone.
-            return name.startsWith('sergik-audio-cache-') || name.startsWith('sergik-api-cache-')
+            return (
+              name.startsWith('sergik-audio-cache-') ||
+              name.startsWith('sergik-api-cache-') ||
+              name.startsWith('sergik-cover-cache-')
+            )
           })
           .map((name) => caches.delete(name))
       )
@@ -141,6 +153,29 @@ self.addEventListener('activate', (event) => {
   )
   self.clients.claim()
 })
+
+function isBustedArtworkPath(pathOrUrl) {
+  const lower = String(pathOrUrl || '').toLowerCase()
+  const looksLikeArtwork =
+    lower.includes('/images/audio/artwork/') ||
+    lower.includes('/audio-files/artwork/') ||
+    /\/artwork\/folder-/i.test(lower)
+  if (!looksLikeArtwork) return false
+  return /[?&]v=\d+/i.test(pathOrUrl) || /%3[Ff]v%3[Dd]\d+/i.test(pathOrUrl)
+}
+
+/** Only cache covers that include an explicit `?v=` bust (or next/image wrapping one). */
+function isCacheableCoverRequest(url) {
+  if (url.pathname.startsWith('/_next/image')) {
+    try {
+      const inner = decodeURIComponent(url.searchParams.get('url') || '')
+      return isBustedArtworkPath(inner)
+    } catch {
+      return false
+    }
+  }
+  return isBustedArtworkPath(url.pathname + url.search)
+}
 
 // Fetch event - implement caching strategy
 self.addEventListener('fetch', (event) => {
@@ -154,6 +189,12 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.startsWith('/api/admin')) return
     if (url.pathname.startsWith('/api/analytics')) return
 
+    // Media proxy — same Range-aware audio cache as CDN mp3 URLs.
+    if (url.pathname.startsWith('/api/audio/media')) {
+      event.respondWith(handleAudioRequest(event.request))
+      return
+    }
+
     const isCacheableApi =
       url.pathname.startsWith('/api/audio/waveform') ||
       url.pathname.startsWith('/api/audio/bpm') ||
@@ -165,30 +206,33 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(handleApiRequest(event.request))
     return
   }
+
+  // Busted cover art / next/image optimizer URLs — cache-first (v= makes overwrite safe).
+  if (event.request.method === 'GET' && isCacheableCoverRequest(url)) {
+    event.respondWith(handleCoverRequest(event.request))
+    return
+  }
   
-  // Skip image files FIRST - let browser handle them directly
-  // This must happen before any other checks to prevent image interception
-  // Check both pathname and full URL to catch all image files
+  // Skip other image files — let browser/HTTP cache handle them
   const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?|$)/i
   const isImageFile = imageExtensions.test(url.pathname) || imageExtensions.test(url.href)
   
   if (isImageFile) {
-    return // Let browser handle image requests - NEVER intercept images
+    return
   }
   
   // For Supabase URLs, explicitly skip images (double-check for safety)
   if (url.hostname.includes('supabase.co') && isImageFile) {
-    return // Never intercept Supabase image files
+    return
   }
   
   // Only handle actual audio files (not API endpoints, images, or other resources)
   const hasAudioExtension = /\.(mp3|wav|m4a|flac|aac|ogg|wma|mp4|m4v)(\?|$)/i.test(url.pathname)
   
   // For Supabase URLs, only intercept if it has an audio file extension
-  // Don't intercept images or other file types from Supabase
   if (url.hostname.includes('supabase.co')) {
     if (!hasAudioExtension) {
-      return // Let browser handle non-audio Supabase requests (images, etc.)
+      return
     }
   }
   
@@ -200,7 +244,7 @@ self.addEventListener('fetch', (event) => {
   const isAudioFile = hasAudioExtension || isAudioPath
   
   if (!isAudioFile) {
-    return // Let browser handle non-audio requests
+    return
   }
   
   event.respondWith(handleAudioRequest(event.request))
@@ -448,16 +492,130 @@ async function handleAudioRequest(request) {
   }
 }
 
+async function getCoverCacheMetadata() {
+  try {
+    const cache = await caches.open(COVER_CACHE_NAME)
+    const response = await cache.match(COVER_METADATA_KEY)
+    if (response) return await response.json()
+  } catch (error) {
+    console.debug('Cover metadata read failed:', error)
+  }
+  return { items: [], totalSize: 0 }
+}
+
+async function saveCoverCacheMetadata(metadata) {
+  try {
+    const cache = await caches.open(COVER_CACHE_NAME)
+    await cache.put(
+      COVER_METADATA_KEY,
+      new Response(JSON.stringify(metadata), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  } catch (error) {
+    console.debug('Cover metadata write failed:', error)
+  }
+}
+
+async function evictCoverLRU(targetSize) {
+  const metadata = await getCoverCacheMetadata()
+  const cache = await caches.open(COVER_CACHE_NAME)
+  metadata.items.sort((a, b) => a.lastAccessed - b.lastAccessed)
+  let currentSize = metadata.totalSize
+  const itemsToRemove = []
+  for (const item of metadata.items) {
+    if (currentSize <= targetSize) break
+    try {
+      await cache.delete(item.url)
+      currentSize -= item.size
+      itemsToRemove.push(item.url)
+    } catch {
+      /* ignore */
+    }
+  }
+  metadata.items = metadata.items.filter((item) => !itemsToRemove.includes(item.url))
+  metadata.totalSize = currentSize
+  await saveCoverCacheMetadata(metadata)
+}
+
+async function putCoverInCache(url, response) {
+  if (!response || !response.ok || response.status !== 200) return
+  const cache = await caches.open(COVER_CACHE_NAME)
+  const size = await getResponseSize(response.clone())
+  if (size > 4 * 1024 * 1024) return // skip huge single covers
+  let metadata = await getCoverCacheMetadata()
+  if (metadata.totalSize + size > COVER_MAX_SIZE) {
+    await evictCoverLRU(Math.max(0, COVER_MAX_SIZE - size))
+    metadata = await getCoverCacheMetadata()
+  }
+  if (metadata.items.length >= COVER_MAX_ITEMS) {
+    metadata.items.sort((a, b) => a.lastAccessed - b.lastAccessed)
+    while (metadata.items.length >= COVER_MAX_ITEMS) {
+      const oldest = metadata.items.shift()
+      if (!oldest) break
+      try {
+        await cache.delete(oldest.url)
+        metadata.totalSize = Math.max(0, metadata.totalSize - (oldest.size || 0))
+      } catch {
+        /* ignore */
+      }
+    }
+    await saveCoverCacheMetadata(metadata)
+    metadata = await getCoverCacheMetadata()
+  }
+  await cache.put(url, response.clone())
+  metadata.items = metadata.items.filter((item) => item.url !== url)
+  metadata.items.push({
+    url,
+    size,
+    lastAccessed: Date.now(),
+    cachedAt: Date.now(),
+  })
+  metadata.totalSize = metadata.items.reduce((sum, item) => sum + (item.size || 0), 0)
+  await saveCoverCacheMetadata(metadata)
+}
+
+/** Cache-first for busted cover / next/image URLs. */
+async function handleCoverRequest(request) {
+  const url = request.url
+  const cache = await caches.open(COVER_CACHE_NAME)
+  const cached = await cache.match(url)
+  if (cached) {
+    const metadata = await getCoverCacheMetadata()
+    const item = metadata.items.find((entry) => entry.url === url)
+    if (item) {
+      item.lastAccessed = Date.now()
+      await saveCoverCacheMetadata(metadata)
+    }
+    return cached
+  }
+  try {
+    const response = await fetch(request)
+    if (response.ok && response.status === 200) {
+      await putCoverInCache(url, response.clone())
+    }
+    return response
+  } catch (error) {
+    const stale = await cache.match(url)
+    if (stale) return stale
+    throw error
+  }
+}
+
 // Message handler for preloading tracks
 self.addEventListener('message', async (event) => {
   if (event.data.type === 'PRELOAD_TRACKS') {
     const tracks = event.data.tracks || []
+    const preloadLimit =
+      typeof event.data.limit === 'number' && event.data.limit > 0
+        ? Math.min(event.data.limit, PRELOAD_COUNT)
+        : PRELOAD_COUNT
     const cache = await caches.open(CACHE_NAME)
     
     // Preload next tracks one at a time. Firing all of these at once put several
     // whole-file downloads in flight alongside the track currently streaming,
     // and they competed for the same connection budget — audible as stalls.
-    for (let i = 0; i < Math.min(tracks.length, PRELOAD_COUNT); i++) {
+    for (let i = 0; i < Math.min(tracks.length, preloadLimit); i++) {
       const trackUrl = tracks[i]
       
       // Check if already cached
@@ -492,6 +650,24 @@ self.addEventListener('message', async (event) => {
       } catch (error) {
         // Silently fail preload
         console.debug('Preload failed:', error)
+      }
+    }
+  } else if (event.data.type === 'PRELOAD_COVERS') {
+    const urls = event.data.urls || []
+    for (let i = 0; i < Math.min(urls.length, COVER_PRELOAD_COUNT); i++) {
+      const coverUrl = urls[i]
+      if (!coverUrl) continue
+      try {
+        const parsed = new URL(coverUrl, self.location.origin)
+        if (!isCacheableCoverRequest(parsed)) continue
+        const cache = await caches.open(COVER_CACHE_NAME)
+        if (await cache.match(coverUrl)) continue
+        const response = await fetch(coverUrl, { credentials: 'same-origin' })
+        if (response.ok && response.status === 200) {
+          await putCoverInCache(coverUrl, response)
+        }
+      } catch (error) {
+        console.debug('Cover preload failed:', error)
       }
     }
   } else if (event.data.type === 'CLEAR_CACHE') {

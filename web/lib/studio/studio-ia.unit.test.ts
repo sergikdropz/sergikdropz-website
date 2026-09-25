@@ -19,6 +19,7 @@ describe('studio IA', () => {
     expect(parseStudioCreateTab('nope')).toBe('release')
     expect(parseStudioPipelineTab(null)).toBe('ops')
     expect(parseStudioPipelineTab('calendar')).toBe('calendar')
+    expect(parseStudioPipelineTab('distrokid')).toBe('distrokid')
     expect(parseStudioPipelineTab('command')).toBe('ops')
   })
 
@@ -27,6 +28,7 @@ describe('studio IA', () => {
     expect(studioCreateHref('import')).toBe('/studio/create?tab=import')
     expect(studioPipelineHref()).toBe('/studio/pipeline')
     expect(studioPipelineHref('isrcs')).toBe('/studio/pipeline?tab=isrcs')
+    expect(studioPipelineHref('distrokid')).toBe('/studio/pipeline?tab=distrokid')
     expect(studioCollabHref()).toBe('/studio/collab')
     expect(studioCollabHref('abc')).toBe('/studio/collab?release=abc')
   })
@@ -62,5 +64,7 @@ describe('studio IA', () => {
     expect(isStudioNavActive('collab', '/studio/collab')).toBe(true)
     expect(isStudioNavActive('collab', '/studio/releases')).toBe(false)
     expect(isStudioNavActive('releases', '/studio/collab')).toBe(false)
+    expect(isStudioNavActive('royalties', '/studio/royalties')).toBe(true)
+    expect(isStudioNavActive('royalties', '/studio/pipeline')).toBe(false)
   })
 })

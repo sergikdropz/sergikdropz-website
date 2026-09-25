@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useNotifications } from '@/contexts/NotificationContext'
 import WizardStepBar, { type WizardStep } from './WizardStepBar'
 import VaultImportPanel from './VaultImportPanel'
-import { COPY_TEMPLATES, type MarketingCopy } from '@/lib/studio/constants'
+import { COPY_TEMPLATES, DEFAULT_LABEL_NAME, type MarketingCopy } from '@/lib/studio/constants'
 import { DSP_PRIMARY_GENRES, secondaryGenresFor, streetDateHint } from '@/lib/studio/dsp-ingest'
 import { TRACK_LANGUAGES } from '@/lib/studio/dsp-package'
 import { FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa'
@@ -39,7 +39,7 @@ export default function NewReleaseWizard() {
     subgenre: '',
     description: '',
     explicit: false,
-    label_name: 'SERGIK',
+    label_name: DEFAULT_LABEL_NAME,
     language: 'en',
     previously_released: '' as '' | 'no' | 'yes',
     previous_isrc: '',

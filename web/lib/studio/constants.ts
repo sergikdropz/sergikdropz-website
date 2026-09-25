@@ -1,5 +1,8 @@
-export const DISTRIBUTION_MODES = ['self', 'aggregator'] as const
+export const DISTRIBUTION_MODES = ['self', 'aggregator', 'distrokid'] as const
 export type DistributionMode = (typeof DISTRIBUTION_MODES)[number]
+
+/** DSP / DistroKid / Revelator metadata “label” (imprint). Not the LLC legal name. */
+export const DEFAULT_LABEL_NAME = 'SERGIKdropz'
 
 export const WORKFLOW_STEPS = [
   { id: 'catalog', label: 'Catalog', description: 'Tracks, credits, DSP ingest, ISRCs' },

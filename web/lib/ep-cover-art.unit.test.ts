@@ -31,6 +31,31 @@ describe('ep-cover-art', () => {
     )
   })
 
+  it('prefers uploaded folder masters over legacy unreleased EP UUID files', () => {
+    const folder = '/images/audio/artwork/folder-collection-unreleased-eps-sergik---soul-candy.jpg'
+    const legacy =
+      '/images/audio/unreleased/eps/SERGIK%20-%20Soul%20Candy/57A67CAB-0A23-4AB6-AE83-C840B0E0D3E4.jpeg'
+    expect(artworkResolutionScore(folder)).toBeGreaterThan(artworkResolutionScore(legacy))
+    const out = dedupeArtworkByReleaseLabel([
+      { id: 'legacy', src: legacy, label: 'Soul Candy cover art' },
+      { id: 'folder', src: folder, label: 'Soul Candy EP cover art' },
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0]?.src).toContain('folder-collection-unreleased-eps-sergik---soul-candy.jpg')
+  })
+
+  it('keeps distinct covers that only share a generic Album label', () => {
+    const out = dedupeArtworkByReleaseLabel([
+      { id: 'a', src: '/images/audio/artwork/folder-1.jpg', label: 'Album cover art' },
+      { id: 'b', src: '/images/audio/artwork/folder-2.jpg', label: 'Album cover art' },
+      { id: 'c', src: '/images/audio/artwork/folder-daze.jpg', label: 'Daze cover art' },
+      { id: 'd', src: '/images/audio/artwork/folder-daze-v2.jpg', label: 'Daze EP cover art' },
+    ])
+    expect(out).toHaveLength(3)
+    expect(out.filter((x) => /folder-[12]\.jpg/.test(x.src))).toHaveLength(2)
+    expect(out.filter((x) => /folder-daze/.test(x.src))).toHaveLength(1)
+  })
+
   it('dedupes artwork choices by release label keeping highest resolution', () => {
     const out = dedupeArtworkByReleaseLabel([
       {
@@ -59,8 +84,7 @@ describe('ep-cover-art', () => {
   it('resolves catalog cover art from a folder name', () => {
     const src = catalogArtworkForRelease('Staying A Vibe')
     expect(src).toBeTruthy()
-    expect(src).toMatch(/Staying(%20| )A(%20| )Vibe/)
-    expect(src).toMatch(/staying-a-vibe-cover\.jpg/)
+    expect(src).toMatch(/staying-a-vibe/i)
     expect(catalogArtworkForRelease('Staying A Vibe EP')).toBe(src)
     expect(catalogArtworkForRelease('unknown release')).toBeUndefined()
   })

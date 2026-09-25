@@ -9,6 +9,7 @@ import { createdDateFromTrack } from '@/lib/music-library/track-created-date'
 export type SongTableOptionalColumn =
   | 'artist'
   | 'album'
+  | 'ep'
   | 'genre'
   | 'subgenre'
   | 'bpm'
@@ -26,6 +27,7 @@ export type SongTableSortField =
   | 'title'
   | 'artist'
   | 'album'
+  | 'ep'
   | 'genre'
   | 'subgenre'
   | 'bpm'
@@ -45,6 +47,7 @@ export type SongTableSortField =
 export const SONG_TABLE_OPTIONAL_COLUMNS: SongTableOptionalColumn[] = [
   'artist',
   'album',
+  'ep',
   'genre',
   'subgenre',
   'bpm',
@@ -60,6 +63,7 @@ export const SONG_TABLE_OPTIONAL_COLUMNS: SongTableOptionalColumn[] = [
 export const SONG_TABLE_COLUMN_LABELS: Record<SongTableOptionalColumn, string> = {
   artist: 'Artist',
   album: 'Album',
+  ep: 'EP',
   genre: 'Genre',
   subgenre: 'Subgenre',
   bpm: 'BPM',
@@ -77,6 +81,7 @@ export const SONG_TABLE_DEFAULT_COLUMN_ORDER: SongTableReorderableColumn[] = [
   'dna',
   'artist',
   'album',
+  'ep',
   'genre',
   'subgenre',
   'bpm',
@@ -95,13 +100,36 @@ export const SONG_TABLE_EP_COLUMNS_STORAGE_KEY = 'serg-browser-ep-songs-visible-
 export const SONG_TABLE_EP_COLUMNS_VERSION_KEY = 'serg-browser-ep-songs-visible-columns-version'
 export const SONG_TABLE_EP_COLUMNS_VERSION = 'v1-artist-album-time-genre-subgenre'
 export const SONG_TABLE_COLUMN_ORDER_STORAGE_KEY = 'serg-browser-songs-column-order'
+export const SONG_TABLE_COLUMN_WIDTHS_STORAGE_KEY = 'serg-browser-songs-column-widths'
 export const SONG_TABLE_SORT_STORAGE_KEY = 'serg-browser-songs-sort'
+
+export const SONG_TABLE_COLUMN_WIDTH_MIN = 48
+export const SONG_TABLE_COLUMN_WIDTH_MAX = 520
+
+export const SONG_TABLE_DEFAULT_COLUMN_WIDTHS: Record<SongTableReorderableColumn, number> = {
+  title: 240,
+  dna: 56,
+  artist: 148,
+  album: 148,
+  ep: 132,
+  genre: 120,
+  subgenre: 120,
+  bpm: 64,
+  key: 72,
+  year: 56,
+  date: 96,
+  date_created: 96,
+  rating: 88,
+  play_count: 72,
+  duration: 68,
+}
 
 export const COLUMN_SORT_FIELD: Partial<Record<SongTableReorderableColumn, SongTableSortField>> = {
   title: 'title',
   dna: 'sonic_dna',
   artist: 'artist',
   album: 'album',
+  ep: 'ep',
   genre: 'genre',
   subgenre: 'subgenre',
   bpm: 'bpm',
@@ -236,6 +264,56 @@ export function saveSongTableColumnOrder(order: SongTableReorderableColumn[]): v
   }
 }
 
+export function loadSongTableColumnWidths(): Record<SongTableReorderableColumn, number> {
+  const merged = { ...SONG_TABLE_DEFAULT_COLUMN_WIDTHS }
+  if (typeof window === 'undefined') return merged
+  try {
+    const raw = localStorage.getItem(SONG_TABLE_COLUMN_WIDTHS_STORAGE_KEY)
+    if (!raw) return merged
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return merged
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!ALL_REORDERABLE.has(key as SongTableReorderableColumn)) continue
+      const n = Number(value)
+      if (!Number.isFinite(n)) continue
+      merged[key as SongTableReorderableColumn] = Math.min(
+        SONG_TABLE_COLUMN_WIDTH_MAX,
+        Math.max(SONG_TABLE_COLUMN_WIDTH_MIN, Math.round(n)),
+      )
+    }
+    return merged
+  } catch {
+    return merged
+  }
+}
+
+export function saveSongTableColumnWidths(
+  widths: Partial<Record<SongTableReorderableColumn, number>>,
+): void {
+  try {
+    const payload: Partial<Record<SongTableReorderableColumn, number>> = {}
+    for (const [key, value] of Object.entries(widths)) {
+      if (!ALL_REORDERABLE.has(key as SongTableReorderableColumn)) continue
+      const n = Number(value)
+      if (!Number.isFinite(n)) continue
+      payload[key as SongTableReorderableColumn] = Math.min(
+        SONG_TABLE_COLUMN_WIDTH_MAX,
+        Math.max(SONG_TABLE_COLUMN_WIDTH_MIN, Math.round(n)),
+      )
+    }
+    localStorage.setItem(SONG_TABLE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(payload))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clampSongTableColumnWidth(width: number): number {
+  return Math.min(
+    SONG_TABLE_COLUMN_WIDTH_MAX,
+    Math.max(SONG_TABLE_COLUMN_WIDTH_MIN, Math.round(width)),
+  )
+}
+
 export function loadSongTableSort(): { field: SongTableSortField; dir: 'asc' | 'desc' } {
   const fallback = { field: 'title' as const, dir: 'asc' as const }
   if (typeof window === 'undefined') return fallback
@@ -320,7 +398,8 @@ const DNA_STATUS_RANK: Record<string, number> = {
 export function sortSongTableTracks(
   tracks: Track[],
   field: SongTableSortField,
-  dir: 'asc' | 'desc'
+  dir: 'asc' | 'desc',
+  opts?: { epLabel?: (track: Track) => string },
 ): Track[] {
   const out = [...tracks]
   out.sort((a, b) => {
@@ -334,6 +413,9 @@ export function sortSongTableTracks(
         break
       case 'album':
         cmp = compareStrings(a.album || '', b.album || '', 'asc')
+        break
+      case 'ep':
+        cmp = compareStrings(opts?.epLabel?.(a) || '', opts?.epLabel?.(b) || '', 'asc')
         break
       case 'genre':
         cmp = compareStrings(a.genre || '', b.genre || '', 'asc')

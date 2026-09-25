@@ -2,16 +2,35 @@
 
 import Image from 'next/image'
 import { CRATE_MOSAIC_SIZE } from '@/lib/catalog-sync'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+
+function mosaicCanOptimize(src: string): boolean {
+  if (!src || src.startsWith('blob:') || src.startsWith('data:')) return false
+  if (src.startsWith('/') && !src.startsWith('//')) return true
+  try {
+    const { hostname } = new URL(src)
+    return (
+      hostname.endsWith('.supabase.co') ||
+      hostname === 's3.amazonaws.com' ||
+      hostname.endsWith('.amazonaws.com') ||
+      hostname.endsWith('.fandalism.com') ||
+      hostname.endsWith('.scdn.co')
+    )
+  } catch {
+    return false
+  }
+}
 
 function MosaicTile({ src }: { src: string }) {
-  const sameOrigin = src.startsWith('/') && !src.startsWith('//')
-  if (sameOrigin) {
+  const resolved = resolveImageUrl(src) || src
+  if (mosaicCanOptimize(resolved)) {
     return (
       <Image
-        src={src.split('?')[0] || src}
+        src={resolved}
         alt=""
         fill
-        sizes="80px"
+        sizes="48px"
+        quality={45}
         className="object-cover"
         loading="lazy"
       />
@@ -19,7 +38,7 @@ function MosaicTile({ src }: { src: string }) {
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+    <img src={resolved} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
   )
 }
 

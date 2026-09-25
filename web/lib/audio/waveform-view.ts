@@ -158,19 +158,35 @@ export type ElementBandEnergies = {
   vocals: number
 }
 
-/** Drum-element + spectral-range palette for `drums` mode. */
+/** Drum-element + spectral-range palette for `drums` mode.
+ * Kick / sub = prominent red; snare / clap = green; hats = blue (lighter = higher).
+ */
 export const DRUM_SPECTRAL_COLORS = {
-  kick: [255, 72, 8] as const, // sub / kick punch
-  snare: [255, 140, 48] as const, // snare body (mid punch)
-  clap: [255, 230, 90] as const, // clap / brighter mid-high
-  hat: [70, 230, 255] as const, // hats / air
-  sub: [255, 40, 20] as const, // deepest low
-  lowMid: [255, 140, 20] as const, // bass body
-  mid: [255, 64, 180] as const, // musical mids
-  highMid: [120, 255, 90] as const, // presence
-  air: [140, 160, 255] as const, // top air
-  flux: [255, 196, 96] as const, // warm attack hairline (not white — keeps tape dark)
+  kick: [255, 48, 12] as const, // kick punch — most prominent red
+  snare: [48, 220, 72] as const, // snare body
+  clap: [90, 255, 96] as const, // clap / brighter mid
+  hat: [36, 120, 255] as const, // hats base (deep blue)
+  hatLight: [170, 220, 255] as const, // top air / lightest percussion
+  sub: [255, 28, 8] as const, // deepest low — hottest red
+  lowMid: [255, 72, 24] as const, // bass body still red-led
+  mid: [64, 210, 80] as const, // musical mids → snare/clap green family
+  highMid: [110, 255, 130] as const, // presence / clap sheen (green)
+  air: [150, 205, 255] as const, // top air (light blue)
+  flux: [255, 90, 40] as const, // kick-led attack hairline
 } as const
+
+/** Hi-hat / percussion blue: higher frequency energy → lighter blue. */
+export function drumHatRgb(high01: number): readonly [number, number, number] {
+  const t = Math.max(0, Math.min(1, high01))
+  const soft = t * t * (3 - 2 * t)
+  const [r0, g0, b0] = DRUM_SPECTRAL_COLORS.hat
+  const [r1, g1, b1] = DRUM_SPECTRAL_COLORS.hatLight
+  return [
+    Math.round(r0 + (r1 - r0) * soft),
+    Math.round(g0 + (g1 - g0) * soft),
+    Math.round(b0 + (b1 - b0) * soft),
+  ]
+}
 
 export const WAVEFORM_COLOR_MODES: Array<{
   id: WaveformColorMode
@@ -188,7 +204,7 @@ export const WAVEFORM_COLOR_MODES: Array<{
     id: 'drums',
     label: 'Drums',
     shortLabel: 'Drums',
-    description: 'Kick / snare / clap / hat pockets from DNA + DSP bands',
+    description: 'Kick red · snare/clap green · hats blue (lighter = higher)',
   },
   {
     id: 'elements',
@@ -519,8 +535,8 @@ export function resolveWaveformColor(
 }
 
 /**
- * Drums mode: prioritize kick / clap / hat labels, otherwise blend spectral ranges
- * (sub → low-mid → mid → high-mid → air) from Low/Mid/High band energy.
+ * Drums mode: kick = prominent red, snare/clap = green, hats = blue
+ * (lighter blue as high-band energy rises).
  */
 export function drumSpectralColor(
   sample: Pick<WaveformSample, 'positive' | 'elementType' | 'elementConfidence' | 'bands'>,
@@ -528,6 +544,7 @@ export function drumSpectralColor(
 ): string {
   const amp = expandPeakValley(sample.positive ?? 0.5, { power: 1.35, gain: 1.25, floor: 0 })
   const confidence = sample.elementConfidence ?? 0
+  const highBand = sample.bands?.high ?? 0
   if (sample.elementType && confidence > 0.28) {
     const scale = 0.42 + amp * 0.82
     switch (sample.elementType) {
@@ -536,7 +553,7 @@ export function drumSpectralColor(
         return rgbString(r * scale, g * scale, b * scale)
       }
       case 'snare': {
-        const [r, g, b] = DRUM_SPECTRAL_COLORS.mid
+        const [r, g, b] = DRUM_SPECTRAL_COLORS.snare
         return rgbString(r * scale, g * scale, b * scale)
       }
       case 'clap': {
@@ -544,7 +561,7 @@ export function drumSpectralColor(
         return rgbString(r * scale, g * scale, b * scale)
       }
       case 'hihat': {
-        const [r, g, b] = DRUM_SPECTRAL_COLORS.hat
+        const [r, g, b] = drumHatRgb(Math.max(highBand, confidence * 0.55 + amp * 0.35))
         return rgbString(r * scale, g * scale, b * scale)
       }
       default:
@@ -552,24 +569,26 @@ export function drumSpectralColor(
     }
   }
 
-  const bands = dominateBands(dnaTintBands(inferBandsFromSample(sample), profile), 4.2)
+  // Bias spectral mix toward low/kick so red reads as the dominant body.
+  const bands = dominateBands(dnaTintBands(inferBandsFromSample(sample), profile), 4.6)
   const total = bands.low + bands.mid + bands.high + 1e-6
   const spectral = sharpenBandWeights(
     {
-      sub: bands.low * (bands.low / total),
-      lowMid: bands.low * (1 - bands.low / total) + bands.mid * 0.25,
-      mid: bands.mid * 0.7,
-      highMid: bands.mid * 0.3 + bands.high * 0.35,
-      air: bands.high * 0.75,
+      sub: bands.low * 1.35,
+      lowMid: bands.low * 0.55 + bands.mid * 0.12,
+      mid: bands.mid * 0.55,
+      highMid: bands.mid * 0.22 + bands.high * 0.18,
+      air: bands.high * 0.7,
     },
-    2.4,
-    0.04,
+    2.85,
+    0.03,
   )
   const sub = spectral.sub
   const lowMid = spectral.lowMid
   const mid = spectral.mid
   const highMid = spectral.highMid
   const air = spectral.air
+  const hatTone = drumHatRgb(bands.high / total)
 
   const energy = 0.22 + amp * 0.98
   let r =
@@ -577,21 +596,21 @@ export function drumSpectralColor(
     lowMid * DRUM_SPECTRAL_COLORS.lowMid[0] +
     mid * DRUM_SPECTRAL_COLORS.mid[0] +
     highMid * DRUM_SPECTRAL_COLORS.highMid[0] +
-    air * DRUM_SPECTRAL_COLORS.air[0]
+    air * hatTone[0]
   let g =
     sub * DRUM_SPECTRAL_COLORS.sub[1] +
     lowMid * DRUM_SPECTRAL_COLORS.lowMid[1] +
     mid * DRUM_SPECTRAL_COLORS.mid[1] +
     highMid * DRUM_SPECTRAL_COLORS.highMid[1] +
-    air * DRUM_SPECTRAL_COLORS.air[1]
+    air * hatTone[1]
   let b =
     sub * DRUM_SPECTRAL_COLORS.sub[2] +
     lowMid * DRUM_SPECTRAL_COLORS.lowMid[2] +
     mid * DRUM_SPECTRAL_COLORS.mid[2] +
     highMid * DRUM_SPECTRAL_COLORS.highMid[2] +
-    air * DRUM_SPECTRAL_COLORS.air[2]
+    air * hatTone[2]
 
-  ;[r, g, b] = boostRgbSaturation(r * energy, g * energy, b * energy, 2.1)
+  ;[r, g, b] = boostRgbSaturation(r * energy, g * energy, b * energy, 2.25)
   return rgbString(r, g, b)
 }
 

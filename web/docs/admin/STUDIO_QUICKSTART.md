@@ -6,7 +6,7 @@ The Studio dashboard is four surfaces:
 1. **Home** → `/studio` — readiness snapshot
 2. **Create** → `/studio/create` — new release, track upload, CSV ISRC/split import, or DistroKid My Music JSON
 3. **Releases** → `/studio/releases` — work a package through catalog → rights → copy → delivery → launch
-4. **Pipeline** → `/studio/pipeline` — ops queues (DSP ingest, contracts, UGC, collab), marketing + DSP connect, calendar, and ISRC registry
+4. **Pipeline** → `/studio/pipeline` — ops queues, marketing, calendar, DistroKid upload slate, and ISRC registry
 5. **Release Collab** → `/studio/collab` — collaborator thread + magic-link review portal
 
 ## Setup
@@ -30,7 +30,8 @@ SOUNDEXCHANGE_ACCOUNT_ID=your_account_id
 SOUNDEXCHANGE_BASE_URL=https://api.soundexchange.com  # Optional
 
 # Distributor API (Revelator aggregator — DSP delivery)
-# Without keys, Delivery → Distribute to stores dry-runs (no DSP upload).
+# Without keys, scheduled DSP delivery is DistroKid (Pipeline → DistroKid). DistroKid has no API key.
+# Revelator dry-run still validates a payload and does not upload audio.
 # Partner/sandbox: support@revelator.com — then set keys and REVELATOR_DRY_RUN=0.
 REVELATOR_API_KEY=your_api_key
 REVELATOR_PARTNER_USER_ID=your_partner_user_id

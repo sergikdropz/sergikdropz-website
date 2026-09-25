@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface Category {
   id: string
@@ -15,6 +15,7 @@ interface ShopFiltersProps {
   onSearchChange: (query: string) => void
   sortBy: string
   onSortChange: (sort: string) => void
+  resultCount?: number
 }
 
 export default function ShopFilters({
@@ -25,7 +26,21 @@ export default function ShopFilters({
   onSearchChange,
   sortBy,
   onSortChange,
+  resultCount,
 }: ShopFiltersProps) {
+  const [draftQuery, setDraftQuery] = useState(searchQuery)
+
+  useEffect(() => {
+    setDraftQuery(searchQuery)
+  }, [searchQuery])
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (draftQuery !== searchQuery) onSearchChange(draftQuery)
+    }, 200)
+    return () => window.clearTimeout(handle)
+  }, [draftQuery, onSearchChange, searchQuery])
+
   return (
     <div className="space-y-4">
       {/* Category pills */}
@@ -59,10 +74,11 @@ export default function ShopFilters({
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
           <input
-            type="text"
+            type="search"
             placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={draftQuery}
+            onChange={(e) => setDraftQuery(e.target.value)}
+            aria-label="Search shop catalog"
             className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:border-gray-500 transition-colors"
           />
         </div>
@@ -77,6 +93,11 @@ export default function ShopFilters({
           <option value="name-az">Name: A-Z</option>
         </select>
       </div>
+      {typeof resultCount === 'number' && (
+        <p className="text-xs text-gray-500" aria-live="polite">
+          Showing {resultCount} {resultCount === 1 ? 'result' : 'results'}
+        </p>
+      )}
     </div>
   )
 }

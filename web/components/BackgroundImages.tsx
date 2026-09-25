@@ -166,9 +166,11 @@ function MosaicCrossfadeCell({
               quality={imageQuality}
               sizes={imageSizes}
               unoptimized={shouldUnoptimizeImage(layer.src)}
-              priority={priority && layer.key === layerKey}
-              fetchPriority={layer.key === layerKey ? fetchPriority : 'auto'}
-              loading={layer.key === layerKey ? loading : 'lazy'}
+              // Keep priority on outgoing crossfade layers too — they stay full-cell size
+              // and can still be reported as LCP while the fade runs.
+              priority={priority}
+              fetchPriority={priority ? 'high' : fetchPriority}
+              loading={priority ? 'eager' : loading}
               onError={() => onError(layer.id)}
             />
           </div>
@@ -346,7 +348,8 @@ export default function BackgroundImages() {
     })
   }, [liveCovers, availableImages, variant])
 
-  // First mosaic tile is often LCP on vault/music routes — opt it into next/image priority.
+  // Only the first mosaic cell is LCP-critical; the rest must not steal bandwidth
+  // from vault crate thumbs (priorityCount = gridImageCount was a regression).
   const priorityCount = coverMosaic ? 1 : 0
   const imageQuality = isWebKit
     ? isMobile
@@ -384,7 +387,7 @@ export default function BackgroundImages() {
               imageQuality={imageQuality}
               imageSizes={imageSizes}
               priority={eager}
-              fetchPriority={index === 0 ? 'high' : eager ? 'high' : 'auto'}
+              fetchPriority={eager ? 'high' : 'auto'}
               loading={eager ? 'eager' : 'lazy'}
               onError={(id) => setImageErrors((prev) => new Set(prev).add(id))}
             />

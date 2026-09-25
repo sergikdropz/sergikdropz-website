@@ -21,15 +21,13 @@ function ConsentDialog({
   onAccept: () => void
   onDecline: () => void
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+
   return (
     <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-black/95 p-5 shadow-2xl sm:p-6">
       <div className="flex flex-col gap-4">
-        <div className="text-sm text-gray-200">
-          <span className="font-semibold text-white">Analytics consent.</span>{' '}
-          We use privacy-friendly analytics to understand what content performs best.
-          No audio autoplay and no tracking on admin routes.
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <p className="text-center text-sm text-gray-200">This website uses cookies.</p>
+        <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
           <button
             type="button"
             onClick={onDecline}
@@ -45,6 +43,24 @@ function ConsentDialog({
             Accept
           </button>
         </div>
+        <p className="text-center text-[11px] leading-relaxed text-gray-500">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((open) => !open)}
+            className="underline decoration-gray-600 underline-offset-2 hover:text-gray-300"
+            aria-expanded={detailsOpen}
+          >
+            Click here
+          </button>{' '}
+          for agreement information.
+        </p>
+        {detailsOpen ? (
+          <div className="text-center text-[11px] leading-relaxed text-gray-400">
+            Site cache is stored for your profile memory. That reduces data buffering and speeds up later visits. If
+            you subscribe to watch a video, the email from your Google account or one you enter joins the SERGIK
+            contact list for releases and promo. You can unsubscribe from any message.
+          </div>
+        ) : null}
       </div>
     </div>
   )

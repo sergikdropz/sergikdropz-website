@@ -11,8 +11,10 @@ web/public/audio/**
 web/temp/
 web/temp/**
 
-# Exclude mobile app (not needed for web deployment)
-mobile/
+# Exclude React Native / Expo app at repo root only.
+# Bare `mobile/` also drops web/components/mobile/ (needed for web builds).
+/mobile/
+/mobile/**
 
 # Exclude node_modules (will be installed during build)
 **/node_modules

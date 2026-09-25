@@ -6,6 +6,7 @@
 export type AnalyticsConsentStatus = 'granted' | 'denied' | 'unknown'
 
 const ANALYTICS_CONSENT_KEY = 'analytics_consent'
+const PROMO_CONTACT_CONSENT_KEY = 'promo_contact_consent'
 
 export function getAnalyticsConsent(): AnalyticsConsentStatus {
   if (typeof window === 'undefined') {
@@ -25,7 +26,15 @@ export function setAnalyticsConsent(status: Exclude<AnalyticsConsentStatus, 'unk
   }
 
   localStorage.setItem(ANALYTICS_CONSENT_KEY, status)
+  localStorage.setItem(PROMO_CONTACT_CONSENT_KEY, status)
   window.dispatchEvent(new CustomEvent('analytics-consent', { detail: status }))
+}
+
+export function getPromoContactConsent(): AnalyticsConsentStatus {
+  if (typeof window === 'undefined') return 'unknown'
+  const stored = localStorage.getItem(PROMO_CONTACT_CONSENT_KEY)
+  if (stored === 'granted' || stored === 'denied') return stored
+  return 'unknown'
 }
 
 export function isAnalyticsConsentGranted(): boolean {

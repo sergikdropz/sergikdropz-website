@@ -1,3 +1,5 @@
+import { DEFAULT_LABEL_NAME } from '@/lib/studio/constants'
+
 export const TRACK_LANGUAGES = [
   { id: 'en', label: 'English' },
   { id: 'es', label: 'Spanish' },
@@ -126,7 +128,7 @@ export function buildReleasePackageSeeds(
   } = {},
 ): ReleasePackageSeed {
   const seed: ReleasePackageSeed = {}
-  const label = clean(release.label_name) || 'SERGIK'
+  const label = clean(release.label_name) || DEFAULT_LABEL_NAME
   if (!clean(release.album_artist)) seed.album_artist = label
   if (!clean(release.upc) && opts.upc) seed.upc = opts.upc
   const street = clean(release.release_date)

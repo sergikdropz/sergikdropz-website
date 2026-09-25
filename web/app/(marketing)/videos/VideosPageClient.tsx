@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { FaYoutube } from 'react-icons/fa'
 import NavigationButtons from '@/components/NavigationButtons'
 import VideoCard from '@/components/VideoCard'
-import { featuredVideo, publicVideos } from '@/lib/videos/catalog-model'
+import { publicVideos } from '@/lib/videos/catalog-model'
 import { VIDEO_CATEGORIES } from '@/lib/videos/types'
 import type { CatalogVideo, VideoCatalog } from '@/lib/videos/types'
 
@@ -40,7 +40,6 @@ export default function VideosPageClient({ initialCatalog }: VideosPageClientPro
   }, [initialCatalog.youtube_channel])
 
   const videos = publicVideos(catalog)
-  const hero = featuredVideo(videos)
   const categories = useMemo(() => {
     const present = new Set(videos.map((video) => video.category))
     return VIDEO_CATEGORIES.filter((category) => present.has(category.id))
@@ -51,7 +50,7 @@ export default function VideosPageClient({ initialCatalog }: VideosPageClientPro
     return videos.filter((video) => video.category === filter)
   }, [videos, filter])
 
-  const gridVideos = hero && filter === 'all' ? visible.filter((video) => video.id !== hero.id) : visible
+  const gridVideos = visible
 
   return (
     <div className="relative min-h-screen pt-20">
@@ -68,12 +67,6 @@ export default function VideosPageClient({ initialCatalog }: VideosPageClientPro
 
         {videos.length > 0 ? (
           <>
-            {hero && filter === 'all' && (
-              <div className="mx-auto mb-10 max-w-5xl">
-                <VideoCard video={hero} variant="hero" />
-              </div>
-            )}
-
             <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
               <FilterChip
                 active={filter === 'all'}

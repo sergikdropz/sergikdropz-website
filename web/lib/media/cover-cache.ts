@@ -6,6 +6,7 @@
 
 import { withArtworkCacheBust, stripArtworkCacheBust } from '@/lib/catalog-sync/artwork'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { isLocalFolderArtworkPath } from '@/utils/imageOptimization'
 
 export const COVER_CACHE_NAME = 'sergik-cover-cache-v1'
 export const COVER_PREFETCH_LIMIT = 32
@@ -91,8 +92,12 @@ export function nextImageCoverUrl(src: string, width = 256): string | null {
       /* fall through */
     }
   }
-  if (busted.startsWith('/')) {
-    return `/_next/image?url=${encodeURIComponent(busted)}&w=${width}&q=75`
+  if (isLocalFolderArtworkPath(busted)) {
+    return busted
+  }
+  const pathOnly = busted.split('?')[0]
+  if (pathOnly.startsWith('/')) {
+    return `/_next/image?url=${encodeURIComponent(pathOnly)}&w=${width}&q=75`
   }
   return `/_next/image?url=${encodeURIComponent(busted)}&w=${width}&q=75`
 }

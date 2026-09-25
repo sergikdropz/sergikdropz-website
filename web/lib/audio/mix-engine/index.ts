@@ -149,6 +149,7 @@ export {
   resolveSnareClapOnsetSec,
   buildGridOnsetBundle,
   emphasizePeaksNearOnsets,
+  remeshPeaksOntoOnsets,
   isGridLocked,
   isGridManual,
   readGridLockScore,

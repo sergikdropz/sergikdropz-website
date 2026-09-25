@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { headers } from 'next/headers'
+import { persistPromoContact } from '@/lib/fan-crm'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { parseSupabaseUserIdFromStripeMeta } from '@/lib/stripe/user-metadata'
 import { calculateSplitsForProduct, calculateSplitsForBundle } from '@/lib/revenue-splits'
@@ -42,6 +43,19 @@ export async function POST(request: Request) {
     try {
       const customerEmail = session.customer_email || session.customer_details?.email || null
       const customerName = session.customer_details?.name || null
+      if (customerEmail) {
+        try {
+          await persistPromoContact(supabase, {
+            email: customerEmail,
+            name: customerName,
+            source: productType === 'tip' ? 'tip' : 'shop',
+            tags: ['shop', 'subscriber'],
+            platforms: ['shop'],
+          })
+        } catch (contactErr) {
+          console.warn('shop contact skipped:', contactErr)
+        }
+      }
       const linkedUserId = parseSupabaseUserIdFromStripeMeta(session.metadata)
       const purchaseUser = linkedUserId ? { user_id: linkedUserId } : {}
 
@@ -105,19 +119,6 @@ export async function POST(request: Request) {
           product_type: 'tip',
           ...purchaseUser,
         })
-
-        // Add tipper to email subscribers
-        if (customerEmail) {
-          await supabase.from('email_subscribers').upsert(
-            {
-              email: customerEmail,
-              name: customerName,
-              source: 'tip',
-              is_active: true,
-            },
-            { onConflict: 'email' }
-          )
-        }
 
         console.log('Tip saved:', session.id)
       }

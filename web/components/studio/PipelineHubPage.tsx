@@ -9,6 +9,7 @@ import CommandCenterPanel from './CommandCenterPanel'
 import MarketingPipelinePanel from './MarketingPipelinePanel'
 import ReleaseCalendarPanel from './ReleaseCalendarPanel'
 import SoundExchangePanel from './SoundExchangePanel'
+import DistroKidQueuePanel from './DistroKidQueuePanel'
 import {
   parseStudioPipelineTab,
   studioPipelineHref,
@@ -35,6 +36,12 @@ const TABS = [
     hint: 'Yearly slate and spacing',
   },
   {
+    id: 'distrokid',
+    label: 'DistroKid',
+    href: studioPipelineHref('distrokid'),
+    hint: 'Scheduled uploads until Revelator',
+  },
+  {
     id: 'isrcs',
     label: 'ISRCs',
     href: studioPipelineHref('isrcs'),
@@ -53,6 +60,10 @@ const COPY: Record<StudioPipelineTab, { subtitle: string }> = {
   },
   calendar: {
     subtitle: 'The yearly slate. Add placeholders here, then create the real package when masters land.',
+  },
+  distrokid: {
+    subtitle:
+      'Scheduled DSP delivery through DistroKid until Revelator Partner API keys are live. Upload on DistroKid, then mark the release submitted.',
   },
   isrcs: {
     subtitle:
@@ -83,6 +94,8 @@ function PipelineHubInner() {
         <MarketingPipelinePanel />
       ) : active === 'calendar' ? (
         <ReleaseCalendarPanel />
+      ) : active === 'distrokid' ? (
+        <DistroKidQueuePanel />
       ) : active === 'isrcs' ? (
         <SoundExchangePanel />
       ) : (

@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { appendFile } from 'fs/promises'
-import { join } from 'path'
 import { getServerSession } from '@/lib/auth'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabaseReachability'
 import { bumpMusicLibraryPublishVersion } from '@/lib/music-library-publish'
 import { persistSystemicCover } from '@/lib/catalog-sync/persist-systemic-cover'
-
-const logPath = join(process.cwd(), '.cursor', 'debug.log')
-const log = async (obj: any) => { try { await appendFile(logPath, JSON.stringify({...obj,timestamp:Date.now(),sessionId:'debug-session',runId:'run1'})+'\n'); } catch {} }
+import { artworkUrlForCatalogStorage } from '@/lib/catalog-sync/artwork'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
 function asJsonObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -33,11 +30,14 @@ function folderAlbumArtist(row: any): string | null {
 function mapFolderRow(row: any) {
   if (!row) return row
   const albumArtist = folderAlbumArtist(row)
+  const rawArt = row.artwork || row.artwork_url || undefined
+  const artwork = rawArt ? resolveImageUrl(String(rawArt)) || rawArt : undefined
   return {
     ...row,
     album_artist: albumArtist,
     albumArtist,
-    artwork: row.artwork || row.artwork_url || undefined,
+    artwork,
+    artwork_url: artwork || row.artwork_url,
   }
 }
 
@@ -58,9 +58,6 @@ export const dynamic = 'force-dynamic'
  * Query params: ?includeHidden=true&includeArchived=true (admin only)
  */
 export async function GET(request: NextRequest) {
-  // #region agent log
-  await log({location:'folders/route.ts:9',message:'GET /api/music-library/folders entry',data:{},hypothesisId:'A'})
-  // #endregion
   try {
     let supabase
     try {
@@ -85,9 +82,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // #region agent log
-    await log({location:'folders/route.ts:16',message:'Querying folders',data:{includeHidden,includeArchived},hypothesisId:'B'})
-    // #endregion
     let query = supabase
       .from('music_library_folders')
       .select('id,name,type,parent_id,hidden,is_archived,archived_at,artwork_url,year,display_order,metadata,created_at,updated_at')
@@ -103,17 +97,10 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query
 
-    // #region agent log
-    await log({location:'folders/route.ts:28',message:'Folders query result',data:{hasData:!!data,dataCount:data?.length||0,hasError:!!error,errorMessage:error?.message||null,errorCode:error?.code||null},hypothesisId:'B'})
-    // #endregion
-
     // Supabase/Cloudflare outages sometimes surface as HTML in error.message
     const isHtml = (v: any) => typeof v === 'string' && v.includes('<!DOCTYPE html>')
 
     if (error || (error && isHtml((error as any)?.message)) || isHtml(data)) {
-      // #region agent log
-      await log({location:'folders/route.ts:31',message:'Folders query error',data:{error:error?.message,code:error?.code,details:error?.details},hypothesisId:'B'})
-      // #endregion
       console.error('Error fetching folders:', error)
       return NextResponse.json(
         {
@@ -125,16 +112,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // #region agent log
-    await log({location:'folders/route.ts:38',message:'GET /api/music-library/folders success',data:{foldersCount:data?.length||0},hypothesisId:'A'})
-    // #endregion
     const headers: Record<string, string> = { 'Cache-Control': 'private, no-store, max-age=0, must-revalidate' }
 
     return NextResponse.json({ folders: (data || []).map(mapFolderRow) }, { headers })
   } catch (error: any) {
-    // #region agent log
-    await log({location:'folders/route.ts:42',message:'GET /api/music-library/folders error',data:{errorMessage:error?.message,errorStack:error?.stack},hypothesisId:'C'})
-    // #endregion
     console.error('Error in GET /api/music-library/folders:', error)
     return NextResponse.json(
       {
@@ -244,27 +225,33 @@ export async function PUT(request: NextRequest) {
     if (updates.type !== undefined) dbUpdates.type = updates.type
     if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId
     if (updates.hidden !== undefined) dbUpdates.hidden = updates.hidden
-    if (updates.artwork !== undefined) dbUpdates.artwork_url = updates.artwork || null
+    if (updates.artwork !== undefined) {
+      dbUpdates.artwork_url = updates.artwork
+        ? artworkUrlForCatalogStorage(String(updates.artwork)) || null
+        : null
+    }
     if (updates.year !== undefined) dbUpdates.year = updates.year
     const albumArtist =
       updates.albumArtist !== undefined ? updates.albumArtist : updates.album_artist
     if (updates.displayOrder !== undefined) dbUpdates.display_order = updates.displayOrder
-    if (updates.metadata !== undefined) dbUpdates.metadata = updates.metadata
     if (updates.is_archived !== undefined) dbUpdates.is_archived = updates.is_archived
     if (updates.archived_at !== undefined) dbUpdates.archived_at = updates.archived_at
 
-    if (albumArtist !== undefined) {
-      dbUpdates.album_artist = albumArtist
+    if (albumArtist !== undefined || updates.metadata !== undefined) {
       const { data: existing } = await supabase
         .from('music_library_folders')
         .select('metadata')
         .eq('id', id)
         .single()
-      dbUpdates.metadata = {
+      const mergedMeta = {
         ...asJsonObject(existing?.metadata),
         ...asJsonObject(updates.metadata),
-        album_artist: albumArtist,
       }
+      if (albumArtist !== undefined) {
+        dbUpdates.album_artist = albumArtist
+        mergedMeta.album_artist = albumArtist
+      }
+      dbUpdates.metadata = mergedMeta
     }
 
     let { data, error } = await supabase
@@ -300,11 +287,15 @@ export async function PUT(request: NextRequest) {
     let tracksUpdated = 0
     let audioFilesUpdated = 0
     if (updates.artwork !== undefined) {
+      const storedArtwork =
+        updates.artwork != null && String(updates.artwork).trim()
+          ? artworkUrlForCatalogStorage(String(updates.artwork))
+          : null
       try {
         const propagated = await persistSystemicCover(
           supabase,
           id,
-          (updates.artwork as string) || null,
+          storedArtwork,
         )
         tracksUpdated = propagated.tracksUpdated
         audioFilesUpdated = propagated.audioFilesUpdated

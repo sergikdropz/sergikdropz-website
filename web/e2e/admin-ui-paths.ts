@@ -43,4 +43,5 @@ export const ADMIN_UI_CRAWL_PATHS: readonly string[] = [
   '/studio/pipeline',
   '/studio/pipeline?tab=marketing',
   '/studio/create',
+  '/studio/royalties',
 ]

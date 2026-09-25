@@ -152,15 +152,27 @@ export function mergeReleaseOntoVaultTrack(
   meta.merged_from_release = true
   meta.merged_at = new Date().toISOString()
 
-  const preferReleaseFile =
-    release.file_url &&
-    (isReleaseMasterUrl(release.file_url) || !isReleaseMasterUrl(keep.file_url))
+  const releaseUrl = release.file_url || ''
+  const releaseIsWavMaster = /\.wav(\?|$)/i.test(releaseUrl) || /\/dsp-masters\//i.test(releaseUrl)
+  if (releaseIsWavMaster && release.file_url) {
+    meta.distribution_wav_url = release.file_url
+    meta.dspMastersPath = meta.dspMastersPath || release.file_url
+  }
+  const keepIsStream = /\.mp3(\?|$)/i.test(keep.file_url || '')
+  const releaseIsStream = /\.mp3(\?|$)/i.test(releaseUrl)
+  const streamUrl = keepIsStream
+    ? keep.file_url || null
+    : releaseIsStream
+      ? release.file_url || null
+      : keep.file_url || release.file_url || null
 
   return {
-    file_url: preferReleaseFile ? release.file_url || null : keep.file_url || null,
-    audio_file_id: preferReleaseFile
-      ? release.audio_file_id || keep.audio_file_id || null
-      : keep.audio_file_id || release.audio_file_id || null,
+    file_url: streamUrl,
+    audio_file_id: keepIsStream
+      ? keep.audio_file_id || null
+      : releaseIsStream
+        ? release.audio_file_id || keep.audio_file_id || null
+        : keep.audio_file_id || null,
     artwork_url: keep.artwork_url || release.artwork_url || null,
     duration: keep.duration ?? release.duration ?? null,
     date: keep.date || release.date || null,

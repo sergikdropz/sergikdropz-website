@@ -4,6 +4,9 @@ import {
   absoluteMediaArtworkUrl,
   artworkMimeType,
   buildLockScreenArtworkEntries,
+  buildMediaSessionArtworkFromRef,
+  mediaSessionArtworkFetchUrl,
+  resolveMediaSessionOrigin,
   lockScreenPrefersTrackSkip,
 } from './lock-screen-media'
 
@@ -23,11 +26,31 @@ describe('lock-screen-media', () => {
     )
   })
 
+  it('prefers HTTPS NEXT_PUBLIC_SITE_URL when page origin is http', () => {
+    const prev = process.env.NEXT_PUBLIC_SITE_URL
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://sergikdropz.com'
+    expect(resolveMediaSessionOrigin('http://192.168.1.10:3001')).toBe('https://sergikdropz.com')
+    process.env.NEXT_PUBLIC_SITE_URL = prev
+  })
+
+  it('routes local covers through session-artwork API', () => {
+    const url = mediaSessionArtworkFetchUrl('/images/audio/artwork/folder-x.jpg', 'https://sergikdropz.com')
+    expect(url).toBe(
+      'https://sergikdropz.com/api/media/session-artwork?path=%2Fimages%2Faudio%2Fartwork%2Ffolder-x.jpg',
+    )
+  })
+
   it('falls back to brand mark when cover missing', () => {
     const entries = buildLockScreenArtworkEntries(undefined, 'https://sergikdropz.com')
     expect(entries.length).toBeGreaterThan(0)
-    expect(entries[0]?.src).toBe(`https://sergikdropz.com${LOCK_SCREEN_FALLBACK_ARTWORK}`)
+    expect(entries[0]?.src).toContain('/api/media/session-artwork?')
+    expect(entries[0]?.src).toContain(encodeURIComponent(LOCK_SCREEN_FALLBACK_ARTWORK))
     expect(entries[0]?.type).toBe('image/png')
+  })
+
+  it('builds artwork from catalog ref', () => {
+    const entries = buildMediaSessionArtworkFromRef('/images/logo.png', 'https://sergikdropz.com')
+    expect(entries[0]?.src).toContain('session-artwork')
   })
 
   it('prefers track skip on iPhone / iPad / Android', () => {

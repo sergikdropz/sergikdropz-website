@@ -1,8 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { FaPlay, FaYoutube } from 'react-icons/fa'
-import { videoCategoryLabel, youtubeEmbedUrl, youtubeThumbnailUrls, youtubeWatchUrl } from '@/lib/videos/youtube'
+import { FaPlay } from 'react-icons/fa'
+import {
+  isYouTubePlaceholderThumbnail,
+  videoCategoryLabel,
+  youtubeEmbedUrl,
+  youtubeThumbnailUrls,
+} from '@/lib/videos/youtube'
 
 interface Video {
   id: string
@@ -35,7 +40,7 @@ export default function VideoCard({ video, variant = 'default' }: VideoCardProps
   return (
     <article
       className={`group overflow-hidden rounded-2xl border border-white/10 bg-gray-950 transition-colors hover:border-white/25 ${
-        isHero ? 'shadow-2xl shadow-black/40' : ''
+        isHero ? 'shadow-2xl shadow-black/40' : 'flex h-full flex-col'
       }`}
     >
       <div
@@ -57,6 +62,14 @@ export default function VideoCard({ video, variant = 'default' }: VideoCardProps
               src={thumbnailUrl}
               alt=""
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              onLoad={(event) => {
+                if (
+                  isYouTubePlaceholderThumbnail(event.currentTarget.naturalWidth) &&
+                  thumbnailIndex < thumbnailOptions.length - 1
+                ) {
+                  setThumbnailIndex((index) => index + 1)
+                }
+              }}
               onError={() => {
                 if (thumbnailIndex < thumbnailOptions.length - 1) {
                   setThumbnailIndex((index) => index + 1)
@@ -89,28 +102,13 @@ export default function VideoCard({ video, variant = 'default' }: VideoCardProps
           />
         )}
       </div>
-      <div className={isHero ? 'space-y-3 p-5 sm:p-6' : 'space-y-2 p-4'}>
-        <h3 className={`font-semibold text-white ${isHero ? 'text-2xl sm:text-3xl' : 'text-base line-clamp-2'}`}>
+      <div className={isHero ? 'space-y-3 p-5 sm:p-6' : 'flex flex-1 flex-col space-y-2 p-4'}>
+        <h3 className={`font-semibold text-white ${isHero ? 'text-2xl sm:text-3xl' : 'h-12 text-base leading-6 line-clamp-2'}`}>
           {video.title}
         </h3>
-        {video.description && (
-          <p className={`text-gray-400 ${isHero ? 'text-base line-clamp-3' : 'text-sm line-clamp-2'}`}>
-            {video.description}
-          </p>
-        )}
-        <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
-          <span>{video.date}</span>
-          <a
-            href={youtubeWatchUrl(video.youtube_id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-red-400 hover:text-red-300"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <FaYoutube aria-hidden />
-            YouTube
-          </a>
-        </div>
+        <p className={`text-gray-400 ${isHero ? 'text-base line-clamp-3' : 'h-10 text-sm leading-5 line-clamp-2'}`}>
+          {video.description}
+        </p>
       </div>
     </article>
   )

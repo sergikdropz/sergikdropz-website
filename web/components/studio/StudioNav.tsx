@@ -2,7 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { FaCompactDisc, FaComments, FaHome, FaPlus, FaProjectDiagram } from 'react-icons/fa'
+import {
+  FaCompactDisc,
+  FaComments,
+  FaHome,
+  FaMoneyBillWave,
+  FaPlus,
+  FaProjectDiagram,
+} from 'react-icons/fa'
 import { STUDIO_PATHS, isStudioNavActive, type StudioNavId } from '@/lib/studio/studio-ia'
 
 const links: { href: string; label: string; icon: typeof FaHome; id: StudioNavId }[] = [
@@ -11,6 +18,7 @@ const links: { href: string; label: string; icon: typeof FaHome; id: StudioNavId
   { id: 'create', href: STUDIO_PATHS.create, label: 'Create', icon: FaPlus },
   { id: 'pipeline', href: STUDIO_PATHS.pipeline, label: 'Pipeline', icon: FaProjectDiagram },
   { id: 'collab', href: STUDIO_PATHS.collab, label: 'Release Collab', icon: FaComments },
+  { id: 'royalties', href: STUDIO_PATHS.royalties, label: 'Royalties', icon: FaMoneyBillWave },
 ]
 
 export default function StudioNav() {

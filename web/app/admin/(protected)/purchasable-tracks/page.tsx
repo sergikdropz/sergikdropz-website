@@ -18,6 +18,25 @@ interface PurchasableTrack {
   artwork?: string
   duration?: number
   stripePriceId?: string
+  isrc?: string
+  releaseId?: string
+  distributionTrackId?: string
+}
+
+type ScanMode = 'core' | 'full_targets'
+
+type ScanPreview = {
+  mode: ScanMode
+  candidates: PurchasableTrack[]
+  mergedCount: number
+  existingCount: number
+  releases: Array<{
+    title: string
+    eligible: boolean
+    trackCount: number
+    missingStores: string[]
+  }>
+  skippedTrackCount: number
 }
 
 export default function AdminPurchasableTracks() {
@@ -27,6 +46,10 @@ export default function AdminPurchasableTracks() {
   const [loadingTracks, setLoadingTracks] = useState(true)
   const [editing, setEditing] = useState<PurchasableTrack | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [scanMode, setScanMode] = useState<ScanMode>('core')
+  const [scanPreview, setScanPreview] = useState<ScanPreview | null>(null)
+  const [scanBusy, setScanBusy] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
 useEffect(() => {
     if (isAdmin) {
       fetchTracks()
@@ -67,6 +90,49 @@ useEffect(() => {
     }
   }
 
+  async function previewDistributionScan() {
+    setScanBusy(true)
+    setScanMessage(null)
+    try {
+      const response = await fetch(`/api/admin/purchasable-tracks/scan?mode=${scanMode}`)
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Scan failed')
+      }
+      setScanPreview(data)
+    } catch (error: unknown) {
+      setScanMessage(error instanceof Error ? error.message : 'Scan failed')
+      setScanPreview(null)
+    } finally {
+      setScanBusy(false)
+    }
+  }
+
+  async function importFromDistribution() {
+    setScanBusy(true)
+    setScanMessage(null)
+    try {
+      const response = await fetch('/api/admin/purchasable-tracks/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: scanMode }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Import failed')
+      }
+      setScanMessage(
+        `Imported ${data.importedCount} track(s) from live distribution — ${data.totalTracks} total in shop catalog.`,
+      )
+      setScanPreview(null)
+      await fetchTracks()
+    } catch (error: unknown) {
+      setScanMessage(error instanceof Error ? error.message : 'Import failed')
+    } finally {
+      setScanBusy(false)
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Are you sure you want to delete this track?')) return
 
@@ -103,19 +169,90 @@ useEffect(() => {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Purchasable Tracks</h1>
-          <p className="text-gray-400">Manage tracks available for purchase</p>
+          <p className="text-gray-400">
+            Manage tracks available for purchase. Import from Release Studio distribution when streaming
+            store links are live.
+          </p>
         </div>
 
-        <div className="mb-6">
-          <button
-            onClick={() => {
-              setEditing(null)
-              setShowForm(true)
-            }}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-6 py-3 rounded-lg transition"
-          >
-            + Add Track
-          </button>
+        <div className="mb-6 space-y-4">
+          <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-4">
+            <h2 className="text-lg font-semibold text-white mb-2">Scan music stores (distribution DB)</h2>
+            <p className="text-sm text-gray-400 mb-4 max-w-3xl">
+              Reads live releases, <code className="text-gray-300">distribution_store_links</code>, and DSP
+              masters from Supabase. <strong className="text-gray-300">Core streaming</strong> requires
+              Spotify, Apple Music, YouTube Music, Amazon, Deezer, and Tidal URLs.{' '}
+              <strong className="text-gray-300">Full target list</strong> requires every non-B2B store on the
+              release target list.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={scanMode}
+                onChange={(e) => setScanMode(e.target.value as ScanMode)}
+                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              >
+                <option value="core">Core streaming (recommended)</option>
+                <option value="full_targets">Full DistroKid target list</option>
+              </select>
+              <button
+                type="button"
+                onClick={previewDistributionScan}
+                disabled={scanBusy}
+                className="rounded-lg border border-purple-500/50 bg-purple-600/20 px-4 py-2 text-sm font-medium text-purple-100 hover:bg-purple-600/30 disabled:opacity-50"
+              >
+                {scanBusy ? 'Scanning…' : 'Preview scan'}
+              </button>
+              <button
+                type="button"
+                onClick={importFromDistribution}
+                disabled={scanBusy}
+                className="rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:from-green-700 hover:to-emerald-700 disabled:opacity-50"
+              >
+                Import eligible tracks
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(null)
+                  setShowForm(true)
+                }}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-200 hover:bg-gray-800"
+              >
+                + Add manually
+              </button>
+            </div>
+            {scanMessage && <p className="mt-3 text-sm text-emerald-300">{scanMessage}</p>}
+            {scanPreview && (
+              <div className="mt-4 rounded-lg border border-gray-700 bg-black/40 p-4 text-sm">
+                <p className="text-white font-medium">
+                  Preview: {scanPreview.candidates.length} new/updated candidate(s) →{' '}
+                  {scanPreview.mergedCount} total after merge (was {scanPreview.existingCount})
+                </p>
+                <p className="text-gray-500 mt-1">
+                  Skipped {scanPreview.skippedTrackCount} track(s) on releases missing store URLs or WAV
+                  masters.
+                </p>
+                <ul className="mt-3 max-h-48 overflow-y-auto space-y-2 text-gray-300">
+                  {scanPreview.releases.map((release) => (
+                    <li key={release.title} className="flex flex-wrap gap-x-2 gap-y-1">
+                      <span className={release.eligible ? 'text-green-400' : 'text-amber-400'}>
+                        {release.eligible ? '✓' : '○'}
+                      </span>
+                      <span>{release.title}</span>
+                      <span className="text-gray-500">
+                        ({release.trackCount} track{release.trackCount === 1 ? '' : 's'})
+                      </span>
+                      {!release.eligible && release.missingStores.length > 0 && (
+                        <span className="text-gray-500">
+                          — missing: {release.missingStores.slice(0, 6).join(', ')}
+                          {release.missingStores.length > 6 ? '…' : ''}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
 
         {showForm && (
@@ -157,6 +294,7 @@ useEffect(() => {
                         <p className="text-gray-400 text-sm">{track.description}</p>
                         <p className="text-green-400 text-sm font-semibold mt-1">
                           ${track.price.toFixed(2)} • {track.formats.length} format(s)
+                          {track.isrc ? ` • ${track.isrc}` : ''}
                         </p>
                       </div>
                     </div>

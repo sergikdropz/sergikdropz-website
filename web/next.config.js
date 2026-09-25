@@ -4,6 +4,9 @@ const repoRoot = path.join(__dirname, '..')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Daemon / `npm run dev` set NEXT_DIST_DIR so recover can wipe the real cache.
+  // Production (Vercel) leaves this unset and stays on `.next`.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // File watching over Docker / VM shared folders often misses events; polling fixes "not reloading".
   ...(process.env.NEXT_WEBPACK_POLL === '1'
     ? {
@@ -76,7 +79,7 @@ const nextConfig = {
     unoptimized: false,
     minimumCacheTTL: 2592000, // 30 days — album art rarely changes
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    imageSizes: [16, 32, 48, 64, 96, 128, 160, 256, 384],
     remotePatterns: [
       {
         protocol: 'https',

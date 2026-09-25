@@ -134,6 +134,10 @@ import {
   type CatalogSyncEvent,
 } from '@/lib/catalog-sync'
 import { useCatalogSync } from '@/contexts/CatalogSyncContext'
+import {
+  artworkUploadHttpErrorMessage,
+  buildArtworkUploadFormData,
+} from '@/lib/media/prepare-cover-upload'
 import { warmMusicLibrarySession } from '@/lib/media/session-warm'
 import { warmUpcomingQueuePlayback } from '@/lib/media/warm-playback-urls'
 import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
@@ -6038,14 +6042,14 @@ function SongsTable({
     setEditArtBusy(true)
     setAdminError(null)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('trackId', editTrack.id)
-      if (editTrack.audioFileId) formData.append('audioFileId', editTrack.audioFileId)
-      if (editTrack.folderId) formData.append('folderId', editTrack.folderId)
+      const formData = await buildArtworkUploadFormData(file, {
+        trackId: editTrack.id,
+        audioFileId: editTrack.audioFileId,
+        folderId: editTrack.folderId,
+      })
       const res = await fetch('/api/audio/artwork', { method: 'POST', body: formData })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Artwork upload failed')
+      if (!res.ok) throw new Error(artworkUploadHttpErrorMessage(res.status, data.error))
       if (!data.artworkUrl) throw new Error('Upload did not return an artwork URL')
       const artworkUrl = stripArtworkCacheBust(String(data.artworkUrl))
       const busted = forceArtworkCacheBust(artworkUrl)
@@ -9234,12 +9238,10 @@ function AdminFolderChrome({
     setError(null)
     if (replacesCurrent) setDraft((d) => ({ ...d, artwork: localPreview }))
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', folderTarget)
+      const formData = await buildArtworkUploadFormData(file, { folderId: folderTarget })
       const res = await fetch('/api/audio/artwork', { method: 'POST', body: formData })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Artwork upload failed')
+      if (!res.ok) throw new Error(artworkUploadHttpErrorMessage(res.status, data.error))
       if (!data.artworkUrl) throw new Error('Upload did not return an artwork URL')
       const artworkUrl = artworkUrlForCatalogStorage(String(data.artworkUrl))
       if (!artworkUrl) throw new Error('Upload did not return a usable artwork URL')
@@ -10289,12 +10291,10 @@ function AdminPlaylistChrome({
     setError(null)
     if (replacesCurrent) setDraft((d) => ({ ...d, artwork: localPreview }))
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', folderTarget)
+      const formData = await buildArtworkUploadFormData(file, { folderId: folderTarget })
       const res = await fetch('/api/audio/artwork', { method: 'POST', body: formData })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Artwork upload failed')
+      if (!res.ok) throw new Error(artworkUploadHttpErrorMessage(res.status, data.error))
       if (!data.artworkUrl) throw new Error('Upload did not return an artwork URL')
       const artworkUrl = stripArtworkCacheBust(String(data.artworkUrl))
       const busted = forceArtworkCacheBust(artworkUrl)

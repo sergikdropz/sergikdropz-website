@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "payees": [
+    {
+      "id": "nexus-studios-az-llc",
+      "name": "Nexus Studios AZ LLC",
+      "email": null,
+      "paymentMethod": null,
+      "notes": "Sole partner payee — DistroKid / Revelator deposit to LLC; Studio pays collabs",
+      "isLabelEntity": true,
+      "createdAt": "2026-03-22T00:00:00.000Z",
+      "updatedAt": "2026-03-22T00:00:00.000Z"
+    }
+  ],
+  "statements": [],
+  "lines": [],
+  "ledger": [],
+  "payouts": [],
+  "updatedAt": "2026-03-22T00:00:00.000Z"
+}

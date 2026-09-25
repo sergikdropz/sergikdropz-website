@@ -1,6 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
+import { ensureShopCheckoutAuth } from '@/lib/checkoutActor'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
 interface BundleCardProps {
   bundle: {
@@ -24,10 +28,16 @@ export default function BundleCard({ bundle }: BundleCardProps) {
     setError(null)
 
     try {
+      const gate = await ensureShopCheckoutAuth({
+        returnPath: typeof window !== 'undefined' ? window.location.pathname : '/shop',
+      })
+      if (!gate.ok) return
+
       const res = await fetch('/api/stripe/create-bundle-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bundleId: bundle.id }),
+        credentials: 'include',
+        body: JSON.stringify({ bundleId: bundle.id, supabaseUserId: gate.userId }),
       })
 
       if (!res.ok) {
@@ -47,12 +57,27 @@ export default function BundleCard({ bundle }: BundleCardProps) {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)
 
+  const cover = bundle.artwork ? resolveImageUrl(bundle.artwork) : ''
+
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 relative overflow-hidden">
       {/* Savings badge */}
-      <div className="absolute top-3 right-3 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded">
+      <div className="absolute top-3 right-3 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded z-10">
         Save {bundle.savingsPercent}%
       </div>
+
+      {isSafeNextImageSrc(cover) && (
+        <div className="relative mb-4 aspect-[2/1] overflow-hidden rounded-lg bg-gray-800">
+          <Image
+            src={cover}
+            alt=""
+            fill
+            unoptimized={shouldUnoptimizeImage(cover)}
+            className="object-cover opacity-90"
+            sizes="(max-width: 768px) 100vw, 33vw"
+          />
+        </div>
+      )}
 
       <h3 className="text-white font-bold text-lg pr-20">{bundle.name}</h3>
       <p className="text-gray-400 text-sm mt-1">{bundle.description}</p>

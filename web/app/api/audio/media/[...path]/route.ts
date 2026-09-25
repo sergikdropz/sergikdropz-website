@@ -221,11 +221,8 @@ async function trySources(
 ): Promise<NextResponse | null> {
   if (getR2MediaConfig()) {
     const r2 = await proxyFromR2(request, relative, method)
-    // Hard R2 errors (502) are Responses; misses are null.
-    if (r2) {
-      if (r2.status === 502) return r2
-      return r2
-    }
+    // Soft-fail R2 transport errors so local / HTTP / sibling extensions can still hit.
+    if (r2 && r2.status !== 502) return r2
   }
 
   const local = await proxyFromLocal(request, relative, method)
@@ -234,7 +231,8 @@ async function trySources(
   const origin = upstreamOrigin()
   if (origin && !/^r2:\/\//i.test(origin) && !origin.includes('sergikdropz.com')) {
     const http = await proxyFromHttp(request, relative, method)
-    if (http.status !== 404) return http
+    // Only accept real audio. A dead tunnel (502) must not block .wav/.m4a retries.
+    if (http.status === 200 || http.status === 206) return http
   }
 
   return null

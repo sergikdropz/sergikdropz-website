@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clampSongTableColumnWidth,
   defaultSongTableOptionalColumns,
+  loadSongTableColumnWidths,
   reorderColumns,
+  SONG_TABLE_COLUMN_WIDTH_MAX,
+  SONG_TABLE_COLUMN_WIDTH_MIN,
+  SONG_TABLE_DEFAULT_COLUMN_WIDTHS,
   sortSongTableTracks,
   SONG_TABLE_EP_DEFAULT_OPTIONAL_COLUMNS,
   visibleColumnOrder,
@@ -18,6 +23,20 @@ const sample = (overrides: Partial<Track> = {}): Track =>
     file: 'a.mp3',
     ...overrides,
   }) as Track
+
+describe('column widths', () => {
+  it('clamps resize values', () => {
+    expect(clampSongTableColumnWidth(10)).toBe(SONG_TABLE_COLUMN_WIDTH_MIN)
+    expect(clampSongTableColumnWidth(9999)).toBe(SONG_TABLE_COLUMN_WIDTH_MAX)
+    expect(clampSongTableColumnWidth(180)).toBe(180)
+  })
+
+  it('defaults every reorderable column width', () => {
+    const widths = loadSongTableColumnWidths()
+    expect(widths.title).toBe(SONG_TABLE_DEFAULT_COLUMN_WIDTHS.title)
+    expect(widths.duration).toBe(SONG_TABLE_DEFAULT_COLUMN_WIDTHS.duration)
+  })
+})
 
 describe('reorderColumns', () => {
   it('moves a column before the drop target', () => {

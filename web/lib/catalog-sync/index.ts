@@ -7,10 +7,13 @@ export type {
 export { CATALOG_SYNC_CHANNEL, CATALOG_VERSION_EVENT } from './types'
 export {
   stripArtworkCacheBust,
+  artworkUrlForCatalogStorage,
   withArtworkCacheBust,
+  forceArtworkCacheBust,
   normalizeArtworkPatch,
   normalizeCollectionId,
   collectionIdFromArtwork,
+  artworkFileIdFromUrl,
   catalogItemMatchesCoverEvent,
   playerTrackMatchesCoverEvent,
   stampAllTrackArtwork,
@@ -51,6 +54,7 @@ export {
   EMPTY_LIVE_MOSAIC_COVERS,
   upsertLiveMosaicCover,
   removeLiveMosaicCover,
+  removeLiveMosaicCoverBySrc,
   getLiveMosaicCovers,
   subscribeLiveMosaicCovers,
   mergeMosaicTiles,

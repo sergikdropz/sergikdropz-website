@@ -10,6 +10,7 @@ import { getStudioStepAiPrompt } from '@/lib/studio/admin-ai-step-prompts'
 import {
   STATUS_STYLES,
   WORKFLOW_STEPS,
+  DEFAULT_LABEL_NAME,
   type DspStoreId,
   type MarketingCopy,
   type WorkflowStepId,
@@ -112,7 +113,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
     explicit: false,
     upc: '',
     album_artist: 'SERGIK',
-    label_name: 'SERGIK',
+    label_name: DEFAULT_LABEL_NAME,
     catalog_number: '',
     p_line_year: '',
     c_line_year: '',
@@ -152,7 +153,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         explicit: data.release.explicit || false,
         upc: data.release.upc || '',
         album_artist: data.release.album_artist || data.release.label_name || 'SERGIK',
-        label_name: data.release.label_name || 'SERGIK',
+        label_name: data.release.label_name || DEFAULT_LABEL_NAME,
         catalog_number: data.release.catalog_number || '',
         p_line_year: data.release.p_line_year ? String(data.release.p_line_year) : '',
         c_line_year: data.release.c_line_year ? String(data.release.c_line_year) : '',
@@ -553,7 +554,11 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
                   className={`inline-block px-3 py-1 rounded-full text-xs font-medium ring-1 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.ring}`}
                 >
                   {statusStyle.label}
-                  {release.distribution_mode === 'self' ? ' · Self' : ''}
+                  {release.distribution_mode === 'self'
+                    ? ' · Self'
+                    : release.distribution_mode === 'distrokid'
+                      ? ' · DistroKid'
+                      : ''}
                 </span>
                 <VerifiedStoreIcons
                   storeLinks={storeLinks}
@@ -784,6 +789,21 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
           }
           previouslyReleased={release.previously_released}
           onContinuityUpdated={() => void load()}
+          distributorMeta={{
+            title: release.title,
+            album_artist: release.album_artist,
+            label_name: release.label_name,
+            upc: release.upc,
+            catalog_number: release.catalog_number,
+            genre: release.genre,
+            release_date: release.release_date,
+            artwork_url: release.artwork_url,
+            p_line_year: release.p_line_year,
+            c_line_year: release.c_line_year,
+            spotify_artist_id: release.spotify_artist_id,
+            apple_artist_id: release.apple_artist_id,
+            youtube_artist_id: release.youtube_artist_id,
+          }}
         />
       )}
 
