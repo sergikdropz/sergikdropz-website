@@ -103,6 +103,20 @@ describe('compose-unified-sonic-dna', () => {
         keyConfidence: 0.7,
         genre: { primary: 'Funky House', subgenre: 'Deep n Funky', source: 'audio-measured' },
         percussion: { kickRole: 'four-on-floor', snareRole: '2-and-4', hatGrid: 'offbeat' },
+        bass: { lock: 'offbeat-syncopated', rootNote: 'G' },
+        spectral: {
+          relative: { sub: 0.08, kick: 0.14, bass: 0.16, lowMid: 0.14, mid: 0.12, presence: 0.1, air: 0.12 },
+          flatness: 0.22,
+          zeroCrossingRate: 0.09,
+          centroidHz: 1600,
+          chromaFlux: 0.07,
+        },
+        instruments: [
+          { id: 'kick-drum', label: 'Kick drum', confidence: 0.72 },
+          { id: 'snare-clap', label: 'Snare / clap', confidence: 0.65 },
+          { id: 'hats-cymbals', label: 'Hats / cymbals', confidence: 0.58 },
+          { id: 'bass', label: 'Bass', confidence: 0.6 },
+        ],
       },
     })
     const sections = listSonicDnaReportSections(filled)

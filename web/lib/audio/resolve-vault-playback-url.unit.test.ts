@@ -54,11 +54,16 @@ describe('resolveVaultPlaybackUrl', () => {
     expect(presign).not.toHaveBeenCalled()
   })
 
-  it('flag on still returns proxy while browser-play is hard-disabled', async () => {
+  it('flag on presigns when R2 is configured', async () => {
     process.env.R2_BROWSER_PLAY = '1'
     const out = await resolveVaultPlaybackUrl(FTP)
-    expect(out).toEqual({ url: PROXY, fallbackUrl: PROXY, source: 'proxy' })
-    expect(presign).not.toHaveBeenCalled()
+    expect(out).toEqual({
+      url: SIGNED,
+      fallbackUrl: PROXY,
+      source: 'presigned',
+      expiresIn: 3600,
+    })
+    expect(presign).toHaveBeenCalled()
   })
 
   it('falls back to proxy if presign fails while flag is on', async () => {

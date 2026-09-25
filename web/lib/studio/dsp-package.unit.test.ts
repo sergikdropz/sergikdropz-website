@@ -51,7 +51,7 @@ describe('buildReleasePackageSeeds', () => {
         appleArtistId: 'https://music.apple.com/us/artist/sergik/1577778284',
       },
     )
-    expect(seed.album_artist).toBe('SERGIK')
+    expect(seed.album_artist).toBe('SERGIKdropz')
     expect(seed.upc).toBe('0199991234564')
     expect(seed.original_release_date).toBe('2026-01-01')
     expect(seed.catalog_number).toBe(generateCatalogNumber('Are We Awake?', 2026))
