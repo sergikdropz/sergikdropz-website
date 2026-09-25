@@ -40,8 +40,8 @@ export default function ProductCard({
   return (
     <Link href={href} className="group block">
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden transition-all duration-300 hover:border-gray-600 hover:bg-gray-900/70">
-        {isSafeNextImageSrc(cover) && (
-          <div className="relative aspect-square overflow-hidden">
+        <div className="relative aspect-square overflow-hidden bg-gray-800/80">
+          {isSafeNextImageSrc(cover) ? (
             <Image
               src={cover}
               alt={title}
@@ -50,13 +50,17 @@ export default function ProductCard({
               className="object-cover transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />
-            {licensingEnabled && (
-              <div className="absolute top-2 right-2 bg-purple-600 text-white text-xs font-semibold px-2 py-1 rounded">
-                Licensable
-              </div>
-            )}
-          </div>
-        )}
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-xs uppercase tracking-wider text-gray-600">
+              SERGIK
+            </div>
+          )}
+          {licensingEnabled && (
+            <div className="absolute top-2 right-2 bg-purple-600 text-white text-xs font-semibold px-2 py-1 rounded">
+              Licensable
+            </div>
+          )}
+        </div>
         <div className="p-4">
           <h3 className="text-white font-semibold text-sm truncate group-hover:text-gray-200">
             {title}

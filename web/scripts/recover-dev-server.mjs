@@ -39,30 +39,6 @@ function killListenersOnPort(p) {
   }
 }
 
-function devCacheLooksCorrupt(distPath) {
-  const mainApp = path.join(distPath, 'static/chunks/main-app.js')
-  const mainLegacy = path.join(distPath, 'static/chunks/main.js')
-  const manifestPath = path.join(distPath, 'server/app-paths-manifest.json')
-
-  if (fs.existsSync(mainLegacy) && !fs.existsSync(mainApp)) {
-    return true
-  }
-
-  if (fs.existsSync(manifestPath)) {
-    try {
-      const j = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-      const keys = Object.keys(j)
-      if (keys.length === 1 && keys[0] === '/_not-found/page') {
-        return true
-      }
-    } catch {
-      return true
-    }
-  }
-
-  return false
-}
-
 const stopDaemon = spawnSync(process.execPath, [path.join(__dirname, 'dev-stop.mjs')], {
   cwd: webRoot,
   stdio: 'inherit',
@@ -71,9 +47,12 @@ if (stopDaemon.status !== 0) process.exit(stopDaemon.status ?? 1)
 
 killListenersOnPort(port)
 
-if (fs.existsSync(distAbs) && devCacheLooksCorrupt(distAbs)) {
-  fs.rmSync(distAbs, { recursive: true, force: true })
-  console.log(`[dev:recover] Removed incomplete dev output: ${distAbs}`)
+const defaultNext = path.join(webRoot, '.next')
+const wipeTargets = new Set([distAbs, defaultNext])
+for (const target of wipeTargets) {
+  if (!fs.existsSync(target)) continue
+  fs.rmSync(target, { recursive: true, force: true })
+  console.log(`[dev:recover] Removed cache: ${target}`)
 }
 
 const ensure = spawnSync(process.execPath, [path.join(__dirname, 'ensure-port-free.mjs'), String(port)], {

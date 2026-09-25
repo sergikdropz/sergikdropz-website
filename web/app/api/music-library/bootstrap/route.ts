@@ -7,6 +7,7 @@ import {
   matchCatalogEtag,
   setCatalogSnapshot,
 } from '@/lib/music-library/catalog-snapshot-cache'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,7 +113,9 @@ export async function GET(request: NextRequest) {
         type: folder.type,
         parentId: folder.parent_id,
         hidden: folder.hidden,
-        artwork: folder.artwork_url,
+        artwork: folder.artwork_url
+          ? resolveImageUrl(String(folder.artwork_url)) || folder.artwork_url
+          : undefined,
         year: folder.year,
         children: [] as any[],
         tracks: [] as any[],
@@ -132,7 +135,9 @@ export async function GET(request: NextRequest) {
       id: playlist.id,
       name: playlist.name,
       description: playlist.description || undefined,
-      artwork: playlist.artwork_url || undefined,
+      artwork: playlist.artwork_url
+        ? resolveImageUrl(String(playlist.artwork_url)) || playlist.artwork_url
+        : undefined,
       trackIds: playlist.track_ids || [],
       createdAt: playlist.created_at,
       is_archived: playlist.is_archived,

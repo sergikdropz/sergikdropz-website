@@ -66,6 +66,8 @@
     "sonic-dna:watch": "node ../knowledge/scripts/watch-sonic-dna-analysis.mjs",
     "sonic-dna:train-genre": "npx tsx ../knowledge/scripts/train-genre-engine.mjs",
     "vault:apply-export-dates": "npx tsx scripts/apply-export-created-dates.ts",
+    "artwork:normalize": "node scripts/normalize-folder-artwork.mjs",
+    "artwork:normalize:dry": "node scripts/normalize-folder-artwork.mjs --dry-run",
     "db:migrate-release-collab": "node scripts/apply-release-collab-migration.mjs",
     "db:migrate-social-promo": "node scripts/apply-social-promo-migration.mjs",
     "db:migrate-dsp-verify": "node scripts/apply-dsp-store-link-verification-migration.mjs",

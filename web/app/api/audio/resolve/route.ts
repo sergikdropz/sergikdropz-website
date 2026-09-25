@@ -5,6 +5,7 @@ import {
   normalizeVaultAudioUrl,
 } from '@/utils/normalizeVaultAudioUrl'
 import { resolveVaultPlaybackUrl } from '@/lib/audio/resolve-vault-playback-url'
+import { syncMediaProxyPlaybackUrl } from '@/lib/audio/skip-background-resolve'
 
 const RESOLVE_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
@@ -25,6 +26,17 @@ const RESOLVE_CACHE_HEADERS = {
 export const dynamic = 'force-dynamic';
 
 async function resolveOne(filePath: string) {
+  const proxyUrl = syncMediaProxyPlaybackUrl(filePath)
+  if (proxyUrl) {
+    return {
+      path: filePath,
+      url: proxyUrl,
+      fallbackUrl: proxyUrl,
+      source: 'proxy' as const,
+      expiresIn: undefined,
+    }
+  }
+
   const vaultPlayback = await resolveVaultPlaybackUrl(filePath)
   if (vaultPlayback && vaultPlayback.source !== 'normalized') {
     return {

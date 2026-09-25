@@ -30,6 +30,8 @@ function clientFor(cfg: R2MediaConfig): S3Client {
   cachedClient = new S3Client({
     region: 'auto',
     endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
+    // R2 expects path-style URLs; virtual-host (`bucket.account…`) can ENOTFOUND.
+    forcePathStyle: true,
     credentials: {
       accessKeyId: cfg.accessKeyId,
       secretAccessKey: cfg.secretAccessKey,

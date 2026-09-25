@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-09-20T14:16:20.765Z",
+    "generatedAt": "2026-09-24T05:50:20.867Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,10 +15,10 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 86,
-      "appRouterRouteHandlers": 265,
-      "componentsTsx": 171,
-      "libTs": 535
+      "appRouterPages": 87,
+      "appRouterRouteHandlers": 278,
+      "componentsTsx": 180,
+      "libTs": 593
     },
     "pagesByCategory": {
       "fan": 5,
@@ -28,9 +28,9 @@
       "tooling": 1,
       "shop": 9,
       "admin": 39,
-      "studio": 13
+      "studio": 14
     },
-    "contentHash": "44c55d7b19551c2f"
+    "contentHash": "38858049d7b45d86"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -55,7 +55,7 @@
   "e2e": {
     "playwrightConfig": "web/playwright.config.ts",
     "adminCrawlListFile": "web/e2e/admin-ui-paths.ts",
-    "adminCrawlPathCount": 41,
+    "adminCrawlPathCount": 42,
     "drift": {
       "crawlPathsMissingMatchingAdminPage": [],
       "adminPagesNotInCrawlList": []
@@ -488,6 +488,11 @@
         "category": "studio"
       },
       {
+        "urlPath": "/studio/royalties",
+        "file": "web/app/studio/royalties/page.tsx",
+        "category": "studio"
+      },
+      {
         "urlPath": "/studio/soundexchange",
         "file": "web/app/studio/soundexchange/page.tsx",
         "category": "studio"
@@ -697,6 +702,11 @@
       {
         "urlPath": "/api/admin/purchasable-tracks",
         "file": "web/app/api/admin/purchasable-tracks/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/purchasable-tracks/scan",
+        "file": "web/app/api/admin/purchasable-tracks/scan/route.ts",
         "category": "api"
       },
       {
@@ -1210,6 +1220,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/media/session-artwork",
+        "file": "web/app/api/media/session-artwork/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/membership/status",
         "file": "web/app/api/membership/status/route.ts",
         "category": "api"
@@ -1540,6 +1555,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/distrokid/queue",
+        "file": "web/app/api/studio/distrokid/queue/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/isrc/assign",
         "file": "web/app/api/studio/isrc/assign/route.ts",
         "category": "api"
@@ -1617,6 +1637,11 @@
       {
         "urlPath": "/api/studio/releases/[id]/distribute",
         "file": "web/app/api/studio/releases/[id]/distribute/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/distrokid",
+        "file": "web/app/api/studio/releases/[id]/distrokid/route.ts",
         "category": "api"
       },
       {
@@ -1725,6 +1750,21 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/royalties/payouts",
+        "file": "web/app/api/studio/royalties/payouts/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/royalties",
+        "file": "web/app/api/studio/royalties/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/royalties/statements",
+        "file": "web/app/api/studio/royalties/statements/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/soundexchange/batch-submit",
         "file": "web/app/api/studio/soundexchange/batch-submit/route.ts",
         "category": "api"
@@ -1800,6 +1840,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/videos/youtube-description",
+        "file": "web/app/api/videos/youtube-description/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/webhooks/resend",
         "file": "web/app/api/webhooks/resend/route.ts",
         "category": "api"
@@ -1807,6 +1852,31 @@
       {
         "urlPath": "/api/youtube-videos",
         "file": "web/app/api/youtube-videos/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/youtube/subscribe-gate/ack",
+        "file": "web/app/api/youtube/subscribe-gate/ack/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/youtube/subscribe-gate/callback",
+        "file": "web/app/api/youtube/subscribe-gate/callback/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/youtube/subscribe-gate/reset",
+        "file": "web/app/api/youtube/subscribe-gate/reset/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/youtube/subscribe-gate/start",
+        "file": "web/app/api/youtube/subscribe-gate/start/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/youtube/subscribe-gate/status",
+        "file": "web/app/api/youtube/subscribe-gate/status/route.ts",
         "category": "api"
       },
       {

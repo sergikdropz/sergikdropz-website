@@ -13,6 +13,8 @@ import {
   safeAudioFileName,
 } from '@/lib/audio/replace-audio-file'
 import { normalizeTitleKey } from '@/lib/studio/distrokid-import'
+import { saveLocalVaultAudioFile } from '@/lib/music-library/ingest-vault-audio'
+import { planImportedAudio, transcodeAudioToMp3 } from '@/lib/audio/stream-master'
 import {
   getR2MediaConfig,
   putR2Object,
@@ -266,7 +268,7 @@ export async function ingestDistroKidWav(
     input.buffer.subarray(0, 3).toString('binary') === 'ID3' ||
     (input.buffer[0] === 0xff && (input.buffer[1] & 0xe0) === 0xe0)
   const contentType = looksLikeMp3 ? 'audio/mpeg' : 'audio/wav'
-  const format = looksLikeMp3 ? 'MP3' : 'WAV'
+  let format = looksLikeMp3 ? 'MP3' : 'WAV'
 
   try {
     await putR2Object(relativePath, input.buffer, { contentType })
@@ -286,6 +288,33 @@ export async function ingestDistroKidWav(
   const fileUrl = cacheBustMediaUrl(
     publicR2MediaUrl(relativePath) || vaultMediaProxyUrl(relativePath),
   )
+  const planned = planImportedAudio({ fileName, vaultRelativePath: relativePath })
+  let streamUrl = fileUrl
+  let distributionWavUrl = fileUrl
+  if (planned.isWav && planned.dspWavRelativePath) {
+    try {
+      if (planned.dspWavRelativePath !== relativePath) {
+        await saveLocalVaultAudioFile(planned.dspWavRelativePath, input.buffer)
+        await putR2Object(planned.dspWavRelativePath, input.buffer, { contentType: 'audio/wav' })
+        distributionWavUrl = cacheBustMediaUrl(
+          publicR2MediaUrl(planned.dspWavRelativePath) ||
+            vaultMediaProxyUrl(planned.dspWavRelativePath),
+        )
+      }
+      const mp3 = await transcodeAudioToMp3(input.buffer)
+      await saveLocalVaultAudioFile(planned.streamRelativePath, mp3)
+      await putR2Object(planned.streamRelativePath, mp3, { contentType: 'audio/mpeg' })
+      streamUrl = cacheBustMediaUrl(
+        publicR2MediaUrl(planned.streamRelativePath) || vaultMediaProxyUrl(planned.streamRelativePath),
+      )
+      format = 'MP3'
+    } catch (err) {
+      console.warn(
+        '[distrokid-wav] MP3 stream encode failed, website will use the WAV until re-ingest:',
+        err instanceof Error ? err.message : err,
+      )
+    }
+  }
   const fingerprint = fingerprintHashFromBuffer(input.buffer)
   const metadata = await extractMetadataFromBuffer(input.buffer, fileName)
   const waveform = await generateWaveformFromBuffer(input.buffer, fileName)
@@ -303,7 +332,7 @@ export async function ingestDistroKidWav(
       await supabase
         .from('audio_files')
         .update({
-          file_url: fileUrl,
+          file_url: streamUrl,
           file_name: fileName,
           format: format,
           size_bytes: input.buffer.length,
@@ -324,7 +353,7 @@ export async function ingestDistroKidWav(
           artist,
           file_name: fileName,
           file_path: relativePath,
-          file_url: fileUrl,
+          file_url: streamUrl,
           format: format,
           size_bytes: input.buffer.length,
           size_mb: parseFloat((input.buffer.length / (1024 * 1024)).toFixed(2)),
@@ -374,7 +403,7 @@ export async function ingestDistroKidWav(
     if (vaultMatch?.id) {
       libraryTrackId = vaultMatch.id
       const merged = mergeReleaseOntoVaultTrack(vaultMatch, {
-        file_url: fileUrl,
+        file_url: distributionWavUrl,
         audio_file_id: audioFileId,
         duration,
         isrc,
@@ -382,6 +411,8 @@ export async function ingestDistroKidWav(
         fingerprint,
         source: 'distrokid-wav',
       })
+      if (!/\.mp3(\?|$)/i.test(merged.file_url || '')) merged.file_url = streamUrl
+      if (planned.dspWavRelativePath) merged.metadata.dspMastersPath = planned.dspWavRelativePath
       await supabase
         .from('music_library_tracks')
         .update({
@@ -404,7 +435,7 @@ export async function ingestDistroKidWav(
       await supabase
         .from('music_library_tracks')
         .update({
-          file_url: fileUrl,
+          file_url: streamUrl,
           title: trackTitle,
           artist,
           duration,
@@ -429,7 +460,7 @@ export async function ingestDistroKidWav(
         audio_file_id: audioFileId,
         title: trackTitle,
         artist,
-        file_url: fileUrl,
+        file_url: streamUrl,
         duration,
         metadata: {
           source: 'distrokid-wav',
@@ -446,7 +477,7 @@ export async function ingestDistroKidWav(
           title: trackTitle,
           distribution_track_id: dist ? String(dist.id) : null,
           music_library_track_id: null,
-          wav_url: fileUrl,
+          wav_url: distributionWavUrl,
           message: trackErr.message,
         }
       }
@@ -463,7 +494,7 @@ export async function ingestDistroKidWav(
     const { error: linkErr } = await supabase
       .from('distribution_tracks')
       .update({
-        wav_url: fileUrl,
+        wav_url: distributionWavUrl,
         music_library_track_id: libraryTrackId,
         duration: duration ?? (typeof dist.duration === 'number' ? dist.duration : null),
         fingerprint_hash: fingerprint,
@@ -476,7 +507,7 @@ export async function ingestDistroKidWav(
         title: trackTitle,
         distribution_track_id: String(dist.id),
         music_library_track_id: libraryTrackId,
-        wav_url: fileUrl,
+        wav_url: distributionWavUrl,
         message: linkErr.message,
       }
     }
@@ -488,7 +519,7 @@ export async function ingestDistroKidWav(
     title: trackTitle,
     distribution_track_id: dist ? String(dist.id) : null,
     music_library_track_id: libraryTrackId,
-    wav_url: fileUrl,
+    wav_url: distributionWavUrl,
   }
 }
 

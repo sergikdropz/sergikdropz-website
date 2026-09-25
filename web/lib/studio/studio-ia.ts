@@ -6,15 +6,16 @@ export const STUDIO_PATHS = {
   create: '/studio/create',
   pipeline: '/studio/pipeline',
   collab: '/studio/collab',
+  royalties: '/studio/royalties',
 } as const
 
 export const STUDIO_CREATE_TABS = ['release', 'track', 'import'] as const
 export type StudioCreateTab = (typeof STUDIO_CREATE_TABS)[number]
 
-export const STUDIO_PIPELINE_TABS = ['ops', 'marketing', 'calendar', 'isrcs'] as const
+export const STUDIO_PIPELINE_TABS = ['ops', 'marketing', 'calendar', 'distrokid', 'isrcs'] as const
 export type StudioPipelineTab = (typeof STUDIO_PIPELINE_TABS)[number]
 
-export type StudioNavId = 'home' | 'releases' | 'create' | 'pipeline' | 'collab'
+export type StudioNavId = 'home' | 'releases' | 'create' | 'pipeline' | 'collab' | 'royalties'
 
 export function studioCollabHref(releaseId?: string | null): string {
   if (!releaseId) return STUDIO_PATHS.collab
@@ -27,7 +28,7 @@ export function parseStudioCreateTab(value: string | null | undefined): StudioCr
 }
 
 export function parseStudioPipelineTab(value: string | null | undefined): StudioPipelineTab {
-  if (value === 'marketing' || value === 'calendar' || value === 'isrcs') return value
+  if (value === 'marketing' || value === 'calendar' || value === 'distrokid' || value === 'isrcs') return value
   return 'ops'
 }
 
@@ -102,6 +103,11 @@ export function isStudioNavActive(item: StudioNavId, pathname: string | null): b
   if (item === 'home') return pathname === STUDIO_PATHS.home
   if (item === 'collab') {
     return pathname === STUDIO_PATHS.collab || pathname.startsWith(`${STUDIO_PATHS.collab}/`)
+  }
+  if (item === 'royalties') {
+    return (
+      pathname === STUDIO_PATHS.royalties || pathname.startsWith(`${STUDIO_PATHS.royalties}/`)
+    )
   }
   if (item === 'create') {
     return pathname === STUDIO_PATHS.create || pathname.startsWith(`${STUDIO_PATHS.create}/`) || CREATE_LEGACY.has(pathname)

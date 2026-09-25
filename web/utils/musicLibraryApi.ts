@@ -65,6 +65,8 @@ export interface FolderItem {
   is_archived?: boolean
   archived_at?: string
   albumArtist?: string
+  /** Folder JSONB — includes music_videos for release YouTube embeds. */
+  metadata?: Record<string, unknown>
 }
 
 export interface MusicLibraryData {
@@ -118,7 +120,7 @@ let purgedOldCacheKeys = false
 const MUSIC_LIBRARY_CACHE_TTL_MS = 10 * 60_000
 
 // Persistent cache (best-effort). Browser storage can be evicted; we just try to keep it.
-const CACHE_VERSION = 'v15' // v15: persist date_created / year / catalog_overrides across refresh
+const CACHE_VERSION = 'v20' // v20: R2 proxy playback + resolved bootstrap artwork
 const PERSIST_KEY = `sergik:musicLibraryCache:${CACHE_VERSION}`
 const CACHE_VERSION_NUM = parseInt(CACHE_VERSION.replace(/^v/i, ''), 10) || 0
 const PERSIST_TTL_MS = 24 * 60 * 60_000
@@ -134,10 +136,29 @@ export const MUSIC_LIBRARY_CACHE_INVALIDATED_EVENT = 'sergik:music-library-cache
  * Useful when schema changes or data is updated.
  * Does NOT own React Query — emits MUSIC_LIBRARY_CACHE_INVALIDATED_EVENT so leaf RQ keys stay in sync.
  */
+/** Drop shared in-flight hydration so the next fetch includes newly ingested rows. */
+export function resetMusicLibraryHydrationInFlight(): void {
+  hydrationInFlight = null
+  hydrationInFlightKey = ''
+}
+
+/** Preserve first occurrence — fixes duplicate rows from unstable offset paging. */
+export function dedupeTracksById(tracks: Track[]): Track[] {
+  const seen = new Set<string>()
+  const out: Track[] = []
+  for (const track of tracks) {
+    if (!track?.id || seen.has(track.id)) continue
+    seen.add(track.id)
+    out.push(track)
+  }
+  return out
+}
+
 export function invalidateMusicLibraryCache(): void {
   musicLibraryCache = { data: null, expiresAt: 0, version: 0 }
   catalogVersionCache = { value: null, fetchedAt: 0 }
   catalogVersionInFlight = null
+  resetMusicLibraryHydrationInFlight()
   if (typeof window === 'undefined') return
   try {
     const prefix = `sergik:musicLibraryCache:${CACHE_VERSION}`
@@ -277,6 +298,9 @@ async function fetchLibrary(url: string, init?: RequestInit): Promise<Response> 
 function normalizeMusicLibraryUrlsInPlace(data: MusicLibraryData): void {
   const fix = (t: Track) => {
     if (t?.file && typeof t.file === 'string') t.file = normalizeVaultAudioUrl(t.file)
+    if (t?.artwork && typeof t.artwork === 'string') {
+      t.artwork = resolveImageUrl(t.artwork) || t.artwork
+    }
     delete (t as any).sonic_dna
     delete (t as any).waveform
     delete (t as any).waveform_data
@@ -284,6 +308,9 @@ function normalizeMusicLibraryUrlsInPlace(data: MusicLibraryData): void {
   const walk = (nodes: FolderItem[] | undefined) => {
     if (!nodes) return
     for (const n of nodes) {
+      if (n.artwork && typeof n.artwork === 'string') {
+        n.artwork = resolveImageUrl(n.artwork) || n.artwork
+      }
       n.tracks?.forEach(fix)
       if (n.children) walk(n.children)
     }
@@ -775,23 +802,27 @@ export async function fetchTracksSummary(
         const tracks = (data.tracks || []) as Track[]
         tracks.forEach(normalizeTrackMedia)
         // Prefer live API rows whenever present. Empty 200 with a folderId can be
-        // a real empty folder — return it so we do not paint stale JSON stubs
-        // (Unknown key / None genre) over rich cloud catalog fields.
-        if (tracks.length > 0 || folderId) {
+        // a real empty folder — but only trust it when total is explicitly 0.
+        // Soft-empty (missing total) falls through to cache/JSON so EP crates
+        // are not wiped by a transient empty payload.
+        if (tracks.length > 0) {
           return { tracks, total: data.total ?? tracks.length, hasMore: Boolean(data.hasMore) }
         }
+        if (folderId && typeof data.total === 'number' && data.total === 0) {
+          return { tracks: [], total: 0, hasMore: false }
+        }
+      } else if (response.status >= 500) {
+        // Let callers fall through to cache / JSON instead of treating as empty.
+        console.warn('tracks-optimized unavailable', response.status)
+      } else if (response.status === 401 || response.status === 403) {
+        console.warn('tracks-optimized auth required', response.status)
       }
     } catch (error) {
       console.error('Error fetching tracks summary from API:', error)
     }
   }
 
-  // Offline / unconfigured API only — never preferred over live DB when USE_API.
-  if (USE_API && folderId) {
-    return { tracks: [], total: 0, hasMore: false }
-  }
-
-  // Fallback: extract from JSON (no pagination)
+  // Fallback: extract from JSON (no pagination) when API is empty/unreachable
   const data = await loadJsonLibrary()
   const allTracks: Track[] = []
 
@@ -826,12 +857,24 @@ export async function fetchTracksSummary(
 export async function extractTracksFromJsonByAlbumName(albumName?: string): Promise<Track[]> {
   const needle = albumName?.trim().toLowerCase()
   if (!needle) return []
+  const normalizeName = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[?!.]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  const needleNorm = normalizeName(needle)
   const data = await loadJsonLibrary()
   const allTracks: Track[] = []
 
   function walk(items: FolderItem[]) {
     for (const item of items) {
-      if (item.tracks?.length && String(item.name || '').trim().toLowerCase() === needle) {
+      const itemNorm = normalizeName(String(item.name || ''))
+      const nameMatch =
+        itemNorm === needleNorm ||
+        itemNorm.includes(needleNorm) ||
+        needleNorm.includes(itemNorm)
+      if (item.tracks?.length && nameMatch) {
         allTracks.push(
           ...item.tracks.map((track) => {
             const next = stripHeavyAnalysisFields(track)
@@ -861,6 +904,8 @@ type CatalogHydrationOptions = {
   /** When true, wait before each page batch (e.g. while audio is buffering/playing). */
   shouldPause?: () => boolean
   onBatch?: (loaded: number, total: number | undefined) => void
+  /** After ingest/sync — do not reuse a stale shared hydration promise. */
+  forceRefresh?: boolean
 }
 
 let hydrationInFlight: Promise<Track[]> | null = null
@@ -888,24 +933,38 @@ export async function fetchAllTracksSummaryForHydration(
 ): Promise<Track[]> {
   const includeArchived = options?.includeArchived ?? false
   const key = includeArchived ? 'arch' : 'live'
+  if (options?.forceRefresh) {
+    resetMusicLibraryHydrationInFlight()
+  }
   if (hydrationInFlight && hydrationInFlightKey === key) {
+    // Join the shared flight even when callers pass shouldPause/signal —
+    // MusicLibraryClient + SergBrowser used to double-fetch because of that.
+    if (options?.shouldPause) {
+      await yieldWhilePaused(options.shouldPause, options.signal)
+    }
+    if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     return hydrationInFlight
   }
 
+  // Pause/abort prefs from the first caller apply to the shared run.
+  const shouldPause = options?.shouldPause
+  const signal = options?.signal
+  const onBatch = options?.onBatch
+
   const run = (async () => {
     const all: Track[] = []
-    await yieldWhilePaused(options?.shouldPause, options?.signal)
+    await yieldWhilePaused(shouldPause, signal)
 
     const first = await fetchTracksSummary(undefined, {
       includeArchived,
       limit: HYDRATION_SUMMARY_PAGE_SIZE,
       offset: 0,
     })
-    if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
     const firstBatch = first.tracks || []
     all.push(...firstBatch)
-    options?.onBatch?.(all.length, first.total)
+    onBatch?.(all.length, first.total)
 
     const total =
       typeof first.total === 'number' && first.total > 0 ? first.total : undefined
@@ -923,7 +982,7 @@ export async function fetchAllTracksSummaryForHydration(
       // Unknown total — keep sequential after first page
       let offset = firstBatch.length
       while (true) {
-        await yieldWhilePaused(options?.shouldPause, options?.signal)
+        await yieldWhilePaused(shouldPause, signal)
         const result = await fetchTracksSummary(undefined, {
           includeArchived,
           limit: pageSize,
@@ -931,7 +990,7 @@ export async function fetchAllTracksSummaryForHydration(
         })
         const batch = result.tracks || []
         all.push(...batch)
-        options?.onBatch?.(all.length, undefined)
+        onBatch?.(all.length, undefined)
         if (batch.length === 0 || !result.hasMore) break
         offset += batch.length
       }
@@ -939,7 +998,7 @@ export async function fetchAllTracksSummaryForHydration(
     }
 
     for (let i = 0; i < offsets.length; i += HYDRATION_CONCURRENCY) {
-      await yieldWhilePaused(options?.shouldPause, options?.signal)
+      await yieldWhilePaused(shouldPause, signal)
       const slice = offsets.slice(i, i + HYDRATION_CONCURRENCY)
       const pages = await Promise.all(
         slice.map((offset) =>
@@ -950,30 +1009,68 @@ export async function fetchAllTracksSummaryForHydration(
           }),
         ),
       )
-      if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       for (const page of pages) {
         all.push(...(page.tracks || []))
       }
-      options?.onBatch?.(all.length, total)
+      onBatch?.(all.length, total)
     }
 
-    return all
+    // Count queries can lag right after ingest — keep paging while full batches arrive.
+    let tailOffset = all.length
+    while (true) {
+      await yieldWhilePaused(shouldPause, signal)
+      const tail = await fetchTracksSummary(undefined, {
+        includeArchived,
+        limit: pageSize,
+        offset: tailOffset,
+      })
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      const batch = tail.tracks || []
+      if (!batch.length) break
+      all.push(...batch)
+      onBatch?.(all.length, total)
+      if (batch.length < pageSize) break
+      tailOffset += batch.length
+    }
+
+    let deduped = dedupeTracksById(all)
+    const expected = typeof total === 'number' && total > 0 ? total : deduped.length
+    if (deduped.length < expected) {
+      const byId = new Map(deduped.map((t) => [t.id, t]))
+      let repairOffset = deduped.length
+      while (byId.size < expected) {
+        await yieldWhilePaused(shouldPause, signal)
+        const repair = await fetchTracksSummary(undefined, {
+          includeArchived,
+          limit: pageSize,
+          offset: repairOffset,
+        })
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+        const batch = repair.tracks || []
+        if (!batch.length) break
+        for (const track of batch) {
+          if (track?.id && !byId.has(track.id)) byId.set(track.id, track)
+        }
+        repairOffset += batch.length
+        if (batch.length < pageSize) break
+      }
+      deduped = [...byId.values()]
+    }
+
+    return deduped
   })()
 
-  if (!options?.signal && !options?.shouldPause) {
-    hydrationInFlight = run
-    hydrationInFlightKey = key
-    try {
-      return await run
-    } finally {
-      if (hydrationInFlight === run) {
-        hydrationInFlight = null
-        hydrationInFlightKey = ''
-      }
+  hydrationInFlight = run
+  hydrationInFlightKey = key
+  try {
+    return await run
+  } finally {
+    if (hydrationInFlight === run) {
+      hydrationInFlight = null
+      hydrationInFlightKey = ''
     }
   }
-
-  return run
 }
 
 /**
@@ -1010,7 +1107,10 @@ export async function createFolder(folder: Partial<FolderItem>): Promise<FolderI
  */
 export async function updateFolder(
   id: string,
-  updates: Partial<Omit<FolderItem, 'artwork'>> & { artwork?: string | null }
+  updates: Partial<Omit<FolderItem, 'artwork' | 'metadata'>> & {
+    artwork?: string | null
+    metadata?: Record<string, unknown>
+  }
 ): Promise<(FolderItem & { publishVersion?: number | null }) | null> {
   if (!USE_API) {
     console.warn('API not enabled, cannot update folder')
@@ -1279,6 +1379,86 @@ export type LinkDroppedFilesResult = {
   databaseUpdated?: boolean
 }
 
+export type VaultDropDuplicatePreview = {
+  file: string
+  trackId: string
+  title: string
+  artist: string | null
+  alreadyInPlaylist: boolean
+  score: number
+}
+
+export type PreviewVaultFileDropResult = {
+  preview: true
+  target: 'library' | 'playlist' | 'folder'
+  duplicates: VaultDropDuplicatePreview[]
+  newFiles: string[]
+  totalAudio: number
+}
+
+function dropFileNameRefs(
+  files: File[] | { name: string; path?: string }[],
+): { name: string; path?: string }[] {
+  return files.map((f) =>
+    f instanceof File
+      ? {
+          name: f.name,
+          path: (f as File & { webkitRelativePath?: string }).webkitRelativePath,
+        }
+      : { name: f.name, path: f.path },
+  )
+}
+
+/** Match-only: which dropped filenames already exist in the vault (no upload). */
+export async function previewVaultFileDrop(
+  target:
+    | { kind: 'library' }
+    | { kind: 'playlist'; playlistId: string }
+    | { kind: 'folder'; folderId: string },
+  files: File[] | { name: string; path?: string }[],
+): Promise<PreviewVaultFileDropResult> {
+  const nameRefs = dropFileNameRefs(files)
+  const body =
+    target.kind === 'library'
+      ? { target: 'library', preview: true, files: nameRefs }
+      : target.kind === 'folder'
+        ? { target: 'folder', folderId: target.folderId, preview: true, files: nameRefs }
+        : { playlistId: target.playlistId, preview: true, files: nameRefs }
+  const response = await fetch('/api/music-library/playlists/link-files', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to preview drop')
+  }
+  const resolvedTarget =
+    data.target === 'library'
+      ? 'library'
+      : data.target === 'folder'
+        ? 'folder'
+        : 'playlist'
+  return {
+    preview: true,
+    target: resolvedTarget,
+    duplicates: Array.isArray(data.duplicates) ? data.duplicates : [],
+    newFiles: Array.isArray(data.newFiles) ? data.newFiles : [],
+    totalAudio: Number(data.totalAudio) || nameRefs.length,
+  }
+}
+
+/** Remove drops that matched an existing vault row (by dropped basename). */
+export function filterDropFilesSkippingVaultDuplicates(
+  files: File[],
+  duplicates: Array<{ file: string }>,
+): File[] {
+  if (!duplicates.length) return files
+  const dupeNames = new Set(duplicates.map((d) => String(d.file || '').toLowerCase()).filter(Boolean))
+  return files.filter((f) => !dupeNames.has(f.name.toLowerCase()))
+}
+
 function parseLinkFilesPayload(data: any): LinkDroppedFilesResult {
   return {
     added: data.added || [],
@@ -1344,6 +1524,94 @@ function postLinkFilesForm(
     xhr.onabort = () => reject(new Error('Upload cancelled'))
     xhr.send(form)
   })
+}
+
+/** Ingest dropped audio into the vault catalog (Songs inbox — not tied to a playlist). */
+/** Ingest dropped audio into a crate/EP folder (music_library_folders row). */
+export async function linkDroppedFilesToFolder(
+  folderId: string,
+  files: File[] | { name: string; path?: string }[],
+  options?: { convertToMp3?: boolean; onUploadProgress?: (ratio: number) => void },
+): Promise<LinkDroppedFilesResult> {
+  const asFiles = (files as unknown[]).filter(
+    (f): f is File => typeof File !== 'undefined' && f instanceof File,
+  )
+
+  if (asFiles.length) {
+    const form = new FormData()
+    form.append('target', 'folder')
+    form.append('folderId', folderId)
+    if (options?.convertToMp3) form.append('convertToMp3', '1')
+    for (const file of asFiles) {
+      form.append('files', file, file.name)
+      const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath
+      if (rel) form.append('paths', rel)
+      else form.append('paths', file.name)
+    }
+    const { ok, data } = await postLinkFilesForm(form, options?.onUploadProgress)
+    throwIfLinkFilesFailed(ok, data)
+    return parseLinkFilesPayload(data)
+  }
+
+  const nameRefs = files.map((f) =>
+    f instanceof File
+      ? {
+          name: f.name,
+          path: (f as File & { webkitRelativePath?: string }).webkitRelativePath,
+        }
+      : { name: f.name, path: f.path },
+  )
+  const response = await fetch('/api/music-library/playlists/link-files', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: 'folder', folderId, files: nameRefs }),
+  })
+  const data = await response.json().catch(() => ({}))
+  throwIfLinkFilesFailed(response.ok, data)
+  return parseLinkFilesPayload(data)
+}
+
+export async function linkDroppedFilesToLibrary(
+  files: File[] | { name: string; path?: string }[],
+  options?: { convertToMp3?: boolean; onUploadProgress?: (ratio: number) => void },
+): Promise<LinkDroppedFilesResult> {
+  const asFiles = (files as unknown[]).filter(
+    (f): f is File => typeof File !== 'undefined' && f instanceof File,
+  )
+
+  if (asFiles.length) {
+    const form = new FormData()
+    form.append('target', 'library')
+    if (options?.convertToMp3) form.append('convertToMp3', '1')
+    for (const file of asFiles) {
+      form.append('files', file, file.name)
+      const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath
+      if (rel) form.append('paths', rel)
+      else form.append('paths', file.name)
+    }
+    const { ok, data } = await postLinkFilesForm(form, options?.onUploadProgress)
+    throwIfLinkFilesFailed(ok, data)
+    return parseLinkFilesPayload(data)
+  }
+
+  const nameRefs = files.map((f) =>
+    f instanceof File
+      ? {
+          name: f.name,
+          path: (f as File & { webkitRelativePath?: string }).webkitRelativePath,
+        }
+      : { name: f.name, path: f.path },
+  )
+  const response = await fetch('/api/music-library/playlists/link-files', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: 'library', files: nameRefs }),
+  })
+  const data = await response.json().catch(() => ({}))
+  throwIfLinkFilesFailed(response.ok, data)
+  return parseLinkFilesPayload(data)
 }
 
 export async function linkDroppedFilesToPlaylist(
@@ -1501,7 +1769,44 @@ export async function fetchBrowseSongsAll(
     if (batch.length < BROWSE_SONGS_PAGE_SIZE || (total > 0 && all.length >= total)) break
     offset += batch.length
   }
-  return { tracks: all, total: total || all.length }
+  // Count can lag right after ingest — keep paging while full batches arrive.
+  while (all.length > 0) {
+    const data = await fetchBrowse({
+      ...options,
+      view: 'songs',
+      limit: BROWSE_SONGS_PAGE_SIZE,
+      offset: all.length,
+    })
+    const batch: Track[] = data.tracks || []
+    if (!batch.length) break
+    all.push(...batch)
+    if (batch.length < BROWSE_SONGS_PAGE_SIZE) break
+  }
+
+  let tracks = dedupeTracksById(all)
+  const expected = total > 0 ? total : tracks.length
+  if (tracks.length < expected) {
+    const byId = new Map(tracks.map((t) => [t.id, t]))
+    let repairOffset = tracks.length
+    while (byId.size < expected) {
+      const data = await fetchBrowse({
+        ...options,
+        view: 'songs',
+        limit: BROWSE_SONGS_PAGE_SIZE,
+        offset: repairOffset,
+      })
+      const batch: Track[] = data.tracks || []
+      if (!batch.length) break
+      for (const track of batch) {
+        if (track?.id && !byId.has(track.id)) byId.set(track.id, track)
+      }
+      repairOffset += batch.length
+      if (batch.length < BROWSE_SONGS_PAGE_SIZE) break
+    }
+    tracks = [...byId.values()]
+  }
+
+  return { tracks, total: total || tracks.length }
 }
 
 export async function recordTrackPlay(

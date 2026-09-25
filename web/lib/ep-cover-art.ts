@@ -33,6 +33,24 @@ export function normalizeReleaseKey(name: string): string {
     .trim()
 }
 
+/** Labels too generic to merge covers (e.g. FS mosaic tiles all titled "Album cover art"). */
+const GENERIC_ARTWORK_RELEASE_KEYS = new Set([
+  'album',
+  'cover',
+  'artwork',
+  'image',
+  'untitled',
+  'unknown',
+])
+
+/** One key per release when named; otherwise unique by resolved src path. */
+export function artworkDedupeKey(label: string, src: string): string {
+  const releaseKey = normalizeReleaseKey(label)
+  const srcKey = `src:${(resolveImageUrl(src) || src).split('?')[0]}`
+  if (!releaseKey || GENERIC_ARTWORK_RELEASE_KEYS.has(releaseKey)) return srcKey
+  return releaseKey
+}
+
 /**
  * Heuristic resolution score for cover URLs (higher = prefer).
  * Local masters beat Spotify CDN thumbs; Spotify size codes are known.
@@ -48,6 +66,15 @@ export function artworkResolutionScore(src: string): number {
 
   const dim = url.match(/(?:^|[/_-])(\d{2,4})x(\d{2,4})(?:[./_]|$)/i)
   if (dim) return Math.max(Number(dim[1]) || 0, Number(dim[2]) || 0)
+
+  // Uploaded folder masters beat legacy UUID files under /unreleased/eps/
+  if (
+    url.includes('/images/audio/artwork/') ||
+    /\/audio-files\/artwork\//i.test(url) ||
+    /\/object\/(?:public|sign)\/audio-files\/artwork\//i.test(url)
+  ) {
+    return 5000
+  }
 
   // Local / ingested masters are typically full-resolution
   if (
@@ -72,8 +99,7 @@ export function dedupeArtworkByReleaseLabel<T extends { src: string; label: stri
   const order: string[] = []
 
   for (const item of items) {
-    const releaseKey = normalizeReleaseKey(item.label)
-    const key = releaseKey || `src:${(resolveImageUrl(item.src) || item.src).split('?')[0]}`
+    const key = artworkDedupeKey(item.label, item.src)
     const prev = byKey.get(key)
     if (!prev) {
       byKey.set(key, item)
@@ -99,8 +125,7 @@ function createTileCollector() {
     const src = resolveImageUrl(raw)
     if (!src) return
     const srcKey = src.split('?')[0]
-    const releaseKey = normalizeReleaseKey(alt)
-    const key = releaseKey || `src:${srcKey}`
+    const key = artworkDedupeKey(alt, src)
 
     const prev = byRelease.get(key)
     if (prev) {

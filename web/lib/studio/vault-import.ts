@@ -10,6 +10,7 @@ import {
   type TrackDisplaySource,
 } from '@/lib/audio/track-display'
 import type { MarketingCopy } from '@/lib/studio/constants'
+import { DEFAULT_LABEL_NAME } from '@/lib/studio/constants'
 import {
   contributorsFromVault,
   creditsBlockFromContributors,
@@ -54,6 +55,7 @@ export type VaultTrackRow = TrackDisplaySource & {
   display_order?: number | null
   track_number?: number | null
   is_archived?: boolean | null
+  metadata?: Record<string, unknown> | null
 }
 
 export type StudioReleaseType = 'single' | 'ep' | 'album'
@@ -483,7 +485,11 @@ export function buildVaultReleaseDraft(
   }
 
   const trackDrafts: VaultTrackDraft[] = liveTracks.map((t) => {
-    const fileUrl = clean(t.file_url)
+    const meta =
+      t.metadata && typeof t.metadata === 'object' && !Array.isArray(t.metadata) ? t.metadata : {}
+    const distributionWav =
+      typeof meta.distribution_wav_url === 'string' ? meta.distribution_wav_url.trim() : ''
+    const fileUrl = distributionWav || clean(t.file_url)
     const identity = studioTrackIdentityFromVault(t)
     return {
       music_library_track_id: t.id,
@@ -543,7 +549,7 @@ export function buildVaultReleaseDraft(
       subgenre: dsp.secondary || subgenre,
       description: releaseDescription,
       release_date: releaseDateFromFolderAndTracks(folder, liveTracks),
-      label_name: clean(folder.album_artist) || 'SERGIK',
+      label_name: clean(folder.album_artist) || DEFAULT_LABEL_NAME,
       explicit: false,
       source_folder_id: folder.id,
     },

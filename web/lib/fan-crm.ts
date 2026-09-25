@@ -2,6 +2,8 @@ import type { createSupabaseServerClient } from '@/lib/supabase'
 
 export const VAULT_UNLOCK_SOURCE = 'vault_unlock'
 export const VAULT_UNLOCK_TAG = 'vault'
+export const YOUTUBE_UNLOCK_SOURCE = 'youtube_unlock'
+export const YOUTUBE_UNLOCK_TAG = 'youtube'
 
 export type VaultUnlockFanInput = {
   email: string
@@ -255,6 +257,118 @@ export async function persistVaultUnlockAsFan(
   const now = new Date().toISOString()
   await persistFanRecord(supabase, input, now)
   await persistFanLead(supabase, input, now)
+  await ensureEmailSubscriber(supabase, {
+    email: input.email,
+    name: input.displayName,
+    source: vaultUnlockSource(input.source),
+  })
+}
+
+export type PromoContactInput = {
+  email: string
+  name?: string | null
+  source: string
+  tags: string[]
+  platforms: string[]
+}
+
+/** Insert a promo subscriber without replacing the source already on file. */
+export async function ensureEmailSubscriber(
+  supabase: SupabaseLike,
+  input: { email: string; name?: string | null; source: string },
+): Promise<void> {
+  const email = input.email.toLowerCase().trim()
+  if (isSyntheticFanEmail(email)) return
+  const { data: existing, error: selErr } = await supabase
+    .from('email_subscribers')
+    .select('id, name, is_active')
+    .eq('email', email)
+    .maybeSingle()
+  if (selErr) {
+    console.warn('email_subscribers select skipped:', selErr.code, selErr.message)
+    return
+  }
+  if (existing?.id) {
+    const patch: Record<string, unknown> = { is_active: true, updated_at: new Date().toISOString() }
+    if (!existing.name && input.name) patch.name = input.name
+    const { error: updErr } = await supabase.from('email_subscribers').update(patch).eq('id', existing.id)
+    if (updErr) console.warn('email_subscribers update skipped:', updErr.code, updErr.message)
+    return
+  }
+  const { error: insErr } = await supabase.from('email_subscribers').insert({
+    email,
+    name: input.name || null,
+    source: input.source,
+    is_active: true,
+  })
+  if (insErr && insErr.code !== '23505') {
+    console.warn('email_subscribers insert skipped:', insErr.code, insErr.message)
+  }
+}
+
+/** Video-unlock and other opt-in contacts join both the subscriber list and Fans CRM. */
+export async function persistPromoContact(supabase: SupabaseLike, input: PromoContactInput): Promise<void> {
+  const email = input.email.toLowerCase().trim()
+  if (isSyntheticFanEmail(email)) return
+  const now = new Date().toISOString()
+  await ensureEmailSubscriber(supabase, { email, name: input.name || null, source: input.source })
+
+  const { data: existing, error: selErr } = await supabase
+    .from('fans')
+    .select('id, name, source, tags, metadata')
+    .eq('email', email)
+    .maybeSingle()
+  if (selErr) {
+    console.warn('fans promo select skipped:', selErr.code, selErr.message)
+    return
+  }
+
+  const tags = normalizeFanTags(existing?.tags)
+  for (const tag of input.tags) {
+    if (tag && !tags.includes(tag)) tags.push(tag)
+  }
+  const metadata =
+    existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
+      ? { ...(existing.metadata as Record<string, unknown>) }
+      : {}
+  const platforms = new Set(
+    [
+      ...(Array.isArray(metadata.platforms) ? metadata.platforms : []),
+      ...input.platforms,
+    ].filter((p): p is string => typeof p === 'string' && p.trim().length > 0),
+  )
+  metadata.platforms = Array.from(platforms)
+
+  if (existing?.id) {
+    const { error: updErr } = await supabase
+      .from('fans')
+      .update({
+        name: (existing.name && String(existing.name).trim()) || input.name || existing.name || '',
+        tags,
+        metadata,
+        consent_email: true,
+        last_engaged_at: now,
+        updated_at: now,
+      })
+      .eq('id', existing.id)
+    if (updErr) console.warn('fans promo update skipped:', updErr.code, updErr.message)
+    return
+  }
+
+  const { error: insErr } = await supabase.from('fans').insert({
+    email,
+    name: input.name || '',
+    phone: null,
+    tags,
+    source: input.source,
+    consent_email: true,
+    consent_sms: false,
+    last_engaged_at: now,
+    metadata,
+  })
+  if (insErr && insErr.code !== '23505') {
+    console.warn('fans promo insert skipped:', insErr.code, insErr.message)
+  }
 }
 
 async function knownFanEmails(supabase: SupabaseLike): Promise<Set<string> | null> {

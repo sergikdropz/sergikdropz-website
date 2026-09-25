@@ -191,6 +191,24 @@ describe('buildVaultReleaseDraft', () => {
     expect(tracks[0]?.contributors[0]).toMatchObject({ role: 'primary', name: 'SERGIK' })
   })
 
+  it('uses the stored DSP wav for distribution and leaves the stream mp3 on the vault row', () => {
+    const { tracks } = buildVaultReleaseDraft(
+      { id: 'folder-ep-wav', name: 'Pyramids', type: 'single' },
+      [
+        {
+          id: 'trk-pyramids',
+          title: 'Da Pyramids',
+          file_url: '/api/audio/media/unreleased/Library/Da%20Pyramids.mp3',
+          metadata: {
+            distribution_wav_url: '/api/audio/media/dsp-masters/library/Da%20Pyramids.wav',
+          },
+        },
+      ],
+    )
+    expect(tracks[0]?.wav_url).toContain('dsp-masters/library')
+    expect(tracks[0]?.wav_url).toContain('.wav')
+  })
+
   it('treats Sonic DNA payload as complete when audio_files status is absent', () => {
     const { tracks } = buildVaultReleaseDraft(
       { id: 'folder-ep-2', name: 'Are We Awake?', type: 'ep' },

@@ -9,6 +9,7 @@ import ReleaseCard from '@/components/ReleaseCard'
 import UpcomingReleases from '@/components/UpcomingReleases'
 import SoundCloudEmbed from '@/components/SoundCloudEmbed'
 import NavigationButtons from '@/components/NavigationButtons'
+import ExclusiveMusicbankCta from '@/components/music/ExclusiveMusicbankCta'
 import { PlatformCollapse, PlatformLinkPanel } from '@/components/PlatformCollapse'
 import artistData from '@/data/artist.json'
 import { artistDspProfileUrl } from '@/lib/artist-platforms'
@@ -31,7 +32,7 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
   const [filter, setFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'year' | 'type'>('year')
   const liveReleases = initialLiveReleases
-  const [releasesExpanded, setReleasesExpanded] = useState(true)
+  const [releasesExpanded, setReleasesExpanded] = useState(false)
   const [soundcloudExpanded, setSoundcloudExpanded] = useState(false)
   const [youtubeExpanded, setYoutubeExpanded] = useState(false)
   const [appleExpanded, setAppleExpanded] = useState(false)
@@ -145,20 +146,7 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
             <p className="max-w-2xl text-center text-sm sm:text-base text-gray-400 leading-relaxed">
               {artistData.bio.short}
             </p>
-            <div className="flex w-full justify-center">
-              <Link
-                href="/music-library"
-                prefetch={false}
-                className="inline-flex min-h-[44px] origin-center items-center justify-center gap-2 rounded border border-yellow-400 px-4 py-2 text-center font-six-caps text-3xl font-semibold text-yellow-400 transition-colors hover:bg-yellow-400/10 hover:text-yellow-300 touch-manipulation sm:px-5 sm:py-2.5 sm:text-4xl md:text-5xl"
-                style={{
-                  letterSpacing: '0.22em',
-                  transform: 'scaleX(1.12)',
-                  textShadow: '0.4px 0 0 currentColor, -0.4px 0 0 currentColor',
-                }}
-              >
-                Exclusive ID MusicBank
-              </Link>
-            </div>
+            <ExclusiveMusicbankCta layout="hero" prefetch={false} showHint />
           </div>
         </div>
 

@@ -85,6 +85,7 @@ export const VinylDisc = memo(function VinylDisc({
   const lastMoveAtRef = useRef(0)
   const armedTravelPxRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
+  const scrubCenterRef = useRef<Point | null>(null)
   const platterAngleRef = useRef(0)
   const onScrubStartRef = useRef(onScrubStart)
   const onScrubDeltaRef = useRef(onScrubDelta)
@@ -136,6 +137,7 @@ export const VinylDisc = memo(function VinylDisc({
       scrubArmedRef.current = false
       armedTravelPxRef.current = 0
       activePointerIdRef.current = null
+      scrubCenterRef.current = null
       lastMoveAtRef.current = 0
       if (wasArmed) {
         endVinylScrub()
@@ -152,6 +154,7 @@ export const VinylDisc = memo(function VinylDisc({
       activePointerIdRef.current = event.pointerId
       lastPointRef.current = { x: event.clientX, y: event.clientY }
       lastMoveAtRef.current = performance.now()
+      scrubCenterRef.current = centerOf(root)
       platterAngleRef.current = getVinylSpinAngle()
       try {
         root.setPointerCapture(event.pointerId)
@@ -173,7 +176,7 @@ export const VinylDisc = memo(function VinylDisc({
       const travel = Math.hypot(next.x - prev.x, next.y - prev.y)
       if (travel < 0.5) return
 
-      const center = centerOf(root)
+      const center = scrubCenterRef.current ?? centerOf(root)
       const deltaDeg = tangentialDeltaDeg(center, prev, next)
       lastPointRef.current = next
 
@@ -234,7 +237,11 @@ export const VinylDisc = memo(function VinylDisc({
       } ${className}`}
       role={scrubEnabled ? 'slider' : undefined}
       aria-label={scrubEnabled ? 'Vinyl scrubber — drag to spin and seek' : undefined}
-      style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      style={{
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        contain: 'layout size style',
+      }}
     >
       {/* Transform is JS-only — never put `transform` in a React style object */}
       <div
@@ -335,6 +342,7 @@ export const VinylDisc = memo(function VinylDisc({
           {artwork ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
+              key={artwork}
               src={artwork}
               alt=""
               className="pointer-events-none h-full w-full object-cover"

@@ -95,6 +95,20 @@ export function removeLiveMosaicCover(id: string) {
   notify()
 }
 
+/** Drop every mosaic tile that resolves to the same cover path. */
+export function removeLiveMosaicCoverBySrc(src: string | null | undefined) {
+  const key = src ? pathKey(src) : ''
+  if (!key) return
+  suppressMosaicPath(src)
+  let changed = false
+  for (const [id, tile] of Array.from(tilesById.entries())) {
+    if (pathKey(tile.src) !== key) continue
+    tilesById.delete(id)
+    changed = true
+  }
+  if (changed) notify()
+}
+
 export function getLiveMosaicCovers(): BackgroundTile[] {
   return snapshot
 }

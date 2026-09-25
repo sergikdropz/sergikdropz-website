@@ -5,7 +5,11 @@ function mockSupabase(opts: {
   folders: Array<{ id: string; artwork_url: string | null }>
   tracks: Array<{ folder_id: string; artwork_url: string; updated_at?: string }>
 }) {
-  const folderUpdateEq = vi.fn().mockResolvedValue({ error: null })
+  const folderUpdateEq = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'f1', name: 'Test' }, error: null }),
+    }),
+  })
   const playlistUpdateEq = vi.fn().mockResolvedValue({ error: null })
   const trackUpdate = vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnValue({

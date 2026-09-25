@@ -1,10 +1,16 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import type { LaunchHandoffStatus } from '@/lib/studio/launch-handoff'
 import { vaultSoftReadiness } from '@/lib/studio/vault-import'
-import { studioPipelineHref } from '@/lib/studio/studio-ia'
+import { STUDIO_PATHS, studioPipelineHref } from '@/lib/studio/studio-ia'
+import {
+  evaluateDistributorReadiness,
+  type DistributorReadinessRelease,
+} from '@/lib/studio/distributor-readiness'
+import type { RoyaltyOpsSignals } from '@/lib/studio/royalties/types'
 import {
   DEFAULT_INGEST_ATTESTATIONS,
   type IngestAttestations,
@@ -12,6 +18,7 @@ import {
 import { IngestAttestationsSection } from './CopyrightPanel'
 import SocialPromoPanel from './SocialPromoPanel'
 import StreamContinuityPanel from './StreamContinuityPanel'
+import DistroKidDeliveryCard from './DistroKidDeliveryCard'
 import {
   FaCheckCircle,
   FaExclamationTriangle,
@@ -57,6 +64,8 @@ type Props = {
   onAttestationsChange?: (next: IngestAttestations) => void
   previouslyReleased?: boolean | null
   onContinuityUpdated?: () => void
+  /** Metadata for distributor-ready checklist (partner → royalty ops → multi-label) */
+  distributorMeta?: DistributorReadinessRelease | null
 }
 
 export default function LaunchPanel({
@@ -81,8 +90,48 @@ export default function LaunchPanel({
   onAttestationsChange,
   previouslyReleased,
   onContinuityUpdated,
+  distributorMeta = null,
 }: Props) {
+  const [royaltyOps, setRoyaltyOps] = useState<RoyaltyOpsSignals | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/studio/royalties')
+        if (!res.ok) return
+        const json = await res.json()
+        if (!cancelled && json?.signals) setRoyaltyOps(json.signals as RoyaltyOpsSignals)
+      } catch {
+        /* soft — Launch still works without royalty store */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const soft = vaultSoftReadiness(tracks, hasArtwork ? 'yes' : null)
+  const distributor = evaluateDistributorReadiness(
+    {
+      title,
+      album_artist: distributorMeta?.album_artist,
+      label_name: distributorMeta?.label_name,
+      upc: distributorMeta?.upc,
+      catalog_number: distributorMeta?.catalog_number,
+      language: distributorMeta?.language,
+      genre: distributorMeta?.genre || (hasGenre ? 'set' : null),
+      release_date: distributorMeta?.release_date || (hasReleaseDate ? 'set' : null),
+      artwork_url: distributorMeta?.artwork_url || (hasArtwork ? 'set' : null),
+      p_line_year: distributorMeta?.p_line_year,
+      c_line_year: distributorMeta?.c_line_year,
+      spotify_artist_id: distributorMeta?.spotify_artist_id,
+      apple_artist_id: distributorMeta?.apple_artist_id,
+      youtube_artist_id: distributorMeta?.youtube_artist_id,
+    },
+    copyright,
+    royaltyOps,
+  )
 
   const checks: PreflightItem[] = [
     {
@@ -331,6 +380,95 @@ export default function LaunchPanel({
             Open public music page <FaExternalLinkAlt className="text-xs" />
           </Link>
         )}
+      </div>
+
+      <DistroKidDeliveryCard releaseId={releaseId} />
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Distributor path</h3>
+            <p className="text-sm text-zinc-500 mt-1">
+              Partner delivery now → label pays collaborators → multi-label later. Direct DSP deals
+              stay future until volume justifies DDEX.
+            </p>
+            <Link
+              href={STUDIO_PATHS.royalties}
+              className="inline-flex items-center gap-1.5 text-xs text-violet-300 hover:text-violet-200 mt-2"
+            >
+              Open royalty ops <FaExternalLinkAlt className="text-[10px]" />
+            </Link>
+          </div>
+          <span
+            className={
+              distributor.partnerReady
+                ? 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+                : 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30'
+            }
+          >
+            {distributor.partnerReady ? 'Partner-ready' : 'Partner gaps'} · {distributor.score}%
+          </span>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-3 mb-5">
+          {(Object.keys(distributor.phases) as Array<keyof typeof distributor.phases>).map(
+            (phase) => {
+              const p = distributor.phases[phase]
+              return (
+                <div
+                  key={phase}
+                  className="rounded-lg border border-zinc-800 px-3 py-2.5"
+                >
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-500">{p.label}</p>
+                  <p className="text-sm text-zinc-200 mt-1">
+                    {p.done}/{p.total}
+                    <span className={`ml-2 text-xs ${p.ok ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {p.ok ? 'ok' : 'open'}
+                    </span>
+                  </p>
+                </div>
+              )
+            },
+          )}
+        </div>
+
+        <ul className="space-y-2">
+          {distributor.items.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-start gap-3 text-sm border-b border-zinc-800/80 py-2 last:border-0"
+            >
+              <span
+                className={
+                  c.ok
+                    ? 'text-emerald-400 mt-0.5'
+                    : c.soft
+                      ? 'text-sky-400 mt-0.5'
+                      : 'text-amber-400 mt-0.5'
+                }
+              >
+                {c.ok ? (
+                  <FaCheckCircle />
+                ) : c.soft ? (
+                  <FaInfoCircle />
+                ) : (
+                  <FaExclamationTriangle />
+                )}
+              </span>
+              <div>
+                <p className={c.ok ? 'text-zinc-300' : 'text-zinc-200'}>
+                  {c.label}
+                  {c.soft ? (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-sky-500/80">
+                      soft
+                    </span>
+                  ) : null}
+                </p>
+                {c.hint && <p className="text-xs text-zinc-500 mt-0.5">{c.hint}</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">

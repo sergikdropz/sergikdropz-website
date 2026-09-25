@@ -23,6 +23,7 @@ export const adminNavItems: AdminNavItem[] = [
     type: 'group',
     label: 'Shop',
     items: [
+      { type: 'link', label: 'Live shop', href: '/shop' },
       { type: 'link', label: 'Products', href: '/admin/purchasable-tracks' },
       { type: 'link', label: 'Licenses', href: '/admin/licenses' },
       { type: 'link', label: 'Bundles', href: '/admin/bundles' },

@@ -5,12 +5,19 @@ import Image from 'next/image'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { fetchBrowserAuthSession } from '@/lib/auth/browser-session'
+
+const TOP_REVEAL_PX = 24
+const SCROLL_DELTA_PX = 8
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false)
+  const [headerHidden, setHeaderHidden] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
   const touchStartX = useRef<number | null>(null)
+  const lastScrollY = useRef(0)
+  const rafScroll = useRef<number | null>(null)
 
   const navItems = [
     { href: '/', label: 'Home' },
@@ -26,11 +33,10 @@ export default function Header() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/auth/session', { credentials: 'include' })
-      .then((r) => r.json())
+    fetchBrowserAuthSession()
       .then((d) => {
         if (cancelled) return
-        if (!d.authenticated) setFanNav('guest')
+        if (!d?.authenticated) setFanNav('guest')
         else if (d.isAdmin) setFanNav('admin')
         else setFanNav('fan')
       })
@@ -41,6 +47,51 @@ export default function Header() {
       cancelled = true
     }
   }, [])
+
+  // Hide on scroll down, reveal on scroll up / near top. Stay visible while mobile menu is open.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    lastScrollY.current = window.scrollY || 0
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) {
+      setHeaderHidden(false)
+      return
+    }
+
+    const update = () => {
+      rafScroll.current = null
+      if (isOpen) {
+        setHeaderHidden(false)
+        lastScrollY.current = window.scrollY || 0
+        return
+      }
+      const y = window.scrollY || 0
+      const delta = y - lastScrollY.current
+      lastScrollY.current = y
+
+      if (y <= TOP_REVEAL_PX) {
+        setHeaderHidden(false)
+        return
+      }
+      if (delta > SCROLL_DELTA_PX) {
+        setHeaderHidden(true)
+      } else if (delta < -SCROLL_DELTA_PX) {
+        setHeaderHidden(false)
+      }
+    }
+
+    const onScroll = () => {
+      if (rafScroll.current != null) return
+      rafScroll.current = window.requestAnimationFrame(update)
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (rafScroll.current != null) window.cancelAnimationFrame(rafScroll.current)
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) {
@@ -115,10 +166,49 @@ export default function Header() {
     }
   }, [isOpen])
 
+  const slideHidden = headerHidden && !isOpen
+
+  // Drive vault sticky chrome: sit under the header when visible, pin to viewport top when hidden.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const el = headerRef.current
+    const root = document.documentElement
+    if (!el) return
+
+    const publish = () => {
+      const height = Math.round(el.getBoundingClientRect().height)
+      root.style.setProperty('--site-header-height', `${height}px`)
+      root.style.setProperty(
+        '--site-header-offset',
+        slideHidden ? 'env(safe-area-inset-top, 0px)' : `${height}px`,
+      )
+      root.dataset.siteHeaderHidden = slideHidden ? 'true' : 'false'
+    }
+
+    publish()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null
+    ro?.observe(el)
+    return () => {
+      ro?.disconnect()
+    }
+  }, [slideHidden, isOpen, fanNav])
+
+  useEffect(() => {
+    return () => {
+      const root = document.documentElement
+      root.style.removeProperty('--site-header-offset')
+      root.style.removeProperty('--site-header-height')
+      delete root.dataset.siteHeaderHidden
+    }
+  }, [])
+
   return (
     <header
       ref={headerRef}
-      className="fixed top-0 w-full z-50 bg-black/95 border-b border-gray-800 safe-area-top"
+      className={`fixed top-0 w-full z-50 bg-black/95 border-b border-gray-800 safe-area-top transition-transform duration-300 ease-out motion-reduce:transition-none ${
+        slideHidden ? '-translate-y-full' : 'translate-y-0'
+      }`}
+      data-header-hidden={slideHidden ? 'true' : 'false'}
     >
       <nav className="w-full max-w-none px-4 py-3 md:py-4">
         <div className="flex items-center justify-between">

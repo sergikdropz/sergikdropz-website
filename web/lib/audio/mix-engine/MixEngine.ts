@@ -177,6 +177,11 @@ export class MixEngine {
   private hpfB: BiquadFilterNode | null = null
   private lpfB: BiquadFilterNode | null = null
   private deckChainAttached: Record<DeckId, boolean> = { a: false, b: false }
+  /**
+   * Mobile lock-screen path: never create MediaElementSource — crossfade and master
+   * volume use HTMLAudioElement.volume (works with screen off).
+   */
+  private nativeElementOutput = false
   private mixIntel: MixIntelligence | null = null
   private deckEqBase: Record<DeckId, FilterMixEqGains> = {
     a: { low: 0, mid: 0, high: 0 },
@@ -521,7 +526,6 @@ export class MixEngine {
   private armPlayheadTick(tick: () => void) {
     const hidden = typeof document !== 'undefined' && document.hidden
     if (hidden) {
-      this.playheadTimer = setTimeout(tick, 32)
       return
     }
     this.playheadRaf = requestAnimationFrame(tick)
@@ -1012,6 +1016,14 @@ export class MixEngine {
     this.deckEqListener = fn
   }
 
+  setNativeElementOutput(enabled: boolean) {
+    this.nativeElementOutput = enabled
+  }
+
+  isNativeElementOutput(): boolean {
+    return this.nativeElementOutput
+  }
+
   /**
    * Manual crossfader. 0 = all A, 1 = all B.
    * Volume only — EQ dials stay independent. Gain law follows the user curve.
@@ -1084,6 +1096,7 @@ export class MixEngine {
 
   /** Mixer bus can own the speakers (not raw HTML / orphan fallback). */
   hasMixerControls(): boolean {
+    if (this.nativeElementOutput) return true
     return !!(
       this.masterGain &&
       ((this.deckChainAttached.a && (this.sourceA || this.externalSourceA)) ||
@@ -1213,6 +1226,7 @@ export class MixEngine {
    * first time it becomes the live track its audio skips the EQ filters.
    */
   private ensureDeckChain(deck: DeckId): boolean {
+    if (this.nativeElementOutput) return false
     const ctx = (this.ctx ?? this.externalGainA?.context) as AudioContext | null
     if (!ctx || typeof ctx.createGain !== 'function') return this.deckChainAttached[deck]
     this.ctx = ctx
@@ -2175,7 +2189,7 @@ export class MixEngine {
   private armMixTick(tick: (now: number) => void) {
     const hidden = typeof document !== 'undefined' && document.hidden
     if (hidden) {
-      this.mixTimer = setTimeout(() => tick(performance.now()), 32)
+      this.mixTimer = setTimeout(() => tick(performance.now()), 250)
       return
     }
     this.fadeRaf = requestAnimationFrame(tick)
@@ -2218,6 +2232,10 @@ export class MixEngine {
    * a MediaElementSource on deck A — we reuse InvalidStateError by skipping graph.
    */
   attachGraph(ctx: AudioContext): boolean {
+    if (this.nativeElementOutput) {
+      this.applyDeckGains(this.faderA, this.faderB, { instant: true })
+      return true
+    }
     this.ctx = ctx
     try {
       if (!this.gainA) this.gainA = ctx.createGain()
@@ -2502,7 +2520,7 @@ export class MixEngine {
     opts?: StartTransitionOptions
   ): Promise<boolean> {
     if (opts?.masterVolume != null) this.setMasterVolume(opts.masterVolume)
-    if (opts?.audioContext) {
+    if (opts?.audioContext && !this.nativeElementOutput) {
       this.attachGraph(opts.audioContext)
     }
     const idle = this.getIdleTrack()

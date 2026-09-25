@@ -110,17 +110,46 @@ export function useMusicSmartPlaylists({ enabled = true, publishVersion }: LeafO
   })
 }
 
+/** Seed RQ so SergBrowser does not refetch playlists the parent already loaded. */
+export function seedMusicPlaylistsQuery(
+  queryClient: QueryClient,
+  playlists: Playlist[],
+  publishVersion: number,
+  opts?: { includeHidden?: boolean; includeArchived?: boolean },
+) {
+  const includeHidden = opts?.includeHidden ?? false
+  const includeArchived = opts?.includeArchived ?? false
+  queryClient.setQueryData(
+    queryKeys.musicLibrary.playlists(publishVersion, includeHidden, includeArchived),
+    playlists,
+  )
+  // CatalogSync often starts at 0 then flips — seed both keys to avoid a cold refetch.
+  if (publishVersion !== 0) {
+    queryClient.setQueryData(
+      queryKeys.musicLibrary.playlists(0, includeHidden, includeArchived),
+      playlists,
+    )
+  }
+}
+
 export function useMusicPlaylists({
   enabled = true,
   publishVersion,
   includeHidden = false,
   includeArchived = false,
-}: LeafOpts & { includeHidden?: boolean; includeArchived?: boolean }) {
+  /** Parent already loaded — use as initialData and skip an immediate network hit. */
+  initialData,
+}: LeafOpts & {
+  includeHidden?: boolean
+  includeArchived?: boolean
+  initialData?: Playlist[]
+}) {
   return useQuery({
     queryKey: queryKeys.musicLibrary.playlists(publishVersion, includeHidden, includeArchived),
     queryFn: (): Promise<Playlist[]> =>
       fetchPlaylists({ includeHidden, includeArchived }),
     enabled,
+    initialData,
     staleTime: MUSIC_LIBRARY_LEAF_STALE_MS,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,

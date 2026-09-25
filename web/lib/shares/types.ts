@@ -2,6 +2,10 @@
  * SoundCloud-style share links for vault tracks and folders (EPs/albums).
  */
 
+import { catalogArtworkForRelease } from '@/lib/ep-cover-art'
+import { rewriteShareArtworkForLiveDisplay } from '@/lib/shares/share-artwork-display'
+import { resolveImageUrl } from '@/utils/resolveImageUrl'
+
 export type ShareKind = 'track' | 'folder'
 export type ShareVisibility = 'public' | 'unlisted' | 'disabled'
 
@@ -224,13 +228,13 @@ export function absoluteShareOgImageUrl(
 }
 
 /**
- * Browser/img src for share UI — prefer the direct URL (Supabase/R2 CDN).
- * Proxying every cover through Next.js made mobile loads very slow.
+ * Browser/img src for share UI — prefer Supabase Storage on live sites (Vercel
+ * `/images` masters are immutable until deploy). Local dev uses `/images/…`.
  */
 export function shareDisplayArtworkUrl(artwork?: string | null): string | undefined {
   const raw = String(artwork || '').trim()
   if (!raw) return undefined
-  return raw
+  return rewriteShareArtworkForLiveDisplay(raw)
 }
 
 /**
@@ -244,11 +248,35 @@ export function shareAccentArtworkUrl(artwork?: string | null): string | undefin
   return `/api/shares/artwork-proxy?src=${encodeURIComponent(raw)}`
 }
 
-/** Prefer track art, then collection/folder art. */
+/**
+ * Folder/EP cover resolution — mirrors vault {@link folderArtworkSrc}:
+ * folder tile art, then tracks, then shipped schedule masters.
+ */
+export function resolveFolderShareCoverArt(
+  collection: Pick<ShareCollectionPayload, 'title' | 'artwork'>,
+  tracks: Array<Pick<ShareTrackPayload, 'artwork'>>,
+): string | undefined {
+  const candidates = [
+    typeof collection.artwork === 'string' ? collection.artwork.trim() : '',
+    ...tracks.map((t) => (typeof t.artwork === 'string' ? t.artwork.trim() : '')),
+    catalogArtworkForRelease(collection.title),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => resolveImageUrl(value) || value)
+    .filter(Boolean)
+
+  const local = candidates.find((src) => src.startsWith('/images/') || src.startsWith('/audio/'))
+  return local || candidates[0] || undefined
+}
+
+/** Folder shares use the EP cover; track shares prefer the active track. */
 export function pickShareArtwork(
-  payload: Pick<ResolvedSharePayload, 'collection' | 'tracks'>,
+  payload: Pick<ResolvedSharePayload, 'share' | 'collection' | 'tracks'>,
   trackIndex = 0,
 ): string | undefined {
+  if (payload.share.kind === 'folder' && payload.collection) {
+    return resolveFolderShareCoverArt(payload.collection, payload.tracks)
+  }
   const track = payload.tracks[trackIndex] || payload.tracks[0]
   return track?.artwork || payload.collection?.artwork || undefined
 }

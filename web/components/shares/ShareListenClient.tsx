@@ -6,10 +6,27 @@ import ShareMiniPlayer, { type ShareScrubApi } from '@/components/shares/ShareMi
 import ShareStoryClipPicker from '@/components/shares/ShareStoryClipPicker'
 import ShareVinylStage from '@/components/shares/ShareVinylStage'
 import { useAlbumAccents } from '@/hooks/useAlbumAccents'
+import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset'
 import { exportShareStoryFromPayload } from '@/lib/shares/client'
 import { rgbToCss } from '@/lib/shares/album-accents'
 import { STORY_SNIPPET_DURATION_SEC } from '@/lib/shares/story-snippet'
-import { pickShareArtwork, shareDisplayArtworkUrl, type ResolvedSharePayload } from '@/lib/shares/types'
+import {
+  pickShareArtwork,
+  shareAccentArtworkUrl,
+  shareDisplayArtworkUrl,
+  type ResolvedSharePayload,
+} from '@/lib/shares/types'
+import { warmAudioByteHints } from '@/lib/media/session-warm'
+import { resolveWarmPlaybackUrl } from '@/lib/media/warm-playback-urls'
+
+function shareCoverDriftSeed(name: string): number {
+  let h = 2166136261
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
 
 function formatDuration(sec: number): string {
   if (!Number.isFinite(sec) || sec <= 0) return ''
@@ -47,6 +64,7 @@ export default function ShareListenClient({
   const [igNotice, setIgNotice] = useState<string | null>(null)
   const scrubApiRef = useRef<ShareScrubApi | null>(null)
   const scrubWasPlayingRef = useRef(false)
+  const visualBottomOffset = useVisualViewportBottomOffset()
 
   useEffect(() => {
     let cancelled = false
@@ -69,9 +87,23 @@ export default function ShareListenClient({
     }
   }, [token])
 
+  useEffect(() => {
+    if (!data?.tracks?.length) return
+    const urls = data.tracks
+      .slice(0, 3)
+      .map((t) => resolveWarmPlaybackUrl(t.playbackUrl || t.file))
+      .filter((u): u is string => Boolean(u))
+    if (urls.length) void warmAudioByteHints(urls)
+  }, [data?.tracks])
+
   const artworkRaw = data ? pickShareArtwork(data, activeIndex) : undefined
   const artwork = shareDisplayArtworkUrl(artworkRaw) || artworkRaw
-  const accents = useAlbumAccents(artwork)
+  const accentSrc = shareAccentArtworkUrl(artworkRaw) || artwork
+  const accents = useAlbumAccents(accentSrc)
+  const backdropSrc = accentSrc || artwork
+  const coverDriftSeed = shareCoverDriftSeed(data?.share.title || artworkRaw || 'share')
+  const coverDriftVariant = coverDriftSeed % 8
+  const coverDriftDelaySec = -((coverDriftSeed >>> 3) % 28)
 
   // Kick cover download as soon as we know the URL (before paint of vinyl stage).
   useEffect(() => {
@@ -228,32 +260,49 @@ export default function ShareListenClient({
       style={stageStyle}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        {/* Soft album-color washes */}
-        <div
-          className="absolute -left-1/4 top-[-10%] h-[70%] w-[80%] rounded-full opacity-70 blur-3xl transition-colors duration-700"
-          style={{
-            background: `radial-gradient(circle, ${rgbToCss(accents.primary, 0.55)} 0%, transparent 70%)`,
-          }}
-        />
-        <div
-          className="absolute -right-1/4 top-[20%] h-[55%] w-[70%] rounded-full opacity-60 blur-3xl transition-colors duration-700"
-          style={{
-            background: `radial-gradient(circle, ${rgbToCss(accents.secondary, 0.4)} 0%, transparent 70%)`,
-          }}
-        />
-        <div
-          className="absolute bottom-[-10%] left-1/2 h-[45%] w-[90%] -translate-x-1/2 rounded-full opacity-50 blur-3xl transition-colors duration-700"
-          style={{
-            background: `radial-gradient(circle, ${rgbToCss(accents.muted, 0.8)} 0%, transparent 70%)`,
-          }}
-        />
-        {artwork && (
-          <div
-            className="absolute inset-0 scale-110 bg-cover bg-center opacity-25 blur-3xl saturate-150"
-            style={{ backgroundImage: `url(${artwork})` }}
-          />
+        {backdropSrc ? (
+          <>
+            <div className="absolute inset-0 overflow-hidden brightness-[0.58]">
+              <div
+                className={`ep-release-cover-drift ep-release-cover-drift-${coverDriftVariant} absolute inset-0`}
+                style={{ animationDelay: `${coverDriftDelaySec}s` }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  key={backdropSrc}
+                  src={backdropSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  decoding="async"
+                  fetchPriority="high"
+                />
+              </div>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/58 to-black/72" />
+          </>
+        ) : (
+          <>
+            <div
+              className="absolute -left-1/4 top-[-10%] h-[70%] w-[80%] rounded-full opacity-70 blur-3xl transition-colors duration-700"
+              style={{
+                background: `radial-gradient(circle, ${rgbToCss(accents.primary, 0.55)} 0%, transparent 70%)`,
+              }}
+            />
+            <div
+              className="absolute -right-1/4 top-[20%] h-[55%] w-[70%] rounded-full opacity-60 blur-3xl transition-colors duration-700"
+              style={{
+                background: `radial-gradient(circle, ${rgbToCss(accents.secondary, 0.4)} 0%, transparent 70%)`,
+              }}
+            />
+            <div
+              className="absolute bottom-[-10%] left-1/2 h-[45%] w-[90%] -translate-x-1/2 rounded-full opacity-50 blur-3xl transition-colors duration-700"
+              style={{
+                background: `radial-gradient(circle, ${rgbToCss(accents.muted, 0.8)} 0%, transparent 70%)`,
+              }}
+            />
+          </>
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/50 to-black/90" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/85" />
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -269,7 +318,7 @@ export default function ShareListenClient({
           <span className="text-[10px] uppercase tracking-[0.22em] text-white/45">{kindLabel}</span>
         </header>
 
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-4 pt-2 sm:px-8 sm:pb-6">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[calc(13rem+env(safe-area-inset-bottom,0px))] pt-2 sm:px-8 sm:pb-[calc(13.5rem+env(safe-area-inset-bottom,0px))]">
           <div
             className={`w-full ${
               stageMode === 'sleeve'
@@ -284,6 +333,7 @@ export default function ShareListenClient({
                 {artwork ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
+                    key={`${activeIndex}-${artwork}`}
                     src={artwork}
                     alt=""
                     className="h-full w-full object-cover"
@@ -338,12 +388,6 @@ export default function ShareListenClient({
                 })}
               </div>
             </div>
-            {stageMode === 'vinyl' && (
-              <p className="mt-2 text-center text-[10px] uppercase tracking-[0.18em] text-white/35">
-                Drag to spin & scrub
-              </p>
-            )}
-
             <div className="mt-4 text-center sm:mt-5">
               <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
                 {data.share.title}
@@ -352,9 +396,6 @@ export default function ShareListenClient({
                 {artist}
                 {subtitle ? <span className="text-zinc-500"> · {subtitle}</span> : null}
               </p>
-              {data.share.kind === 'folder' && activeTrack && data.tracks.length > 1 && (
-                <p className="mt-2 text-xs text-zinc-500">Now playing · {activeTrack.title}</p>
-              )}
               {variant === 'page' && (
                 <div className="mt-4 flex flex-col items-center gap-2">
                   <button
@@ -369,11 +410,7 @@ export default function ShareListenClient({
                     <p className="max-w-sm text-center text-xs leading-relaxed text-zinc-400" role="status">
                       {igNotice}
                     </p>
-                  ) : (
-                    <p className="max-w-xs text-center text-[10px] uppercase tracking-[0.14em] text-zinc-600">
-                      Pick 15s · export MP4 · link copied for sticker
-                    </p>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -409,10 +446,12 @@ export default function ShareListenClient({
       </div>
 
       <div
-        className="relative z-20 sticky bottom-0 border-t"
+        className="fixed inset-x-0 z-20 border-t touch-manipulation"
         style={{
+          bottom: visualBottomOffset,
           borderColor: rgbToCss(accents.primary, 0.25),
           background: `linear-gradient(180deg, ${rgbToCss(accents.muted, 0.72)} 0%, rgba(0,0,0,0.88) 100%)`,
+          contain: 'layout style',
         }}
       >
         <ShareMiniPlayer

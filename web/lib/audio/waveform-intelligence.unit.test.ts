@@ -208,4 +208,25 @@ describe('buildWaveformTapeCache + DNA remesure', () => {
     })
     expect(tape?.timed[0]?.color).toMatch(/rgb\(/)
   })
+
+  it('remeshes crests onto peak-derived onsets when DNA has no onset series', () => {
+    const samples = Array.from({ length: 128 }, (_, i) => {
+      // Crests slightly early of a 0.5s lattice (bins ~0.47, 0.97, …)
+      const hit = i === 58 || i === 122
+      return {
+        positive: hit ? 0.95 : 0.12,
+        negative: hit ? 0.9 : 0.1,
+        color: 'rgb(0,0,0)',
+      }
+    })
+    const tape = buildWaveformTapeCache({
+      samples,
+      durationSec: 2,
+      colorMode: 'drums',
+      intelligenceProfile: null,
+      targetCount: 128,
+    })
+    expect(tape).not.toBeNull()
+    expect(tape!.timed.some((s) => s.positive > 0.85)).toBe(true)
+  })
 })

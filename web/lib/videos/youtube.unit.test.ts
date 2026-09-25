@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   guessVideoCategory,
+  isYouTubePlaceholderThumbnail,
   parseYouTubeInput,
   slugifyVideoTitle,
   uniqueVideoSlug,
@@ -49,6 +50,12 @@ describe('video slug and category helpers', () => {
 
   it('labels hyphenated categories in full', () => {
     expect(videoCategoryLabel('behind-the-scenes')).toBe('Behind The Scenes')
+  })
+
+  it('treats YouTube’s 120px gray frame as a missing thumbnail', () => {
+    expect(isYouTubePlaceholderThumbnail(120)).toBe(true)
+    expect(isYouTubePlaceholderThumbnail(480)).toBe(false)
+    expect(isYouTubePlaceholderThumbnail(0)).toBe(false)
   })
 
   it('builds a privacy-friendly embed url', () => {

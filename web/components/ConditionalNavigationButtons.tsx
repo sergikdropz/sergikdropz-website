@@ -10,14 +10,15 @@ export default function ConditionalNavigationButtons() {
   const isMusicLibraryMain =
     pathname === '/music-library' || pathname === '/music-library/'
   const isMusicPage = pathname === '/music' || pathname === '/music/'
+  const isVideosPage = pathname === '/videos' || pathname === '/videos/'
 
   // Don't show navigation buttons on admin or studio routes
   if (isAdminRoute || isStudioRoute) {
     return null
   }
 
-  // Music Library / Music embed these links inside their page containers
-  if (isMusicLibraryMain || isMusicPage) {
+  // These pages embed the same links inside their own layout.
+  if (isMusicLibraryMain || isMusicPage || isVideosPage) {
     return null
   }
 

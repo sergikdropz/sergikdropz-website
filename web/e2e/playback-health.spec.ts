@@ -1,10 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
+import { installVaultPlaybackPrefs, startVaultTrackFromLibrary } from './vault-playback-helpers'
 
 test.describe.configure({ timeout: 180_000 })
 
-// Bundled Chromium decodes the vault's MP3s, so this runs everywhere. Set
-// PLAYWRIGHT_AUDIO_CHANNEL=chrome to re-check against a stock Chrome build when
-// a failure looks codec- or platform-specific.
 const audioChannel = process.env.PLAYWRIGHT_AUDIO_CHANNEL
 if (audioChannel) {
   test.use({ channel: audioChannel as 'chrome' })
@@ -23,23 +21,6 @@ type AudioSnapshot = {
   volume: number
   muted: boolean
   contexts: string[]
-}
-
-async function unlockVault(page: Page) {
-  const unlock = await page.request.post('/api/fan/vault-unlock', {
-    data: { email: `e2e-playback-${Date.now()}@example.com` },
-    headers: { 'Content-Type': 'application/json' },
-  })
-  expect(unlock.ok(), 'vault unlock should succeed').toBeTruthy()
-}
-
-async function dismissConsent(page: Page) {
-  const accept = page.getByRole('button', { name: /^Accept$/i })
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (!(await accept.isVisible().catch(() => false))) return
-    await accept.click({ force: true }).catch(() => {})
-    await page.waitForTimeout(400)
-  }
 }
 
 async function snapshotAudio(page: Page): Promise<AudioSnapshot | null> {
@@ -70,12 +51,8 @@ async function snapshotAudio(page: Page): Promise<AudioSnapshot | null> {
 test('vault track reaches real playback progress, not just a network request', async ({
   page,
 }) => {
+  await installVaultPlaybackPrefs(page)
   await page.addInitScript(() => {
-    window.localStorage.setItem('analytics_consent', 'granted')
-    window.localStorage.setItem('idjEnabled', '0')
-    window.localStorage.setItem('autoDJEnabled', '0')
-    // Track every AudioContext the app creates so a stalled media element can be
-    // attributed to a suspended graph rather than a network/codec problem.
     const Native = window.AudioContext || (window as any).webkitAudioContext
     if (!Native) return
     const contexts: AudioContext[] = []
@@ -120,18 +97,7 @@ test('vault track reaches real playback progress, not just a network request', a
     }
   })
 
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await unlockVault(page)
-  await page.goto('/music-library', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: /SERGIK Music Vault/i })).toBeVisible({
-    timeout: 90_000,
-  })
-  await dismissConsent(page)
-
-  await page.getByRole('button', { name: /^Songs$/i }).click({ force: true })
-  const trackRow = page.getByRole('row', { name: /Dmn8r|FTP 2|One Of Those Nights/i }).first()
-  await expect(trackRow).toBeVisible({ timeout: 60_000 })
-  await trackRow.dblclick()
+  await startVaultTrackFromLibrary(page)
 
   let latest: AudioSnapshot | null = null
   try {
@@ -147,8 +113,6 @@ test('vault track reaches real playback progress, not just a network request', a
       )
       .toBeGreaterThan(0.35)
   } catch (error) {
-    // A stalled element is almost always a graph problem (a MediaElementSource
-    // with no path to the destination), so surface the wiring with the failure.
     const graphLog = await page.evaluate(() => (window as any).__graphLog ?? [])
     await test.info().attach('audio-state', { body: JSON.stringify(latest, null, 2) })
     await test.info().attach('audio-graph', { body: (graphLog as string[]).join('\n') })
@@ -169,8 +133,6 @@ test('vault track reaches real playback progress, not just a network request', a
     `no successful media response\n${diagnostics}`,
   ).toBeTruthy()
 
-  // Catalog stamps / waveform patches used to re-run the src+load effect and
-  // restart the track. Keep the playhead moving through a metadata identity change.
   const t1 = latest!.currentTime
   const src1 = latest!.src
   await page.evaluate(() => {
@@ -204,23 +166,8 @@ test('vault track reaches real playback progress, not just a network request', a
 })
 
 test('library playback advances to the next queued track and stays playing', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('analytics_consent', 'granted')
-    window.localStorage.setItem('idjEnabled', '0')
-    window.localStorage.setItem('autoDJEnabled', '0')
-  })
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await unlockVault(page)
-  await page.goto('/music-library', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: /SERGIK Music Vault/i })).toBeVisible({
-    timeout: 90_000,
-  })
-  await dismissConsent(page)
-
-  await page.getByRole('button', { name: /^Songs$/i }).click({ force: true })
-  const trackRow = page.getByRole('row', { name: /Dmn8r|FTP 2|One Of Those Nights/i }).first()
-  await expect(trackRow).toBeVisible({ timeout: 60_000 })
-  await trackRow.dblclick()
+  await installVaultPlaybackPrefs(page)
+  await startVaultTrackFromLibrary(page)
 
   type NowPlaying = {
     id: string | null
@@ -246,7 +193,6 @@ test('library playback advances to the next queued track and stays playing', asy
     }, { timeout: 30_000 })
     .toBe(true)
 
-  // Vault playTrack turns iDJ off — confirm library continuous mode.
   await expect
     .poll(
       async () =>

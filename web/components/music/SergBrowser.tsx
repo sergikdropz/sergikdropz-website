@@ -9,6 +9,13 @@ import { usePathname } from 'next/navigation'
 import { FaPlay, FaMusic, FaCompactDisc, FaUser, FaTags, FaList, FaTh, FaBars, FaHistory, FaFire, FaStar, FaPlus, FaMinus, FaClock, FaChevronRight, FaChevronLeft, FaChevronUp, FaChevronDown, FaFolder, FaEdit, FaTrash, FaCopy, FaExternalLinkAlt, FaGripVertical, FaEye, FaEyeSlash, FaBolt, FaFileAlt, FaSync, FaImage, FaUpload, FaTimes, FaRandom, FaClone, FaSortAlphaDown, FaSortAmountDown, FaInfoCircle, FaLink, FaCode, FaInstagram, FaRocket } from 'react-icons/fa'
 import { copyShareEmbedHtml, copyShareListenLink, exportShareStorySnippet } from '@/lib/shares/client'
 import { createdDateFromTrack } from '@/lib/music-library/track-created-date'
+import {
+  releaseFolderTypeMap,
+  buildTrackFolderMembershipMap,
+  trackReleaseBadgeFlags,
+  trackEpReleaseLabel,
+  type TrackReleaseBadgeFlags,
+} from '@/lib/music-library/track-release-assignment'
 import StarRating from './StarRating'
 import {
   fetchFolders,
@@ -17,6 +24,8 @@ import {
   fetchTracksByIds,
   fetchTracksSummary,
   fetchAllTracksSummaryForHydration,
+  fetchBrowseSongsAll,
+  dedupeTracksById,
   extractTracksFromJsonByAlbumName,
   peekCachedMusicLibrary,
   rateTrack,
@@ -29,8 +38,15 @@ import {
   updateFolder,
   createFolder,
   invalidateMusicLibraryCache,
+  resetMusicLibraryHydrationInFlight,
   linkDroppedFilesToPlaylist,
+  linkDroppedFilesToLibrary,
+  linkDroppedFilesToFolder,
+  type LinkDroppedFilesResult,
+  previewVaultFileDrop,
+  filterDropFilesSkippingVaultDuplicates,
   PlaylistDropTooLargeError,
+  type PreviewVaultFileDropResult,
   type Track,
   type BrowseView,
   type SmartPlaylist,
@@ -44,10 +60,25 @@ import { genrePickerModel, applyPreferredGenreToSonicDna, preferredGenreDirectiv
 import { appendSonicDnaLookupParams } from '@/lib/audio/sonic-dna-query'
 import SonicDnaReportModal from '@/components/music/SonicDnaReportModal'
 import { SergikBrandText } from '@/components/music/SergikBrandText'
+import ReleaseMusicVideosRow from '@/components/music/ReleaseMusicVideosRow'
+import {
+  parseFolderMusicVideos,
+  type FolderMusicVideo,
+} from '@/lib/music-library/folder-music-videos'
 import PlaylistDropProgress, {
   type PlaylistDropItem,
 } from '@/components/music/PlaylistDropProgress'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import {
+  COVER_HERO_QUALITY,
+  COVER_HERO_SIZES,
+  COVER_THUMB_QUALITY,
+  COVER_THUMB_SIZES,
+  isSafeNextImageSrc,
+  shouldUnoptimizeHeroCover,
+  shouldUnoptimizeImage,
+} from '@/utils/imageOptimization'
+
 import { catalogArtworkForRelease, collectEpCoverTiles, collectReleaseCoverTiles, dedupeArtworkByReleaseLabel } from '@/lib/ep-cover-art'
 import { analyzeBeatCountFromUrl, formatClock, formatBpmAccuracyNote, recordTapTempo, scoreBpmSuggestionAccuracy, tapTempoDelta, TAP_TEMPO_MIN_INTERVALS, TAP_TEMPO_RESET_MS, TAP_TEMPO_SECTION_BEATS, type BeatCountCandidate, type BpmAccuracyScore } from '@/lib/audio/beat-count'
 import { analyzeRootKeyFromUrl, pickBestKeyFromSources, type RankedKeyPick } from '@/lib/audio/root-key'
@@ -69,7 +100,9 @@ import {
 } from '@/lib/audio/playlist-drop-limits'
 import {
   stripArtworkCacheBust,
+  artworkUrlForCatalogStorage,
   withArtworkCacheBust,
+  forceArtworkCacheBust,
   normalizeArtworkPatch,
   isUploadedFolderArtwork,
   isImageFile,
@@ -85,7 +118,13 @@ import {
   assignCrateMosaicCovers,
   getLiveMosaicCovers,
   subscribeLiveMosaicCovers,
+  hydrateLiveMosaicCovers,
   EMPTY_LIVE_MOSAIC_COVERS,
+  removeLiveMosaicCoverBySrc,
+  suppressMosaicPath,
+  isMosaicPathSuppressed,
+  collectionIdFromArtwork,
+  artworkFileIdFromUrl,
   trackShouldUseCrateMosaic,
   subscribeCatalogSync,
   emitCatalogSync,
@@ -96,8 +135,17 @@ import {
 } from '@/lib/catalog-sync'
 import { useCatalogSync } from '@/contexts/CatalogSyncContext'
 import {
+  artworkUploadHttpErrorMessage,
+  buildArtworkUploadFormData,
+} from '@/lib/media/prepare-cover-upload'
+import { warmMusicLibrarySession } from '@/lib/media/session-warm'
+import { warmUpcomingQueuePlayback } from '@/lib/media/warm-playback-urls'
+import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import { fetchBrowserAuthSession } from '@/lib/auth/browser-session'
+import {
   fetchMusicBrowse,
   fetchMusicBrowseSongsAll,
+  invalidateMusicLibraryQueries,
   useMusicPlaylists,
   useMusicSmartPlaylists,
 } from '@/lib/api/music-library-hooks'
@@ -105,6 +153,8 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useMusicPlayer, type PlayerSource } from '@/contexts/MusicPlayerContext'
 import { CrateCoverMosaic } from '@/components/music/CrateCoverMosaic'
 import { mosaicCoversForTrack, usePlayerCoverPool } from '@/hooks/useTrackMosaicCovers'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { filterTracksForLibraryBrowse } from '@/lib/music-library/track-search'
 import { readCatalogRandomSetting } from '@/lib/audio/catalog-random'
 import {
   COLUMN_SORT_FIELD,
@@ -113,12 +163,16 @@ import {
   columnHeaderAlign,
   columnHeaderLabel,
   columnHeaderUppercase,
+  clampSongTableColumnWidth,
   loadSongTableColumnOrder,
   loadSongTableColumnVisibility,
+  loadSongTableColumnWidths,
   loadSongTableSort,
   reorderColumns,
+  SONG_TABLE_DEFAULT_COLUMN_WIDTHS,
   saveSongTableColumnOrder,
   saveSongTableColumnVisibility,
+  saveSongTableColumnWidths,
   saveSongTableSort,
   sortSongTableTracks,
   visibleColumnOrder,
@@ -138,12 +192,55 @@ interface SergBrowserProps {
   /** Controlled search from parent (e.g. Music Vault). Hides the inline search when set. */
   searchQuery?: string
   onSearchQueryChange?: (query: string) => void
+  /** Parent bootstrap playlists — seeds RQ so we skip a duplicate /playlists round-trip. */
+  initialPlaylists?: Playlist[]
 }
 
 type SortField = SongTableSortField
 const ALBUM_LAYOUT_STORAGE_KEY = 'serg-browser-albums-layout'
 const LEGACY_ALBUM_LAYOUT_STORAGE_KEY = 'itunes-browser-albums-layout'
 const EP_COVER_CHOICES = collectEpCoverTiles()
+const RELEASE_COVER_CHOICES = collectReleaseCoverTiles()
+
+/** Pool for “Choose existing artwork” — live vault covers first, then static shop/schedule. */
+function buildArtworkChoices(input: {
+  seedId: string
+  seedSrc?: string
+  seedLabel: string
+  tracks?: Track[]
+  libraryAlbums?: Array<Pick<AlbumTile, 'id' | 'name' | 'artwork'>>
+  liveMosaic?: Array<{ id: string; src: string; alt: string }>
+}): ArtworkChoice[] {
+  const seen = new Set<string>()
+  const choices: ArtworkChoice[] = []
+  const add = (id: string, src: string | undefined, label: string) => {
+    if (!src?.trim()) return
+    const resolved = resolveImageUrl(src.trim())
+    if (!resolved) return
+    const key = stripArtworkCacheBust(resolved)
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    choices.push({ id, src: resolved, label: label.trim() || 'Cover art' })
+  }
+
+  add(`current-${input.seedId}`, input.seedSrc, input.seedLabel)
+  for (const track of input.tracks || []) {
+    add(`track-${track.id}`, track.artwork, track.title)
+  }
+  for (const tile of input.liveMosaic || []) {
+    const label = String(tile.alt || '')
+      .replace(/\s*cover art$/i, '')
+      .replace(/\s*EP$/i, '')
+      .trim()
+    add(tile.id, tile.src, label || tile.alt || 'Cover')
+  }
+  for (const album of input.libraryAlbums || []) {
+    add(`album-${album.id}`, album.artwork, album.name)
+  }
+  for (const tile of EP_COVER_CHOICES) add(tile.id, tile.src, tile.alt)
+  for (const tile of RELEASE_COVER_CHOICES) add(`release-pool-${tile.id}`, tile.src, tile.alt)
+  return dedupeArtworkByReleaseLabel(choices)
+}
 
 type AlbumLayout = 'list' | 'tiles'
 
@@ -179,11 +276,15 @@ type AlbumTile = {
   year?: number
   albumArtist?: string
   hidden?: boolean
+  /** YouTube music videos attached to this release (folder.metadata.music_videos). */
+  musicVideos?: FolderMusicVideo[]
 }
 
 function firstArtworkSrc(...values: Array<string | null | undefined>): string {
   for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'string' && value.trim()) {
+      return resolveImageUrl(value.trim()) || value.trim()
+    }
   }
   return ''
 }
@@ -193,21 +294,19 @@ function trackDateCreatedIso(track: Pick<Track, 'metadata' | 'year' | 'date_crea
   return createdDateFromTrack(track) || ''
 }
 
-function isLocalCoverUrl(src: string): boolean {
-  const resolved = resolveImageUrl(src)
-  return resolved.startsWith('/images/') || resolved.startsWith('/audio/')
-}
-
 function folderArtworkSrc(album: Pick<AlbumTile, 'name' | 'artwork'>, tracks: Track[] = []): string {
-  // Explicit folder/album cover always wins — never let track/catalog art override a set cover.
-  const explicit = typeof album.artwork === 'string' ? album.artwork.trim() : ''
-  if (explicit) return explicit
-  const values = [
+  const candidates = [
+    typeof album.artwork === 'string' ? album.artwork.trim() : '',
     ...tracks.map((track) => track.artwork),
     catalogArtworkForRelease(album.name),
   ]
-  const usable = values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-  return usable.find(isLocalCoverUrl) || firstArtworkSrc(...usable)
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => resolveImageUrl(value.trim()) || value.trim())
+    .filter(Boolean)
+
+  // Prefer shipped local masters (reliable after PNG→JPG normalize).
+  const local = candidates.find((src) => src.startsWith('/images/') || src.startsWith('/audio/'))
+  return local || candidates[0] || ''
 }
 
 function withResolvedArtwork(tile: AlbumTile, tracks: Track[] = []): AlbumTile {
@@ -316,6 +415,7 @@ function collectAlbumAndEpTiles(items: FolderItem[] | any[]): AlbumTile[] {
           year: item.year,
           albumArtist: item.albumArtist || item.album_artist || item.metadata?.album_artist || 'SERGIK',
           hidden: !!(item.hidden || item.is_hidden),
+          musicVideos: parseFolderMusicVideos(item.metadata),
         })
       }
       if (Array.isArray(item.children) && item.children.length) walk(item.children)
@@ -341,6 +441,7 @@ function toAlbumTiles(albums: any[]): AlbumTile[] {
       year: a.year,
       albumArtist: a.albumArtist || a.album_artist || a.metadata?.album_artist || 'SERGIK',
       hidden: !!(a.hidden || a.is_hidden),
+      musicVideos: parseFolderMusicVideos(a.metadata),
     }))
     .sort((a, b) => {
       if (a.type !== b.type) return a.type === 'ep' ? -1 : 1
@@ -435,13 +536,52 @@ function withTrackOrder(tracks: Track[]): Track[] {
   }))
 }
 
-function dedupeTracksById(tracks: Track[]): Track[] {
-  const seen = new Set<string>()
-  return tracks.filter((track) => {
-    if (!track?.id || seen.has(track.id)) return false
-    seen.add(track.id)
-    return true
-  })
+/** Prefer later lists (live API) over earlier cache seeds. */
+function mergeTracksById(...lists: Track[][]): Track[] {
+  const byId = new Map<string, Track>()
+  for (const list of lists) {
+    for (const track of list) {
+      if (track?.id) byId.set(track.id, track)
+    }
+  }
+  return [...byId.values()]
+}
+
+/** Keep freshly ingested rows visible at the top of Songs (table sort still applies). */
+function pinTrackIdsToFront(trackIds: string[], tracks: Track[]): Track[] {
+  if (!trackIds.length || !tracks.length) return tracks
+  const idSet = new Set(trackIds)
+  const byId = new Map(tracks.map((t) => [t.id, t]))
+  const front: Track[] = []
+  for (const id of trackIds) {
+    const row = byId.get(id)
+    if (row) front.push(row)
+  }
+  if (!front.length) return tracks
+  const rest = tracks.filter((t) => !idSet.has(t.id))
+  return [...front, ...rest]
+}
+
+function stubTracksFromLinkDropCreated(
+  created: LinkDroppedFilesResult['created'],
+  existingIds: Set<string>,
+): Track[] {
+  const stubs: Track[] = []
+  for (const row of created) {
+    if (!row.trackId || existingIds.has(row.trackId)) continue
+    const title = String(row.file || '')
+      .replace(/\.[^.]+$/, '')
+      .trim()
+    const path = String(row.filePath || row.file || '').replace(/^\/+/, '')
+    stubs.push({
+      id: row.trackId,
+      title: title || row.trackId,
+      artist: 'SERGIK',
+      file: normalizeVaultAudioUrl(path ? `/audio/${path}` : ''),
+    } as Track)
+    existingIds.add(row.trackId)
+  }
+  return stubs
 }
 
 const FOLDER_TRACK_PAGE = 200
@@ -597,6 +737,10 @@ function mergeAlbumTiles(...lists: AlbumTile[][]): AlbumTile[] {
         ...tile,
         artwork: firstArtworkSrc(tile.artwork, prev?.artwork) || undefined,
         hidden: !!(tile.hidden ?? prev?.hidden),
+        musicVideos:
+          (tile.musicVideos && tile.musicVideos.length > 0
+            ? tile.musicVideos
+            : prev?.musicVideos) || [],
       })
     }
   }
@@ -660,6 +804,7 @@ export default function SergBrowser({
   adminMode,
   searchQuery: controlledSearchQuery,
   onSearchQueryChange,
+  initialPlaylists,
 }: SergBrowserProps) {
   const pathname = usePathname()
   const isAdminCatalog = adminMode ?? pathname.startsWith('/admin')
@@ -680,6 +825,8 @@ export default function SergBrowser({
   const curatedPlaylistsQuery = useMusicPlaylists({
     publishVersion,
     includeHidden: isAdminCatalog,
+    initialData:
+      !isAdminCatalog && initialPlaylists?.length ? initialPlaylists : undefined,
   })
 
   const queuePanelHostElRef = useRef<HTMLDivElement | null>(null)
@@ -723,6 +870,7 @@ export default function SergBrowser({
   const [internalSearchQuery, setInternalSearchQuery] = useState('')
   const searchControlled = controlledSearchQuery !== undefined
   const searchQuery = searchControlled ? controlledSearchQuery : internalSearchQuery
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 280)
   const setSearchQuery = (value: string) => {
     if (searchControlled) onSearchQueryChange?.(value)
     else setInternalSearchQuery(value)
@@ -731,6 +879,8 @@ export default function SergBrowser({
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null)
   const selectedAlbumIdRef = useRef<string | null>(null)
   selectedAlbumIdRef.current = selectedAlbumId
+  const activeSidebarAlbumRef = useRef<string | null>(null)
+  activeSidebarAlbumRef.current = activeSidebarAlbum
   const albumsRef = useRef<AlbumTile[]>([])
   albumsRef.current = albums
   const [albumLayout, setAlbumLayout] = useState<AlbumLayout>(loadAlbumLayout)
@@ -753,12 +903,70 @@ export default function SergBrowser({
   const sidebarAlbumsRef = useRef(sidebarAlbums)
   const albumTracksByFolderRef = useRef(albumTracksByFolder)
   const tracksRef = useRef(tracks)
+  const songsCatalogBaselineRef = useRef<Track[]>([])
   const activeCuratedPlaylistRef = useRef(activeCuratedPlaylist)
   curatedPlaylistsRef.current = curatedPlaylists
   sidebarAlbumsRef.current = sidebarAlbums
   albumTracksByFolderRef.current = albumTracksByFolder
   tracksRef.current = tracks
   activeCuratedPlaylistRef.current = activeCuratedPlaylist
+
+  const songsViewTracks = useMemo(
+    () =>
+      filterTracksForLibraryBrowse(tracks, {
+        search: searchQuery,
+        genre: filterGenre,
+        artist: filterArtist,
+      }),
+    [tracks, searchQuery, filterGenre, filterArtist],
+  )
+  const songsBrowseFiltered =
+    Boolean(searchQuery.trim()) || Boolean(filterGenre) || Boolean(filterArtist)
+
+  // Warm busted EP covers (+ mosaic) after first browse paint so they don't
+  // contend with bootstrap / albums browse on cold load.
+  useEffect(() => {
+    if (loading) return
+    const idle =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 4000 })
+        : (cb: () => void) => window.setTimeout(cb, 1200)
+    const handle = idle(() => {
+      void hydrateLiveMosaicCovers()
+    })
+    return () => {
+      if (typeof handle === 'number') window.clearTimeout(handle)
+      else if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(handle as number)
+      }
+    }
+  }, [loading])
+
+  useEffect(() => {
+    if (loading) return
+    const mosaic = getLiveMosaicCovers()
+    const covers = [
+      ...sidebarAlbums.map((a: any) => a?.artwork as string | undefined),
+      ...mosaic.map((t) => t.src),
+      ...EP_COVER_CHOICES.map((t) => t.src),
+    ]
+    const idle =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 3500 })
+        : (cb: () => void) => window.setTimeout(cb, 800)
+    const handle = idle(() => {
+      void warmMusicLibrarySession({
+        covers,
+        key: `vault-covers:${sidebarAlbums.length}:${mosaic.length}`,
+      })
+    })
+    return () => {
+      if (typeof handle === 'number') window.clearTimeout(handle)
+      else if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(handle as number)
+      }
+    }
+  }, [sidebarAlbums, loading])
   const [playlistsSectionMenu, setPlaylistsSectionMenu] = useState<{ x: number; y: number } | null>(null)
   const [playlistCreateOpen, setPlaylistCreateOpen] = useState(false)
   const [playlistCreateDraft, setPlaylistCreateDraft] = useState({ name: '', description: '' })
@@ -769,6 +977,15 @@ export default function SergBrowser({
   const [playlistDropNotice, setPlaylistDropNotice] = useState<string | null>(null)
   const [playlistDropPendingConvert, setPlaylistDropPendingConvert] = useState<File[] | null>(null)
   const [playlistDropItems, setPlaylistDropItems] = useState<PlaylistDropItem[]>([])
+  const [vaultDropDuplicateGate, setVaultDropDuplicateGate] = useState<{
+    files: File[]
+    preview: PreviewVaultFileDropResult
+    target:
+      | { kind: 'library' }
+      | { kind: 'playlist'; playlistId: string }
+      | { kind: 'folder'; folderId: string }
+  } | null>(null)
+  const resolveVaultDropGateRef = useRef<((files: File[] | null) => void) | null>(null)
   const [sidebarPlaylistDragOverId, setSidebarPlaylistDragOverId] = useState<string | null>(null)
   const [sidebarTrackDragActive, setSidebarTrackDragActive] = useState(false)
   const [sidebarPlaylistNotice, setSidebarPlaylistNotice] = useState<string | null>(null)
@@ -831,8 +1048,16 @@ export default function SergBrowser({
       if (!hasBrowseContentRef.current) setLoading(true)
     }
     try {
+      const browseFilterActive = Boolean(
+        debouncedSearchQuery.trim() || filterGenre || filterArtist,
+      )
+
       // Curated playlist selected — fetch its tracks (reuse the same audio file across playlists)
       if (activeCuratedPlaylist) {
+        if (browseFilterActive && tracksRef.current.length) {
+          setLoading(false)
+          return
+        }
         showBlockingLoader()
         const pl = curatedPlaylistsRef.current.find((p) => p.id === activeCuratedPlaylist)
         const ids = pl?.trackIds || []
@@ -871,6 +1096,10 @@ export default function SergBrowser({
 
       // Sidebar album/EP selected — fetch its tracks directly by folder
       if (activeSidebarAlbum) {
+        if (browseFilterActive && tracksRef.current.length) {
+          setLoading(false)
+          return
+        }
         showBlockingLoader()
         const pl = curatedPlaylistsRef.current.find(
           (p) => p.id === playlistIdForFolder(activeSidebarAlbum) || p.id === activeSidebarAlbum
@@ -889,6 +1118,10 @@ export default function SergBrowser({
       }
 
       if (activeSmartPlaylist) {
+        if (browseFilterActive && tracksRef.current.length) {
+          setLoading(false)
+          return
+        }
         showBlockingLoader()
         const result = await resolveSmartPlaylist(activeSmartPlaylist)
         setTracks(result.tracks || [])
@@ -898,65 +1131,114 @@ export default function SergBrowser({
       }
 
       if (view === 'songs') {
-        const noFilters = !filterGenre && !filterArtist && !searchQuery
-        const applySongFilters = (list: Track[]) => {
-          let next = list
-          if (filterGenre) {
-            next = next.filter((t) => String(t.genre || '') === filterGenre)
+        const searchTerm = debouncedSearchQuery.trim()
+        const browseFiltered = Boolean(searchTerm || filterGenre || filterArtist)
+
+        // Admin: filter in-memory (instant as you type via songsViewTracks). Skip network on filter-only reloads.
+        if (isAdminCatalog && browseFiltered) {
+          const baseline = tracksRef.current.length
+            ? tracksRef.current
+            : songsCatalogBaselineRef.current
+          if (baseline.length) {
+            if (!tracksRef.current.length) setTracks(baseline)
+            setLoading(false)
+            return
           }
-          if (filterArtist) {
-            const artistQ = filterArtist.toLowerCase()
-            next = next.filter((t) => String(t.artist || '').toLowerCase().includes(artistQ))
-          }
-          if (searchQuery) {
-            const q = searchQuery.trim().toLowerCase()
-            next = next.filter(
-              (t) =>
-                String(t.title || '').toLowerCase().includes(q) ||
-                String(t.artist || '').toLowerCase().includes(q) ||
-                String(t.album || '').toLowerCase().includes(q),
-            )
-          }
-          return next
         }
+
+        const browseSortOpts = {
+          sort: sortField,
+          dir: sortDir,
+          genre: filterGenre || undefined,
+          artist: filterArtist || undefined,
+          search: searchTerm || undefined,
+        }
+
+        if (!isAdminCatalog && browseFiltered) {
+          showBlockingLoader()
+          try {
+            const data = await fetchMusicBrowseSongsAll(queryClient, publishVersion, browseSortOpts)
+            const rows = dedupeTracksById(data.tracks || [])
+            if (!stillCurrent()) return
+            setTracks(rows)
+            setTotal(data.total ?? rows.length)
+          } catch {
+            if (!stillCurrent()) return
+            const fallback = filterTracksForLibraryBrowse(
+              songsCatalogBaselineRef.current.length
+                ? songsCatalogBaselineRef.current
+                : tracksRef.current,
+              { search: searchTerm, genre: filterGenre, artist: filterArtist },
+            )
+            setTracks(fallback)
+            setTotal(fallback.length)
+          }
+          setLoading(false)
+          return
+        }
+
+        // Admin Songs: paginated /browse is authoritative (includes loose library rows; stable paging).
+        if (isAdminCatalog) {
+          showBlockingLoader()
+          try {
+            const data = await fetchBrowseSongsAll({
+              sort: sortField,
+              dir: sortDir,
+            })
+            if (!stillCurrent()) return
+            const rows = dedupeTracksById(data.tracks || [])
+            songsCatalogBaselineRef.current = rows
+            setTracks(rows)
+            setTotal(data.total ?? rows.length)
+          } catch {
+            if (!stillCurrent()) return
+            setTracks([])
+            setTotal(0)
+          }
+          setLoading(false)
+          return
+        }
+
         const seeded = tracksFromCachedLibrary()
         if (seeded.length) {
-          const filtered = applySongFilters(seeded)
-          if (filtered.length || noFilters) {
-            setTracks(filtered)
-            setTotal(filtered.length)
-            setLoading(false)
-          } else {
-            showBlockingLoader()
-          }
+          setTracks(seeded)
+          setTotal(seeded.length)
+          setLoading(false)
         } else {
           showBlockingLoader()
         }
         try {
-          const hydrated = await fetchAllTracksSummaryForHydration({ includeArchived: false })
-          const filtered = applySongFilters(hydrated)
-          if (filtered.length || hydrated.length) {
-            setTracks(filtered)
-            setTotal(filtered.length)
-            setLoading(false)
-            return
-          }
+          const hydrated = await fetchAllTracksSummaryForHydration({
+            includeArchived: false,
+            forceRefresh: isAdminCatalog,
+          })
+          if (!stillCurrent()) return
+          const merged = mergeTracksById(hydrated, seeded)
+          setTracks((prev) => {
+            const withPrev = mergeTracksById(merged, prev)
+            setTotal(withPrev.length)
+            return withPrev
+          })
+          setLoading(false)
+          return
         } catch {
           /* fall through to browse only when cache is empty */
         }
-        if (seeded.length) {
+        if (seeded.length && !isAdminCatalog) {
           setLoading(false)
           return
         }
         const data = await fetchMusicBrowseSongsAll(queryClient, publishVersion, {
           sort: sortField,
           dir: sortDir,
-          genre: filterGenre || undefined,
-          artist: filterArtist || undefined,
-          search: searchQuery || undefined,
         })
-        setTracks(data.tracks || [])
-        setTotal(data.total || 0)
+        if (!stillCurrent()) return
+        const browseTracks = data.tracks || []
+        setTracks((prev) => {
+          const merged = mergeTracksById(browseTracks, prev)
+          setTotal(merged.length)
+          return merged
+        })
         setLoading(false)
         return
       }
@@ -974,7 +1256,9 @@ export default function SergBrowser({
             setAlbums((prev) => prev.map((tile) => withResolvedArtwork(tile, cachedGrouped[tile.id] || [])))
           }
           const cacheMisses = cachedTiles.some((tile) => !(cachedGrouped[tile.id] && cachedGrouped[tile.id].length > 0))
-          if (cacheMisses) setAlbumTracksHydrating(true)
+          // Admin never seeds tracks from cache, so tiles are empty until the API merge —
+          // show "Loading tracks…" instead of a false "0 tracks / No tracks found".
+          if (cacheMisses || isAdminCatalog) setAlbumTracksHydrating(true)
           setLoading(false)
         } else {
           showBlockingLoader()
@@ -985,17 +1269,19 @@ export default function SergBrowser({
 
       const data = await fetchMusicBrowse(queryClient, publishVersion, {
         view,
-        sort: sortField,
-        dir: sortDir,
+        // Albums browse must share the sidebar tile key (title/asc) so we don't
+        // double-hit /browse?limit=500 when the song-table sort differs.
+        sort: view === 'albums' ? 'title' : sortField,
+        dir: view === 'albums' ? 'asc' : sortDir,
         genre: filterGenre || undefined,
         artist: filterArtist || undefined,
-        search: searchQuery || undefined,
+        search: debouncedSearchQuery.trim() || undefined,
         limit: view === 'albums' ? 500 : 200,
       })
 
       if (view === 'albums') {
         let tiles = toAlbumTiles(data.albums || []).map((tile) => withResolvedArtwork(tile))
-        if (!searchQuery.trim()) {
+        if (!debouncedSearchQuery.trim()) {
           const fromFolders = await loadAlbumAndEpTilesFromLibrary(isAdminCatalog).catch(
             () => [] as AlbumTile[],
           )
@@ -1005,7 +1291,7 @@ export default function SergBrowser({
           if (!isAdminCatalog) tiles = tiles.filter((t) => !t.hidden)
         } else if (tiles.length === 0) {
           tiles = await loadAlbumAndEpTilesFromLibrary(isAdminCatalog)
-          const q = searchQuery.trim().toLowerCase()
+          const q = debouncedSearchQuery.trim().toLowerCase()
           tiles = tiles
             .filter(
               (a) =>
@@ -1018,21 +1304,30 @@ export default function SergBrowser({
           tiles = tiles.filter((t) => !t.hidden)
         }
         setAlbums((prev) => mergeAlbumTilesPreservingUploads(tiles, prev as AlbumTile[]))
+        // Keep sidebar in sync from the same browse result (avoids a second /browse).
+        if (!debouncedSearchQuery.trim()) {
+          setSidebarAlbums((prev) => mergeAlbumTilesPreservingUploads(tiles, prev as AlbumTile[]))
+        }
 
         let grouped = tracksGroupedFromCachedLibrary()
         const paintGrouped = (next: Record<string, Track[]>) => {
           if (!stillCurrent()) return
           const stamped = withEpArtworkOnCrateTracks(next, tiles)
           setAlbumTracksByFolder(stamped)
-          setAlbums((prev) =>
+          const resolveTiles = (prev: AlbumTile[]) =>
             prev.map((tile) => {
               const resolved = withResolvedArtwork(tile, stamped[tile.id] || [])
               if (isUploadedFolderArtwork(tile.artwork)) {
-                return { ...resolved, artwork: tile.artwork }
+                // Re-resolve so retired .png Storage URLs become local JPEG masters.
+                return {
+                  ...resolved,
+                  artwork: resolveImageUrl(tile.artwork) || tile.artwork || resolved.artwork,
+                }
               }
               return resolved
-            }),
-          )
+            })
+          setAlbums(resolveTiles)
+          setSidebarAlbums(resolveTiles)
         }
         // Instant paint from cache, but never trust stub Unknown/None catalog as final.
         if (Object.keys(grouped).length) paintGrouped(grouped)
@@ -1042,31 +1337,36 @@ export default function SergBrowser({
         )
         if (tilesNeedingHydration.length) {
           setAlbumTracksHydrating(true)
-          const BATCH = 6
-          for (let i = 0; i < tilesNeedingHydration.length; i += BATCH) {
-            if (!stillCurrent()) return
-            const slice = tilesNeedingHydration.slice(i, i + BATCH)
-            const fills = await Promise.all(
-              slice.map(async (tile) => {
-                const pl = curatedPlaylistsRef.current.find(
-                  (p) =>
-                    p.id === playlistIdForFolder(tile.id) ||
-                    p.id === tile.id ||
-                    folderIdFromPlaylistId(p.id) === tile.id,
-                )
-                const loaded = await loadTracksForAlbumFolder(tile.id, pl?.trackIds || [], tile.name)
-                return loaded.length
-                  ? ([tile.id, withAlbumName(loaded, tile.name, tile.type)] as const)
-                  : null
-              }),
-            )
-            for (const fill of fills) {
-              if (fill) grouped[fill[0]] = fill[1]
+          try {
+            const BATCH = 6
+            for (let i = 0; i < tilesNeedingHydration.length; i += BATCH) {
+              if (!stillCurrent()) break
+              const slice = tilesNeedingHydration.slice(i, i + BATCH)
+              const fills = await Promise.all(
+                slice.map(async (tile) => {
+                  const pl = curatedPlaylistsRef.current.find(
+                    (p) =>
+                      p.id === playlistIdForFolder(tile.id) ||
+                      p.id === tile.id ||
+                      folderIdFromPlaylistId(p.id) === tile.id,
+                  )
+                  const loaded = await loadTracksForAlbumFolder(tile.id, pl?.trackIds || [], tile.name)
+                  return loaded.length
+                    ? ([tile.id, withAlbumName(loaded, tile.name, tile.type)] as const)
+                    : null
+                }),
+              )
+              for (const fill of fills) {
+                if (fill) grouped[fill[0]] = fill[1]
+              }
+              if (stillCurrent()) paintGrouped(grouped)
             }
-            paintGrouped(grouped)
+          } finally {
+            if (stillCurrent()) setAlbumTracksHydrating(false)
           }
+        } else if (stillCurrent()) {
+          setAlbumTracksHydrating(false)
         }
-        if (stillCurrent()) setAlbumTracksHydrating(false)
 
         // Background overlay so admin edits aren't stuck on the first folder page.
         void fetchAllTracksSummaryForHydration({
@@ -1132,10 +1432,10 @@ export default function SergBrowser({
     } finally {
       if (stillCurrent()) {
         setLoading(false)
-        if (view !== 'albums') setAlbumTracksHydrating(false)
+        setAlbumTracksHydrating(false)
       }
     }
-  }, [view, sortField, sortDir, filterGenre, filterArtist, searchQuery, activeSmartPlaylist, activeCuratedPlaylist, activeSidebarAlbum, isAdminCatalog, queryClient, publishVersion])
+  }, [view, sortField, sortDir, filterGenre, filterArtist, debouncedSearchQuery, activeSmartPlaylist, activeCuratedPlaylist, activeSidebarAlbum, isAdminCatalog, queryClient, publishVersion])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -1169,6 +1469,10 @@ export default function SergBrowser({
   }, [curatedPlaylistsQuery.data])
 
   useEffect(() => {
+    // Albums view already seeds sidebar from the shared title/asc browse.
+    if (view === 'albums' && albums.length > 0 && !searchQuery.trim()) {
+      return
+    }
     loadCatalogAlbumAndEpTiles(isAdminCatalog, queryClient, publishVersion)
       .then((tiles) =>
         setSidebarAlbums((prev) =>
@@ -1190,7 +1494,7 @@ export default function SergBrowser({
           )
           .catch(() => {})
       })
-  }, [isAdminCatalog, queryClient, publishVersion])
+  }, [isAdminCatalog, queryClient, publishVersion, view, albums.length, searchQuery])
 
   useEffect(() => {
     if (!isAdminCatalog) return
@@ -1233,6 +1537,10 @@ export default function SergBrowser({
     const source = browsePlayerSource()
     const startQueue = readCatalogRandomSetting() ? [track] : tracks
     playTrack(track as any, startQueue as any, source)
+    if (!readCatalogRandomSetting()) {
+      const warmIdx = startQueue.findIndex((t) => t.id === track.id)
+      warmUpcomingQueuePlayback(startQueue, warmIdx >= 0 ? warmIdx : idx, 2)
+    }
     recordTrackPlay(track.id, { source: activeSmartPlaylist ? 'smart_playlist' : 'browse' })
   }
 
@@ -1421,12 +1729,16 @@ export default function SergBrowser({
       }
 
       const movedTracks: Track[] = []
+      let skippedAlreadyInTarget = 0
       let errorMessage: string | null = null
       for (const id of unique) {
         const existing = resolved.find((t) => t.id === id)
         const sourceFolderId =
           existing?.folderId || (existing as Track & { folder_id?: string } | undefined)?.folder_id || ''
-        if (sourceFolderId && sourceFolderId === targetFolderId) continue
+        if (sourceFolderId && sourceFolderId === targetFolderId) {
+          skippedAlreadyInTarget += 1
+          continue
+        }
         try {
           const saved = await updateTrack(id, { folderId: targetFolderId })
           const base =
@@ -1457,7 +1769,12 @@ export default function SergBrowser({
       }
 
       if (!movedTracks.length) {
-        setSidebarPlaylistNotice(errorMessage || `Already in “${target.name}”`)
+        setSidebarPlaylistNotice(
+          errorMessage ||
+            (skippedAlreadyInTarget > 0
+              ? `Already in “${target.name}” (${skippedAlreadyInTarget} duplicate${skippedAlreadyInTarget === 1 ? '' : 's'})`
+              : `Already in “${target.name}”`),
+        )
         return
       }
 
@@ -1517,12 +1834,16 @@ export default function SergBrowser({
         })
       }
       invalidateMusicLibraryCache()
+      const dupeNote =
+        skippedAlreadyInTarget > 0
+          ? ` · ${skippedAlreadyInTarget} already in crate`
+          : ''
       setSidebarPlaylistNotice(
         errorMessage
-          ? `${movedTracks.length} moved · ${errorMessage}`
+          ? `${movedTracks.length} moved · ${errorMessage}${dupeNote}`
           : movedTracks.length === 1
-            ? `Moved 1 track to “${target.name}”`
-            : `Moved ${movedTracks.length} tracks to “${target.name}”`,
+            ? `Moved 1 track to “${target.name}”${dupeNote}`
+            : `Moved ${movedTracks.length} tracks to “${target.name}”${dupeNote}`,
       )
     },
     [activeSidebarAlbum, selectedAlbumId],
@@ -1544,6 +1865,35 @@ export default function SergBrowser({
       console.error('Failed to persist playlist order', err)
     }
   }, [])
+
+  const finishVaultDropDuplicateGate = useCallback((files: File[] | null) => {
+    resolveVaultDropGateRef.current?.(files)
+    resolveVaultDropGateRef.current = null
+    setVaultDropDuplicateGate(null)
+  }, [])
+
+  const gateVaultDropFiles = useCallback(
+    async (
+      files: File[],
+      target:
+        | { kind: 'library' }
+        | { kind: 'playlist'; playlistId: string }
+        | { kind: 'folder'; folderId: string },
+    ): Promise<File[] | null> => {
+      try {
+        const preview = await previewVaultFileDrop(target, files)
+        if (!preview.duplicates.length) return files
+        return new Promise((resolve) => {
+          resolveVaultDropGateRef.current = resolve
+          setVaultDropDuplicateGate({ files, preview, target })
+        })
+      } catch (err: any) {
+        console.warn('[vault-drop] duplicate preview failed', err)
+        return files
+      }
+    },
+    [],
+  )
 
   const patchPlaylistDropItem = useCallback((id: string, patch: Partial<PlaylistDropItem>) => {
     setPlaylistDropItems((prev) =>
@@ -1721,6 +2071,404 @@ export default function SergBrowser({
     ],
   )
 
+  const applyFolderDropResultIncremental = useCallback(
+    async (folderId: string, result: Awaited<ReturnType<typeof linkDroppedFilesToFolder>>) => {
+      const newIds = [
+        ...new Set([
+          ...result.added,
+          ...result.created.map((row) => row.trackId),
+        ]),
+      ].filter(Boolean)
+      if (!newIds.length) return
+      invalidateMusicLibraryCache()
+      await moveTracksToSidebarFolder(folderId, newIds)
+    },
+    [moveTracksToSidebarFolder],
+  )
+
+  const runFolderFileDrop = useCallback(
+    async (files: File[], convertToMp3: boolean, folderId: string) => {
+      if (!isAdminCatalog || !folderId || playlistDropBusy) return
+      if (!files.length) return
+      openSidebarAlbum(folderId)
+
+      setPlaylistDropBusy(true)
+      setSidebarPlaylistNotice(null)
+      setPlaylistDropPendingConvert(null)
+
+      let added = 0
+      let created = 0
+      let failed = 0
+      let skippedDupes = 0
+
+      try {
+        for (const file of files) {
+          try {
+            const result = await linkDroppedFilesToFolder(folderId, [file], { convertToMp3 })
+            if (result.ingestFailed.length) {
+              failed += 1
+            } else if (result.created.length) {
+              created += 1
+              added += result.added.length
+              await applyFolderDropResultIncremental(folderId, result)
+            } else if (result.added.length) {
+              added += result.added.length
+              await applyFolderDropResultIncremental(folderId, result)
+            } else if (result.alreadyInPlaylist.length) {
+              skippedDupes += 1
+            } else if (result.unmatched.length) {
+              failed += 1
+            }
+          } catch (err: any) {
+            if (
+              (err instanceof PlaylistDropTooLargeError || err?.code === 'FILE_TOO_LARGE') &&
+              err?.convertible
+            ) {
+              setPlaylistDropPendingConvert(files)
+              setSidebarPlaylistNotice(err.message)
+              return
+            }
+            failed += 1
+          }
+        }
+
+        const parts: string[] = []
+        if (created) parts.push(`Ingested ${created} new into crate`)
+        if (added) parts.push(`Added ${added} to crate`)
+        if (skippedDupes) parts.push(`${skippedDupes} duplicate${skippedDupes === 1 ? '' : 's'} skipped`)
+        if (!created && !added && skippedDupes) parts.push('All files were already in this crate')
+        if (!created && !added && !skippedDupes) parts.push('No new tracks added')
+        if (failed) parts.push(`${failed} failed`)
+        setSidebarPlaylistNotice(parts.join(' · '))
+      } finally {
+        setPlaylistDropBusy(false)
+      }
+    },
+    [
+      isAdminCatalog,
+      playlistDropBusy,
+      applyFolderDropResultIncremental,
+    ],
+  )
+
+  const handleCrateFolderFileDrop = useCallback(
+    async (fileList: FileList | File[], folderId: string) => {
+      if (!isAdminCatalog || !folderId || playlistDropBusy) return
+      const files = Array.from(fileList)
+      if (!files.length) return
+
+      const maybeLarge = files.filter((f) => f.size > PLAYLIST_DROP_MAX_DIRECT_BYTES)
+      if (maybeLarge.length) {
+        setSidebarPlaylistNotice('Checking track length for large files…')
+        const needsConvert: File[] = []
+        const blocked: { file: File; durationSec: number | null; maxBytes: number }[] = []
+
+        for (const file of maybeLarge) {
+          const durationSec = await probeAudioFileDuration(file)
+          if (isWithinDirectIngestLimit(file.size, durationSec)) continue
+          if (isConvertibleOversizeAudio(file.name, file.size, durationSec)) {
+            needsConvert.push(file)
+          } else {
+            blocked.push({ file, durationSec, maxBytes: maxDirectBytesForDuration(durationSec) })
+          }
+        }
+
+        if (blocked.length) {
+          setPlaylistDropPendingConvert(null)
+          setSidebarPlaylistNotice(
+            blocked
+              .map(({ file, durationSec, maxBytes }) => {
+                const dur = durationSec != null ? ` · ${formatDurationClock(durationSec)}` : ''
+                return `${file.name} (${formatBytesMb(file.size)}${dur}, limit ${formatBytesMb(maxBytes)}) cannot be auto-converted`
+              })
+              .join('; '),
+          )
+          return
+        }
+
+        if (needsConvert.length) {
+          setPlaylistDropPendingConvert(files)
+          setSidebarPlaylistNotice(
+            needsConvert.map((f) => `${f.name} (${formatBytesMb(f.size)})`).join(', ') +
+              ` exceed${needsConvert.length === 1 ? 's' : ''} the duration-based size budget. Convert to high-quality MP3 (320kbps) to continue.`,
+          )
+          return
+        }
+      }
+
+      const gated = await gateVaultDropFiles(files, { kind: 'folder', folderId })
+      if (!gated) return
+      if (!gated.length) {
+        setSidebarPlaylistNotice('All dropped files match tracks already in this crate.')
+        return
+      }
+      await runFolderFileDrop(gated, false, folderId)
+    },
+    [isAdminCatalog, playlistDropBusy, runFolderFileDrop, gateVaultDropFiles],
+  )
+
+  const applyLibraryDropResultIncremental = useCallback(
+    async (result: Awaited<ReturnType<typeof linkDroppedFilesToLibrary>>) => {
+      const newIds = [
+        ...new Set([
+          ...result.added,
+          ...result.created.map((row) => row.trackId),
+        ]),
+      ].filter(Boolean)
+      if (!newIds.length) return
+
+      resetMusicLibraryHydrationInFlight()
+      invalidateMusicLibraryCache()
+      void invalidateMusicLibraryQueries(queryClient)
+
+      let fetched = await fetchTracksByIds(newIds)
+      const resolvedIds = new Set(fetched.map((t) => t.id))
+      const stubs = stubTracksFromLinkDropCreated(result.created, resolvedIds)
+      fetched = [...fetched, ...stubs]
+
+      const applyMerged = (lists: Track[][]) => {
+        setTracks((prev) => {
+          const merged = pinTrackIdsToFront(newIds, mergeTracksById(...lists, prev))
+          setTotal(merged.length)
+          return merged
+        })
+      }
+
+      if (view === 'songs' && !activeCuratedPlaylist && !activeSidebarAlbum && !activeSmartPlaylist) {
+        try {
+          const hydrated = await fetchAllTracksSummaryForHydration({
+            includeArchived: false,
+            forceRefresh: true,
+          })
+          applyMerged([hydrated, fetched])
+          if (result.publishVersion != null) {
+            onRemoteVersionChange(result.publishVersion)
+          }
+          return
+        } catch {
+          /* fall through to incremental merge */
+        }
+      }
+
+      if (!fetched.length) {
+        if (result.publishVersion != null) {
+          onRemoteVersionChange(result.publishVersion)
+        }
+        return
+      }
+      applyMerged([fetched])
+      if (result.publishVersion != null) {
+        onRemoteVersionChange(result.publishVersion)
+      }
+    },
+    [
+      queryClient,
+      onRemoteVersionChange,
+      view,
+      activeCuratedPlaylist,
+      activeSidebarAlbum,
+      activeSmartPlaylist,
+    ],
+  )
+
+  const runLibraryFileDrop = useCallback(
+    async (files: File[], convertToMp3: boolean) => {
+      if (!isAdminCatalog || playlistDropBusy) return
+      if (!files.length) return
+
+      const items: PlaylistDropItem[] = files.map((file, index) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+        name: file.name,
+        sizeLabel: formatBytesMb(file.size),
+        state: 'queued',
+        percent: 0,
+      }))
+      setPlaylistDropItems(items)
+      setPlaylistDropBusy(true)
+      setPlaylistDropNotice(null)
+      setPlaylistDropPendingConvert(null)
+
+      let created = 0
+      let added = 0
+      let failed = 0
+
+      try {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          const itemId = items[i].id
+          patchPlaylistDropItem(itemId, {
+            state: convertToMp3 ? 'converting' : 'uploading',
+            percent: convertToMp3 ? 6 : 3,
+            detail: convertToMp3 ? '320kbps MP3' : undefined,
+          })
+          try {
+            const result = await linkDroppedFilesToLibrary([file], {
+              convertToMp3,
+              onUploadProgress: (ratio) => {
+                const capped = Math.max(0, Math.min(1, ratio))
+                const percent = convertToMp3
+                  ? Math.round(8 + capped * 52)
+                  : Math.round(4 + capped * 72)
+                patchPlaylistDropItem(itemId, {
+                  state: capped < 1 ? (convertToMp3 ? 'converting' : 'uploading') : 'processing',
+                  percent,
+                  detail: capped < 1 ? `${Math.round(capped * 100)}% uploaded` : 'Writing vault…',
+                })
+              },
+            })
+            if (result.ingestFailed.length) {
+              failed += 1
+              patchPlaylistDropItem(itemId, {
+                state: 'failed',
+                percent: 100,
+                detail: result.ingestFailed[0]?.error || 'Ingest failed',
+              })
+            } else if (result.created.length) {
+              created += 1
+              added += result.added.length
+              patchPlaylistDropItem(itemId, {
+                state: 'added',
+                percent: 100,
+                detail: result.converted?.length ? 'Converted & ingested' : 'Ingested into vault',
+              })
+              await applyLibraryDropResultIncremental(result)
+            } else if (result.added.length) {
+              added += result.added.length
+              patchPlaylistDropItem(itemId, {
+                state: 'added',
+                percent: 100,
+                detail: 'Added to Songs library',
+              })
+              await applyLibraryDropResultIncremental(result)
+            } else if (result.unmatched.length) {
+              failed += 1
+              patchPlaylistDropItem(itemId, {
+                state: 'failed',
+                percent: 100,
+                detail: result.unmatched[0]?.reason || 'Could not match',
+              })
+            } else {
+              patchPlaylistDropItem(itemId, {
+                state: 'matched',
+                percent: 100,
+                detail: 'Matched existing vault track',
+              })
+            }
+          } catch (err: any) {
+            if (
+              (err instanceof PlaylistDropTooLargeError || err?.code === 'FILE_TOO_LARGE') &&
+              err?.convertible
+            ) {
+              setPlaylistDropPendingConvert(files.slice(i))
+              setPlaylistDropNotice(err.message)
+              for (let j = i; j < items.length; j++) {
+                patchPlaylistDropItem(items[j].id, {
+                  state: j === i ? 'failed' : 'queued',
+                  percent: j === i ? 100 : 0,
+                  detail: j === i ? err.message : 'Waiting for convert',
+                })
+              }
+              return
+            }
+            failed += 1
+            patchPlaylistDropItem(itemId, {
+              state: 'failed',
+              percent: 100,
+              detail: err?.message || 'Drop failed',
+            })
+          }
+        }
+
+        const parts: string[] = []
+        if (created) parts.push(`Ingested ${created} new into vault`)
+        if (added) parts.push(`Updated ${added} in Songs`)
+        if (!created && !added) parts.push('No new tracks added')
+        if (failed) parts.push(`${failed} failed to ingest`)
+        setPlaylistDropNotice(parts.join(' · '))
+      } finally {
+        setPlaylistDropBusy(false)
+        setPlaylistDropActive(false)
+      }
+    },
+    [
+      isAdminCatalog,
+      playlistDropBusy,
+      applyLibraryDropResultIncremental,
+      patchPlaylistDropItem,
+    ],
+  )
+
+  const handleLibraryFileDrop = useCallback(
+    async (fileList: FileList | File[]) => {
+      if (!isAdminCatalog || playlistDropBusy) return
+      const files = Array.from(fileList)
+      if (!files.length) return
+
+      const maybeLarge = files.filter((f) => f.size > PLAYLIST_DROP_MAX_DIRECT_BYTES)
+      if (maybeLarge.length) {
+        setPlaylistDropNotice('Checking track length for large files…')
+        const needsConvert: File[] = []
+        const blocked: { file: File; durationSec: number | null; maxBytes: number }[] = []
+
+        for (const file of maybeLarge) {
+          const durationSec = await probeAudioFileDuration(file)
+          if (isWithinDirectIngestLimit(file.size, durationSec)) continue
+          if (isConvertibleOversizeAudio(file.name, file.size, durationSec)) {
+            needsConvert.push(file)
+          } else {
+            blocked.push({
+              file,
+              durationSec,
+              maxBytes: maxDirectBytesForDuration(durationSec),
+            })
+          }
+        }
+
+        if (blocked.length) {
+          setPlaylistDropPendingConvert(null)
+          setPlaylistDropNotice(
+            blocked
+              .map(({ file, durationSec, maxBytes }) => {
+                const dur =
+                  durationSec != null ? ` · ${formatDurationClock(durationSec)}` : ''
+                return `${file.name} (${formatBytesMb(file.size)}${dur}, limit ${formatBytesMb(maxBytes)}) cannot be auto-converted`
+              })
+              .join('; '),
+          )
+          setPlaylistDropActive(false)
+          return
+        }
+
+        if (needsConvert.length) {
+          setPlaylistDropPendingConvert(files)
+          setPlaylistDropNotice(
+            needsConvert
+              .map((f) => `${f.name} (${formatBytesMb(f.size)})`)
+              .join(', ') +
+              ` exceed${needsConvert.length === 1 ? 's' : ''} the duration-based size budget. Convert to high-quality MP3 (320kbps) to continue.`,
+          )
+          setPlaylistDropActive(false)
+          return
+        }
+      }
+
+      const gated = await gateVaultDropFiles(files, { kind: 'library' })
+      if (!gated) {
+        setPlaylistDropActive(false)
+        return
+      }
+      if (!gated.length) {
+        setPlaylistDropNotice(
+          'All dropped files match existing vault tracks. Nothing new was ingested.',
+        )
+        setPlaylistDropActive(false)
+        return
+      }
+      await runLibraryFileDrop(gated, false)
+    },
+    [isAdminCatalog, playlistDropBusy, runLibraryFileDrop, gateVaultDropFiles],
+  )
+
   const handlePlaylistFileDrop = useCallback(
     async (fileList: FileList | File[], playlistId?: string) => {
       const targetId = playlistId || activeCuratedPlaylist
@@ -1778,9 +2526,54 @@ export default function SergBrowser({
         // All large files fit their duration budget — upload as-is
       }
 
-      await runPlaylistFileDrop(files, false, targetId)
+      const gated = await gateVaultDropFiles(files, { kind: 'playlist', playlistId: targetId })
+      if (!gated) {
+        setPlaylistDropActive(false)
+        return
+      }
+      if (!gated.length) {
+        setPlaylistDropNotice(
+          'All dropped files match existing vault tracks already in this playlist or library.',
+        )
+        setPlaylistDropActive(false)
+        return
+      }
+      await runPlaylistFileDrop(gated, false, targetId)
     },
-    [isAdminCatalog, activeCuratedPlaylist, playlistDropBusy, runPlaylistFileDrop],
+    [
+      isAdminCatalog,
+      activeCuratedPlaylist,
+      playlistDropBusy,
+      runPlaylistFileDrop,
+      gateVaultDropFiles,
+    ],
+  )
+
+  const handleVaultFileDrop = useCallback(
+    async (fileList: FileList | File[]) => {
+      if (
+        isAdminCatalog &&
+        view === 'songs' &&
+        !activeCuratedPlaylist &&
+        !activeSidebarAlbum &&
+        !activeSmartPlaylist &&
+        !selectedAlbumId
+      ) {
+        await handleLibraryFileDrop(fileList)
+        return
+      }
+      await handlePlaylistFileDrop(fileList)
+    },
+    [
+      isAdminCatalog,
+      view,
+      activeCuratedPlaylist,
+      activeSidebarAlbum,
+      activeSmartPlaylist,
+      selectedAlbumId,
+      handleLibraryFileDrop,
+      handlePlaylistFileDrop,
+    ],
   )
 
   const applyCatalogEvent = useCallback((event: CatalogSyncEvent) => {
@@ -1855,7 +2648,11 @@ export default function SergBrowser({
         const stampCollectionList = (list: Track[]) => {
           if (!list.length) return list
           const openAlbum = selectedAlbumIdRef.current
+          const sidebarAlbum = activeSidebarAlbumRef.current
           if (openAlbum && catalogItemMatchesCoverEvent({ id: openAlbum }, folderId)) {
+            return stampAllTrackArtwork(list, syncedArtwork)
+          }
+          if (sidebarAlbum && catalogItemMatchesCoverEvent({ id: sidebarAlbum }, folderId)) {
             return stampAllTrackArtwork(list, syncedArtwork)
           }
           const belongs = list.some((t) => playerTrackMatchesCoverEvent(t, { folderId }))
@@ -2223,6 +3020,83 @@ export default function SergBrowser({
         : []
   const epContentFlush = Boolean(epStageAlbum)
 
+  const patchFolderMusicVideos = useCallback(
+    (folderId: string, next: FolderMusicVideo[], fallbackName = 'Release', fallbackType = 'ep') => {
+      const patch = (list: AlbumTile[]) => {
+        const exists = list.some((tile) => tile.id === folderId)
+        if (!exists) {
+          return [
+            ...list,
+            {
+              id: folderId,
+              name: fallbackName,
+              type: fallbackType,
+              musicVideos: next,
+            },
+          ]
+        }
+        return list.map((tile) => (tile.id === folderId ? { ...tile, musicVideos: next } : tile))
+      }
+      setAlbums((prev) => patch(prev as AlbumTile[]))
+      setSidebarAlbums((prev) => patch(prev as AlbumTile[]))
+      invalidateMusicLibraryCache()
+    },
+    [],
+  )
+
+  const releaseMusicVideosRow = useMemo(() => {
+    let releaseFolderId: string | null = activeSidebarAlbum || selectedAlbumId
+    if (!releaseFolderId && activeCuratedPlaylist) {
+      const fromPlaylist = folderIdFromPlaylistId(activeCuratedPlaylist)
+      const known =
+        sidebarAlbums.some((a: any) => a.id === fromPlaylist) ||
+        albums.some((a) => a.id === fromPlaylist)
+      if (known) releaseFolderId = fromPlaylist
+    }
+    if (!releaseFolderId) return null
+
+    const releaseTile =
+      (activeSidebarAlbum
+        ? sidebarAlbums.find((a: any) => a.id === activeSidebarAlbum)
+        : null) ||
+      (selectedAlbumId ? albums.find((a) => a.id === selectedAlbumId) : null) ||
+      sidebarAlbums.find((a: any) => a.id === releaseFolderId) ||
+      albums.find((a) => a.id === releaseFolderId) ||
+      null
+
+    const musicVideos = Array.isArray(releaseTile?.musicVideos)
+      ? releaseTile.musicVideos
+      : parseFolderMusicVideos((releaseTile as any)?.metadata)
+
+    if (!isAdminCatalog && musicVideos.length === 0) return null
+
+    return (
+      <ReleaseMusicVideosRow
+        folderId={releaseFolderId}
+        folderName={releaseTile?.name || activePlaylistName || 'Release'}
+        videos={musicVideos}
+        isAdmin={isAdminCatalog}
+        onVideosChange={(next) =>
+          patchFolderMusicVideos(
+            releaseFolderId,
+            next,
+            releaseTile?.name || activePlaylistName || 'Release',
+            releaseTile?.type || 'ep',
+          )
+        }
+      />
+    )
+  }, [
+    activeSidebarAlbum,
+    selectedAlbumId,
+    activeCuratedPlaylist,
+    sidebarAlbums,
+    albums,
+    isAdminCatalog,
+    activePlaylistName,
+    patchFolderMusicVideos,
+  ])
+
   const activeSongsPlaylistContext = useMemo(() => {
     if (activeCuratedPlaylist) {
       const pl = curatedPlaylists.find((p) => p.id === activeCuratedPlaylist)
@@ -2286,6 +3160,117 @@ export default function SergBrowser({
     })
   }, [curatedPlaylists, folderMeta, isAdminCatalog, sidebarAlbums])
 
+  const songsLibraryDropEnabled = useMemo(
+    () =>
+      isAdminCatalog &&
+      view === 'songs' &&
+      !activeSmartPlaylist &&
+      !activeCuratedPlaylist &&
+      !activeSidebarAlbum &&
+      !selectedAlbumId,
+    [
+      isAdminCatalog,
+      view,
+      activeSmartPlaylist,
+      activeCuratedPlaylist,
+      activeSidebarAlbum,
+      selectedAlbumId,
+    ],
+  )
+
+  const adminVaultFileDropEnabled =
+    Boolean(isAdminCatalog && activeCuratedPlaylist) || songsLibraryDropEnabled
+
+  const releaseFolderTypesForBadge = useMemo(
+    () => releaseFolderTypeMap([...sidebarAlbums, ...albums], folderMeta),
+    [sidebarAlbums, albums, folderMeta],
+  )
+
+  const playlistCompanionFolderIdsForBadge = useMemo(() => {
+    const ids = new Set<string>()
+    for (const pl of curatedPlaylists) {
+      if (pl?.id) ids.add(folderIdFromPlaylistId(String(pl.id)))
+    }
+    return ids
+  }, [curatedPlaylists])
+
+  const releaseCatalogTilesForBadge = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; type: string }>()
+    for (const tile of [...sidebarAlbums, ...albums]) {
+      if (!tile?.id) continue
+      byId.set(String(tile.id), {
+        id: String(tile.id),
+        name: String(tile.name || ''),
+        type: String(tile.type || ''),
+      })
+    }
+    return [...byId.values()]
+  }, [sidebarAlbums, albums])
+
+  const releaseGroupedTracksForBadges = useMemo(() => {
+    const merged: Record<string, Track[]> = { ...albumTracksByFolder }
+    const cached = tracksGroupedFromCachedLibrary()
+    for (const [folderId, list] of Object.entries(cached)) {
+      if (!list?.length) continue
+      if (!merged[folderId]?.length) {
+        merged[folderId] = list
+        continue
+      }
+      const byId = new Map(merged[folderId].map((t) => [t.id, t]))
+      for (const t of list) {
+        if (t?.id && !byId.has(t.id)) byId.set(t.id, t)
+      }
+      merged[folderId] = [...byId.values()]
+    }
+    return merged
+  }, [albumTracksByFolder, publishVersion])
+
+  const trackFolderMembershipById = useMemo(() => {
+    const playlistFolders = curatedPlaylists.map((pl) => ({
+      folderId: folderIdFromPlaylistId(String(pl.id)),
+      trackIds: Array.isArray(pl.trackIds) ? pl.trackIds.map(String) : [],
+    }))
+    return buildTrackFolderMembershipMap(
+      releaseGroupedTracksForBadges,
+      releaseFolderTypesForBadge,
+      playlistFolders,
+    )
+  }, [
+    releaseGroupedTracksForBadges,
+    releaseFolderTypesForBadge,
+    curatedPlaylists,
+  ])
+
+  const runPendingConvertWithDuplicateGate = useCallback(async () => {
+    const pending = playlistDropPendingConvert
+    if (!pending?.length || playlistDropBusy) return
+    const libraryDrop = songsLibraryDropEnabled && !activeCuratedPlaylist
+    const target = libraryDrop
+      ? ({ kind: 'library' } as const)
+      : ({ kind: 'playlist', playlistId: activeCuratedPlaylist! } as const)
+    if (target.kind === 'playlist' && !target.playlistId) return
+    const gated = await gateVaultDropFiles(pending, target)
+    if (!gated) {
+      setPlaylistDropPendingConvert(null)
+      return
+    }
+    if (!gated.length) {
+      setPlaylistDropPendingConvert(null)
+      setPlaylistDropNotice('All files match existing vault tracks — nothing to convert.')
+      return
+    }
+    if (libraryDrop) await runLibraryFileDrop(gated, true)
+    else await runPlaylistFileDrop(gated, true, activeCuratedPlaylist)
+  }, [
+    playlistDropPendingConvert,
+    playlistDropBusy,
+    songsLibraryDropEnabled,
+    activeCuratedPlaylist,
+    gateVaultDropFiles,
+    runLibraryFileDrop,
+    runPlaylistFileDrop,
+  ])
+
   const sidebarCrateMosaics = useCrateMosaics(sidebarAlbums, albumTracksByFolder)
 
   return (
@@ -2293,7 +3278,7 @@ export default function SergBrowser({
       {/* Sidebar — omitted from layout when collapsed so the list fills full width */}
       {!browseSidebarCollapsed && (
       <div
-        className="relative flex flex-shrink-0 flex-col border-r border-gray-800 bg-gray-950/50 sticky top-[var(--music-lib-chrome-top,4rem)] z-[9] self-start max-h-[calc(100dvh-var(--music-lib-chrome-top,4rem)-var(--global-music-player-height,7rem)-0.5rem)] overflow-y-auto overscroll-contain"
+        className="relative flex flex-shrink-0 flex-col border-r border-gray-800 bg-gray-950/50 sticky top-[var(--music-lib-chrome-top,4rem)] z-[9] self-start max-h-[calc(100dvh-var(--music-lib-chrome-top,4rem)-var(--global-music-player-height,7rem)-0.5rem)] overflow-y-auto overscroll-contain transition-[top,max-height] duration-300 ease-out motion-reduce:transition-none"
         style={{ width: browseSidebarWidth }}
       >
         <div className="min-w-0 flex-1">
@@ -2616,6 +3601,7 @@ export default function SergBrowser({
                     enabled={isAdminCatalog}
                     hidden={!!(album.hidden || folderMeta[album.id]?.hidden)}
                     tracks={albumTracksByFolder[album.id] || []}
+                    libraryAlbums={sidebarAlbums}
                     onUpdated={applyFolderPatch}
                     onArchived={applyFolderArchived}
                     onTracksReordered={applyFolderTracks}
@@ -2641,18 +3627,122 @@ export default function SergBrowser({
 
           {/* Crates (folder type album — vibe collections of loose singles) */}
           {sidebarAlbums.filter((a: any) => a.type === 'album' && (isAdminCatalog || !a.hidden)).length > 0 && (
-            <div>
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Crates</div>
+            <div
+              onDragEnter={
+                isAdminCatalog
+                  ? (e) => {
+                      if (
+                        !playlistDragHasTracks(e.dataTransfer) &&
+                        !dataTransferHasFiles(e.dataTransfer)
+                      ) {
+                        return
+                      }
+                      e.preventDefault()
+                      setSidebarTrackDragActive(true)
+                    }
+                  : undefined
+              }
+              onDragOver={
+                isAdminCatalog
+                  ? (e) => {
+                      if (
+                        !playlistDragHasTracks(e.dataTransfer) &&
+                        !dataTransferHasFiles(e.dataTransfer)
+                      ) {
+                        return
+                      }
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'copy'
+                      setSidebarTrackDragActive(true)
+                    }
+                  : undefined
+              }
+              onDragLeave={
+                isAdminCatalog
+                  ? (e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setSidebarTrackDragActive(false)
+                        setSidebarPlaylistDragOverId(null)
+                      }
+                    }
+                  : undefined
+              }
+              className={
+                sidebarTrackDragActive && isAdminCatalog
+                  ? 'rounded-md ring-1 ring-violet-400/40 bg-violet-950/15'
+                  : undefined
+              }
+            >
+              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                Crates
+              </div>
+              {sidebarTrackDragActive && isAdminCatalog && (
+                <p className="mb-1.5 px-3 text-[11px] text-violet-300">
+                  Drop tracks or audio files on a crate
+                </p>
+              )}
+              {sidebarPlaylistNotice && (
+                <p className="mb-1.5 px-3 text-[11px] text-teal-400">{sidebarPlaylistNotice}</p>
+              )}
               <nav className="space-y-0.5">
                 {sidebarAlbums
                   .filter((a: any) => a.type === 'album' && (isAdminCatalog || !(a.hidden || folderMeta[a.id]?.hidden)))
-                  .map((album: any) => (
+                  .map((album: any) => {
+                  const acceptTrackDrop = isAdminCatalog
+                    ? {
+                        onDragEnter: (e: React.DragEvent) => {
+                          if (
+                            !playlistDragHasTracks(e.dataTransfer) &&
+                            !dataTransferHasFiles(e.dataTransfer)
+                          ) {
+                            return
+                          }
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setSidebarTrackDragActive(true)
+                          setSidebarPlaylistDragOverId(album.id)
+                        },
+                        onDragOver: (e: React.DragEvent) => {
+                          if (
+                            !playlistDragHasTracks(e.dataTransfer) &&
+                            !dataTransferHasFiles(e.dataTransfer)
+                          ) {
+                            return
+                          }
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.dataTransfer.dropEffect = 'copy'
+                          if (sidebarPlaylistDragOverId !== album.id) {
+                            setSidebarPlaylistDragOverId(album.id)
+                          }
+                        },
+                        onDragLeave: (e: React.DragEvent) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                            setSidebarPlaylistDragOverId((id) => (id === album.id ? null : id))
+                          }
+                        },
+                        onDrop: (e: React.DragEvent) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setSidebarPlaylistDragOverId(null)
+                          setSidebarTrackDragActive(false)
+                          if (e.dataTransfer.files?.length) {
+                            void handleCrateFolderFileDrop(e.dataTransfer.files, album.id)
+                            return
+                          }
+                          const ids = readLibraryDragTrackIds(e.dataTransfer)
+                          if (ids.length) void moveTracksToSidebarFolder(album.id, ids)
+                        },
+                      }
+                    : undefined
+                  return (
+                  <div key={album.id} {...acceptTrackDrop}>
                   <AdminFolderChrome
-                    key={album.id}
                     album={album}
                     enabled={isAdminCatalog}
                     hidden={!!(album.hidden || folderMeta[album.id]?.hidden)}
                     tracks={albumTracksByFolder[album.id] || []}
+                    libraryAlbums={sidebarAlbums}
                     onUpdated={applyFolderPatch}
                     onArchived={applyFolderArchived}
                     onTracksReordered={applyFolderTracks}
@@ -2665,11 +3755,14 @@ export default function SergBrowser({
                       tracks={albumTracksByFolder[album.id] || []}
                       mosaicCovers={sidebarCrateMosaics[album.id] || []}
                       active={activeSidebarAlbum === album.id}
+                      dropActive={sidebarPlaylistDragOverId === album.id}
                       onSelect={openSidebarAlbum}
                       showPrivateBadge={isAdminCatalog && !!(album.hidden || folderMeta[album.id]?.hidden)}
                     />
                   </AdminFolderChrome>
-                ))}
+                  </div>
+                  )
+                })}
               </nav>
             </div>
           )}
@@ -2688,6 +3781,7 @@ export default function SergBrowser({
                     enabled={isAdminCatalog}
                     hidden={!!(album.hidden || folderMeta[album.id]?.hidden)}
                     tracks={albumTracksByFolder[album.id] || []}
+                    libraryAlbums={sidebarAlbums}
                     onUpdated={applyFolderPatch}
                     onArchived={applyFolderArchived}
                     onTracksReordered={applyFolderTracks}
@@ -2746,7 +3840,7 @@ export default function SergBrowser({
       {/* Main content — grows with crates / track lists */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header bar — pins under site nav; queue docks as absolute dropdown under it */}
-        <div className="sticky top-[var(--music-lib-chrome-top,4rem)] z-[11] shrink-0 bg-gray-950 [contain:layout]">
+        <div className="sticky top-[var(--music-lib-chrome-top,4rem)] z-[11] shrink-0 bg-gray-950 [contain:layout] transition-[top] duration-300 ease-out motion-reduce:transition-none">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-2 border-b border-gray-800 bg-gray-950 px-3 py-2.5 sm:px-5 sm:py-3">
             <div className="flex min-w-0 items-center gap-2 justify-self-start">
               {browseSidebarCollapsed && (
@@ -2849,7 +3943,12 @@ export default function SergBrowser({
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-3 justify-self-end">
               {view === 'songs' && !activeSmartPlaylist && !selectedAlbumId && (
-                <span className="hidden sm:inline text-sm text-gray-500">{total.toLocaleString()} tracks</span>
+                <span className="hidden sm:inline text-sm text-gray-500">
+                  {(songsBrowseFiltered ? songsViewTracks.length : total).toLocaleString()} tracks
+                  {songsBrowseFiltered && songsViewTracks.length !== total ? (
+                    <span className="text-gray-600"> / {total.toLocaleString()}</span>
+                  ) : null}
+                </span>
               )}
               {!searchControlled && (
                 <input
@@ -2897,7 +3996,8 @@ export default function SergBrowser({
               {/* Songs View */}
               {(view === 'songs' || activeSmartPlaylist || activeCuratedPlaylist || activeSidebarAlbum) && (
                 <>
-                  {isAdminCatalog && activeCuratedPlaylist && playlistDropNotice && (
+                  {releaseMusicVideosRow}
+                  {isAdminCatalog && adminVaultFileDropEnabled && playlistDropNotice && (
                     <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                       <p>{playlistDropNotice}</p>
                       {playlistDropPendingConvert && playlistDropPendingConvert.length > 0 && (
@@ -2906,9 +4006,7 @@ export default function SergBrowser({
                             type="button"
                             disabled={playlistDropBusy}
                             className="rounded-md bg-purple-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-purple-500 disabled:opacity-50"
-                            onClick={() =>
-                              void runPlaylistFileDrop(playlistDropPendingConvert, true)
-                            }
+                            onClick={() => void runPendingConvertWithDuplicateGate()}
                           >
                             {playlistDropBusy
                               ? 'Converting…'
@@ -2948,7 +4046,7 @@ export default function SergBrowser({
                       tracks={epStageTracks}
                     >
                       <SongsTable
-                        tracks={tracks}
+                        tracks={songsViewTracks}
                         currentTrackId={currentTrack?.id}
                         isPlaying={isPlaying}
                         sortField={sortField}
@@ -2970,17 +4068,25 @@ export default function SergBrowser({
                         onPlaylistReorder={
                           isAdminCatalog && activeCuratedPlaylist ? applyPlaylistReorder : undefined
                         }
-                        acceptVaultFileDrop={Boolean(isAdminCatalog && activeCuratedPlaylist)}
+                        acceptVaultFileDrop={adminVaultFileDropEnabled}
+                        vaultDropMode={
+                          songsLibraryDropEnabled && !activeCuratedPlaylist ? 'library' : 'playlist'
+                        }
                         vaultDropActive={playlistDropActive}
                         vaultDropBusy={playlistDropBusy}
                         vaultDropItems={playlistDropItems}
                         onVaultDropActiveChange={setPlaylistDropActive}
-                        onVaultFilesDropped={handlePlaylistFileDrop}
+                        onVaultFilesDropped={handleVaultFileDrop}
+                        releaseFolderTypes={releaseFolderTypesForBadge}
+                        releaseCatalogTiles={releaseCatalogTilesForBadge}
+                        playlistCompanionFolderIds={playlistCompanionFolderIdsForBadge}
+                        trackFolderMembershipById={trackFolderMembershipById}
+                        releaseGroupedByFolder={releaseGroupedTracksForBadges}
                       />
                     </EpReleaseStage>
                   ) : (
                   <SongsTable
-                  tracks={tracks}
+                  tracks={songsViewTracks}
                   currentTrackId={currentTrack?.id}
                   isPlaying={isPlaying}
                   sortField={sortField}
@@ -3001,12 +4107,20 @@ export default function SergBrowser({
                   onPlaylistReorder={
                     isAdminCatalog && activeCuratedPlaylist ? applyPlaylistReorder : undefined
                   }
-                  acceptVaultFileDrop={Boolean(isAdminCatalog && activeCuratedPlaylist)}
+                  acceptVaultFileDrop={adminVaultFileDropEnabled}
+                  vaultDropMode={
+                    songsLibraryDropEnabled && !activeCuratedPlaylist ? 'library' : 'playlist'
+                  }
                   vaultDropActive={playlistDropActive}
                   vaultDropBusy={playlistDropBusy}
                   vaultDropItems={playlistDropItems}
                   onVaultDropActiveChange={setPlaylistDropActive}
-                  onVaultFilesDropped={handlePlaylistFileDrop}
+                  onVaultFilesDropped={handleVaultFileDrop}
+                  releaseFolderTypes={releaseFolderTypesForBadge}
+                  releaseCatalogTiles={releaseCatalogTilesForBadge}
+                  playlistCompanionFolderIds={playlistCompanionFolderIdsForBadge}
+                  trackFolderMembershipById={trackFolderMembershipById}
+                  releaseGroupedByFolder={releaseGroupedTracksForBadges}
                 />
                   )}
                 </>
@@ -3049,6 +4163,7 @@ export default function SergBrowser({
                       onTracksReordered={applyFolderTracks}
                       onVisibilityChange={applyFolderVisibility}
                       onAddedToLibrary={applyAddedToLibrary}
+                      onMusicVideosChange={patchFolderMusicVideos}
                       onPlayGroup={(group, track) => {
                         const folderId = track.folderId || group[0]?.folderId
                         const source = folderId ? { type: 'folder' as const, id: folderId } : browsePlayerSource()
@@ -3068,6 +4183,8 @@ export default function SergBrowser({
                 loadingAlbumTracks ? (
                   <div className="text-center py-12 text-gray-500">Loading tracks...</div>
                 ) : selectedAlbum?.type === 'ep' ? (
+                  <>
+                  {releaseMusicVideosRow}
                   <EpReleaseStage album={selectedAlbum} tracks={albumTracks}>
                     <SongsTable
                       tracks={albumTracks}
@@ -3097,7 +4214,10 @@ export default function SergBrowser({
                       onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                     />
                   </EpReleaseStage>
+                  </>
                 ) : (
+                  <>
+                  {releaseMusicVideosRow}
                   <SongsTable
                     tracks={albumTracks}
                     currentTrackId={currentTrack?.id}
@@ -3124,6 +4244,7 @@ export default function SergBrowser({
                     onTracksRemovedFromPlaylist={applyTracksRemovedFromPlaylist}
                     onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                   />
+                  </>
                 )
               )}
 
@@ -3215,6 +4336,80 @@ export default function SergBrowser({
             <FaExternalLinkAlt className="h-3 w-3 text-gray-500" />
             Open Music Library
           </Link>
+          </div>
+        </div>
+      )}
+
+      {vaultDropDuplicateGate && isAdminCatalog && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vault-drop-dup-title"
+          onClick={() => finishVaultDropDuplicateGate(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-amber-500/30 bg-gray-900 p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="vault-drop-dup-title" className="text-sm font-semibold text-white">
+              Duplicate tracks detected
+            </h2>
+            <p className="mt-2 text-xs text-gray-400">
+              {vaultDropDuplicateGate.preview.newFiles.length > 0
+                ? `${vaultDropDuplicateGate.preview.duplicates.length} file(s) match existing vault tracks. ${vaultDropDuplicateGate.preview.newFiles.length} would be ingested as new.`
+                : 'Every dropped file matches a track already in the vault.'}
+            </p>
+            <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-800 bg-gray-950/80 p-2 text-xs">
+              {vaultDropDuplicateGate.preview.duplicates.map((dup) => (
+                <li key={`${dup.trackId}-${dup.file}`} className="text-gray-300">
+                  <span className="font-medium text-gray-100">{dup.title}</span>
+                  <span className="text-gray-500"> · {dup.file}</span>
+                  {dup.alreadyInPlaylist && (
+                    <span className="ml-1 rounded bg-gray-800 px-1 py-0.5 text-[10px] text-amber-200">
+                      {vaultDropDuplicateGate.target.kind === 'folder'
+                        ? 'Already in crate'
+                        : vaultDropDuplicateGate.target.kind === 'library'
+                          ? 'Already in library'
+                          : 'Already in playlist'}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-800 hover:text-white"
+                onClick={() => finishVaultDropDuplicateGate(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-gray-600 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-800"
+                onClick={() =>
+                  finishVaultDropDuplicateGate(
+                    filterDropFilesSkippingVaultDuplicates(
+                      vaultDropDuplicateGate.files,
+                      vaultDropDuplicateGate.preview.duplicates,
+                    ),
+                  )
+                }
+              >
+                Skip duplicates
+                {vaultDropDuplicateGate.preview.newFiles.length > 0
+                  ? ` (${vaultDropDuplicateGate.preview.newFiles.length} new)`
+                  : ''}
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-500"
+                onClick={() => finishVaultDropDuplicateGate(vaultDropDuplicateGate.files)}
+              >
+                Add all ({vaultDropDuplicateGate.files.length})
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3403,11 +4598,17 @@ function SongsTable({
   onTracksRemovedFromFolder,
   onPlaylistReorder,
   acceptVaultFileDrop = false,
+  vaultDropMode = 'playlist',
   vaultDropActive = false,
   vaultDropBusy = false,
   vaultDropItems = [],
   onVaultDropActiveChange,
   onVaultFilesDropped,
+  releaseFolderTypes = null,
+  releaseCatalogTiles = null,
+  playlistCompanionFolderIds = null,
+  trackFolderMembershipById = null,
+  releaseGroupedByFolder = null,
   playerSource = null,
 }: {
   tracks: Track[]
@@ -3435,11 +4636,18 @@ function SongsTable({
   onPlaylistReorder?: (playlistId: string, orderedTrackIds: string[]) => void | Promise<void>
   /** Admin: drop OS audio — match vault or auto-ingest, then populate playlist */
   acceptVaultFileDrop?: boolean
+  vaultDropMode?: 'playlist' | 'library'
   vaultDropActive?: boolean
   vaultDropBusy?: boolean
   vaultDropItems?: PlaylistDropItem[]
   onVaultDropActiveChange?: (active: boolean) => void
   onVaultFilesDropped?: (files: FileList | File[]) => void
+  /** Admin Songs: EP/crate assignment badges */
+  releaseFolderTypes?: Record<string, string> | null
+  releaseCatalogTiles?: Array<{ id: string; name: string; type: string }> | null
+  playlistCompanionFolderIds?: ReadonlySet<string> | null
+  trackFolderMembershipById?: ReadonlyMap<string, TrackReleaseBadgeFlags> | null
+  releaseGroupedByFolder?: Record<string, Track[]> | null
   playerSource?: PlayerSource
 }) {
   const { playNext, addToQueue, playQueue } = useMusicPlayer()
@@ -3448,8 +4656,17 @@ function SongsTable({
     loadSongTableColumnVisibility(columnPreset),
   )
   const [columnOrder, setColumnOrder] = useState<SongTableReorderableColumn[]>(() => loadSongTableColumnOrder())
+  const [columnWidths, setColumnWidths] = useState(() => loadSongTableColumnWidths())
+  const columnWidthsRef = useRef(columnWidths)
+  columnWidthsRef.current = columnWidths
   const columnDragRef = useRef<SongTableReorderableColumn | null>(null)
+  const columnResizeRef = useRef<{
+    col: SongTableReorderableColumn
+    startX: number
+    startW: number
+  } | null>(null)
   const [columnDragOver, setColumnDragOver] = useState<SongTableReorderableColumn | null>(null)
+  const [resizingColumn, setResizingColumn] = useState<SongTableReorderableColumn | null>(null)
   const [columnMenu, setColumnMenu] = useState<{ x: number; y: number } | null>(null)
   const columnMenuRef = useRef<HTMLDivElement>(null)
   const [trackMenu, setTrackMenu] = useState<{ x: number; y: number; track: Track } | null>(null)
@@ -3577,9 +4794,9 @@ function SongsTable({
     if (fanListsInFlightRef.current) return
     fanListsInFlightRef.current = true
     try {
-      const sr = await fetch('/api/auth/session', { credentials: 'include' })
-      const sd = await sr.json().catch(() => ({}))
-      if (!sr.ok || !sd.authenticated || !sd.user?.id) {
+      const sr = await fetchBrowserAuthSession()
+      const sd = sr || {}
+      if (!sr?.authenticated || !sd.user?.id) {
         setAuthUser(null)
         setFanPlaylists([])
         setWishlistIds(new Set())
@@ -3635,15 +4852,33 @@ function SongsTable({
     [columnOrder, visibleOptional, adminCatalog]
   )
 
+  const epReleaseSortOpts = useMemo(() => {
+    if (!releaseFolderTypes || !releaseCatalogTiles) return undefined
+    return {
+      epLabel: (track: Track) =>
+        trackEpReleaseLabel(track, {
+          releaseFolderTypes,
+          releaseCatalogTiles: releaseCatalogTiles || undefined,
+          groupedByFolder: releaseGroupedByFolder || undefined,
+          playlistCompanionFolderIds: playlistCompanionFolderIds || undefined,
+        }),
+    }
+  }, [
+    releaseFolderTypes,
+    releaseCatalogTiles,
+    releaseGroupedByFolder,
+    playlistCompanionFolderIds,
+  ])
+
   const displayTracks = useMemo(() => {
-    const sorted = sortSongTableTracks(tracks, sortField, sortDir)
+    const sorted = sortSongTableTracks(tracks, sortField, sortDir, epReleaseSortOpts)
     const seen = new Set<string>()
     return sorted.filter((track) => {
       if (!track.id || seen.has(track.id)) return false
       seen.add(track.id)
       return true
     })
-  }, [tracks, sortField, sortDir])
+  }, [tracks, sortField, sortDir, epReleaseSortOpts])
 
   // DNA column is blob-free on list rows — prefetch progress for visible songs so % isn't stuck at 0.
   useEffect(() => {
@@ -3677,11 +4912,61 @@ function SongsTable({
   )
   const selectedCount = selectedTracks.length
 
+  const columnWidthPx = useCallback(
+    (colKey: SongTableReorderableColumn) =>
+      columnWidths[colKey] ?? SONG_TABLE_DEFAULT_COLUMN_WIDTHS[colKey],
+    [columnWidths],
+  )
+
+  const onColumnResizeStart = useCallback(
+    (colKey: SongTableReorderableColumn, e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      columnResizeRef.current = {
+        col: colKey,
+        startX: e.clientX,
+        startW: columnWidthPx(colKey),
+      }
+      setResizingColumn(colKey)
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    [columnWidthPx],
+  )
+
+  useEffect(() => {
+    if (!resizingColumn) return
+    const onMove = (e: PointerEvent) => {
+      const ref = columnResizeRef.current
+      if (!ref) return
+      const next = clampSongTableColumnWidth(ref.startW + e.clientX - ref.startX)
+      setColumnWidths((prev) => ({ ...prev, [ref.col]: next }))
+    }
+    const onUp = () => {
+      columnResizeRef.current = null
+      setResizingColumn(null)
+      saveSongTableColumnWidths(columnWidthsRef.current)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [resizingColumn])
+
   const onColumnDragStart = useCallback((colKey: SongTableReorderableColumn) => (e: React.DragEvent) => {
+    if (resizingColumn) {
+      e.preventDefault()
+      return
+    }
     columnDragRef.current = colKey
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', colKey)
-  }, [])
+  }, [resizingColumn])
 
   const onColumnDragOver = useCallback((colKey: SongTableReorderableColumn) => (e: React.DragEvent) => {
     e.preventDefault()
@@ -4757,17 +6042,17 @@ function SongsTable({
     setEditArtBusy(true)
     setAdminError(null)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('trackId', editTrack.id)
-      if (editTrack.audioFileId) formData.append('audioFileId', editTrack.audioFileId)
-      if (editTrack.folderId) formData.append('folderId', editTrack.folderId)
+      const formData = await buildArtworkUploadFormData(file, {
+        trackId: editTrack.id,
+        audioFileId: editTrack.audioFileId,
+        folderId: editTrack.folderId,
+      })
       const res = await fetch('/api/audio/artwork', { method: 'POST', body: formData })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Artwork upload failed')
+      if (!res.ok) throw new Error(artworkUploadHttpErrorMessage(res.status, data.error))
       if (!data.artworkUrl) throw new Error('Upload did not return an artwork URL')
       const artworkUrl = stripArtworkCacheBust(String(data.artworkUrl))
-      const busted = withArtworkCacheBust(artworkUrl)
+      const busted = forceArtworkCacheBust(artworkUrl)
       setEditDraft((d) => ({ ...d, artwork: busted }))
       setEditTrack((current) => (current ? { ...current, artwork: busted } : current))
       onTrackUpdated?.({ ...editTrack, artwork: busted, folderId: editTrack.folderId || data.folderId })
@@ -5157,7 +6442,7 @@ function SongsTable({
     if (loading && !(acceptVaultFileDrop && vaultDropItems.length)) {
       return <div className="text-center py-12 text-gray-500">Loading tracks...</div>
     }
-    if (acceptVaultFileDrop && playlistContext) {
+    if (acceptVaultFileDrop && (playlistContext || vaultDropMode === 'library')) {
       return (
         <div
           className={`relative rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
@@ -5188,20 +6473,30 @@ function SongsTable({
           }}
         >
           {vaultDropItems.length ? (
-            <PlaylistDropProgress items={vaultDropItems} playlistName={playlistContext.name} />
+            <PlaylistDropProgress
+              items={vaultDropItems}
+              playlistName={
+                vaultDropMode === 'library' ? 'Songs library' : playlistContext?.name || 'playlist'
+              }
+            />
           ) : (
             <>
               <FaUpload className="mx-auto mb-3 h-8 w-8 text-gray-500" />
               <p className="text-base text-gray-200">
                 {vaultDropBusy
-                  ? 'Adding to vault & playlist…'
-                  : `Drop tracks into “${playlistContext.name}”`}
+                  ? vaultDropMode === 'library'
+                    ? 'Ingesting into vault…'
+                    : 'Adding to vault & playlist…'
+                  : vaultDropMode === 'library'
+                    ? 'Drop tracks into Songs'
+                    : `Drop tracks into “${playlistContext?.name || 'playlist'}”`}
               </p>
               <p className="mt-2 max-w-md mx-auto text-sm text-gray-500">
                 Drop audio from your computer. Existing vault tracks are matched by path/name;
                 new files are copied into <code className="text-gray-400">web/public/audio</code> and added to the library.
-                Files over 80MB are allowed when track length justifies the size (high-res WAV budget);
-                denser files can be converted to 320kbps MP3 on drop.
+                {vaultDropMode === 'library'
+                  ? ' New ingests stay unassigned until you move them to an EP or crate.'
+                  : ' Files over 80MB are allowed when track length justifies the size (high-res WAV budget); denser files can be converted to 320kbps MP3 on drop.'}
               </p>
             </>
           )}
@@ -5280,7 +6575,9 @@ function SongsTable({
       {acceptVaultFileDrop && vaultDropActive && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-purple-950/70">
           <p className="text-sm font-medium text-purple-100">
-            Drop to add to vault & playlist
+            {vaultDropMode === 'library'
+              ? 'Drop to ingest into Songs library'
+              : 'Drop to add to vault & playlist'}
           </p>
         </div>
       )}
@@ -5764,7 +7061,7 @@ function SongsTable({
           <PopupMenuDragHeader title="Columns" headerProps={columnMenuClamp.headerProps} />
           <div className="py-2">
           <p className="px-3 pb-2 text-[10px] leading-snug text-gray-500">
-            Drag headers to reorder · Click header to sort
+            Drag headers to reorder · Drag the right edge to resize · Click header to sort
           </p>
           <div className="border-t border-gray-800 pt-1">
             {SONG_TABLE_OPTIONAL_COLUMNS.slice()
@@ -6710,12 +8007,20 @@ function SongsTable({
           )}
         </p>
       )}
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          {playlistOrganize ? <col style={{ width: 32 }} /> : null}
+          <col style={{ width: 32 }} />
+          <col style={{ width: 40 }} />
+          {orderedVisibleColumns.map((colKey) => (
+            <col key={colKey} style={{ width: columnWidthPx(colKey) }} />
+          ))}
+        </colgroup>
         <thead>
           <tr
             className="border-b border-gray-800 text-gray-500"
             onContextMenu={onHeaderContextMenu}
-            title="Drag headers to reorder · Click to sort · Right-click to show or hide columns"
+            title="Drag headers to reorder · Drag column right edge to resize · Click to sort · Right-click columns"
           >
             {playlistOrganize && (
               <th className="w-8 py-2 px-1 text-center" aria-label="Drag row">
@@ -6760,15 +8065,22 @@ function SongsTable({
               return (
                 <th
                   key={colKey}
-                  draggable
+                  draggable={!resizingColumn}
                   onDragStart={onColumnDragStart(colKey)}
                   onDragOver={onColumnDragOver(colKey)}
                   onDragLeave={onColumnDragLeave}
                   onDrop={onColumnDrop(colKey)}
                   onDragEnd={onColumnDragEnd}
-                  className={`py-2 px-2 ${alignClass} ${
+                  style={{
+                    width: columnWidthPx(colKey),
+                    minWidth: columnWidthPx(colKey),
+                    maxWidth: columnWidthPx(colKey),
+                  }}
+                  className={`relative py-2 px-2 ${alignClass} ${
                     columnDragOver === colKey ? 'bg-purple-900/30 ring-1 ring-inset ring-purple-500/40' : ''
-                  } ${sortableField ? 'cursor-pointer hover:text-white' : ''}`}
+                  } ${resizingColumn === colKey ? 'bg-purple-900/20' : ''} ${
+                    sortableField ? 'cursor-pointer hover:text-white' : ''
+                  }`}
                   onClick={sortableField ? () => onSort(sortableField) : undefined}
                 >
                   <span
@@ -6784,6 +8096,20 @@ function SongsTable({
                     <span className="truncate">{label}</span>
                     {sortableField ? sortIcon(sortableField) : null}
                   </span>
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={`Resize ${label} column`}
+                    title="Drag to resize column"
+                    className={`absolute right-0 top-0 z-10 h-full w-2 translate-x-1/2 cursor-col-resize touch-none ${
+                      resizingColumn === colKey
+                        ? 'bg-purple-500/50'
+                        : 'hover:bg-purple-500/30'
+                    }`}
+                    onPointerDown={(e) => onColumnResizeStart(colKey, e)}
+                    onClick={(e) => e.stopPropagation()}
+                    onDragStart={(e) => e.preventDefault()}
+                  />
                 </th>
               )
             })}
@@ -6885,7 +8211,11 @@ function SongsTable({
                   switch (colKey) {
                     case 'title':
                       return (
-                        <td key={colKey} className="py-2 px-2" onContextMenu={(e) => openTrackMenu(e, track)}>
+                        <td
+                          key={colKey}
+                          className="max-w-0 overflow-hidden py-2 px-2"
+                          onContextMenu={(e) => openTrackMenu(e, track)}
+                        >
                           <div className="flex items-center space-x-2">
                             {(() => {
                               const useMosaic = trackShouldUseCrateMosaic(track)
@@ -6902,9 +8232,57 @@ function SongsTable({
                                 </div>
                               )
                             })()}
-                            <span className={`truncate max-w-[250px] ${isCurrent ? 'text-purple-300 font-medium' : ''}`}>
-                              {track.title}
-                            </span>
+                            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                              <span
+                                className={`min-w-0 truncate ${isCurrent ? 'text-purple-300 font-medium' : ''}`}
+                              >
+                                {track.title}
+                              </span>
+                              {adminCatalog && !folderContext && releaseFolderTypes && (
+                                <span className="inline-flex shrink-0 items-center gap-1">
+                                  {(() => {
+                                    const flags = trackReleaseBadgeFlags(track, {
+                                      releaseFolderTypes,
+                                      releaseCatalogTiles: releaseCatalogTiles || undefined,
+                                      playlistCompanionFolderIds:
+                                        playlistCompanionFolderIds || undefined,
+                                      membershipByTrackId:
+                                        trackFolderMembershipById || undefined,
+                                    })
+                                    if (!flags.ep && !flags.crate) {
+                                      return (
+                                        <span
+                                          className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-200/90"
+                                          title="Not on an EP or crate — drag to sidebar to assign"
+                                        >
+                                          Loose
+                                        </span>
+                                      )
+                                    }
+                                    return (
+                                      <>
+                                        {flags.ep && (
+                                          <span
+                                            className="rounded bg-teal-500/10 px-1 text-[9px] font-bold leading-none text-teal-500"
+                                            title="On an EP release"
+                                          >
+                                            EP
+                                          </span>
+                                        )}
+                                        {flags.crate && (
+                                          <span
+                                            className="rounded bg-violet-500/10 px-1 text-[9px] font-bold leading-none text-violet-400"
+                                            title="In a crate (vibe collection)"
+                                          >
+                                            CRATE
+                                          </span>
+                                        )}
+                                      </>
+                                    )
+                                  })()}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                       )
@@ -6928,11 +8306,11 @@ function SongsTable({
                     }
                     case 'artist':
                       return (
-                        <td key={colKey} className="py-2 px-2 text-gray-400 truncate max-w-[150px]">{track.artist}</td>
+                        <td key={colKey} className="max-w-0 overflow-hidden truncate py-2 px-2 text-gray-400">{track.artist}</td>
                       )
                     case 'album':
                       return (
-                        <td key={colKey} className="py-2 px-2 text-gray-500 truncate max-w-[140px]">
+                        <td key={colKey} className="max-w-0 overflow-hidden truncate py-2 px-2 text-gray-500">
                           {track.album ? (
                             <span className="flex items-center space-x-1">
                               {track.albumType === 'ep' && <span className="text-[9px] font-bold text-teal-500 bg-teal-500/10 px-1 rounded">EP</span>}
@@ -6941,13 +8319,43 @@ function SongsTable({
                           ) : '—'}
                         </td>
                       )
+                    case 'ep': {
+                      const epLabel =
+                        releaseFolderTypes && releaseCatalogTiles
+                          ? trackEpReleaseLabel(track, {
+                              releaseFolderTypes,
+                              releaseCatalogTiles: releaseCatalogTiles || undefined,
+                              groupedByFolder: releaseGroupedByFolder || undefined,
+                              playlistCompanionFolderIds:
+                                playlistCompanionFolderIds || undefined,
+                            })
+                          : ''
+                      return (
+                        <td
+                          key={colKey}
+                          className="max-w-0 overflow-hidden truncate py-2 px-2 text-gray-500"
+                          title={epLabel || undefined}
+                        >
+                          {epLabel ? (
+                            <span className="flex items-center gap-1 truncate">
+                              <span className="shrink-0 rounded bg-teal-500/10 px-1 text-[9px] font-bold leading-none text-teal-500">
+                                EP
+                              </span>
+                              <span className="truncate">{epLabel}</span>
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      )
+                    }
                     case 'genre':
                       return (
-                        <td key={colKey} className="py-2 px-2 text-gray-500 truncate max-w-[120px]">{displayTrackGenre(track) || '—'}</td>
+                        <td key={colKey} className="max-w-0 overflow-hidden truncate py-2 px-2 text-gray-500">{displayTrackGenre(track) || '—'}</td>
                       )
                     case 'subgenre':
                       return (
-                        <td key={colKey} className="py-2 px-2 text-gray-500 truncate max-w-[140px]">{displayTrackSubgenre(track) || '—'}</td>
+                        <td key={colKey} className="max-w-0 overflow-hidden truncate py-2 px-2 text-gray-500">{displayTrackSubgenre(track) || '—'}</td>
                       )
                     case 'bpm':
                       return (
@@ -7079,9 +8487,12 @@ function ChooseExistingArtworkPanel({
   busy = false,
   onSelect,
   onUploadFile,
+  onReplaceFile,
   onPreview,
   onClear,
   onBrowseUpload,
+  onRemoveFromPool,
+  onDeleteArtwork,
   onUploadError,
 }: {
   choices: ArtworkChoice[]
@@ -7089,12 +8500,17 @@ function ChooseExistingArtworkPanel({
   busy?: boolean
   onSelect: (src: string) => void
   onUploadFile: (file: File) => void
+  /** Replace a pool tile’s file (folder cover) when possible; otherwise upload for current album. */
+  onReplaceFile?: (file: File, choice: ArtworkChoice) => void
   onPreview: (src: string) => void
   onClear?: () => void
   onBrowseUpload: () => void
+  onRemoveFromPool?: (choice: ArtworkChoice) => void
+  onDeleteArtwork?: (choice: ArtworkChoice) => void | Promise<void>
   onUploadError?: (message: string) => void
 }) {
   const [dragOver, setDragOver] = useState(false)
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set())
   const [ctx, setCtx] = useState<{
     x: number
     y: number
@@ -7102,13 +8518,27 @@ function ChooseExistingArtworkPanel({
     choice?: ArtworkChoice
   } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+  const replaceTargetRef = useRef<ArtworkChoice | null>(null)
   const artMenuClamp = useClampedFixedMenuPosition(
     !!ctx,
     ctx ? { x: ctx.x, y: ctx.y } : null,
-    { width: 208, height: 220 },
+    { width: 224, height: 340 },
     { externalRef: menuRef },
   )
   const dragDepth = useRef(0)
+
+  const visibleChoices = useMemo(
+    () =>
+      choices.filter((choice) => {
+        const key = stripArtworkCacheBust(resolveImageUrl(choice.src) || choice.src)
+        if (!key) return false
+        if (hiddenKeys.has(key)) return false
+        if (isMosaicPathSuppressed(choice.src)) return false
+        return true
+      }),
+    [choices, hiddenKeys],
+  )
 
   useEffect(() => {
     if (!ctx) return
@@ -7154,6 +8584,21 @@ function ChooseExistingArtworkPanel({
     if (url) window.open(url, '_blank', 'noopener,noreferrer')
     setCtx(null)
   }
+
+  const hideChoice = (choice: ArtworkChoice) => {
+    const key = stripArtworkCacheBust(resolveImageUrl(choice.src) || choice.src)
+    if (key) setHiddenKeys((prev) => new Set(prev).add(key))
+    onRemoveFromPool?.(choice)
+    setCtx(null)
+  }
+
+  const startReplace = (choice: ArtworkChoice) => {
+    replaceTargetRef.current = choice
+    setCtx(null)
+    replaceInputRef.current?.click()
+  }
+
+  const choiceCanDeleteFile = (choice: ArtworkChoice) => Boolean(artworkFileIdFromUrl(choice.src))
 
   return (
     <div
@@ -7205,6 +8650,21 @@ function ChooseExistingArtworkPanel({
         }
       }}
     >
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          const target = replaceTargetRef.current
+          replaceTargetRef.current = null
+          e.target.value = ''
+          if (!file || !target) return
+          if (onReplaceFile) onReplaceFile(file, target)
+          else onUploadFile(file)
+        }}
+      />
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           Choose existing artwork
@@ -7213,19 +8673,19 @@ function ChooseExistingArtworkPanel({
           {busy ? 'Uploading…' : dragOver ? 'Drop to use' : 'Right-click · drop image'}
         </span>
       </div>
-      {choices.length === 0 ? (
+      {visibleChoices.length === 0 ? (
         <p className="px-1 py-3 text-center text-xs text-gray-500">
           No artwork found — drop an image here or right-click to upload
         </p>
       ) : (
         <div className="grid max-h-48 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-5">
-          {choices.map((choice) => {
+          {visibleChoices.map((choice) => {
             const selected = resolveImageUrl(selectedSrc) === resolveImageUrl(choice.src)
             return (
               <button
                 key={choice.id}
                 type="button"
-                title={choice.label}
+                title={`${choice.label} · Right-click for actions`}
                 draggable={!busy}
                 onClick={() => onSelect(choice.src)}
                 onContextMenu={(e) => openChoiceMenu(e, choice)}
@@ -7242,7 +8702,7 @@ function ChooseExistingArtworkPanel({
                     : 'border-gray-700 hover:border-gray-500'
                 }`}
               >
-                <CoverArt src={choice.src} alt={choice.label} sizes="72px" iconClassName="h-5 w-5 text-gray-600" />
+                <CoverArt src={choice.src} alt={choice.label} sizes="72px" quality={COVER_THUMB_QUALITY} iconClassName="h-5 w-5 text-gray-600" />
               </button>
             )
           })}
@@ -7254,7 +8714,7 @@ function ChooseExistingArtworkPanel({
           {...artMenuClamp.rootProps}
           role="menu"
           aria-label="Artwork actions"
-          className="fixed w-52 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+          className="fixed w-56 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
           style={artMenuClamp.style}
           onContextMenu={(e) => e.preventDefault()}
         >
@@ -7289,6 +8749,47 @@ function ChooseExistingArtworkPanel({
                 <FaEye className="h-3 w-3 text-gray-500" />
                 Preview
               </button>
+              <div className="my-1 border-t border-gray-800" />
+              <button
+                type="button"
+                role="menuitem"
+                disabled={busy || !onReplaceFile}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800/80 disabled:opacity-50"
+                onClick={() => startReplace(ctx.choice!)}
+              >
+                <FaUpload className="h-3 w-3 text-gray-500" />
+                Replace image…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={busy}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800/80 disabled:opacity-50"
+                onClick={() => hideChoice(ctx.choice!)}
+              >
+                <FaEyeSlash className="h-3 w-3 text-gray-500" />
+                Remove from chooser
+              </button>
+              {onDeleteArtwork && choiceCanDeleteFile(ctx.choice) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={busy}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                  onClick={() => {
+                    const choice = ctx.choice!
+                    setCtx(null)
+                    void Promise.resolve(onDeleteArtwork(choice)).then(() => {
+                      const key = stripArtworkCacheBust(resolveImageUrl(choice.src) || choice.src)
+                      if (key) setHiddenKeys((prev) => new Set(prev).add(key))
+                    })
+                  }}
+                >
+                  <FaTrash className="h-3 w-3" />
+                  Delete file…
+                </button>
+              )}
+              <div className="my-1 border-t border-gray-800" />
               <button
                 type="button"
                 role="menuitem"
@@ -7339,7 +8840,7 @@ function ChooseExistingArtworkPanel({
                 </button>
               )}
               <p className="border-t border-gray-800 px-3 py-2 text-[10px] leading-snug text-gray-500">
-                Drop an image file onto this panel to upload and set as cover.
+                Drop an image file onto this panel to upload and set as cover. Right-click a tile to replace or delete it.
               </p>
             </>
           )}
@@ -7356,6 +8857,7 @@ function AdminFolderChrome({
   children,
   tracks = [],
   hidden = false,
+  libraryAlbums = [],
   onUpdated,
   onArchived,
   onTracksReordered,
@@ -7368,6 +8870,8 @@ function AdminFolderChrome({
   children: React.ReactNode
   tracks?: Track[]
   hidden?: boolean
+  /** Other catalog releases — fills “Choose existing artwork” with current covers. */
+  libraryAlbums?: Array<Pick<AlbumTile, 'id' | 'name' | 'artwork'>>
   onUpdated?: (id: string, patch: Partial<AlbumTile>, publishVersion?: number | null) => void
   onArchived?: (id: string) => void
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
@@ -7414,10 +8918,21 @@ function AdminFolderChrome({
   const artViewerRef = useRef<HTMLDivElement>(null)
   const coverDragDepth = useRef(0)
   const artPreviewBlobRef = useRef<string | null>(null)
+  const artworkSnapshotRef = useRef<string | null>(null)
+  const liveMosaicCovers = useSyncExternalStore(
+    subscribeLiveMosaicCovers,
+    getLiveMosaicCovers,
+    () => EMPTY_LIVE_MOSAIC_COVERS,
+  )
 
   useEffect(() => {
     artPreviewBlobRef.current = artPreviewBlob
   }, [artPreviewBlob])
+
+  useEffect(() => {
+    if (!chooseArtOpen) return
+    void hydrateLiveMosaicCovers({ force: true })
+  }, [chooseArtOpen])
 
   useEffect(() => {
     return () => {
@@ -7475,21 +8990,18 @@ function AdminFolderChrome({
     }
   }, [menu, editOpen, chooseArtOpen, artViewerOpen])
 
-  const artChoices = useMemo(() => {
-    const seen = new Set<string>()
-    const choices: ArtworkChoice[] = []
-    const add = (id: string, src: string | undefined, label: string) => {
-      if (!src?.trim()) return
-      const key = resolveImageUrl(src).split('?')[0]
-      if (!key || seen.has(key)) return
-      seen.add(key)
-      choices.push({ id, src, label })
-    }
-    add(`current-${album.id}`, folderArtworkSrc(album, orderedTracks), album.name)
-    for (const track of orderedTracks) add(`track-${track.id}`, track.artwork, track.title)
-    for (const tile of EP_COVER_CHOICES) add(tile.id, tile.src, tile.alt)
-    return dedupeArtworkByReleaseLabel(choices)
-  }, [album.id, album.artwork, album.name, orderedTracks])
+  const artChoices = useMemo(
+    () =>
+      buildArtworkChoices({
+        seedId: album.id,
+        seedSrc: folderArtworkSrc(album, orderedTracks),
+        seedLabel: album.name,
+        tracks: orderedTracks,
+        libraryAlbums,
+        liveMosaic: liveMosaicCovers,
+      }),
+    [album.id, album.artwork, album.name, orderedTracks, libraryAlbums, liveMosaicCovers],
+  )
 
   if (!enabled) return <>{children}</>
 
@@ -7501,12 +9013,14 @@ function AdminFolderChrome({
   }
 
   const openEdit = () => {
+    const initialArtwork = folderArtworkSrc(album, tracks)
+    artworkSnapshotRef.current = artworkUrlForCatalogStorage(initialArtwork)
     setDraft({
       name: album.name,
       type: album.type === 'album' ? 'album' : 'ep',
       year: album.year != null ? String(album.year) : '',
       albumArtist: album.albumArtist || '',
-      artwork: folderArtworkSrc(album, tracks),
+      artwork: initialArtwork,
     })
     setOrderedTracks(tracks)
     setDragIndex(null)
@@ -7616,10 +9130,65 @@ function AdminFolderChrome({
     }
   }
 
-  const selectArtwork = (src: string) => {
-    setDraft((d) => ({ ...d, artwork: withArtworkCacheBust(src) || src }))
+  const commitFolderCoverLocally = (
+    artworkToSave: string,
+    publishVersion?: number | null,
+  ) => {
+    const busted = forceArtworkCacheBust(artworkToSave)
+    artworkSnapshotRef.current = artworkToSave
+    setDraft((d) => ({ ...d, artwork: busted }))
+    setOrderedTracks((prev) => {
+      const stamped = stampAllTrackArtwork(prev, busted)
+      onTracksReordered?.(
+        album.id,
+        withAlbumName(
+          withTrackOrder(stamped),
+          draft.name.trim() || album.name,
+          album.type,
+        ),
+      )
+      return stamped
+    })
+    onUpdated?.(album.id, { artwork: busted }, publishVersion ?? null)
+    invalidateMusicLibraryCache()
+    void hydrateLiveMosaicCovers({ force: true })
+    setNotice('Cover art saved')
     setChooseArtOpen(false)
     setError(null)
+  }
+
+  const persistFolderCoverSystemically = async (
+    rawSrc: string,
+    opts?: { skipServer?: boolean; publishVersion?: number | null },
+  ) => {
+    const artworkToSave = artworkUrlForCatalogStorage(rawSrc)
+    if (!artworkToSave) {
+      setError('Invalid cover art URL')
+      return
+    }
+    setArtBusy(true)
+    setError(null)
+    try {
+      let publishVersion = opts?.publishVersion ?? null
+      if (!opts?.skipServer) {
+        const saved = await updateFolder(album.id, { artwork: artworkToSave })
+        publishVersion = saved?.publishVersion ?? publishVersion
+        try {
+          await updatePlaylist(playlistIdForFolder(album.id), { artwork: artworkToSave })
+        } catch {
+          /* collection playlist may not exist */
+        }
+      }
+      commitFolderCoverLocally(artworkToSave, publishVersion)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save cover art')
+    } finally {
+      setArtBusy(false)
+    }
+  }
+
+  const selectArtwork = (src: string) => {
+    void persistFolderCoverSystemically(src)
   }
 
   const openFolderArtViewer = (src?: string) => {
@@ -7650,12 +9219,14 @@ function AdminFolderChrome({
     }
   }
 
-  const uploadFolderArtwork = async (file: File) => {
+  const uploadFolderArtwork = async (file: File, targetFolderId?: string) => {
     const reject = artworkUploadRejectReason(file)
     if (reject) {
       setError(reject)
       return
     }
+    const folderTarget = (targetFolderId || album.id).trim() || album.id
+    const replacesCurrent = folderTarget === album.id
     if (artPreviewBlobRef.current) {
       URL.revokeObjectURL(artPreviewBlobRef.current)
       artPreviewBlobRef.current = null
@@ -7665,22 +9236,30 @@ function AdminFolderChrome({
     setArtPreviewBlob(localPreview)
     setArtBusy(true)
     setError(null)
-    setDraft((d) => ({ ...d, artwork: localPreview }))
+    if (replacesCurrent) setDraft((d) => ({ ...d, artwork: localPreview }))
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', album.id)
+      const formData = await buildArtworkUploadFormData(file, { folderId: folderTarget })
       const res = await fetch('/api/audio/artwork', { method: 'POST', body: formData })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Artwork upload failed')
+      if (!res.ok) throw new Error(artworkUploadHttpErrorMessage(res.status, data.error))
       if (!data.artworkUrl) throw new Error('Upload did not return an artwork URL')
-      const artworkUrl = stripArtworkCacheBust(String(data.artworkUrl))
-      const busted = withArtworkCacheBust(artworkUrl)
-      setDraft((d) => ({ ...d, artwork: busted }))
-      onUpdated?.(album.id, { artwork: busted }, data.publishVersion ?? null)
-      setChooseArtOpen(false)
+      const artworkUrl = artworkUrlForCatalogStorage(String(data.artworkUrl))
+      if (!artworkUrl) throw new Error('Upload did not return a usable artwork URL')
+      if (replacesCurrent) {
+        commitFolderCoverLocally(artworkUrl, data.publishVersion ?? null)
+      } else {
+        if (artPreviewBlobRef.current === localPreview) {
+          URL.revokeObjectURL(localPreview)
+          artPreviewBlobRef.current = null
+          setArtPreviewBlob(null)
+        }
+        void hydrateLiveMosaicCovers({ force: true })
+        setNotice('Cover image replaced')
+      }
     } catch (err: any) {
-      setDraft((d) => (d.artwork === localPreview ? { ...d, artwork: folderArtworkSrc(album, orderedTracks) } : d))
+      if (replacesCurrent) {
+        setDraft((d) => (d.artwork === localPreview ? { ...d, artwork: folderArtworkSrc(album, orderedTracks) } : d))
+      }
       if (artPreviewBlobRef.current === localPreview) {
         URL.revokeObjectURL(localPreview)
         artPreviewBlobRef.current = null
@@ -7690,6 +9269,53 @@ function AdminFolderChrome({
     } finally {
       setArtBusy(false)
       if (artFileRef.current) artFileRef.current.value = ''
+    }
+  }
+
+  const replaceChoiceArtwork = (file: File, choice: ArtworkChoice) => {
+    const fromArt = collectionIdFromArtwork(choice.src)
+    void uploadFolderArtwork(file, fromArt || album.id)
+  }
+
+  const removeChoiceFromPool = (choice: ArtworkChoice) => {
+    suppressMosaicPath(choice.src)
+    removeLiveMosaicCoverBySrc(choice.src)
+  }
+
+  const deleteChoiceArtwork = async (choice: ArtworkChoice) => {
+    const label = choice.label || 'this cover'
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`Delete artwork file for “${label}”? Folders using this file will clear their cover.`)
+    ) {
+      return
+    }
+    setArtBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/audio/artwork', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src: choice.src }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to delete artwork')
+      suppressMosaicPath(choice.src)
+      removeLiveMosaicCoverBySrc(choice.src)
+      const selectedBase = stripArtworkCacheBust(resolveImageUrl(draft.artwork) || draft.artwork)
+      const deletedBase = stripArtworkCacheBust(resolveImageUrl(choice.src) || choice.src)
+      if (selectedBase && deletedBase && selectedBase === deletedBase) {
+        setDraft((d) => ({ ...d, artwork: '' }))
+      }
+      if (data.publishVersion != null) {
+        onUpdated?.(album.id, {}, data.publishVersion)
+      }
+      void hydrateLiveMosaicCovers({ force: true })
+      setNotice('Artwork file deleted')
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete artwork')
+    } finally {
+      setArtBusy(false)
     }
   }
 
@@ -7708,7 +9334,8 @@ function AdminFolderChrome({
       setError('Artwork is still uploading — wait a moment, then Save')
       return
     }
-    const artworkToSave = stripArtworkCacheBust(draft.artwork) || null
+    const artworkToSave = artworkUrlForCatalogStorage(draft.artwork)
+    const artworkChanged = artworkToSave !== artworkSnapshotRef.current
     setBusy(true)
     setError(null)
     try {
@@ -7717,7 +9344,7 @@ function AdminFolderChrome({
         type: draft.type,
         year,
         albumArtist: draft.albumArtist.trim() || undefined,
-        artwork: artworkToSave,
+        ...(artworkChanged ? { artwork: artworkToSave } : {}),
       })
       if (orderedTracks.length) {
         await Promise.all(
@@ -7729,29 +9356,51 @@ function AdminFolderChrome({
           )
         )
       }
-      try {
-        await updatePlaylist(playlistIdForFolder(album.id), {
-          ...(orderedTracks.length ? { trackIds: orderedTracks.map((track) => track.id) } : {}),
-          artwork: artworkToSave || '',
-        })
-      } catch {
-        /* collection playlist may not exist */
+      if (artworkChanged) {
+        try {
+          await updatePlaylist(playlistIdForFolder(album.id), {
+            ...(orderedTracks.length ? { trackIds: orderedTracks.map((track) => track.id) } : {}),
+            artwork: artworkToSave || '',
+          })
+        } catch {
+          /* collection playlist may not exist */
+        }
+      } else if (orderedTracks.length) {
+        try {
+          await updatePlaylist(playlistIdForFolder(album.id), {
+            trackIds: orderedTracks.map((track) => track.id),
+          })
+        } catch {
+          /* collection playlist may not exist */
+        }
       }
-      if (orderedTracks.length) {
-        onTracksReordered?.(album.id, withAlbumName(withTrackOrder(orderedTracks), draft.name.trim(), album.type))
+      const tilePatch: Partial<AlbumTile> = {
+        name: draft.name.trim(),
+        type: draft.type,
+        year,
+        albumArtist: draft.albumArtist.trim() || 'SERGIK',
+      }
+      if (artworkChanged) {
+        artworkSnapshotRef.current = artworkToSave
+        tilePatch.artwork = artworkToSave ? forceArtworkCacheBust(artworkToSave) : null
+        if (artworkToSave) {
+          const busted = tilePatch.artwork!
+          const stamped = stampAllTrackArtwork(orderedTracks, busted)
+          setOrderedTracks(stamped)
+          onTracksReordered?.(
+            album.id,
+            withAlbumName(withTrackOrder(stamped), draft.name.trim(), album.type),
+          )
+          void hydrateLiveMosaicCovers({ force: true })
+        }
+      } else if (orderedTracks.length) {
+        onTracksReordered?.(
+          album.id,
+          withAlbumName(withTrackOrder(orderedTracks), draft.name.trim(), album.type),
+        )
       }
       invalidateMusicLibraryCache()
-      onUpdated?.(
-        album.id,
-        {
-          name: draft.name.trim(),
-          type: draft.type,
-          year,
-          albumArtist: draft.albumArtist.trim() || 'SERGIK',
-          artwork: artworkToSave ? withArtworkCacheBust(artworkToSave) : undefined,
-        },
-        saved?.publishVersion ?? null,
-      )
+      onUpdated?.(album.id, tilePatch, saved?.publishVersion ?? null)
       setEditOpen(false)
     } catch (err: any) {
       setError(err?.message || 'Failed to save folder')
@@ -8187,9 +9836,12 @@ function AdminFolderChrome({
                     busy={artBusy}
                     onSelect={selectArtwork}
                     onUploadFile={(file) => void uploadFolderArtwork(file)}
+                    onReplaceFile={replaceChoiceArtwork}
                     onPreview={(src) => openFolderArtViewer(src)}
                     onClear={() => setDraft((d) => ({ ...d, artwork: '' }))}
                     onBrowseUpload={() => artFileRef.current?.click()}
+                    onRemoveFromPool={removeChoiceFromPool}
+                    onDeleteArtwork={deleteChoiceArtwork}
                     onUploadError={setError}
                   />
                 )}
@@ -8298,6 +9950,8 @@ function AdminFolderChrome({
               }
               alt={`${draft.name || album.name} cover art`}
               sizes="448px"
+              quality={COVER_HERO_QUALITY}
+              heroMaster
               iconClassName="h-16 w-16 text-gray-600"
             />
             <button
@@ -8389,10 +10043,20 @@ function AdminPlaylistChrome({
   const artViewerRef = useRef<HTMLDivElement>(null)
   const coverDragDepth = useRef(0)
   const artPreviewBlobRef = useRef<string | null>(null)
+  const liveMosaicCovers = useSyncExternalStore(
+    subscribeLiveMosaicCovers,
+    getLiveMosaicCovers,
+    () => EMPTY_LIVE_MOSAIC_COVERS,
+  )
 
   useEffect(() => {
     artPreviewBlobRef.current = artPreviewBlob
   }, [artPreviewBlob])
+
+  useEffect(() => {
+    if (!chooseArtOpen) return
+    void hydrateLiveMosaicCovers({ force: true })
+  }, [chooseArtOpen])
 
   useEffect(() => {
     return () => {
@@ -8438,21 +10102,17 @@ function AdminPlaylistChrome({
     return firstArtworkSrc(draft.artwork, playlist.artwork, ...orderedTracks.map((t) => t.artwork))
   }, [draft.artwork, playlist.artwork, orderedTracks])
 
-  const artChoices = useMemo(() => {
-    const seen = new Set<string>()
-    const choices: ArtworkChoice[] = []
-    const add = (id: string, src: string | undefined, label: string) => {
-      if (!src?.trim()) return
-      const key = resolveImageUrl(src).split('?')[0]
-      if (!key || seen.has(key)) return
-      seen.add(key)
-      choices.push({ id, src, label })
-    }
-    add(`current-${playlist.id}`, draft.artwork || playlist.artwork, playlist.name)
-    for (const track of orderedTracks) add(`track-${track.id}`, track.artwork, track.title)
-    for (const tile of EP_COVER_CHOICES) add(tile.id, tile.src, tile.alt)
-    return dedupeArtworkByReleaseLabel(choices)
-  }, [playlist.id, playlist.artwork, playlist.name, draft.artwork, orderedTracks])
+  const artChoices = useMemo(
+    () =>
+      buildArtworkChoices({
+        seedId: playlist.id,
+        seedSrc: draft.artwork || playlist.artwork,
+        seedLabel: playlist.name,
+        tracks: orderedTracks,
+        liveMosaic: liveMosaicCovers,
+      }),
+    [playlist.id, playlist.artwork, playlist.name, draft.artwork, orderedTracks, liveMosaicCovers],
+  )
 
   useEffect(() => {
     if (!menu && !editOpen) return
@@ -8611,12 +10271,15 @@ function AdminPlaylistChrome({
     }
   }
 
-  const uploadPlaylistArtwork = async (file: File) => {
+  const uploadPlaylistArtwork = async (file: File, targetFolderId?: string) => {
     const reject = artworkUploadRejectReason(file)
     if (reject) {
       setError(reject)
       return
     }
+    const defaultFolder = folderId || `playlist-${playlist.id}`
+    const folderTarget = (targetFolderId || defaultFolder).trim() || defaultFolder
+    const replacesCurrent = folderTarget === defaultFolder
     if (artPreviewBlobRef.current) {
       URL.revokeObjectURL(artPreviewBlobRef.current)
       artPreviewBlobRef.current = null
@@ -8626,24 +10289,34 @@ function AdminPlaylistChrome({
     setArtPreviewBlob(localPreview)
     setArtBusy(true)
     setError(null)
-    setDraft((d) => ({ ...d, artwork: localPreview }))
+    if (replacesCurrent) setDraft((d) => ({ ...d, artwork: localPreview }))
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', folderId || `playlist-${playlist.id}`)
+      const formData = await buildArtworkUploadFormData(file, { folderId: folderTarget })
       const res = await fetch('/api/audio/artwork', { method: 'POST', body: formData })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Artwork upload failed')
+      if (!res.ok) throw new Error(artworkUploadHttpErrorMessage(res.status, data.error))
       if (!data.artworkUrl) throw new Error('Upload did not return an artwork URL')
       const artworkUrl = stripArtworkCacheBust(String(data.artworkUrl))
-      const busted = withArtworkCacheBust(artworkUrl)
-      setDraft((d) => ({ ...d, artwork: busted }))
-      onPlaylistUpdated?.({ ...playlist, artwork: busted })
-      setChooseArtOpen(false)
+      const busted = forceArtworkCacheBust(artworkUrl)
+      if (replacesCurrent) {
+        setDraft((d) => ({ ...d, artwork: busted }))
+        onPlaylistUpdated?.({ ...playlist, artwork: busted })
+        setChooseArtOpen(false)
+      } else {
+        if (artPreviewBlobRef.current === localPreview) {
+          URL.revokeObjectURL(localPreview)
+          artPreviewBlobRef.current = null
+          setArtPreviewBlob(null)
+        }
+        void hydrateLiveMosaicCovers({ force: true })
+        setNotice('Cover image replaced')
+      }
     } catch (err: any) {
-      setDraft((d) =>
-        d.artwork === localPreview ? { ...d, artwork: playlist.artwork || '' } : d
-      )
+      if (replacesCurrent) {
+        setDraft((d) =>
+          d.artwork === localPreview ? { ...d, artwork: playlist.artwork || '' } : d
+        )
+      }
       if (artPreviewBlobRef.current === localPreview) {
         URL.revokeObjectURL(localPreview)
         artPreviewBlobRef.current = null
@@ -8653,6 +10326,50 @@ function AdminPlaylistChrome({
     } finally {
       setArtBusy(false)
       if (artFileRef.current) artFileRef.current.value = ''
+    }
+  }
+
+  const replacePlaylistChoiceArtwork = (file: File, choice: ArtworkChoice) => {
+    const fromArt = collectionIdFromArtwork(choice.src)
+    void uploadPlaylistArtwork(file, fromArt || folderId || `playlist-${playlist.id}`)
+  }
+
+  const removePlaylistChoiceFromPool = (choice: ArtworkChoice) => {
+    suppressMosaicPath(choice.src)
+    removeLiveMosaicCoverBySrc(choice.src)
+  }
+
+  const deletePlaylistChoiceArtwork = async (choice: ArtworkChoice) => {
+    const label = choice.label || 'this cover'
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`Delete artwork file for “${label}”? Folders using this file will clear their cover.`)
+    ) {
+      return
+    }
+    setArtBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/audio/artwork', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src: choice.src }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to delete artwork')
+      suppressMosaicPath(choice.src)
+      removeLiveMosaicCoverBySrc(choice.src)
+      const selectedBase = stripArtworkCacheBust(resolveImageUrl(draft.artwork) || draft.artwork)
+      const deletedBase = stripArtworkCacheBust(resolveImageUrl(choice.src) || choice.src)
+      if (selectedBase && deletedBase && selectedBase === deletedBase) {
+        setDraft((d) => ({ ...d, artwork: '' }))
+      }
+      void hydrateLiveMosaicCovers({ force: true })
+      setNotice('Artwork file deleted')
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete artwork')
+    } finally {
+      setArtBusy(false)
     }
   }
 
@@ -8701,7 +10418,7 @@ function AdminPlaylistChrome({
         ...(saved || playlist),
         name: draft.name.trim(),
         description: draft.description.trim() || undefined,
-        artwork: artworkToSave ? withArtworkCacheBust(artworkToSave) : undefined,
+        artwork: artworkToSave ? forceArtworkCacheBust(artworkToSave) : undefined,
         trackIds: nextIds,
         hidden: draft.hidden,
       }
@@ -9436,9 +11153,12 @@ function AdminPlaylistChrome({
                     busy={artBusy}
                     onSelect={selectArtwork}
                     onUploadFile={(file) => void uploadPlaylistArtwork(file)}
+                    onReplaceFile={replacePlaylistChoiceArtwork}
                     onPreview={(src) => openPlaylistArtViewer(src)}
                     onClear={() => setDraft((d) => ({ ...d, artwork: '' }))}
                     onBrowseUpload={() => artFileRef.current?.click()}
+                    onRemoveFromPool={removePlaylistChoiceFromPool}
+                    onDeleteArtwork={deletePlaylistChoiceArtwork}
                     onUploadError={setError}
                   />
                 )}
@@ -9645,6 +11365,8 @@ function AdminPlaylistChrome({
               }
               alt={`${draft.name || playlist.name} artwork`}
               sizes="448px"
+              quality={COVER_HERO_QUALITY}
+              heroMaster
               iconClassName="h-16 w-16 text-gray-600"
             />
             <button
@@ -9739,6 +11461,7 @@ function AlbumSection({
                     enabled={adminCatalog}
                     hidden={!!album.hidden}
                     tracks={tracksByFolder[album.id] || []}
+                    libraryAlbums={items}
                     onUpdated={onFolderUpdated}
                     onArchived={onFolderArchived}
                     onTracksReordered={onTracksReordered}
@@ -9758,8 +11481,9 @@ function AlbumSection({
                             src={album.artwork || folderArtworkSrc(album, tracksByFolder[album.id] || [])}
                             fallbackSrc={catalogArtworkForRelease(album.name)}
                             alt={album.name}
-                            sizes="200px"
-                            priority={index < 8}
+                            sizes={COVER_THUMB_SIZES}
+                            quality={COVER_THUMB_QUALITY}
+                            priority={index < 3}
                           />
                         )}
                         {album.type === 'ep' && (
@@ -9853,6 +11577,7 @@ function AlbumCatalog({
   onTracksReordered,
   onVisibilityChange,
   onAddedToLibrary,
+  onMusicVideosChange,
 }: {
   items: AlbumTile[]
   tracksByFolder: Record<string, Track[]>
@@ -9874,6 +11599,7 @@ function AlbumCatalog({
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
   onVisibilityChange?: (id: string, hidden: boolean) => void
   onAddedToLibrary?: (tile: AlbumTile) => void
+  onMusicVideosChange?: (folderId: string, videos: FolderMusicVideo[], fallbackName?: string, fallbackType?: string) => void
 }) {
   const tracksWithEpArt = useMemo(
     () => withEpArtworkOnCrateTracks(tracksByFolder, items),
@@ -9893,12 +11619,28 @@ function AlbumCatalog({
             </div>
             {groupItems.map((album) => {
               const group = tracksWithEpArt[album.id] || []
+              const musicVideos = Array.isArray(album.musicVideos) ? album.musicVideos : []
+              const showMusicVideos = adminCatalog || musicVideos.length > 0
+              const musicVideosRow = showMusicVideos ? (
+                <div className="mb-2 sm:mb-3">
+                  <ReleaseMusicVideosRow
+                    folderId={album.id}
+                    folderName={album.name}
+                    videos={musicVideos}
+                    isAdmin={adminCatalog}
+                    onVideosChange={(next) =>
+                      onMusicVideosChange?.(album.id, next, album.name, album.type || 'ep')
+                    }
+                  />
+                </div>
+              ) : null
               const header = (
                 <AdminFolderChrome
                   album={album}
                   enabled={adminCatalog}
                   hidden={!!album.hidden}
                   tracks={group}
+                  libraryAlbums={items}
                   onUpdated={onFolderUpdated}
                   onArchived={onFolderArchived}
                   onTracksReordered={onTracksReordered}
@@ -9921,6 +11663,7 @@ function AlbumCatalog({
                             fallbackSrc={catalogArtworkForRelease(album.name)}
                             alt=""
                             sizes="56px"
+                            quality={COVER_THUMB_QUALITY}
                             iconClassName="h-6 w-6 text-gray-600"
                           />
                         )}
@@ -9956,6 +11699,7 @@ function AlbumCatalog({
                     header={header}
                     variant="banner"
                   >
+                    {musicVideosRow}
                     <SongsTable
                       tracks={group}
                       loading={tracksHydrating && group.length === 0}
@@ -9982,6 +11726,7 @@ function AlbumCatalog({
               return (
                 <section key={album.id} className="space-y-3">
                   {header}
+                  {musicVideosRow}
                   <SongsTable
                     tracks={group}
                     loading={tracksHydrating && group.length === 0}
@@ -10060,7 +11805,9 @@ function EpReleaseStage({
                 src={artworkSrc}
                 fallbackSrc={fallbackSrc}
                 alt=""
-                sizes="100vw"
+                sizes={COVER_HERO_SIZES}
+                quality={COVER_HERO_QUALITY}
+                heroMaster
                 priority
                 objectFit="cover"
               />
@@ -10092,6 +11839,8 @@ function CoverArt({
   fallbackSrc,
   alt = '',
   sizes,
+  quality,
+  heroMaster = false,
   iconClassName = 'w-12 h-12 text-gray-700',
   priority = false,
   objectFit = 'cover',
@@ -10100,6 +11849,10 @@ function CoverArt({
   fallbackSrc?: string | null
   alt?: string
   sizes: string
+  /** next/image quality 1–100. Thumbs ~50; EP hero uses native masters when heroMaster. */
+  quality?: number
+  /** Full-res EP stage / lightbox — no optimizer re-encode. */
+  heroMaster?: boolean
   iconClassName?: string
   priority?: boolean
   objectFit?: 'cover' | 'contain'
@@ -10120,14 +11873,15 @@ function CoverArt({
       const bustMatch = trimmed.match(/[?&]v=([^&]+)/)
       let next = resolveImageUrl(trimmed)
       if (!next) return
-      if (next.startsWith('/images/') || next.startsWith('/audio/')) {
-        const base = next.split('?')[0]
-        // Prefer caller bust (fresh upload) so overwritten files actually refresh
+      const base = next.split('?')[0]
+      const isLocalAsset = base.startsWith('/images/') || base.startsWith('/audio/')
+      // Folder covers (local or Supabase) need a bust — iOS/Safari keep stale bytes at the same URL.
+      if (isLocalAsset || isUploadedFolderArtwork(base)) {
         next = bustMatch
           ? `${base}?v=${bustMatch[1]}`
           : isUploadedFolderArtwork(base)
             ? withArtworkCacheBust(base)
-            : `${base}?v=20260820c`
+            : `${base}?v=20260923hq`
       }
       if (seen.has(next)) return
       seen.add(next)
@@ -10142,10 +11896,12 @@ function CoverArt({
   // fire onError and skip the replacement URL (empty disc icon).
   return (
     <CoverArtFrame
-      key={`${candidates.join('|')}|${objectFit}`}
+      key={`${candidates.join('|')}|${objectFit}|${quality ?? ''}|${sizes}|${heroMaster ? 'hero' : 'std'}`}
       candidates={candidates}
       alt={alt}
       sizes={sizes}
+      quality={quality}
+      heroMaster={heroMaster}
       iconClassName={iconClassName}
       priority={priority}
       objectFit={objectFit}
@@ -10157,6 +11913,8 @@ function CoverArtFrame({
   candidates,
   alt,
   sizes,
+  quality = 75,
+  heroMaster = false,
   iconClassName,
   priority = false,
   objectFit = 'cover',
@@ -10164,6 +11922,8 @@ function CoverArtFrame({
   candidates: string[]
   alt: string
   sizes: string
+  quality?: number
+  heroMaster?: boolean
   iconClassName: string
   priority?: boolean
   objectFit?: 'cover' | 'contain'
@@ -10179,14 +11939,21 @@ function CoverArtFrame({
     )
   }
 
+  const useNextImage =
+    (url.startsWith('/') && !url.startsWith('//')) ||
+    ((url.startsWith('http://') || url.startsWith('https://')) && isSafeNextImageSrc(url))
+  const unoptimized = heroMaster ? shouldUnoptimizeHeroCover(url) : shouldUnoptimizeImage(url)
+
   return (
     <div className="relative h-full w-full">
-      {url.startsWith('/') && !url.startsWith('//') ? (
+      {useNextImage ? (
         <Image
           src={url}
           alt={alt}
           fill
           sizes={sizes}
+          quality={unoptimized ? undefined : quality}
+          unoptimized={unoptimized}
           className={fitClass}
           priority={priority}
           fetchPriority={priority ? 'high' : 'auto'}
@@ -10198,7 +11965,7 @@ function CoverArtFrame({
         <img
           src={url}
           alt={alt}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
           decoding="async"
           className={`absolute inset-0 h-full w-full ${fitClass}`}
           sizes={sizes}
@@ -10223,7 +11990,7 @@ function SidebarArtTile({
       {mosaicCovers?.length ? (
         <CrateCoverMosaic covers={mosaicCovers} />
       ) : (
-        <CoverArt src={src} alt="" sizes="32px" iconClassName="w-3.5 h-3.5 text-gray-600" />
+        <CoverArt src={src} alt="" sizes="32px" quality={COVER_THUMB_QUALITY} iconClassName="w-3.5 h-3.5 text-gray-600" />
       )}
       <span className="sr-only">{alt}</span>
     </span>

@@ -41,6 +41,10 @@ import {
   type WaveformHotCue,
   type WaveformMixOverlay,
 } from '@/lib/audio/waveform-overlays'
+import {
+  clampCanvasDprForDevice,
+  MOBILE_WAVEFORM_PAINT_MIN_MS,
+} from '@/lib/ui/mobile-playback-profile'
 
 /** Stable layout size — avoid getBoundingClientRect jitter flipping canvas buffer size. */
 type StageSize = { width: number; height: number; dpr: number }
@@ -116,6 +120,8 @@ export type WaveformStageProps = {
    * Raise during mix blends (~66 → ~15fps) so MixEngine fade ticks stay on time.
    */
   paintMinMs?: number
+  /** Phone/tablet listening mode — cap DPR, throttle paints, skip heavy overlay canvases. */
+  lowPowerPaint?: boolean
 }
 
 /**
@@ -167,6 +173,7 @@ function WaveformStage({
   onPhaseNudge,
   onPhaseLock,
   paintMinMs = 0,
+  lowPowerPaint = false,
 }: WaveformStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -216,8 +223,13 @@ function WaveformStage({
   readMediaTimeRef.current = readMediaTime
   const seekMediaTimeRef = useRef(seekMediaTime)
   seekMediaTimeRef.current = seekMediaTime
+  const lowPowerPaintRef = useRef(lowPowerPaint)
+  lowPowerPaintRef.current = lowPowerPaint
   const paintMinMsRef = useRef(paintMinMs)
-  paintMinMsRef.current = Math.max(0, paintMinMs)
+  paintMinMsRef.current = Math.max(
+    0,
+    lowPowerPaint ? Math.max(paintMinMs, MOBILE_WAVEFORM_PAINT_MIN_MS) : paintMinMs,
+  )
   const onFollowChangeRef = useRef(onFollowChange)
   onFollowChangeRef.current = onFollowChange
   const onCueSecRef = useRef(onCueSec)
@@ -260,6 +272,8 @@ function WaveformStage({
     hotCues,
     ghostTape,
     deckId,
+    showOverview,
+    showPhaseMeter,
   })
   const barsRef = useRef(visibleBars)
   const offsetRef = useRef(offsetIndex)
@@ -291,6 +305,8 @@ function WaveformStage({
     hotCues,
     ghostTape,
     deckId,
+    showOverview,
+    showPhaseMeter,
   }
 
   // Rebuild tape when samples / mode / DNA / live grid change (not every frame)
@@ -316,10 +332,11 @@ function WaveformStage({
     let { width, height, dpr } = sizeRef.current
     if (width < 2 || height < 2) {
       const rect = viewport.getBoundingClientRect()
-      dpr =
+      const rawDpr =
         typeof globalThis !== 'undefined' && 'devicePixelRatio' in globalThis
-          ? Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1)
+          ? (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1
           : 1
+      dpr = clampCanvasDprForDevice(rawDpr, lowPowerPaintRef.current)
       width = Math.max(1, Math.round(rect.width))
       height = Math.max(1, Math.round(rect.height))
       sizeRef.current = { width, height, dpr }
@@ -360,7 +377,12 @@ function WaveformStage({
     const span = Math.max(1e-6, timeWindow.endSec - timeWindow.startSec)
     const secPerPx = span / width
     // Wide cushion so most frames are pure GPU translate (no canvas redraw)
-    const overscanPx = following ? Math.max(96, Math.round(width * 0.15)) : 0
+    const overscanPx = following
+      ? Math.max(
+          lowPowerPaintRef.current ? 48 : 96,
+          Math.round(width * (lowPowerPaintRef.current ? 0.08 : 0.15)),
+        )
+      : 0
     const paintWidth = width + overscanPx * 2
 
     let paintStart = timeWindow.startSec
@@ -541,7 +563,13 @@ function WaveformStage({
     // CDJ overview strip
     const overview = overviewCanvasRef.current
     const overviewWrap = overviewWrapRef.current
-    if (overview && overviewWrap && tapeCacheRef.current) {
+    if (
+      !lowPowerPaintRef.current &&
+      view.showOverview &&
+      overview &&
+      overviewWrap &&
+      tapeCacheRef.current
+    ) {
       const oRect = overviewWrap.getBoundingClientRect()
       const ow = Math.max(1, Math.round(oRect.width))
       const oh = Math.max(1, Math.round(oRect.height))
@@ -562,7 +590,14 @@ function WaveformStage({
     const phase = phaseCanvasRef.current
     const phaseWrap = phaseWrapRef.current
     const stageBpm = view.bpm
-    if (phase && phaseWrap && stageBpm && stageBpm > 0) {
+    if (
+      !lowPowerPaintRef.current &&
+      view.showPhaseMeter &&
+      phase &&
+      phaseWrap &&
+      stageBpm &&
+      stageBpm > 0
+    ) {
       const pRect = phaseWrap.getBoundingClientRect()
       const pw = Math.max(1, Math.round(pRect.width))
       const ph = Math.max(1, Math.round(pRect.height))
@@ -602,10 +637,11 @@ function WaveformStage({
     if (!el) return
     const measure = () => {
       const rect = el.getBoundingClientRect()
-      const dpr =
+      const rawDpr =
         typeof globalThis !== 'undefined' && 'devicePixelRatio' in globalThis
-          ? Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1)
+          ? (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1
           : 1
+      const dpr = clampCanvasDprForDevice(rawDpr, lowPowerPaintRef.current)
       const next: StageSize = {
         width: Math.max(1, Math.round(rect.width)),
         height: Math.max(1, Math.round(rect.height)),

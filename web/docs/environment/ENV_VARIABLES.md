@@ -50,7 +50,8 @@ SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 # REVELATOR AGGREGATOR (Optional - DSP delivery)
 # ============================================
 # Release Studio Delivery → Distribute to stores.
-# Without keys, aggregator mode dry-runs (validates payload, queues curated store IDs locally).
+# Without live keys, Release Studio sends scheduled releases through DistroKid (no API — upload packet + status).
+# Aggregator mode dry-runs until REVELATOR_DRY_RUN=0 and both keys are set.
 # Request partner/sandbox: support@revelator.com — then set keys and REVELATOR_DRY_RUN=0.
 # Docs: https://api-docs.revelator.com/v2/en/getting-started/
 # REVELATOR_API_KEY=
@@ -68,6 +69,13 @@ SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 # Get these from: https://console.cloud.google.com
 YOUTUBE_API_KEY=your_youtube_api_key
 YOUTUBE_CHANNEL_ID=@sergikdropz
+# Subscribe gate on public release videos. OAuth client (Web) with redirect
+# {origin}/api/youtube/subscribe-gate/callback and the YouTube Data API enabled.
+# Scope requested at sign-in: https://www.googleapis.com/auth/youtube.force-ssl
+YOUTUBE_OAUTH_CLIENT_ID=
+YOUTUBE_OAUTH_CLIENT_SECRET=
+# Optional. Falls back to FAN_VAULT_UNLOCK_SECRET, then a dev-only value.
+YT_SUB_GATE_SECRET=
 
 # ============================================
 # INSTAGRAM API (Optional - for auto-fetching posts)
@@ -161,6 +169,8 @@ ADMIN_AI_CHAT_PROVIDER=anthropic
 
 **Optional:**
 
+- `NEXT_PUBLIC_PLAYBACK_TIMING=1` — dev-only console marks (`loadstart` → `canplay` → `playing`) for latency tuning
+- `NEXT_PUBLIC_R2_BROWSER_PLAY=1` — **staging only**: allow presigned/CDN URLs in `<audio>` (default off; production stays on `/api/audio/media/`)
 - Spotify API (only if using Spotify integration)
 - YouTube API (only if using YouTube integration)
 - Instagram API (only if auto-fetching Instagram posts - otherwise use manual post URLs)

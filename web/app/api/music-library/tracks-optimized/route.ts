@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
+import { buildTrackLibrarySearchOrFilter } from '@/lib/music-library/track-search'
+import { applyStableTrackPaginationOrder } from '@/lib/music-library/stable-track-pagination'
 
 // Cookie + vault gating: incompatible with static/ISR. HTTP caching via headers only if needed.
 export const dynamic = 'force-dynamic'
@@ -106,8 +108,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      // Search in title and artist
-      query = query.or(`title.ilike.%${search}%,artist.ilike.%${search}%`)
+      const searchOr = buildTrackLibrarySearchOrFilter(search)
+      if (searchOr) query = query.or(searchOr)
     }
 
     // Apply sorting
@@ -115,10 +117,15 @@ export async function GET(request: NextRequest) {
     const validSortOrders = ['asc', 'desc']
 
     if (validSortFields.includes(sortBy) && validSortOrders.includes(sortOrder)) {
-      query = query.order(sortBy, { ascending: sortOrder === 'asc' })
+      query = applyStableTrackPaginationOrder(query, {
+        column: sortBy,
+        ascending: sortOrder === 'asc',
+      })
     } else {
-      // Default sorting
-      query = query.order('display_order', { ascending: true }).order('title', { ascending: true })
+      query = applyStableTrackPaginationOrder(query, {
+        column: 'display_order',
+        ascending: true,
+      })
     }
 
     // Apply pagination
@@ -137,7 +144,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      countQuery.or(`title.ilike.%${search}%,artist.ilike.%${search}%`)
+      const searchOr = buildTrackLibrarySearchOrFilter(search)
+      if (searchOr) countQuery.or(searchOr)
     }
 
     const [dataResult, countResult] = await Promise.all([
@@ -152,8 +160,18 @@ export async function GET(request: NextRequest) {
     if (error || (error && isHtml((error as any)?.message)) || isHtml(data)) {
       console.error('Error fetching tracks:', error)
       return NextResponse.json(
-        { tracks: [], total: 0, hasMore: false },
-        { headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'application/json' } },
+        {
+          error: 'Music library tracks unavailable',
+          code: 'TRACKS_UNAVAILABLE',
+          details: { message: error?.message?.substring?.(0, 200) || null },
+          tracks: [],
+          total: 0,
+          hasMore: false,
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'private, no-store', 'Content-Type': 'application/json' },
+        },
       )
     }
 
@@ -163,7 +181,10 @@ export async function GET(request: NextRequest) {
     // Many vault rows keep length on audio_files.duration_seconds while
     // music_library_tracks.duration is null — fill only those gaps (lean select).
     const rows = data || []
-    const audioMap = new Map<string, { id: string; duration_seconds?: number | null }>()
+    const audioMap = new Map<
+      string,
+      { id: string; duration_seconds?: number | null; artwork_url?: string | null }
+    >()
     const needsAudioDuration = rows.filter((track: any) => {
       const d = Number(track.duration)
       return !(Number.isFinite(d) && d > 0) && track.audio_file_id
@@ -174,7 +195,7 @@ export async function GET(request: NextRequest) {
     if (audioFileIds.length > 0) {
       const { data: audioMeta } = await supabase
         .from('audio_files')
-        .select('id, duration_seconds')
+        .select('id, duration_seconds, artwork_url')
         .in('id', audioFileIds)
       audioMeta?.forEach((file: any) => audioMap.set(file.id, file))
     }

@@ -4,6 +4,8 @@ import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
 import { backfillFolderArtworkFromTracks } from '@/lib/catalog-sync/backfill-folder-artwork-from-tracks'
+import { buildTrackLibrarySearchOrFilter } from '@/lib/music-library/track-search'
+import { applyStableTrackPaginationOrder } from '@/lib/music-library/stable-track-pagination'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,7 +82,10 @@ async function browseSongs(supabase: any, opts: BrowseOpts) {
 
   if (opts.genre) query = query.eq('genre', opts.genre)
   if (opts.artist) query = query.ilike('artist', `%${opts.artist}%`)
-  if (opts.search) query = query.or(`title.ilike.%${opts.search}%,artist.ilike.%${opts.search}%`)
+  if (opts.search) {
+    const searchOr = buildTrackLibrarySearchOrFilter(opts.search)
+    if (searchOr) query = query.or(searchOr)
+  }
 
   const sortMap: Record<string, string> = {
     title: 'title',
@@ -104,11 +109,11 @@ async function browseSongs(supabase: any, opts: BrowseOpts) {
   }
 
   const sortField = sortMap[opts.sort] || 'title'
-  query = query.order(sortField, { ascending: opts.dir === 'asc', nullsFirst: false })
-
-  if (opts.sort !== 'title') {
-    query = query.order('title', { ascending: true })
-  }
+  query = applyStableTrackPaginationOrder(query, {
+    column: sortField,
+    ascending: opts.dir === 'asc',
+    nullsFirst: false,
+  })
 
   query = query.range(opts.offset, opts.offset + opts.limit - 1)
 
@@ -142,17 +147,21 @@ async function browseSongs(supabase: any, opts: BrowseOpts) {
 }
 
 function mapAlbumRows(data: any[]) {
-  return (data || []).map((a: any) => ({
-    id: a.id,
-    name: a.name,
-    type: a.type,
-    // Only real DB covers here — catalog/track fallbacks are resolved client-side.
-    artwork: a.artwork_url ? resolveImageUrl(a.artwork_url) : undefined,
-    year: a.year,
-    albumArtist: a.album_artist || a.metadata?.album_artist || a.metadata?.albumArtist || 'SERGIK',
-    genre: a.genre,
-    isCompilation: a.is_compilation,
-  }))
+  return (data || []).map((a: any) => {
+    const musicVideosRaw = a.metadata?.music_videos
+    return {
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      // Only real DB covers here — catalog/track fallbacks are resolved client-side.
+      artwork: a.artwork_url ? resolveImageUrl(a.artwork_url) : undefined,
+      year: a.year,
+      albumArtist: a.album_artist || a.metadata?.album_artist || a.metadata?.albumArtist || 'SERGIK',
+      genre: a.genre,
+      isCompilation: a.is_compilation,
+      metadata: Array.isArray(musicVideosRaw) ? { music_videos: musicVideosRaw } : undefined,
+    }
+  })
 }
 
 async function browseAlbums(supabase: any, opts: BrowseOpts) {

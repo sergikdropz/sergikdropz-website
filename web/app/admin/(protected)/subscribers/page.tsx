@@ -146,7 +146,7 @@ useEffect(() => {
         <div>
           <h1 className="text-2xl font-bold text-white">Email Subscribers</h1>
           <p className="text-gray-400 text-sm mt-1">
-            {activeCount} active / {subscribers.length} total
+            {activeCount} active / {subscribers.length} total. Video unlocks, vault unlocks, shop, and site signups.
           </p>
         </div>
         <div className="flex gap-2">

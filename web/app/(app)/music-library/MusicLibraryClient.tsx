@@ -17,7 +17,11 @@ import {
 import Image from 'next/image'
 import { FaSearch, FaTimes, FaTrash, FaPlus, FaMusic, FaExpand, FaCompress, FaChevronDown, FaChevronUp, FaArrowLeft, FaPlay, FaSort, FaSortAlphaDown, FaSortAlphaUp, FaSortNumericDown, FaSortNumericUp, FaClock, FaColumns, FaCheckSquare, FaSquare, FaCalendar, FaFolder, FaChevronRight, FaEdit } from 'react-icons/fa'
 import { useMusicPlayer, isPlayerFullyExpanded } from '@/contexts/MusicPlayerContext'
+import { useMobileKeyboardInset } from '@/hooks/useMobileKeyboardInset'
+import { importWithChunkRetry } from '@/lib/chunk-import-retry'
+import { prefersCoarseMobilePlayback } from '@/lib/ui/mobile-playback-profile'
 import { readCatalogRandomSetting } from '@/lib/audio/catalog-random'
+import { warmUpcomingQueuePlayback } from '@/lib/media/warm-playback-urls'
 import FolderTree from '@/components/FolderTree'
 import { 
   BpmBadge, 
@@ -43,6 +47,10 @@ import {
   recordTrackPlay,
   type MusicLibraryData,
 } from '@/utils/musicLibraryApi'
+import { seedMusicPlaylistsQuery } from '@/lib/api/music-library-hooks'
+import { fetchBrowserAuthSession } from '@/lib/auth/browser-session'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCatalogSync } from '@/contexts/CatalogSyncContext'
 import { deriveMixingRecommendations } from '@/lib/audio/sonic-dna-mix'
 import { MUSIC_LIBRARY_OVERLAY_HOST_ID } from '@/lib/content-overlay'
 import {
@@ -57,19 +65,13 @@ import {
   catalogTrackPatchHasFields,
 } from '@/lib/catalog-sync'
 
-function importWithChunkRetry<T>(importer: () => Promise<{ default: T }>) {
-  return importer().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error)
-    const isChunkLoadError =
-      (error instanceof Error && error.name === 'ChunkLoadError') ||
-      /Loading chunk .+ failed/i.test(message)
-    if (!isChunkLoadError) throw error
-    return new Promise<{ default: T }>((resolve, reject) => {
-      window.setTimeout(() => {
-        importer().then(resolve).catch(reject)
-      }, 800)
-    })
-  })
+/** Shared promise so bootstrap can preload while the spinner/shell paints. */
+let sergBrowserModulePromise: Promise<{ default: React.ComponentType<any> }> | null = null
+function loadSergBrowserModule() {
+  if (!sergBrowserModulePromise) {
+    sergBrowserModulePromise = importWithChunkRetry(() => import('@/components/music/SergBrowser'))
+  }
+  return sergBrowserModulePromise
 }
 
 const PlaylistManager = dynamic(() => import('@/components/PlaylistManager'), { ssr: false })
@@ -82,7 +84,21 @@ const SonicDNA = dynamic(
     ),
   }
 )
-const SergBrowser = dynamic(() => import('@/components/music/SergBrowser'), { ssr: false })
+const SergBrowser = dynamic(() => loadSergBrowserModule(), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-[240px] sm:min-h-[320px] items-center justify-center px-4 py-10">
+      <div className="w-full max-w-3xl space-y-3" aria-busy="true" aria-label="Loading browse">
+        <div className="h-8 w-1/3 rounded bg-gray-800/80 animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="aspect-square rounded-lg bg-gray-800/70 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </div>
+  ),
+})
 const SmartPlaylistBuilder = dynamic(
   () => import('@/components/music/SmartPlaylistBuilder'),
   { ssr: false }
@@ -90,6 +106,7 @@ const SmartPlaylistBuilder = dynamic(
 import MusicLibraryVirtualTrackScroller from '@/components/music/MusicLibraryVirtualTrackScroller'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { nextImageCoverUrl, ensureBustedCoverUrl } from '@/lib/media/cover-cache'
 import { areKeysCompatible } from '@/types/sergik-data'
 import {
   displayTrackBpm,
@@ -339,6 +356,8 @@ function MusicLibraryMain({
   playlists,
   setPlaylists,
 }: MusicLibraryMainProps) {
+  const queryClient = useQueryClient()
+  const { publishVersion } = useCatalogSync()
   const {
     currentTrack,
     isPlaying,
@@ -390,6 +409,27 @@ function MusicLibraryMain({
     }
   }, [isPlaying, currentTrack])
 
+  useEffect(() => {
+    if (!prefersCoarseMobilePlayback()) return
+    let cancelled = false
+    const warmPlayer = () => {
+      if (cancelled) return
+      void importWithChunkRetry(() => import('@/components/GlobalMusicPlayer')).catch(() => {})
+    }
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warmPlayer, { timeout: 4000 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback(id)
+      }
+    }
+    const timer = window.setTimeout(warmPlayer, 2000)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [])
+
   useLayoutEffect(() => {
     const el = nowPlayingWaveformRef.current
     if (!el || !showLibraryNowPlaying) {
@@ -412,6 +452,8 @@ function MusicLibraryMain({
   const [fanPlaylists, setFanPlaylists] = useState<Playlist[]>([])
   const [playlistsNeedMembership, setPlaylistsNeedMembership] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const librarySearchRef = useRef<HTMLInputElement>(null)
+  const mobileKeyboardInset = useMobileKeyboardInset()
   const [genreFilter, setGenreFilter] = useState<string>('all')
   const [showSmartFiltersPanel, setShowSmartFiltersPanel] = useState(false)
   const [selectedGenreFusions, setSelectedGenreFusions] = useState<string[]>([])
@@ -640,13 +682,20 @@ function MusicLibraryMain({
   }
 
   useEffect(() => {
+    if (!playlists?.length) return
+    seedMusicPlaylistsQuery(queryClient, playlists, publishVersion, {
+      includeHidden: false,
+      includeArchived: false,
+    })
+  }, [playlists, publishVersion, queryClient])
+
+  useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const r = await fetch('/api/auth/session', { credentials: 'include' })
-        const d = await r.json()
+        const d = await fetchBrowserAuthSession()
         if (cancelled) return
-        if (d.authenticated && d.user && !d.isAdmin) {
+        if (d?.authenticated && d.user && !d.isAdmin) {
           setFanUser(d.user)
           const pr = await fetch('/api/fan/playlists', { credentials: 'include' })
           const pj = await pr.json().catch(() => ({}))
@@ -1709,11 +1758,15 @@ function MusicLibraryMain({
     return picked.length > 0 ? picked : displayFolders
   }, [displayFolders, selectedFolder?.id])
 
-  /** Folder-grid + track-list artwork for `<link rel=preload>` (runs even when default view is folders-only). */
+  /** First-screen folder + track thumbs only — full-master preloads stall the vault. */
   const artworkPreloadUrls = useMemo(() => {
     const out: string[] = []
-    const add = (url: string) => {
-      if (url && !out.includes(url)) out.push(url)
+    const add = (raw: string) => {
+      if (!raw) return
+      const busted = ensureBustedCoverUrl(raw) || resolveImageUrl(raw)
+      if (!busted) return
+      const thumb = nextImageCoverUrl(busted, 256) || busted
+      if (thumb && !out.includes(thumb)) out.push(thumb)
     }
 
     let foldersToPreload = displayFoldersForGrid
@@ -1727,17 +1780,18 @@ function MusicLibraryMain({
       }
     }
 
-    for (const folder of foldersToPreload) {
-      getFolderCoverArtworkUrls(folder).forEach(add)
+    for (const folder of foldersToPreload.slice(0, 8)) {
+      const urls = getFolderCoverArtworkUrls(folder)
+      if (urls[0]) add(urls[0])
     }
     displayTracks
       .filter((t) => t.artwork)
-      .slice(0, 30)
+      .slice(0, 6)
       .forEach((t) => add(resolveImageUrl(t.artwork!)))
-    return out.slice(0, 48)
+    return out.slice(0, 8)
   }, [displayFoldersForGrid, displayTracks, libraryData, libraryWithPlaylists])
 
-  // Preload folder covers + track artwork (runs for folder-only default view, not only track lists)
+  // Preload a small set of optimized thumbs (not full masters).
   useEffect(() => {
     if (!libraryData || artworkPreloadUrls.length === 0) return
 
@@ -1746,7 +1800,7 @@ function MusicLibraryMain({
       link.rel = 'preload'
       link.as = 'image'
       link.href = artworkUrl
-      link.setAttribute('fetchpriority', index < 14 ? 'high' : 'auto')
+      link.setAttribute('fetchpriority', index < 2 ? 'high' : 'auto')
 
       if (!document.querySelector(`link[href="${artworkUrl}"]`)) {
         document.head.appendChild(link)
@@ -1903,7 +1957,10 @@ function MusicLibraryMain({
         : undefined
     
     playTrack(track, queue, source)
-    
+    if (!readCatalogRandomSetting() && queue.length > 1) {
+      warmUpcomingQueuePlayback(queue, 0, 2)
+    }
+
     // If track is in displayTracks, keep showing them, otherwise show just this track
     if (!displayTracks.find(t => t.id === track.id)) {
       setDisplayTracks([track])
@@ -2381,7 +2438,7 @@ function MusicLibraryMain({
 
   return (
     <div
-      className="pt-16 sm:pt-20 min-h-screen pb-[calc(var(--global-music-player-height,7rem)+1rem+env(safe-area-inset-bottom,0px))] relative z-10 [--music-lib-chrome-top:4rem] sm:[--music-lib-chrome-top:5rem]"
+      className="pt-16 sm:pt-20 min-h-screen pb-[calc(var(--global-music-player-height,7rem)+1rem+env(safe-area-inset-bottom,0px))] relative z-10 [--music-lib-chrome-top:var(--site-header-offset,5rem)]"
       data-music-library-main
     >
       <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-6 md:py-8 max-w-7xl relative z-10 min-w-0">
@@ -2405,7 +2462,14 @@ function MusicLibraryMain({
             </div>
           )}
           <div className="flex flex-col items-center justify-center mb-3 sm:mb-6 w-full px-1">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold mb-1 font-six-caps text-center border border-yellow-400 text-yellow-400 px-2.5 sm:px-4 py-1 sm:py-2 rounded text-wrap leading-tight max-w-full">
+            <h1
+              data-label="SERGIK Music Vault"
+              className="exclusive-musicbank-glow text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold mb-1 font-six-caps text-center border border-yellow-400 px-2.5 sm:px-4 py-1 sm:py-2 rounded text-wrap leading-tight max-w-full"
+              style={{
+                letterSpacing: '0.22em',
+                transform: 'scaleX(1.12)',
+              }}
+            >
               SERGIK Music Vault
             </h1>
           </div>
@@ -3298,16 +3362,34 @@ function MusicLibraryMain({
         </div>
 
         {/* Search — scrolls with page; Crates header sticks under nav */}
-        <div className="relative mt-2 sm:mt-8 mb-2 sm:mb-4">
+        <div
+          className="relative mt-2 sm:mt-8 mb-2 sm:mb-4"
+          style={
+            mobileKeyboardInset > 0
+              ? { marginBottom: `${mobileKeyboardInset + 8}px` }
+              : undefined
+          }
+        >
           <FaSearch
             className="pointer-events-none absolute left-3 sm:left-4 top-1/2 z-[1] -translate-y-1/2 text-gray-400 text-sm sm:text-base"
             aria-hidden
           />
           <input
-            type="text"
+            ref={librarySearchRef}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
             placeholder="Search library"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => {
+              requestAnimationFrame(() => {
+                librarySearchRef.current?.scrollIntoView({
+                  block: 'center',
+                  behavior: 'smooth',
+                })
+              })
+            }}
             className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-2.5 sm:py-3 text-sm sm:text-base text-center bg-gray-800/40 border border-gray-700 rounded-lg text-white placeholder:text-center placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all touch-manipulation"
             aria-label="Search library"
           />
@@ -3405,6 +3487,7 @@ function MusicLibraryMain({
           <SergBrowser
             searchQuery={searchQuery}
             onSearchQueryChange={setSearchQuery}
+            initialPlaylists={playlists}
           />
         </div>
 
@@ -3545,6 +3628,7 @@ export default function MusicLibrary() {
   const [libraryData, setLibraryData] = useState<MusicLibraryData | null>(null)
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [loadingLibrary, setLoadingLibrary] = useState(true)
+  const queryClient = useQueryClient()
 
   useLayoutEffect(() => {
     const cached = peekCachedMusicLibrary()
@@ -3552,6 +3636,8 @@ export default function MusicLibrary() {
       setLibraryData(cached)
       setLoadingLibrary(false)
     }
+    // Overlap SergBrowser chunk download with bootstrap APIs.
+    void loadSergBrowserModule()
   }, [])
 
   useEffect(() => {
@@ -3562,6 +3648,7 @@ export default function MusicLibrary() {
     let idleHydrationTimeout: ReturnType<typeof setTimeout> | undefined
     const loadLibraryData = async (skipCache = false) => {
       try {
+        void loadSergBrowserModule()
         // Paint from cache immediately when available; only show full-page spinner on cold start
         if (!skipCache) {
           const cached = peekCachedMusicLibrary()
@@ -3573,16 +3660,22 @@ export default function MusicLibrary() {
           }
         }
         if (skipCache) invalidateMusicLibraryCache()
-        // Sync already returns folders with light track rows — show UI as soon as it returns.
-        // Do not block on paginated tracks-optimized hydration.
-        const [libraryDataResult, playlistsResult] = await Promise.all([
-          fetchMusicLibrary({ skipCache }),
-          fetchPlaylists(),
-        ])
+        // Unblock UI as soon as bootstrap returns — playlists arrive in parallel.
+        const libraryPromise = fetchMusicLibrary({ skipCache })
+        const playlistsPromise = fetchPlaylists()
+        const libraryDataResult = await libraryPromise
         if (cancelled) return
         setLibraryData(libraryDataResult)
-        setPlaylists(playlistsResult)
         setLoadingLibrary(false)
+
+        void playlistsPromise.then((playlistsResult) => {
+          if (cancelled) return
+          setPlaylists(playlistsResult)
+          seedMusicPlaylistsQuery(queryClient, playlistsResult, 0, {
+            includeHidden: false,
+            includeArchived: false,
+          })
+        })
 
         // Bootstrap has empty tracks — defer full summary hydration until idle, and
         // pause while the user is actively playing so DB pages don't fight audio.
@@ -3667,36 +3760,43 @@ export default function MusicLibrary() {
       window.removeEventListener('focus', onVisible)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [])
+  }, [queryClient])
 
-  if (loadingLibrary) {
+  if (libraryData) {
     return (
-      <div className="pt-20 min-h-screen pb-40 relative z-10 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white text-xl mb-2">Loading music library...</div>
-          <div className="text-gray-400 text-sm">Fetching playlists and tracks</div>
-        </div>
-      </div>
+      <MusicLibraryMain
+        libraryData={libraryData}
+        setLibraryData={setLibraryData}
+        playlists={playlists}
+        setPlaylists={setPlaylists}
+      />
     )
   }
 
-  if (!libraryData) {
+  if (loadingLibrary) {
     return (
-      <div className="pt-20 min-h-screen pb-40 relative z-10 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-400 text-xl mb-2">Failed to load music library</div>
-          <div className="text-gray-400 text-sm">Please refresh the page</div>
+      <div className="pt-20 min-h-screen pb-40 relative z-10 px-4 sm:px-6">
+        <div className="mx-auto max-w-6xl space-y-6" aria-busy="true" aria-label="Loading music library">
+          <div className="h-10 w-48 rounded bg-gray-800/80 animate-pulse" />
+          <div className="h-4 w-72 max-w-full rounded bg-gray-800/60 animate-pulse" />
+          <div className="w-full min-h-[240px] sm:min-h-[320px] rounded-xl border border-gray-800 bg-gray-900/30 p-4 sm:p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="aspect-square rounded-lg bg-gray-800/70 animate-pulse" />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <MusicLibraryMain
-      libraryData={libraryData}
-      setLibraryData={setLibraryData}
-      playlists={playlists}
-      setPlaylists={setPlaylists}
-    />
+    <div className="pt-20 min-h-screen pb-40 relative z-10 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-red-400 text-xl mb-2">Failed to load music library</div>
+        <div className="text-gray-400 text-sm">Please refresh the page</div>
+      </div>
+    </div>
   )
 }

@@ -12,6 +12,7 @@ import {
 } from '@/lib/audio/waveform-playback-alignment'
 import {
   getPlaybackWaveformCache,
+  loadPlaybackWaveformCache,
   setPlaybackWaveformCache,
 } from '@/lib/audio/waveform-playback-cache'
 import type { WaveformSample } from '@/lib/audio/waveform-view'
@@ -106,7 +107,7 @@ export async function loadWaveformSamplesForTrack(
 
   const candidates = waveformAnalysisUrls(url, track.file)
   for (const u of candidates) {
-    const cached = getPlaybackWaveformCache(u)
+    const cached = (await loadPlaybackWaveformCache(u)) || getPlaybackWaveformCache(u)
     if (cached?.data?.length) {
       const packed = tryPeaks(cached.data, cached.envelopes)
       if (packed) return packed

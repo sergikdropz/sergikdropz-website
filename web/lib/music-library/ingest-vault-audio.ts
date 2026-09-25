@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
-import { createSupabaseServerClient, isLocalHomeSupabase } from '@/lib/supabase'
+import { planImportedAudio, transcodeAudioToMp3 } from '@/lib/audio/stream-master'
+import { getR2MediaConfig, putR2Object, vaultMediaProxyUrl } from '@/lib/audio/r2Media'
+import { createSupabaseServerClient } from '@/lib/supabase'
 
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|flac|ogg|oga|opus|aiff?|webm)$/i
 
@@ -66,6 +68,27 @@ export async function saveLocalVaultAudioFile(
   return { relativePath: clean, publicUrl: `/audio/${encoded}` }
 }
 
+/** Local disk for the dev proxy, plus R2 when the vault bucket is configured. */
+async function storeVaultObject(
+  relativePath: string,
+  buffer: Buffer,
+  contentType: string,
+): Promise<{ relativePath: string; fileUrl: string }> {
+  const saved = await saveLocalVaultAudioFile(relativePath, buffer)
+  if (getR2MediaConfig()) {
+    // R2 is the only copy production can serve (public/audio is gitignored), so a
+    // failed upload must fail the ingest — a swallowed error writes DB rows whose
+    // file_url 404s on sergikdropz.com while looking fine locally.
+    try {
+      await putR2Object(saved.relativePath, buffer, { contentType })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err || 'R2 upload failed')
+      throw new Error(`Vault upload failed for ${saved.relativePath}: ${message}`)
+    }
+  }
+  return { relativePath: saved.relativePath, fileUrl: vaultMediaProxyUrl(saved.relativePath) }
+}
+
 export type IngestedVaultTrack = {
   trackId: string
   audioFileId: string | null
@@ -85,7 +108,8 @@ export async function ingestAudioIntoVault(opts: {
   buffer: Buffer
   mimeType?: string
   playlistName: string
-  folderId: string
+  /** When omitted, track is ingested into the library inbox (unassigned to EP/crate). */
+  folderId?: string | null
   relativeHint?: string | null
   /** Browser File.lastModified — used as original export/creation date when tags lack a date. */
   lastModifiedMs?: number | null
@@ -102,51 +126,32 @@ export async function ingestAudioIntoVault(opts: {
   })
   const playlistSeg = safeSegment(opts.playlistName)
   const baseName = safeSegment(opts.fileName)
+  const libraryInbox = !opts.folderId
   const relativePath =
     opts.relativeHint &&
     !opts.relativeHint.includes('..') &&
     AUDIO_EXT.test(opts.relativeHint)
       ? opts.relativeHint.replace(/^\/+/, '').replace(/^audio\//i, '')
-      : `unreleased/Playlists/${playlistSeg}/${baseName}`
+      : libraryInbox
+        ? `unreleased/Library/${baseName}`
+        : `unreleased/Playlists/${playlistSeg}/${baseName}`
 
-  const useLocal =
-    isLocalHomeSupabase() ||
-    process.env.NEXT_PUBLIC_LOCAL_AUDIO === '1' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('supabase.co')
+  const planned = planImportedAudio({ fileName: baseName, vaultRelativePath: relativePath })
+  let streamBuffer = opts.buffer
+  let streamType = opts.mimeType || 'audio/mpeg'
+  let dspWavPath: string | null = null
 
-  let fileUrl: string
-  let filePath = relativePath
-
-  if (useLocal) {
-    const saved = await saveLocalVaultAudioFile(relativePath, opts.buffer)
-    filePath = saved.relativePath
-    fileUrl = saved.publicUrl
-  } else {
-    try {
-      const { error: uploadError } = await supabase.storage
-        .from('audio-files')
-        .upload(relativePath, opts.buffer, {
-          contentType: opts.mimeType || 'audio/mpeg',
-          upsert: true,
-        })
-      if (uploadError) {
-        console.warn('[ingest-vault] Storage upload failed, saving locally:', uploadError.message)
-        const saved = await saveLocalVaultAudioFile(relativePath, opts.buffer)
-        filePath = saved.relativePath
-        fileUrl = saved.publicUrl
-      } else {
-        const { data: urlData } = supabase.storage.from('audio-files').getPublicUrl(relativePath)
-        fileUrl = urlData.publicUrl
-        filePath = relativePath
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err || 'upload failed')
-      console.warn('[ingest-vault] Storage upload threw, saving locally:', message)
-      const saved = await saveLocalVaultAudioFile(relativePath, opts.buffer)
-      filePath = saved.relativePath
-      fileUrl = saved.publicUrl
-    }
+  if (planned.isWav && planned.dspWavRelativePath) {
+    const wavStored = await storeVaultObject(planned.dspWavRelativePath, opts.buffer, 'audio/wav')
+    dspWavPath = wavStored.relativePath
+    streamBuffer = await transcodeAudioToMp3(opts.buffer)
+    streamType = 'audio/mpeg'
   }
+
+  const stored = await storeVaultObject(planned.streamRelativePath, streamBuffer, streamType)
+  const fileUrl = stored.fileUrl
+  const filePath = stored.relativePath
+  const format = (filePath.split('.').pop() || 'mp3').toUpperCase()
 
   let audioFileId: string | null = null
   {
@@ -169,10 +174,16 @@ export async function ingestAudioIntoVault(opts: {
 
     if (existing?.id) {
       audioFileId = existing.id
-      if (existing.file_url) fileUrl = existing.file_url
       await supabase
         .from('audio_files')
-        .update({ file_url: fileUrl, file_path: filePath })
+        .update({
+          file_url: fileUrl,
+          file_path: filePath,
+          file_name: filePath.split('/').pop(),
+          format,
+          size_bytes: streamBuffer.length,
+          size_mb: parseFloat((streamBuffer.length / (1024 * 1024)).toFixed(2)),
+        })
         .eq('id', existing.id)
     } else {
       const { data: inserted, error } = await supabase
@@ -183,9 +194,9 @@ export async function ingestAudioIntoVault(opts: {
           file_name: baseName,
           file_path: filePath,
           file_url: fileUrl,
-          format: (baseName.split('.').pop() || 'mp3').toUpperCase(),
-          size_bytes: opts.buffer.length,
-          size_mb: parseFloat((opts.buffer.length / (1024 * 1024)).toFixed(2)),
+          format,
+          size_bytes: streamBuffer.length,
+          size_mb: parseFloat((streamBuffer.length / (1024 * 1024)).toFixed(2)),
           folder_path: filePath.includes('/')
             ? filePath.slice(0, filePath.lastIndexOf('/'))
             : '',
@@ -220,10 +231,41 @@ export async function ingestAudioIntoVault(opts: {
     }
 
     if (existingTrack?.id) {
+      const prevMeta = await supabase
+        .from('music_library_tracks')
+        .select('metadata')
+        .eq('id', existingTrack.id)
+        .maybeSingle()
+      const meta =
+        prevMeta.data?.metadata &&
+        typeof prevMeta.data.metadata === 'object' &&
+        !Array.isArray(prevMeta.data.metadata)
+          ? (prevMeta.data.metadata as Record<string, unknown>)
+          : {}
+      await supabase
+        .from('music_library_tracks')
+        .update({
+          file_url: fileUrl,
+          metadata: {
+            ...meta,
+            file_path: filePath,
+            stream_format: 'mp3',
+            ...(dspWavPath
+              ? {
+                  dspMastersPath: dspWavPath,
+                  distribution_wav_url: `/api/audio/media/${dspWavPath
+                    .split('/')
+                    .map((segment) => encodeURIComponent(segment))
+                    .join('/')}`,
+                }
+              : {}),
+          },
+        })
+        .eq('id', existingTrack.id)
       return {
         trackId: existingTrack.id,
         audioFileId,
-        fileUrl: existingTrack.file_url || fileUrl,
+        fileUrl,
         filePath,
         title,
         artist,
@@ -232,10 +274,11 @@ export async function ingestAudioIntoVault(opts: {
     }
   }
 
-  const trackId = `track-${slugify(opts.folderId)}-${slugify(title)}-${Date.now()}`
+  const folderSlug = opts.folderId ? slugify(opts.folderId) : 'library'
+  const trackId = `track-${folderSlug}-${slugify(title)}-${Date.now()}`
   const { error: trackErr } = await supabase.from('music_library_tracks').insert({
     id: trackId,
-    folder_id: opts.folderId,
+    folder_id: opts.folderId || null,
     audio_file_id: audioFileId,
     title,
     artist,
@@ -244,8 +287,19 @@ export async function ingestAudioIntoVault(opts: {
     date_created: originalDate?.isoDate ?? null,
     metadata: {
       file_path: filePath,
-      source: 'playlist-drop-ingest',
+      source: libraryInbox ? 'library-drop-ingest' : 'playlist-drop-ingest',
       ingested_at: new Date().toISOString(),
+      stream_format: 'mp3',
+      stream_bitrate: planned.isWav ? '320k' : null,
+      ...(dspWavPath
+        ? {
+            dspMastersPath: dspWavPath,
+            distribution_wav_url: `/api/audio/media/${dspWavPath
+              .split('/')
+              .map((segment) => encodeURIComponent(segment))
+              .join('/')}`,
+          }
+        : {}),
       ...(originalDate
         ? {
             original_date: originalDate.isoDate,

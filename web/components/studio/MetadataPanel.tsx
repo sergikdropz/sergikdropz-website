@@ -508,7 +508,7 @@ export default function MetadataPanel({
               <p className="text-[11px] text-zinc-600 mt-1">
                 {formatPhonogramNotice(
                   Number(form.p_line_year) || new Date().getFullYear(),
-                  form.label_name || form.album_artist || 'SERGIK',
+                  form.label_name || form.album_artist || 'SERGIKdropz',
                 )}
               </p>
             </div>

@@ -42,7 +42,7 @@ describe('buildReleasePackageSeeds', () => {
     const seed = buildReleasePackageSeeds(
       {
         title: 'Are We Awake?',
-        label_name: 'SERGIK',
+        label_name: 'SERGIKdropz',
         release_date: '2026-01-01',
       },
       {
@@ -51,7 +51,7 @@ describe('buildReleasePackageSeeds', () => {
         appleArtistId: 'https://music.apple.com/us/artist/sergik/1577778284',
       },
     )
-    expect(seed.album_artist).toBe('SERGIK')
+    expect(seed.album_artist).toBe('SERGIKdropz')
     expect(seed.upc).toBe('0199991234564')
     expect(seed.original_release_date).toBe('2026-01-01')
     expect(seed.catalog_number).toBe(generateCatalogNumber('Are We Awake?', 2026))
@@ -63,7 +63,7 @@ describe('buildReleasePackageSeeds', () => {
 
   it('seeds YouTube, Instagram, and Facebook from profile URLs', () => {
     const seed = buildReleasePackageSeeds(
-      { title: 'Are We Awake?', label_name: 'SERGIK' },
+      { title: 'Are We Awake?', label_name: 'SERGIKdropz' },
       {
         youtubeArtistId: 'https://music.youtube.com/channel/UCBWcROfNv8PeY6KdrnNM_pw',
         instagramHandle: 'https://instagram.com/sergikdropz',
@@ -78,7 +78,7 @@ describe('buildReleasePackageSeeds', () => {
   it('keeps existing package fields', () => {
     const seed = buildReleasePackageSeeds({
       album_artist: 'SERGIK x OG Coconut',
-      label_name: 'SERGIK',
+      label_name: 'SERGIKdropz',
       upc: '123',
       catalog_number: 'KEEP',
       p_line_year: 2024,

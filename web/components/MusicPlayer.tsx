@@ -3,8 +3,10 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
 import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
+import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset'
 import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
 import { 
   FaPlay, FaPause, FaStepForward, FaStepBackward, 
@@ -32,8 +34,28 @@ import {
 import { generatePeakData, detectBPM } from '@/utils/audioWorkerClient'
 import { analyzeFrequencyBands, detectTransients } from '@/utils/audioAnalysis'
 import { preloadTracks } from '@/utils/serviceWorker'
+import {
+  isDocumentHidden,
+  mobileQueuePreloadCount,
+  mobileWaveformNetworkAllowed,
+  MOBILE_AUDIO_PRELOAD_DEFER_MS,
+  MOBILE_WAVEFORM_PAINT_MIN_MS,
+  prefersCoarseMobilePlayback,
+  prefersLowPowerWaveformPaint,
+  prefersNativeMixerOutput,
+  MOBILE_LIVE_ANALYZER_OPT_IN_KEY,
+  readNetworkPlaybackSnapshot,
+  resolveMobilePrioritizeBackgroundPlayback,
+  tierToAutoBufferSize,
+  tierToStreamQualityLabel,
+} from '@/lib/ui/mobile-playback-profile'
+import { hapticTransportTap } from '@/lib/ui/haptic-transport'
+import { usePlaybackWakeLock } from '@/hooks/usePlaybackWakeLock'
+import MobileListeningOverlays from '@/components/mobile/MobileListeningOverlays'
+import MobileDjModeBadge from '@/components/music/MobileDjModeBadge'
 import { throttle, rafThrottle } from '@/utils/performance'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import { fetchBrowserAuthSession } from '@/lib/auth/browser-session'
 import { trackTrackPlay } from '@/lib/analytics'
 import {
   catalogScopeLabel,
@@ -69,7 +91,7 @@ import {
 } from '@/lib/audio/waveform-view'
 import { profileFromSonicDna, withLivePlaybackGrid } from '@/lib/audio/waveform-intelligence'
 import {
-  buildLockScreenArtworkEntries,
+  buildMediaSessionArtworkFromRef,
   lockScreenPrefersTrackSkip,
 } from '@/lib/audio/lock-screen-media'
 import { measureBpmFromPeaks, nudgeBeatPhaseSec, reconcileTapeBpm, resolveTapeAlignedGrid, setDownbeatAt } from '@/lib/audio/beat-grid'
@@ -108,6 +130,7 @@ import {
   readMixQualityHistory,
   consecutiveWeakMixCount,
   buildGridOnsetBundle,
+  remeshPeaksOntoOnsets,
   isGridLocked,
   isGridManual,
   readGridLockScore,
@@ -214,6 +237,8 @@ import {
   isEdgePlaybackUrl,
   isR2BrowserPlayEnabled,
 } from '@/lib/audio/edge-playback-url'
+import { playbackTimingMark, playbackTimingStart } from '@/lib/audio/playback-timing'
+import { shouldSkipBackgroundAudioResolve } from '@/lib/audio/skip-background-resolve'
 import {
   assignMediaSrcIfChanged,
   mediaUrlExtensionCandidates,
@@ -223,6 +248,7 @@ import {
 } from '@/lib/audio/media-src'
 import {
   getPlaybackWaveformCache,
+  loadPlaybackWaveformCache,
   setPlaybackWaveformCache,
   clearPlaybackWaveformCache,
 } from '@/lib/audio/waveform-playback-cache'
@@ -248,7 +274,6 @@ import {
 import { usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import React from 'react'
-import { createPortal } from 'react-dom'
 import {
   useMusicPlayer,
   readMusicPlayerState,
@@ -893,22 +918,8 @@ const DJ_MODE_ENABLED = false
 /** Stable empty peaks — avoid `[]` identity churn in dual-deck iDJ waveform memo. */
 const EMPTY_WAVEFORM_SAMPLES: WaveformSample[] = []
 
-/**
- * iOS and Android suspend Web Audio's AudioContext when the screen locks. Our analyzer
- * routes the media element through MediaElementSource → destination, so the audible path
- * stops with the context. Keeping output on HTMLMediaElement preserves background playback.
- */
-function prefersMediaElementBackgroundPlayback(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const uaData = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
-  if (uaData?.mobile === true) return true
-  const ua = navigator.userAgent
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === 'MacIntel' &&
-      (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints > 1)
-  return isIOS || /Android/i.test(ua)
-}
+/** @see prefersCoarseMobilePlayback — lock-screen / HTML audio path on phones. */
+const prefersMediaElementBackgroundPlayback = prefersCoarseMobilePlayback
 
 function coverArtUrl(artwork?: string | null, bust?: number): string | undefined {
   if (!artwork) return undefined
@@ -950,12 +961,6 @@ function lockScreenCoverUrl(
   bust?: number,
 ): string | undefined {
   return albumCoverUrl(track, queue, bust)
-}
-
-function buildLockScreenArtwork(artwork?: string) {
-  const origin = typeof window !== 'undefined' ? window.location.origin : null
-  // iOS MediaMetadata only shows artwork when src is an absolute http(s) URL.
-  return buildLockScreenArtworkEntries(coverArtUrl(artwork), origin)
 }
 
 function PlayerCoverArt({
@@ -1074,6 +1079,8 @@ interface PlayerSettings {
   streamQuality: 'standard' | 'HD' | 'UHD' | 'auto'
   /** On phones/tablets: keep audio on HTMLMediaElement so lock-screen / background playback works. */
   prioritizeBackgroundPlayback: boolean
+  /** Prevent screen dim while playing (uses battery). */
+  keepScreenAwakeWhilePlaying: boolean
 }
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
@@ -1157,8 +1164,7 @@ export default function MusicPlayer({
       return
     }
     let cancelled = false
-    void fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
+    void fetchBrowserAuthSession()
       .then((d) => {
         if (!cancelled) setIsAdminSession(Boolean(d?.authenticated && d?.isAdmin))
       })
@@ -1233,6 +1239,23 @@ export default function MusicPlayer({
     () => profileFromSonicDna(currentTrack?.sonic_dna),
     [currentTrack?.sonic_dna]
   )
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => setPrefersReducedMotion(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  const mobileLowPowerPaint = useMemo(
+    () =>
+      prefersLowPowerWaveformPaint({
+        djMixerActive: isIDJEnabled || isAutoDJEnabled,
+        reducedMotion: prefersReducedMotion,
+      }),
+    [isIDJEnabled, isAutoDJEnabled, prefersReducedMotion],
+  )
   const coverUnoptimized = coverSrc ? shouldUnoptimizeImage(coverSrc) : true
   const coverAlt = currentTrack?.album || currentTrack?.title || 'Album artwork'
   // DJ mode: visible in admin for testing; set DJ_MODE_ENABLED true to show on frontend
@@ -1270,7 +1293,11 @@ export default function MusicPlayer({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(() => {
     const saved = readMusicPlayerState()?.chrome?.isExpanded
-    return typeof saved === 'boolean' ? saved : DEFAULT_PLAYER_CHROME.isExpanded
+    if (typeof saved === 'boolean') return saved
+    if (typeof window !== 'undefined' && prefersCoarseMobilePlayback()) {
+      return false
+    }
+    return DEFAULT_PLAYER_CHROME.isExpanded
   })
   const isExpandedRef = useRef(isExpanded)
   isExpandedRef.current = isExpanded
@@ -1395,9 +1422,8 @@ export default function MusicPlayer({
     timerRef: { current: ReturnType<typeof setTimeout> | null },
     tick: (now: number) => void,
   ) => {
-    const hidden = typeof document !== 'undefined' && document.hidden
-    if (hidden) {
-      timerRef.current = window.setTimeout(() => tick(performance.now()), 32)
+    if (isDocumentHidden()) {
+      timerRef.current = window.setTimeout(() => tick(performance.now()), 500)
       return
     }
     rafRef.current = requestAnimationFrame(tick)
@@ -1454,8 +1480,7 @@ export default function MusicPlayer({
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
+    fetchBrowserAuthSession()
       .then((d) => {
         if (cancelled) return
         setFanUserId(d?.authenticated && d.user?.id ? d.user.id : null)
@@ -1601,10 +1626,24 @@ export default function MusicPlayer({
     const tickMs = 40
     const lockedRecheckMs = 250
     let raf = 0
+    let hiddenTimer: ReturnType<typeof setTimeout> | null = null
     let lastMs = 0
     let lastLockedCheckMs = 0
-    const tick = (now: number) => {
+    const schedule = () => {
+      if (isDocumentHidden()) {
+        hiddenTimer = window.setTimeout(() => tick(performance.now()), 1000)
+        return
+      }
       raf = requestAnimationFrame(tick)
+    }
+    const tick = (now: number) => {
+      raf = 0
+      if (hiddenTimer != null) {
+        clearTimeout(hiddenTimer)
+        hiddenTimer = null
+      }
+      schedule()
+      if (isDocumentHidden()) return
       if (now - lastMs < tickMs) return
       lastMs = now
       if (phraseMixLockRef.current) return
@@ -1659,9 +1698,10 @@ export default function MusicPlayer({
         allowSilentIdle: Boolean(cuedIdleTrackIdRef.current),
       })
     }
-    raf = requestAnimationFrame(tick)
+    schedule()
     return () => {
       if (raf) cancelAnimationFrame(raf)
+      if (hiddenTimer != null) clearTimeout(hiddenTimer)
     }
   }, [isAutoDJEnabled, autoDJConfig.syncMode])
 
@@ -1730,6 +1770,7 @@ export default function MusicPlayer({
     bufferSize: 'auto',
     streamQuality: 'auto',
     prioritizeBackgroundPlayback: true,
+    keepScreenAwakeWhilePlaying: false,
   }
 
   const loadSettings = (): PlayerSettings => {
@@ -1738,17 +1779,34 @@ export default function MusicPlayer({
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        return { ...defaultSettings, ...parsed }
+        const merged = { ...defaultSettings, ...parsed }
+        merged.prioritizeBackgroundPlayback = resolveMobilePrioritizeBackgroundPlayback(
+          typeof parsed.prioritizeBackgroundPlayback === 'boolean'
+            ? parsed.prioritizeBackgroundPlayback
+            : undefined,
+        )
+        return merged
       } catch {
         return defaultSettings
       }
     }
-    return defaultSettings
+    return {
+      ...defaultSettings,
+      prioritizeBackgroundPlayback: resolveMobilePrioritizeBackgroundPlayback(undefined),
+    }
   }
 
   const [settings, setSettings] = useState<PlayerSettings>(loadSettings)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const mobileDjModeActive = useMemo(
+    () =>
+      prefersNativeMixerOutput(
+        settings.prioritizeBackgroundPlayback,
+        isIDJEnabled || isAutoDJEnabled,
+      ),
+    [settings.prioritizeBackgroundPlayback, isIDJEnabled, isAutoDJEnabled],
+  )
 
   const primeQueue = useCallback(() => {
     if (!onQueueChange) return
@@ -2050,12 +2108,32 @@ export default function MusicPlayer({
   } | null>(null)
   const postHandoffTempoUntilRef = useRef(0)
   const MIX_UI_SYNC_MS = 50
-  const [connectionQuality, setConnectionQuality] = useState<'slow' | 'medium' | 'fast'>('fast')
-  const [networkEffectiveType, setNetworkEffectiveType] = useState<string | null>(null)
+  const [connectionQuality, setConnectionQuality] = useState<'slow' | 'medium' | 'fast'>(() =>
+    readNetworkPlaybackSnapshot().tier,
+  )
+  const [networkConstrained, setNetworkConstrained] = useState(() =>
+    readNetworkPlaybackSnapshot().constrained,
+  )
+  const [networkEffectiveType, setNetworkEffectiveType] = useState<string | null>(() =>
+    readNetworkPlaybackSnapshot().effectiveType,
+  )
+  const [mobilePwaNudgeEligible, setMobilePwaNudgeEligible] = useState(false)
+  const [documentVisibleNonce, setDocumentVisibleNonce] = useState(0)
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.hidden) setDocumentVisibleNonce((n) => n + 1)
+    }
+    document.addEventListener('visibilitychange', onChange)
+    return () => document.removeEventListener('visibilitychange', onChange)
+  }, [])
   const [isVisible, setIsVisible] = useState(true)
   const processedWaveformTrackRef = useRef<string | null>(null)
   /** Static track envelope (peaks) — never replaced by live oscilloscope data. */
   const trackWaveformBaseRef = useRef<typeof waveformData>([])
+  const waveformDataSnapshotRef = useRef(waveformData)
+  waveformDataSnapshotRef.current = waveformData
+  const peakVisualLockAppliedRef = useRef('')
+  const [waveformBaseReadyNonce, setWaveformBaseReadyNonce] = useState(0)
   const onQueueChangeRef = useRef(onQueueChange)
   const updatedQueueTrackRef = useRef<Set<string>>(new Set())
   const queueRef = useRef(queue)
@@ -2156,6 +2234,12 @@ export default function MusicPlayer({
   )
   const phraseMixLockRef = useRef(false)
   const mixEngineRef = useRef<MixEngine | null>(null)
+  const waveformPaintMinMs =
+    crossfadeActive || Boolean(mixEngineRef.current?.isMixing())
+      ? 66
+      : mobileLowPowerPaint
+        ? MOBILE_WAVEFORM_PAINT_MIN_MS
+        : 0
   /** Strip EQ / iDJ / Auto DJ force Web Audio even on mobile background mode. */
   const forceWebAudioGraphRef = useRef(false)
   /** Assigned after ensureAudibleMixer is defined — early callers use optional invoke. */
@@ -2607,6 +2691,32 @@ export default function MusicPlayer({
   const idjOnDeckEndedRef = useRef<(deck: 'live' | 'idle') => boolean>(() => false)
   const isIDJEnabledRef = useRef(false)
   isIDJEnabledRef.current = isIDJEnabled
+  const prefersNativeMixerOutputRef = useRef(false)
+
+  const syncNativeMixerPreference = useCallback(() => {
+    const native = prefersNativeMixerOutput(
+      settingsRef.current.prioritizeBackgroundPlayback,
+      isIDJEnabledRef.current || autoDJConfigRef.current.enabled,
+    )
+    prefersNativeMixerOutputRef.current = native
+    mixEngineRef.current?.setNativeElementOutput(native)
+    return native
+  }, [])
+
+  const prevNativeMixerRef = useRef(false)
+  useEffect(() => {
+    const native = syncNativeMixerPreference()
+    if (prevNativeMixerRef.current && !native && (isIDJEnabled || isAutoDJEnabled)) {
+      htmlAudioOnlyRef.current = false
+      void ensureAudibleMixerRef.current?.()
+    }
+    prevNativeMixerRef.current = native
+  }, [
+    settings.prioritizeBackgroundPlayback,
+    isIDJEnabled,
+    isAutoDJEnabled,
+    syncNativeMixerPreference,
+  ])
   const idjIdleTrackIdRef = useRef<string | null>(null)
   idjIdleTrackIdRef.current = idjIdleTrackId
   const idjLiveTrackIdRef = useRef<string | null>(currentTrack?.id ?? null)
@@ -2716,6 +2826,7 @@ export default function MusicPlayer({
       engine.setMasterVolume(settingsRef.current.isMuted ? 0 : settingsRef.current.volume)
     }
     mixEngineRef.current.setKeyLock(true)
+    syncNativeMixerPreference()
     const engine = mixEngineRef.current
     if (engine.getActiveTrack()) {
       // Follow the deck that is already playing — do not flip it back to A.
@@ -2724,7 +2835,7 @@ export default function MusicPlayer({
       engine.setActiveDeck(playbackDeckRef.current === 'next' ? 'b' : 'a')
     }
     return engine
-  }, [])
+  }, [syncNativeMixerPreference])
 
   /** Keep the element audible when MixEngine isn't available to own the graph. */
   const connectFallbackOutput = useCallback(() => {
@@ -3317,18 +3428,28 @@ export default function MusicPlayer({
 
   const commitTrackWaveform = useCallback((data: typeof waveformData, peaks?: number[] | null) => {
     trackWaveformBaseRef.current = data
+    peakVisualLockAppliedRef.current = ''
     setWaveformData(data)
+    if (data.length >= 64) {
+      setWaveformBaseReadyNonce((n) => n + 1)
+    }
     if (peaks !== undefined) setPrecomputedPeaks(peaks)
   }, [])
 
   // Generate waveform from the same file the <audio> element plays.
   // Defer network decode until playing or waveform chrome is visible (avoid cold-path contention).
   const trackKey = currentTrack ? `${currentTrack.id}-${currentTrack.file}` : null
-  const waveformNetworkAllowed = isPlaying || isExpanded || isWaveformDocked
+  const waveformNetworkAllowed = mobileWaveformNetworkAllowed(
+    isPlaying,
+    isExpanded,
+    isWaveformDocked,
+    networkConstrained,
+  )
   
   useEffect(() => {
     if (!currentTrack || !resolvedUrl) {
       trackWaveformBaseRef.current = []
+      peakVisualLockAppliedRef.current = ''
       setPrecomputedPeaks(null)
       setWaveformData([])
       processedWaveformTrackRef.current = null
@@ -3444,7 +3565,7 @@ export default function MusicPlayer({
       const candidates = waveformAnalysisUrls(resolvedUrl, currentTrack.file)
       for (const url of candidates) {
         if (cancelled) return
-        const cached = getPlaybackWaveformCache(url)
+        const cached = (await loadPlaybackWaveformCache(url)) || getPlaybackWaveformCache(url)
         if (cached?.data?.length) {
           if (applyPeaks(cached.data, cached.envelopes)) return
         }
@@ -3936,17 +4057,10 @@ export default function MusicPlayer({
     
     if (connection) {
       const updateConnection = () => {
-        const effectiveType = connection.effectiveType || '4g'
-        setNetworkEffectiveType(effectiveType)
-        
-        // Map to quality levels
-        if (effectiveType === 'slow-2g' || effectiveType === '2g') {
-          setConnectionQuality('slow')
-        } else if (effectiveType === '3g') {
-          setConnectionQuality('medium')
-        } else {
-          setConnectionQuality('fast')
-        }
+        const snap = readNetworkPlaybackSnapshot()
+        setNetworkEffectiveType(snap.effectiveType)
+        setConnectionQuality(snap.tier)
+        setNetworkConstrained(snap.constrained)
       }
       
       updateConnection()
@@ -3983,6 +4097,8 @@ export default function MusicPlayer({
       setError(null)
       return
     }
+
+    playbackTimingStart(currentTrack.id)
 
     const trackFile = currentTrack.file
     const syncNormalized =
@@ -4022,6 +4138,11 @@ export default function MusicPlayer({
     setRetryCount(0)
     decodeReloadsRef.current = 0
     loggedErrorsRef.current.clear()
+
+    if (shouldSkipBackgroundAudioResolve(trackFile, optimistic)) {
+      if (optimistic) resolvedUrlCacheRef.current.set(trackFile, optimistic)
+      return
+    }
 
     let cancelled = false
     resolveAudioUrl(trackFile)
@@ -4096,10 +4217,10 @@ export default function MusicPlayer({
     if (phraseMixLockRef.current) return
     if (isIDJEnabledRef.current) return
     if (isLoading) return
-    if (Date.now() - trackSwitchAtRef.current < 800) return
+    if (Date.now() - trackSwitchAtRef.current < 400) return
 
-    const live = audioRef.current
-    if (live && isPlaying && live.readyState < 2) return
+    const live = getPlaybackAudio()
+    if (live && isPlaying && live.readyState < 1) return
 
     const currentIndex = queue.findIndex((track) => track.id === currentTrack.id)
     if (currentIndex === -1) return
@@ -4122,9 +4243,10 @@ export default function MusicPlayer({
         const idle = getIdleAudio()
         if (!idle) return
         if (mediaUrlsRoughlyEqual(idle.currentSrc || idle.src, url)) {
+          setCuedIdleTrackId(nextTrack.id)
           return
         }
-        idle.src = url
+        assignMediaSrcIfChanged(idle, url)
         idle.preload = 'auto'
         try {
           idle.volume = 0
@@ -4132,6 +4254,7 @@ export default function MusicPlayer({
           /* ignore */
         }
         resolvedUrlCacheRef.current.set(nextTrack.file, url)
+        setCuedIdleTrackId(nextTrack.id)
       }
 
       const playable = toSameOriginMediaUrl(nextTrack.file) || syncUrl
@@ -4146,24 +4269,37 @@ export default function MusicPlayer({
           console.debug('Failed to preload next track:', err)
         })
     }
-  }, [currentTrack, queue, getIdleAudio, isLoading, isPlaying])
+  }, [currentTrack, queue, getIdleAudio, getPlaybackAudio, isLoading, isPlaying])
 
   // Preload next tracks in queue using Service Worker (keep shallow — deep preload
   // was HEADing/GETting 5 R2 objects and starving the live play request).
   useEffect(() => {
     if (!currentTrack || !queue.length) return
-    
-    // Find current index in queue
-    const currentIndex = queue.findIndex(track => track.id === currentTrack.id)
-    if (currentIndex === -1) return
-    
-    const tracksToPreload = queue
-      .slice(currentIndex + 1, currentIndex + 4)
-      .map(track => track.file)
-      .filter(Boolean)
-    
-    if (tracksToPreload.length > 0) {
-      // Resolve all URLs first (use cache if available)
+    const mobile = prefersCoarseMobilePlayback()
+    if (mobile && !isPlaying) return
+    if (isDocumentHidden()) return
+
+    let deferTimer: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
+
+    const runPreload = () => {
+      if (cancelled) return
+      if (isDocumentHidden()) return
+      const currentIndex = queue.findIndex((track) => track.id === currentTrack.id)
+      if (currentIndex === -1) return
+
+      const preloadCount = mobileQueuePreloadCount({
+        constrained: networkConstrained,
+        documentHidden: isDocumentHidden(),
+      })
+      if (preloadCount <= 0) return
+      const tracksToPreload = queue
+        .slice(currentIndex + 1, currentIndex + 1 + preloadCount)
+        .map((track) => track.file)
+        .filter(Boolean)
+
+      if (tracksToPreload.length === 0) return
+
       const cache = resolvedUrlCacheRef.current
       const resolved = tracksToPreload.map((file) => {
         const cached = cache.get(file)
@@ -4178,31 +4314,41 @@ export default function MusicPlayer({
       const needAsync = tracksToPreload.filter((_, i) => !resolved[i])
       const finish = (urls: string[]) => {
         const playable = urls.filter((url) => isDirectPlayableUrl(url))
-        if (playable.length) preloadTracks(playable)
+        if (playable.length) void preloadTracks(playable, preloadCount)
       }
       if (needAsync.length === 0) {
         finish(resolved.filter(Boolean) as string[])
         return
       }
-      Promise.all(needAsync.map((file) => resolveAudioUrl(file)))
+      void Promise.all(needAsync.map((file) => resolveAudioUrl(file)))
         .then((urls) => {
+          if (cancelled) return
           needAsync.forEach((file, idx) => {
             if (urls[idx]) cache.set(file, urls[idx])
           })
-          finish([
-            ...(resolved.filter(Boolean) as string[]),
-            ...urls.filter(Boolean),
-          ])
+          finish([...(resolved.filter(Boolean) as string[]), ...urls.filter(Boolean)])
         })
         .catch((err) => {
           console.debug('Failed to preload tracks via service worker:', err)
         })
     }
-  }, [currentTrack, queue])
+
+    if (mobile) {
+      deferTimer = window.setTimeout(runPreload, MOBILE_AUDIO_PRELOAD_DEFER_MS)
+    } else {
+      runPreload()
+    }
+
+    return () => {
+      cancelled = true
+      if (deferTimer != null) clearTimeout(deferTimer)
+    }
+  }, [currentTrack, queue, isPlaying, networkConstrained, documentVisibleNonce])
 
   // Setup audio analysis - must be accessible from both useEffect and togglePlay
   // This should only be called after user interaction (e.g., when playing)
   const needsWebAudioGraph = useCallback(() => {
+    if (prefersNativeMixerOutputRef.current) return false
     return (
       forceWebAudioGraphRef.current ||
       isIDJEnabledRef.current ||
@@ -4323,12 +4469,33 @@ export default function MusicPlayer({
    * if fallback/html-only stole the speakers, then reapply XF + dials.
    */
   const ensureAudibleMixer = useCallback(async () => {
+    await loadMixEngineClass().catch(() => null)
+    const engine = ensureMixEngine()
+    if (!engine) return null
+    syncNativeMixerPreference()
+
+    if (prefersNativeMixerOutputRef.current) {
+      forceWebAudioGraphRef.current = false
+      htmlAudioOnlyRef.current = true
+      teardownFallbackOutput()
+      teardownWebAudioOutput()
+      engine.setNativeElementOutput(true)
+      engine.setMasterVolume(settingsRef.current.isMuted ? 0 : settingsRef.current.volume)
+      if (isIDJEnabledRef.current || autoDjXfUnlockedRef.current) {
+        engine.setManualCrossfade(idjCrossfadeRef.current, { instant: true })
+      } else {
+        const liveDeck = playbackDeckRef.current === 'next' ? 'b' : 'a'
+        engine.setManualCrossfade(liveDeck === 'b' ? 1 : 0, { instant: true })
+      }
+      return engine
+    }
+
+    engine.setNativeElementOutput(false)
     forceWebAudioGraphRef.current = true
     if (htmlAudioOnlyRef.current) htmlAudioOnlyRef.current = false
-    await loadMixEngineClass().catch(() => null)
     teardownFallbackOutput()
-    const engine = await ensureDualDeckGraph()
-    if (!engine) return null
+    const wired = await ensureDualDeckGraph()
+    if (!wired) return null
     const ctx = audioContextRef.current
     const source = sourceNodeRef.current
     if (ctx && source) {
@@ -4343,7 +4510,13 @@ export default function MusicPlayer({
     engine.setDeckEqGains('a', deckUiRef.current.a.eqGains, { instant: true })
     engine.setDeckEqGains('b', deckUiRef.current.b.eqGains, { instant: true })
     return engine
-  }, [ensureDualDeckGraph, teardownFallbackOutput])
+  }, [
+    ensureMixEngine,
+    ensureDualDeckGraph,
+    teardownFallbackOutput,
+    teardownWebAudioOutput,
+    syncNativeMixerPreference,
+  ])
   ensureAudibleMixerRef.current = ensureAudibleMixer
 
   /** Unstick a MediaElementSource that lost its path to the destination. */
@@ -4545,7 +4718,9 @@ export default function MusicPlayer({
       title: currentTrack.title,
       artist: currentTrack.artist,
       album: currentTrack.album || currentTrack.folder || 'SERGIK',
-      artwork: buildLockScreenArtwork(lockScreenSrc || currentTrack.artwork),
+      artwork: buildMediaSessionArtworkFromRef(
+        lockScreenSrc || mosaicCovers[0] || currentTrack.artwork,
+      ),
     })
 
     // Handle play action from lock screen/notification
@@ -4688,7 +4863,7 @@ export default function MusicPlayer({
       clearHandler('seekforward')
       clearHandler('seekto')
     }
-  }, [currentTrack, lockScreenSrc, isPlaying, duration, onNext, onPrevious, getPlaybackAudio])
+  }, [currentTrack, lockScreenSrc, mosaicCovers, isPlaying, duration, onNext, onPrevious, getPlaybackAudio])
 
   // If the browser pauses the element when the screen locks, resume when visible again.
   useEffect(() => {
@@ -4893,6 +5068,7 @@ export default function MusicPlayer({
     }
 
     const handleLoadStart = () => {
+      if (currentTrack?.id) playbackTimingMark(currentTrack.id, 'loadstart')
       // Intentional skip/src swap: never flip isLoading. That paused the
       // element (play effect) and retriggered load() — the reload/buffer loop.
       if (srcSwapRef.current) return
@@ -4903,6 +5079,7 @@ export default function MusicPlayer({
     }
 
     const handleCanPlay = () => {
+      if (currentTrack?.id) playbackTimingMark(currentTrack.id, 'canplay')
       // During an iDJ same-deck load, applyIDJLiveTrack owns seek → play →
       // lock release. Playing here first caused a 0:00 blip then a seek jump.
       const idjLoading =
@@ -4944,6 +5121,7 @@ export default function MusicPlayer({
       const frozenAt = liveEl.currentTime
       stallRecoveryTimer = setTimeout(() => {
         stallRecoveryTimer = null
+        if (isDocumentHidden()) return
         if (liveEl.paused || !isPlaying) return
         if (Math.abs(liveEl.currentTime - frozenAt) > 0.2) return
         recoverAudibleGraphRef.current()
@@ -4956,6 +5134,7 @@ export default function MusicPlayer({
     // when parent callbacks change and would never accumulate stuck ticks.)
 
     const handlePlaying = () => {
+      if (currentTrack?.id) playbackTimingMark(currentTrack.id, 'playing')
       endedTrackIdRef.current = null
       if (!(isIDJEnabledRef.current && (idjDeckSkipLockRef.current || skipSrcReloadRef.current))) {
         srcSwapRef.current = false
@@ -5094,6 +5273,7 @@ export default function MusicPlayer({
     // `ended` is owned by advanceAfterLiveEndedRef (epoch listeners + clock poll).
     let endedFromClock = false
     const clockPoll = window.setInterval(() => {
+      if (isDocumentHidden()) return
       const engine = mixEngineRef.current
       if (engine?.hasBufferClock()) onTimeUpdate()
       if (!isPlayingRef.current) return
@@ -5142,6 +5322,12 @@ export default function MusicPlayer({
     const timer = window.setInterval(() => {
       const liveEl = getPlaybackAudio()
       if (!liveEl) return
+      if (isDocumentHidden()) {
+        freezeStuckTicks = 0
+        freezeRecoverAttempts = 0
+        if (Number.isFinite(liveEl.currentTime)) freezeLastSec = liveEl.currentTime
+        return
+      }
       if (!isPlayingRef.current) {
         freezeStuckTicks = 0
         freezeLastSec = liveEl.currentTime
@@ -5197,14 +5383,17 @@ export default function MusicPlayer({
         freezeStuckTicks += 1
         if (freezeStuckTicks >= 2) {
           freezeStuckTicks = 0
+          if (isDocumentHidden()) return
           if (isIDJEnabledRef.current || autoDJConfigRef.current.enabled) {
             void ensureAudibleMixerRef.current().then(() => {
+              if (isDocumentHidden()) return
               void liveEl.play().catch(() => {})
             })
           } else if (mesCreatedForEpochRef.current || sourceNodeRef.current) {
             fallBackToHtmlAudioOnlyRef.current()
           } else {
             void liveEl.play().catch(() => {
+              if (isDocumentHidden()) return
               fallBackToHtmlAudioOnlyRef.current()
             })
           }
@@ -5212,7 +5401,10 @@ export default function MusicPlayer({
         return
       }
       if (htmlAudioOnlyRef.current) {
-        if (isIDJEnabledRef.current || autoDJConfigRef.current.enabled) {
+        if (
+          !isDocumentHidden() &&
+          (isIDJEnabledRef.current || autoDJConfigRef.current.enabled)
+        ) {
           htmlAudioOnlyRef.current = false
           void ensureAudibleMixerRef.current()
         }
@@ -5225,6 +5417,7 @@ export default function MusicPlayer({
         freezeStuckTicks += 1
         if (freezeStuckTicks >= 2) {
           freezeStuckTicks = 0
+          if (isDocumentHidden()) return
           freezeRecoverAttempts += 1
           if (isIDJEnabledRef.current || autoDJConfigRef.current.enabled) {
             recoverAudibleGraphRef.current()
@@ -5240,6 +5433,7 @@ export default function MusicPlayer({
             recoverAudibleGraphRef.current()
             void liveEl.play().catch(() => {})
             window.setTimeout(() => {
+              if (isDocumentHidden()) return
               if (htmlAudioOnlyRef.current) return
               if (!isPlayingRef.current) return
               const el = getPlaybackAudio()
@@ -5471,7 +5665,9 @@ export default function MusicPlayer({
 
       clearSkipBlendWatch()
 
-      forceWebAudioGraphRef.current = true
+      if (!prefersNativeMixerOutputRef.current) {
+        forceWebAudioGraphRef.current = true
+      }
       const engine = await ensureAudibleMixer()
       if (!engine?.hasMixerControls()) {
         // MES with no sink freezes playback — fall back to a hard cut.
@@ -5676,7 +5872,9 @@ export default function MusicPlayer({
             incomingRate: resolvedPlan.rateRatio,
             incomingTargetRate: opts?.incomingTargetRate ?? settingsRef.current.playbackRate,
             masterVolume: settingsRef.current.isMuted ? 0 : settingsRef.current.volume,
-            audioContext: audioContextRef.current,
+            audioContext: prefersNativeMixerOutputRef.current
+              ? null
+              : audioContextRef.current,
             mixIntelligence: mixIntel,
             onProgress: pushMixVisualProgress,
             onDeckRate: handleMixDeckRate,
@@ -5918,14 +6116,112 @@ export default function MusicPlayer({
     if (url) setResolvedUrl((prev) => (prev === url ? prev : url))
   }, [])
 
+  /**
+   * Queue advance: if the idle deck already buffered the next track, swap decks
+   * instead of reloading the live element (avoids a full re-fetch at song end).
+   */
+  const tryHandoffToPreloadedIdle = useCallback(
+    (next: Track): boolean => {
+      if (isIDJEnabledRef.current) return false
+      if (autoDJConfigRef.current.enabled) return false
+      if (phraseMixLockRef.current || mixEngineRef.current?.isMixing()) return false
+      if (mixEngineRef.current?.hasBufferClock()) return false
+
+      const idle = getIdleAudio()
+      const live = getPlaybackAudio()
+      if (!idle || !live) return false
+
+      const nextUrl =
+        peekSyncPlaybackUrl(next.file, resolvedUrlCacheRef.current) ||
+        resolvedUrlCacheRef.current.get(next.file) ||
+        null
+      const idleSrc = idle.currentSrc || idle.src || ''
+      const idleMatches =
+        cuedIdleTrackIdRef.current === next.id ||
+        mediaUrlMatchesTrack(idleSrc, next.file) ||
+        (nextUrl != null && mediaUrlsRoughlyEqual(idleSrc, nextUrl))
+      if (!idleMatches) return false
+      if (idle.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false
+
+      try {
+        live.pause()
+      } catch {
+        /* ignore */
+      }
+
+      playbackDeckRef.current = playbackDeckRef.current === 'next' ? 'main' : 'next'
+      liveAudioRef.current =
+        playbackDeckRef.current === 'next' ? nextAudioRef.current : audioRef.current
+
+      const newLive = getPlaybackAudio()
+      if (!newLive) return false
+
+      try {
+        newLive.volume = live.volume
+        newLive.muted = live.muted
+      } catch {
+        /* ignore */
+      }
+
+      skipSrcReloadRef.current = true
+      srcSwapRef.current = true
+      const boundUrl = idleSrc || nextUrl || next.file
+      lastBoundPlaybackRef.current = {
+        id: next.id,
+        url: boundUrl,
+      }
+      endedTrackIdRef.current = null
+      setCuedIdleTrackId(null)
+
+      // Former live deck (now idle) may still be at `ended` — keep it silent.
+      const formerLive = getIdleAudio()
+      if (formerLive) {
+        try {
+          formerLive.pause()
+          formerLive.volume = 0
+        } catch {
+          /* ignore */
+        }
+      }
+      if (boundUrl) {
+        setResolvedUrl((prev) => (prev === boundUrl ? prev : boundUrl))
+      }
+      setIsLoading(false)
+
+      const dur =
+        Number.isFinite(newLive.duration) && newLive.duration > 0
+          ? newLive.duration
+          : next.duration || 0
+      playbackTimeRef.current = 0
+      setCurrentTime(0)
+      setDuration(dur)
+      pushTransportTime(0, dur)
+      setWaveformMediaSyncKey(`${playbackDeckRef.current}:${next.id}`)
+
+      const engine = mixEngineRef.current
+      if (engine && !engine.isMixing() && !engine.hasBufferClock()) {
+        try {
+          engine.setActiveTrack(withMixGrid(next))
+        } catch {
+          /* ignore */
+        }
+      }
+
+      playbackTimingMark(next.id, 'handoff')
+
+      if (isPlayingRef.current) {
+        void newLive.play().catch(() => {})
+      }
+      return true
+    },
+    [getPlaybackAudio, getIdleAudio, pushTransportTime, setCuedIdleTrackId, withMixGrid],
+  )
+
   const hardSkipToNext = useCallback(() => {
     clearSkipBlendWatch()
     clearAutoDJOutWatch()
     mixEngineRef.current?.stopMix()
-    silenceCuedIdle()
-    setCuedIdleTrackId(null)
     phraseMixLockRef.current = false
-    skipSrcReloadRef.current = false
     deckHandoffRef.current = null
     const liveId = currentTrackRef.current?.id ?? null
     if (endedTrackIdRef.current !== liveId) {
@@ -5936,8 +6232,30 @@ export default function MusicPlayer({
     const idx = cur ? q.findIndex((t) => t.id === cur.id) : -1
     const next = (idx >= 0 && idx < q.length - 1 ? q[idx + 1] : q[0]) ?? null
     armResolvedUrlForTrack(next)
+
+    if (next && tryHandoffToPreloadedIdle(next)) {
+      const nextIndex = q.findIndex((track) => track.id === next.id)
+      if (nextIndex >= 0) setCurrentIndex(nextIndex)
+      setCurrentTrack(next)
+      patchMusicPlayerState({ currentTime: 0 })
+      return
+    }
+
+    silenceCuedIdle()
+    setCuedIdleTrackId(null)
+    skipSrcReloadRef.current = false
     onNext?.()
-  }, [clearSkipBlendWatch, clearAutoDJOutWatch, silenceCuedIdle, onNext, armResolvedUrlForTrack])
+  }, [
+    clearSkipBlendWatch,
+    clearAutoDJOutWatch,
+    silenceCuedIdle,
+    onNext,
+    armResolvedUrlForTrack,
+    tryHandoffToPreloadedIdle,
+    setCurrentIndex,
+    setCurrentTrack,
+    patchMusicPlayerState,
+  ])
 
   /**
    * AutoDJ skip-while-cued: blend from the next outgoing beat into the parked
@@ -6062,6 +6380,7 @@ export default function MusicPlayer({
   ])
 
   const handleSkipToPrevious = useCallback(() => {
+    hapticTransportTap()
     if (isIDJEnabledRef.current) {
       stepLiveDeckRef.current(-1)
       return
@@ -6088,6 +6407,7 @@ export default function MusicPlayer({
    * otherwise hard cut.
    */
   const handleSkipToNext = useCallback(() => {
+    hapticTransportTap()
     if (isIDJEnabledRef.current) {
       stepLiveDeckRef.current(1)
       return
@@ -6166,8 +6486,15 @@ export default function MusicPlayer({
       return
     }
     const nextIndex = q.findIndex((track) => track.id === next.id)
+    if (tryHandoffToPreloadedIdle(next)) {
+      if (nextIndex >= 0) setCurrentIndex(nextIndex)
+      setCurrentTrack(next)
+      patchMusicPlayerState({ currentTime: 0 })
+      return
+    }
     if (nextIndex >= 0) setCurrentIndex(nextIndex)
     setCurrentTrack(next)
+    patchMusicPlayerState({ currentTime: 0 })
   }
 
   // Playback control
@@ -6404,6 +6731,7 @@ export default function MusicPlayer({
   const togglePlay = async () => {
     const audio = getPlaybackAudio()
     if (!audio) return
+    hapticTransportTap()
 
     if (isPlaying) {
       mixEngineRef.current?.pauseActiveClock()
@@ -10270,42 +10598,52 @@ export default function MusicPlayer({
   ])
 
   const applyPeakVisualLock = useCallback(
-    (offsetSec: number, bpm: number) => {
+    (offsetSec: number, bpm?: number | null) => {
       const base =
         trackWaveformBaseRef.current.length > 0
           ? trackWaveformBaseRef.current
-          : waveformData
-      if (!base.length || duration <= 0 || !(bpm > 0)) return
+          : waveformDataSnapshotRef.current
+      if (!base.length || duration <= 0) return
+      const resolvedBpm =
+        (typeof bpm === 'number' && bpm > 0 ? bpm : null) ||
+        resolvePlaybackBpm(currentTrack, detectedBPM) ||
+        detectedBPM ||
+        currentTrack?.bpm ||
+        null
+      const trackId = currentTrack?.id ?? ''
+      const lockSig = `${trackId}:${offsetSec}:${duration}:${resolvedBpm ?? 'na'}:${base.length}`
+      if (peakVisualLockAppliedRef.current === lockSig) return
       const bundle = buildGridOnsetBundle({
         sonicDna: currentTrack?.sonic_dna,
         peaks: base,
         durationSec: duration,
-        bpm,
+        bpm: resolvedBpm,
         offsetSec,
       })
       const onsets = [...bundle.kickOnsetSec, ...bundle.snareClapOnsetSec]
-      if (onsets.length < 4) return
-      const n = base.length
-      const radius = Math.max(1, Math.round(n * 0.0015))
-      const boost = 0.32
-      const next = base.map((s) => ({ ...s }))
-      for (const t of onsets) {
-        if (!Number.isFinite(t) || t < 0 || t > duration) continue
-        const center = Math.round((t / duration) * (n - 1))
-        for (let d = -radius; d <= radius; d++) {
-          const i = center + d
-          if (i < 0 || i >= n) continue
-          const w = 1 - Math.abs(d) / (radius + 1)
-          const cur = next[i]!
-          const p = Math.min(1, cur.positive + (1 - cur.positive) * boost * w)
-          const neg = Math.min(1, cur.negative + (1 - cur.negative) * boost * w * 0.85)
-          next[i] = { ...cur, positive: p, negative: neg }
-        }
-      }
-      setWaveformData(next)
+      if (onsets.length < 2) return
+      peakVisualLockAppliedRef.current = lockSig
+      setWaveformData(
+        remeshPeaksOntoOnsets(base, onsets, duration, { searchSec: 0.048, boost: 0.3 }),
+      )
     },
-    [currentTrack?.sonic_dna, waveformData, duration],
+    [currentTrack, detectedBPM, duration],
   )
+
+  // Transient lock for every loaded track — not only after Align / Lock Grid.
+  useEffect(() => {
+    if (!currentTrack?.id || duration <= 0) return
+    if (trackWaveformBaseRef.current.length < 64) return
+    applyPeakVisualLock(beatGridOffsetSec)
+  }, [
+    currentTrack?.id,
+    currentTrack?.sonic_dna,
+    duration,
+    beatGridOffsetSec,
+    detectedBPM,
+    waveformBaseReadyNonce,
+    applyPeakVisualLock,
+  ])
 
   const alignBeatGridToWaveform = useCallback((opts?: { force?: boolean }) => {
     if (!opts?.force && (isGridManual(currentTrack?.sonic_dna) || currentTrack?.grid_manual === true)) {
@@ -11304,7 +11642,8 @@ export default function MusicPlayer({
         deckId={deck === 'a' ? 'A' : 'B'}
         hoverRoot={undefined}
         gestureActiveRef={waveformGestureRef}
-        paintMinMs={crossfadeActive || Boolean(mixEngineRef.current?.isMixing()) ? 66 : 0}
+        paintMinMs={waveformPaintMinMs}
+        lowPowerPaint={mobileLowPowerPaint}
         className={`relative h-full w-full touch-none overflow-hidden ${
           (opts.isLive ? waveformZoom : incomingVisibleBars > 0) ? 'cursor-grab' : 'cursor-pointer'
         } ${!opts.isLive && !incomingDeckHot ? 'opacity-80' : ''}`}
@@ -11330,7 +11669,7 @@ export default function MusicPlayer({
           opts.isLive || incomingDeckHot ? (t) => seekDeckMediaTime(deck, t) : undefined
         }
         onContextMenu={(e, timeSec) => onWaveformContextMenu(deck, e, timeSec)}
-        showOverview={waveformOverview}
+        showOverview={waveformOverview && !mobileLowPowerPaint}
         showPhaseMeter={false}
       />
     )
@@ -11854,7 +12193,11 @@ export default function MusicPlayer({
       if (!isMiniMode && !isExpanded && precomputedPeaks && precomputedPeaks.length > 0) {
         const restored = peaksOrEnvelopesToWaveformSamples(precomputedPeaks)
         trackWaveformBaseRef.current = restored
+        peakVisualLockAppliedRef.current = ''
         setWaveformData(restored)
+        if (restored.length >= 64) {
+          setWaveformBaseReadyNonce((n) => n + 1)
+        }
       }
     }
   }, [isMiniMode, isExpanded, precomputedPeaks, waveformHost])
@@ -11896,6 +12239,22 @@ export default function MusicPlayer({
       (isQueueOpen && !isQueueDocked),
   )
   useLockBodyScroll(lockBackgroundScroll)
+  usePlaybackWakeLock(settings.keepScreenAwakeWhilePlaying, isPlaying)
+  const visualBottomOffset = useVisualViewportBottomOffset()
+
+  useEffect(() => {
+    if (!prefersCoarseMobilePlayback() || !currentTrack?.id || !isPlaying) return
+    setMobilePwaNudgeEligible(true)
+  }, [currentTrack?.id, isPlaying])
+  // Collapsed dock must NOT be overflow-y-auto — iPad Safari rubber-bands that
+  // scrollport with the page and the bar appears to slide up off the bottom.
+  const playerNeedsInternalScroll =
+    !isMiniMode &&
+    (isExpanded ||
+      isSettingsOpen ||
+      showTrackDetails ||
+      isMobileControlsOpen ||
+      (isQueueOpen && !isQueueDocked))
 
   const bpmForGrid = waveformBpm
   const beatDurationSec = waveformBeatDurationSec
@@ -11911,22 +12270,31 @@ export default function MusicPlayer({
     return null
   }
 
+  const scrollRootClassName = isMiniMode
+    ? ''
+    : [
+        'max-h-[90vh]',
+        'overscroll-none',
+        playerNeedsInternalScroll
+          ? lockBackgroundScroll
+            ? 'overflow-hidden'
+            : 'overflow-y-auto overscroll-contain'
+          : 'overflow-hidden',
+      ].join(' ')
+
+  const autoStreamLabel = tierToStreamQualityLabel(connectionQuality)
+  const autoBufferLabel = tierToAutoBufferSize(connectionQuality)
 
   return (
-    <div 
+    <>
+    <div
       ref={playerRef}
-      className={`fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-[9999] transition-[max-height] duration-300 [contain:layout_paint] ${
+      style={{ bottom: visualBottomOffset }}
+      className={`fixed left-0 right-0 bg-black border-t border-gray-800 z-[9999] transition-[max-height] duration-300 touch-manipulation ${
         isMiniMode ? 'max-sm:h-auto sm:h-16' : 'max-h-[90vh]'
       }`}
     >
-      <div
-        data-scroll-lock-root=""
-        className={
-          isMiniMode
-            ? ''
-            : `max-h-[90vh] overscroll-contain ${lockBackgroundScroll ? 'overflow-hidden' : 'overflow-y-auto'}`
-        }
-      >
+      <div data-scroll-lock-root="" className={scrollRootClassName}>
       <audio
         key={`main-audio-${audioElementEpoch}`}
         ref={audioRef}
@@ -12203,6 +12571,7 @@ export default function MusicPlayer({
               mixCrossfadeActive={isIDJEnabled || isAutoDJEnabled || crossfadeActive}
               idjActive={isIDJEnabled}
               autoDjActive={isAutoDJEnabled}
+              mobileDjModeActive={mobileDjModeActive}
               onIdjCrossfade={handleIdjCrossfade}
               autoDjXfUnlocked={autoDjXfUnlocked}
               onUnlockCrossfaderFromAutoDj={unlockCrossfaderFromAutoDj}
@@ -12362,7 +12731,8 @@ export default function MusicPlayer({
                 deckId={deck === 'a' ? 'A' : 'B'}
                 hoverRoot={hoverRoot}
                 gestureActiveRef={waveformGestureRef}
-                paintMinMs={crossfadeActive || Boolean(mixEngineRef.current?.isMixing()) ? 66 : 0}
+                paintMinMs={waveformPaintMinMs}
+                lowPowerPaint={mobileLowPowerPaint}
                 className={`relative touch-none overflow-hidden ${
                   showDualDeckBlend ? 'h-full w-full' : waveformHeightClass
                 } ${
@@ -12499,9 +12869,12 @@ export default function MusicPlayer({
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 justify-self-center">
                   {isExpanded ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex max-w-[min(100%,20rem)] flex-wrap items-center justify-center gap-1">
                       <AutoDJHeaderButton size="compact" />
                       <IDJHeaderButton size="compact" />
+                      {mobileDjModeActive && (isIDJEnabled || isAutoDJEnabled) ? (
+                        <MobileDjModeBadge />
+                      ) : null}
                     </div>
                   ) : (
                     <>
@@ -12584,14 +12957,19 @@ export default function MusicPlayer({
                 </button>
               )}
               {isExpanded && (
-                <MixSessionLog
-                  size="header"
-                  entries={mixQualityHistory}
-                  liveStatus={autoDJStatusMessage || null}
-                  headerStatus={
-                    isIDJEnabled ? 'iDJ — you mix both decks' : autoDjDeckStatusLine
-                  }
-                />
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <MixSessionLog
+                    size="header"
+                    entries={mixQualityHistory}
+                    liveStatus={autoDJStatusMessage || null}
+                    headerStatus={
+                      isIDJEnabled ? 'iDJ — you mix both decks' : autoDjDeckStatusLine
+                    }
+                  />
+                  {mobileDjModeActive && (isIDJEnabled || isAutoDJEnabled) ? (
+                    <MobileDjModeBadge />
+                  ) : null}
+                </div>
               )}
               {!isExpanded && hasPlayerCover && (
                 <button
@@ -13124,7 +13502,7 @@ export default function MusicPlayer({
                 <div>
                   <label className="text-xs text-gray-400 mb-2 block">
                     Stream Quality: {settings.streamQuality === 'auto' 
-                      ? `Auto (${connectionQuality === 'slow' ? 'Standard' : connectionQuality === 'medium' ? 'HD' : 'UHD'})`
+                      ? `Auto (${autoStreamLabel})`
                       : settings.streamQuality}
                     {networkEffectiveType && (
                       <span className="ml-2 text-[10px] text-gray-500">
@@ -13157,7 +13535,10 @@ export default function MusicPlayer({
                     {settings.streamQuality === 'standard' && 'Standard quality for faster streaming and reduced buffering. Best for slow connections.'}
                     {settings.streamQuality === 'HD' && 'HD quality with balanced performance. Good for most connections.'}
                     {settings.streamQuality === 'UHD' && 'Ultra HD quality for the best audio experience. May require more buffering on slow connections.'}
-                    {settings.streamQuality === 'auto' && `Automatically adjusts quality based on your connection (currently: ${connectionQuality === 'slow' ? 'Standard' : connectionQuality === 'medium' ? 'HD' : 'UHD'})`}
+                    {settings.streamQuality === 'auto' &&
+                      `Automatically adjusts quality based on your connection (currently: ${autoStreamLabel})${
+                        networkConstrained ? ' — data-saver / cellular mode active' : ''
+                      }`}
                   </p>
                 </div>
 
@@ -13165,7 +13546,7 @@ export default function MusicPlayer({
                 <div>
                   <label className="text-xs text-gray-400 mb-2 block">
                     Buffer Size: {settings.bufferSize === 'auto' 
-                      ? `Auto (${connectionQuality === 'slow' ? 'Small' : connectionQuality === 'medium' ? 'Medium' : 'Large'})`
+                      ? `Auto (${autoBufferLabel.charAt(0).toUpperCase()}${autoBufferLabel.slice(1)})`
                       : settings.bufferSize.charAt(0).toUpperCase() + settings.bufferSize.slice(1)}
                     {networkEffectiveType && (
                       <span className="ml-2 text-[10px] text-gray-500">
@@ -13198,7 +13579,10 @@ export default function MusicPlayer({
                     {settings.bufferSize === 'small' && 'Minimal buffering, may cause interruptions on slow connections'}
                     {settings.bufferSize === 'medium' && 'Balanced buffering for most connections'}
                     {settings.bufferSize === 'large' && 'Maximum buffering for smooth playback'}
-                    {settings.bufferSize === 'auto' && `Automatically adjusts based on your connection (currently: ${connectionQuality})`}
+                    {settings.bufferSize === 'auto' &&
+                      `Automatically adjusts based on your connection (currently: ${autoBufferLabel})${
+                        networkConstrained ? ' — reduced prefetch on this connection' : ''
+                      }`}
                   </p>
                 </div>
 
@@ -13210,7 +13594,14 @@ export default function MusicPlayer({
                     <div className="flex gap-2 mb-2">
                       <button
                         type="button"
-                        onClick={() => saveSettings({ prioritizeBackgroundPlayback: true })}
+                        onClick={() => {
+                          try {
+                            localStorage.removeItem(MOBILE_LIVE_ANALYZER_OPT_IN_KEY)
+                          } catch {
+                            /* ignore */
+                          }
+                          saveSettings({ prioritizeBackgroundPlayback: true })
+                        }}
                         className={`px-3 py-1.5 rounded text-xs transition-colors ${
                           settings.prioritizeBackgroundPlayback
                             ? 'bg-blue-600 text-white'
@@ -13222,7 +13613,16 @@ export default function MusicPlayer({
                       </button>
                       <button
                         type="button"
-                        onClick={() => saveSettings({ prioritizeBackgroundPlayback: false })}
+                        onClick={() => {
+                          if (prefersCoarseMobilePlayback()) {
+                            try {
+                              localStorage.setItem(MOBILE_LIVE_ANALYZER_OPT_IN_KEY, '1')
+                            } catch {
+                              /* ignore */
+                            }
+                          }
+                          saveSettings({ prioritizeBackgroundPlayback: false })
+                        }}
                         className={`px-3 py-1.5 rounded text-xs transition-colors ${
                           !settings.prioritizeBackgroundPlayback
                             ? 'bg-blue-600 text-white'
@@ -13235,8 +13635,43 @@ export default function MusicPlayer({
                     </div>
                     <p className="text-[10px] text-gray-500">
                       {settings.prioritizeBackgroundPlayback
-                        ? 'Best for listening with the screen off. The real-time spectrum in the expanded player will stay static or use stored waveform data only.'
+                        ? 'Best for listening with the screen off — including Auto DJ and iDJ (volume crossfades; strip EQ is visual-only on phone). Live analyzer uses Web Audio and may pause when locked.'
                         : 'Routes audio through Web Audio for the live spectrum. On many phones, music pauses when the screen locks.'}
+                    </p>
+                  </div>
+                )}
+
+                {prefersMediaElementBackgroundPlayback() && (
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-gray-400 mb-2 block">
+                      Keep screen awake while playing
+                    </label>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => saveSettings({ keepScreenAwakeWhilePlaying: true })}
+                        className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                          settings.keepScreenAwakeWhilePlaying
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-800/40 text-gray-300 hover:bg-gray-700/40'
+                        }`}
+                      >
+                        On
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveSettings({ keepScreenAwakeWhilePlaying: false })}
+                        className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                          !settings.keepScreenAwakeWhilePlaying
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-800/40 text-gray-300 hover:bg-gray-700/40'
+                        }`}
+                      >
+                        Off
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-500">
+                      Uses extra battery. Helpful for long DJ sets with the screen on.
                     </p>
                   </div>
                 )}
@@ -14222,5 +14657,12 @@ export default function MusicPlayer({
         />
       )}
     </div>
+    <MobileListeningOverlays
+      showDjCoach={
+        mobileDjModeActive && (isAutoDJEnabled || isIDJEnabled)
+      }
+      showPwaNudge={mobilePwaNudgeEligible}
+    />
+    </>
   )
 }

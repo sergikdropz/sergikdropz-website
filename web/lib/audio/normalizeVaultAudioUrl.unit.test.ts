@@ -25,7 +25,7 @@ describe('normalizeVaultAudioUrl', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = prev.supabase
   })
 
-  it('routes supabase storage URLs through the same-origin media proxy', () => {
+  it('routes supabase storage URLs through the same-origin media proxy (R2 backend)', () => {
     process.env.NEXT_PUBLIC_AUDIO_BASE_URL = 'https://tunnel.trycloudflare.com'
     expect(
       normalizeVaultAudioUrl(

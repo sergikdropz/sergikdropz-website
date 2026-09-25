@@ -229,6 +229,7 @@ describe('sonic dna report sections', () => {
           audioSubgenre: 'Steppers',
           judgment: 'Hybrid judgment: catalog preference (Reggae / Dub Reggae) aligns with audio-measured groove (Reggae / Steppers).',
         },
+        bass: { lock: 'on-kick', rootNote: 'D' },
       },
     })
     const sections = listSonicDnaReportSections(filled)

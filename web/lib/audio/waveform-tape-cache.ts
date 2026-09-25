@@ -7,11 +7,34 @@ import {
   type WaveformIntelligenceProfile,
 } from '@/lib/audio/waveform-view'
 import { profileCacheKey, remesureTimedSamples } from '@/lib/audio/waveform-intelligence'
+import {
+  buildGridOnsetBundle,
+  remeshPeaksOntoOnsets,
+} from '@/lib/audio/mix-engine/kick-onsets'
 
 export type WaveformTapeCache = {
   key: string
   durationSec: number
   timed: TimedWaveformSample[]
+}
+
+/** Kick + snare/clap onsets from DNA, or derived from peaks for every track. */
+function resolveTapeOnsets(
+  densified: TimedWaveformSample[],
+  durationSec: number,
+  profile?: WaveformIntelligenceProfile | null,
+): { kickOnsetSec: number[]; snareClapOnsetSec: number[] } {
+  const kickStored = profile?.kickOnsetSec || []
+  const snareStored = profile?.snareClapOnsetSec || []
+  if (kickStored.length >= 4 || snareStored.length >= 4) {
+    return { kickOnsetSec: kickStored, snareClapOnsetSec: snareStored }
+  }
+  return buildGridOnsetBundle({
+    peaks: densified,
+    durationSec,
+    bpm: profile?.bpm ?? profile?.effectiveBpm ?? null,
+    offsetSec: profile?.gridOffsetSec ?? 0,
+  })
 }
 
 /** Build a once-per-track densified, DNA-remesured, color-resolved tape. */
@@ -31,24 +54,45 @@ export function buildWaveformTapeCache(params: {
     params.targetCount ?? Math.min(8192, Math.max(4096, samples.length * 2))
   )
 
-  const remesured = remesureTimedSamples(
-    buildTimedSamplesInWindow({
-      samples,
-      durationSec,
-      startIndex: 0,
-      endIndex: samples.length,
-      targetCount,
-    }),
-    intelligenceProfile
+  const densified = buildTimedSamplesInWindow({
+    samples,
+    durationSec,
+    startIndex: 0,
+    endIndex: samples.length,
+    targetCount,
+  })
+
+  const { kickOnsetSec, snareClapOnsetSec } = resolveTapeOnsets(
+    densified,
+    durationSec,
+    intelligenceProfile,
   )
+  const onsets = [...kickOnsetSec, ...snareClapOnsetSec]
+  const locked =
+    onsets.length >= 2
+      ? remeshPeaksOntoOnsets(densified, onsets, durationSec, { searchSec: 0.048, boost: 0.26 })
+      : densified
+
+  const profileForRemesure =
+    intelligenceProfile && (kickOnsetSec.length >= 2 || snareClapOnsetSec.length >= 2)
+      ? {
+          ...intelligenceProfile,
+          kickOnsetSec: kickOnsetSec.length ? kickOnsetSec : intelligenceProfile.kickOnsetSec,
+          snareClapOnsetSec: snareClapOnsetSec.length
+            ? snareClapOnsetSec
+            : intelligenceProfile.snareClapOnsetSec,
+        }
+      : intelligenceProfile
+
+  const remesured = remesureTimedSamples(locked, profileForRemesure)
 
   const timed = remesured.map((s) => ({
     ...s,
-    color: resolveWaveformColor(s, colorMode, intelligenceProfile),
+    color: resolveWaveformColor(s, colorMode, profileForRemesure),
   }))
 
   return {
-    key: `${samples.length}:${durationSec.toFixed(3)}:${colorMode}:${profileCacheKey(intelligenceProfile)}:${targetCount}`,
+    key: `${samples.length}:${durationSec.toFixed(3)}:${colorMode}:${profileCacheKey(profileForRemesure)}:${targetCount}`,
     durationSec,
     timed,
   }
@@ -96,7 +140,6 @@ export function sliceTapeWindow(
     let maxHigh = 0
     let maxFlux = 0
     let peak = slice[a]
-    let tSum = 0
     for (let j = a; j < b; j++) {
       const s = slice[j]
       if (s.positive >= maxPos) {
@@ -111,9 +154,7 @@ export function sliceTapeWindow(
         if (s.bands.mid > maxMid) maxMid = s.bands.mid
         if (s.bands.high > maxHigh) maxHigh = s.bands.high
       }
-      tSum += s.timeSec
     }
-    const mid = slice[Math.min(slice.length - 1, Math.floor((a + b - 1) / 2))]
     const bands =
       maxLow + maxMid + maxHigh > 0
         ? { low: maxLow, mid: maxMid, high: maxHigh }
@@ -125,7 +166,8 @@ export function sliceTapeWindow(
       rms: maxRms > 0 ? maxRms : peak.rms,
       flux: maxFlux > 0 ? maxFlux : peak.flux,
       bands,
-      timeSec: mid?.timeSec ?? tSum / Math.max(1, b - a),
+      // Keep crest time on the transient that owns maxPos — not the column midpoint.
+      timeSec: peak.timeSec,
     })
   }
   return out

@@ -21,6 +21,7 @@ export type RoutePolicyEntry = {
  */
 export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   // Public playback helpers (used by MusicPlayer / resolveAudioUrl / SonicDNA display)
+  { path: '/api/media/session-artwork', method: 'GET', access: 'public', reason: 'Lock-screen Media Session cover bytes' },
   { path: '/api/audio/resolve', method: 'GET', access: 'public', reason: 'Public playback URL resolution' },
   { path: '/api/audio/bpm', method: 'GET', access: 'public', reason: 'Public BPM lookup for player' },
   { path: '/api/audio/waveform', method: 'GET', access: 'public', reason: 'Public waveform for player' },
@@ -48,6 +49,7 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/studio/tracks/[id]/replace-wav', method: 'POST', access: 'admin_write', reason: 'Replace catalog master WAV and vault audio' },
   { path: '/api/audio/reprocess-track', method: 'POST', access: 'admin_write', reason: 'Reprocess track' },
   { path: '/api/audio/artwork', method: 'POST', access: 'admin_write', reason: 'Artwork extraction/upload' },
+  { path: '/api/audio/artwork', method: 'DELETE', access: 'admin_write', reason: 'Delete cover art file from pool' },
   { path: '/api/audio/update-bpm', method: 'POST', access: 'admin_write', reason: 'Persist BPM' },
   { path: '/api/audio/artifacts', method: 'POST', access: 'admin_write', reason: 'Audio artifact generation' },
 
@@ -89,6 +91,9 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/oembed', method: 'GET', access: 'public', reason: 'oEmbed for share listen URLs' },
 
   // Release Collab (studio thread + magic-link portal + Resend webhooks)
+  { path: '/api/studio/distrokid/queue', method: 'GET', access: 'admin_read', reason: 'Scheduled DistroKid upload queue' },
+  { path: '/api/studio/releases/[id]/distrokid', method: 'GET', access: 'admin_read', reason: 'DistroKid upload packet for one release' },
+  { path: '/api/studio/releases/[id]/distrokid', method: 'POST', access: 'admin_write', reason: 'Queue, mark submitted, or mark live on DistroKid' },
   { path: '/api/studio/collab', method: 'GET', access: 'admin_read', reason: 'Release Collab hub overview' },
   { path: '/api/studio/releases/[id]/collab', method: 'GET', access: 'admin_read', reason: 'Release Collab bundle' },
   { path: '/api/studio/releases/[id]/collab/collaborators', method: 'POST', access: 'admin_write', reason: 'Add/update release collaborator' },

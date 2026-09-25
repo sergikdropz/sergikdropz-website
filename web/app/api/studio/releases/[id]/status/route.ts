@@ -42,8 +42,19 @@ export async function GET(
       })
     }
 
-    // Self-publish path has no Revelator polling.
     const distId = String(release.distributor_release_id || '')
+    if (release.distribution_mode === 'distrokid' || distId.startsWith('dk-')) {
+      return NextResponse.json({
+        status: release.distributor_status || 'submitted',
+        stores: [],
+        health,
+        mode: 'distrokid',
+        message:
+          'DistroKid has no delivery status API. Confirm store pages in Delivery after the release shows live on My Music.',
+      })
+    }
+
+    // Self-publish path has no Revelator polling.
     const isSelf =
       release.distribution_mode === 'self' ||
       (distId.startsWith('self-') && !distId.startsWith('dryrun-') && release.distribution_mode !== 'aggregator')

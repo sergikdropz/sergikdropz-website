@@ -66,4 +66,13 @@ describe('tape window slice', () => {
     const slice = sliceTapeWindow(spiked, 0, 99, 10)
     expect(Math.max(...slice.map((s) => s.positive))).toBeCloseTo(0.99, 5)
   })
+
+  it('anchors decimated crest time on the transient peak, not column midpoint', () => {
+    const spiked = timed.map((s, i) =>
+      i === 53 ? { ...s, positive: 0.99, negative: 0.95 } : { ...s, positive: 0.1, negative: 0.08 }
+    )
+    const slice = sliceTapeWindow(spiked, 0, 99, 10)
+    const crest = slice.find((s) => s.positive > 0.9)
+    expect(crest?.timeSec).toBe(53)
+  })
 })

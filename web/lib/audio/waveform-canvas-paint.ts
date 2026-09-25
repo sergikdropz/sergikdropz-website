@@ -9,6 +9,7 @@ import {
   CHANNEL_LANE_RGB,
   DRUM_SPECTRAL_COLORS,
   SERGIK_ELEMENT_COLORS,
+  drumHatRgb,
   mixAdditiveRgb,
   boostRgbSaturation,
   contrastCurve,
@@ -144,7 +145,10 @@ function paintOverlayMergedStack<K extends string>(
     classicRgb?: readonly [number, number, number]
   }
 ): void {
-  const shares = softNormalizeEnergies(p.energies, { minShare: 0.08, threshold: 0.028 })
+  const weighted = Object.fromEntries(
+    p.layers.map((layer) => [layer.key, (p.energies[layer.key] ?? 0) * layer.weight]),
+  ) as Record<K, number>
+  const shares = softNormalizeEnergies(weighted, { minShare: 0.06, threshold: 0.028 })
   const half = p.totalAmp
   let [br, bg, bb] = p.classicRgb ?? mixAdditiveRgb(p.layers, shares)
   ;[br, bg, bb] = boostRgbSaturation(br, bg, bb, 1.55)
@@ -556,10 +560,10 @@ function paintDnaPocketAccents(
   const phrase1 = Math.ceil((p.endSec - latticeOrigin) / phraseSec) + 1
   for (let ph = phrase0; ph <= phrase1; ph++) {
     const base = latticeOrigin + ph * phraseSec
-    for (const s of kicks) mark(base + s * stepSec, 'rgba(80, 220, 160, 0.55)', 0.55)
-    for (const s of snares) mark(base + s * stepSec, 'rgba(255, 190, 70, 0.45)', 0.4)
-    for (const s of claps) mark(base + s * stepSec, 'rgba(245, 248, 255, 0.4)', 0.36)
-    for (const s of hats) mark(base + s * stepSec, 'rgba(70, 220, 255, 0.38)', 0.28)
+    for (const s of kicks) mark(base + s * stepSec, 'rgba(255, 48, 12, 0.62)', 0.58)
+    for (const s of snares) mark(base + s * stepSec, 'rgba(48, 220, 72, 0.48)', 0.38)
+    for (const s of claps) mark(base + s * stepSec, 'rgba(90, 255, 96, 0.42)', 0.34)
+    for (const s of hats) mark(base + s * stepSec, 'rgba(36, 120, 255, 0.4)', 0.26)
   }
 }
 
@@ -573,7 +577,9 @@ type DrumBandCol = {
   hat: number
 }
 
-/** Map L/M/H (+ element labels) → kick / snare / clap / hat for layered drums mode. */
+/** Map L/M/H (+ element labels) → kick / snare / clap / hat for layered drums mode.
+ * Kick/low is weighted to own the silhouette; mid/high feed green clap/snare + blue hats.
+ */
 function sampleDrumBands(s: TimedWaveformSample): {
   kick: number
   snare: number
@@ -582,22 +588,31 @@ function sampleDrumBands(s: TimedWaveformSample): {
 } {
   const bands = s.bands
   const peak = Math.max(s.positive, s.negative)
-  let kick = bands?.low ?? peak * 0.55
-  let snare = (bands?.mid ?? peak * 0.4) * 0.7
-  let clap = (bands?.mid ?? peak * 0.35) * 0.35 + (bands?.high ?? peak * 0.25) * 0.4
-  let hat = bands?.high ?? peak * 0.3
+  const low = bands?.low ?? peak * 0.55
+  const mid = bands?.mid ?? peak * 0.4
+  const high = bands?.high ?? peak * 0.3
+  // Emphasize low-end kick energy so red reads as the dominant body.
+  let kick = low * 1.45
+  let snare = mid * 0.42
+  let clap = mid * 0.18 + high * 0.12
+  let hat = high * 0.85
   const conf = s.elementConfidence ?? 0
   if (s.elementType && conf > 0.28) {
-    const boost = 0.35 + conf * 0.65
-    if (s.elementType === 'kick') kick = Math.max(kick, boost)
-    else if (s.elementType === 'snare') snare = Math.max(snare, boost)
-    else if (s.elementType === 'clap') clap = Math.max(clap, boost)
+    const boost = 0.4 + conf * 0.7
+    if (s.elementType === 'kick') kick = Math.max(kick, boost * 1.35)
+    else if (s.elementType === 'snare') snare = Math.max(snare, boost * 0.85)
+    else if (s.elementType === 'clap') clap = Math.max(clap, boost * 0.78)
     else if (s.elementType === 'hihat') hat = Math.max(hat, boost)
   }
   const flux = typeof s.flux === 'number' ? s.flux : 0
   if (flux > 0.35) {
-    hat = Math.max(hat, hat + flux * 0.35)
-    clap = Math.max(clap, clap + flux * 0.18)
+    // Broadband attacks: prefer kick when low is present, else light hat/clap accents.
+    if (low >= mid * 0.7) {
+      kick = Math.max(kick, kick + flux * 0.55)
+    } else {
+      hat = Math.max(hat, hat + flux * 0.2)
+      clap = Math.max(clap, clap + flux * 0.08)
+    }
   }
   return { kick, snare, clap, hat }
 }
@@ -633,12 +648,12 @@ function paintOnsetTransientTicks(
   }
 
   for (const t of kicks) {
-    mark(t, 'rgba(255, 72, 8, 0.85)', p.zoomed ? 0.42 : 0.28, 0.72)
+    mark(t, 'rgba(255, 48, 12, 0.9)', p.zoomed ? 0.48 : 0.34, 0.72)
   }
   for (let i = 0; i < snares.length; i++) {
     const t = snares[i]!
-    if (i % 2 === 0) mark(t, 'rgba(255, 140, 48, 0.8)', p.zoomed ? 0.34 : 0.22, 0.5)
-    else mark(t, 'rgba(255, 230, 90, 0.75)', p.zoomed ? 0.3 : 0.2, 0.38)
+    if (i % 2 === 0) mark(t, 'rgba(48, 220, 72, 0.8)', p.zoomed ? 0.34 : 0.22, 0.5)
+    else mark(t, 'rgba(90, 255, 96, 0.75)', p.zoomed ? 0.3 : 0.2, 0.38)
   }
 }
 
@@ -896,10 +911,10 @@ function paintDrumsMultiBand(
   if (!samples.length) return
 
   const bias = p.intelligenceProfile?.spectralBias
-  const kickBias = 1 + (bias?.kicks ?? 0) * 1.4
-  const hatBias = 1 + (bias?.hats ?? 0) * 1.3
-  const snareBias = 1 + (bias?.percussion ?? 0) * 1.15
-  const clapBias = 1 + (bias?.percussion ?? 0) * 0.95
+  const kickBias = 1.35 + (bias?.kicks ?? 0) * 1.5
+  const hatBias = 0.95 + (bias?.hats ?? 0) * 1.15
+  const snareBias = 0.78 + (bias?.percussion ?? 0) * 0.85
+  const clapBias = 0.7 + (bias?.percussion ?? 0) * 0.7
 
   const cols = Math.max(64, Math.floor(width))
   const ampScale = height * 0.34
@@ -965,16 +980,17 @@ function paintDrumsMultiBand(
 
   type DrumKey = 'kick' | 'snare' | 'clap' | 'hat'
   const laneLayers: Array<LaneLayerSpec<DrumKey>> = [
-    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, yStart: 0.55, yEnd: 1, anchor: 'bottom', opacityPast: 0.9, opacityFuture: 0.38 },
-    { key: 'snare', rgb: DRUM_SPECTRAL_COLORS.snare, yStart: 0.36, yEnd: 0.7, anchor: 'center', opacityPast: 0.88, opacityFuture: 0.36 },
-    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, yStart: 0.26, yEnd: 0.56, anchor: 'center', opacityPast: 0.86, opacityFuture: 0.34 },
-    { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, yStart: 0, yEnd: 0.4, anchor: 'top', opacityPast: 0.9, opacityFuture: 0.4 },
+    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, yStart: 0.5, yEnd: 1, anchor: 'bottom', opacityPast: 0.96, opacityFuture: 0.42 },
+    { key: 'snare', rgb: DRUM_SPECTRAL_COLORS.snare, yStart: 0.34, yEnd: 0.68, anchor: 'center', opacityPast: 0.82, opacityFuture: 0.32 },
+    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, yStart: 0.24, yEnd: 0.54, anchor: 'center', opacityPast: 0.8, opacityFuture: 0.3 },
+    { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, yStart: 0, yEnd: 0.38, anchor: 'top', opacityPast: 0.88, opacityFuture: 0.38 },
   ]
+  // Kick owns the body; clap/snare sit thinner in green; hats float forward in blue.
   const overlayLayers: Array<OverlayLayerSpec<DrumKey>> = [
-    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, weight: 1, opacityPast: 0.92, opacityFuture: 0.38, forwardBias: 0.15 },
-    { key: 'snare', rgb: DRUM_SPECTRAL_COLORS.snare, weight: 0.95, opacityPast: 0.9, opacityFuture: 0.36, forwardBias: 0.55 },
-    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, weight: 0.9, opacityPast: 0.92, opacityFuture: 0.4, forwardBias: 0.78 },
-    { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, weight: 0.82, opacityPast: 1, opacityFuture: 0.48, forwardBias: 1 },
+    { key: 'kick', rgb: DRUM_SPECTRAL_COLORS.kick, weight: 1.45, opacityPast: 0.96, opacityFuture: 0.42, forwardBias: 0.08 },
+    { key: 'snare', rgb: DRUM_SPECTRAL_COLORS.snare, weight: 0.72, opacityPast: 0.82, opacityFuture: 0.32, forwardBias: 0.4 },
+    { key: 'clap', rgb: DRUM_SPECTRAL_COLORS.clap, weight: 0.62, opacityPast: 0.8, opacityFuture: 0.3, forwardBias: 0.52 },
+    { key: 'hat', rgb: DRUM_SPECTRAL_COLORS.hat, weight: 0.78, opacityPast: 0.9, opacityFuture: 0.42, forwardBias: 0.92 },
   ]
 
   const colW = width / cols
@@ -995,7 +1011,23 @@ function paintDrumsMultiBand(
 
     const totalAmp = Math.max(1.25, overviewAmp(bodyLin) * ampScale)
     const peakAmp = Math.max(totalAmp, overviewAmp(peakLin) * ampScale)
-    const energies = { kick: col.kick, snare: col.snare, clap: col.clap, hat: col.hat }
+    // Pre-bias energies so soft-normalize still keeps kick as the largest share.
+    const energies = {
+      kick: col.kick * 1.35,
+      snare: col.snare * 0.78,
+      clap: col.clap * 0.68,
+      hat: col.hat * 0.9,
+    }
+    const hatTone = drumHatRgb(
+      Math.min(1, (col.hat / Math.max(col.kick + col.snare + col.clap + col.hat, 1e-6)) * 1.8),
+    )
+    const lanesForPaint =
+      stackMode === 'lanes'
+        ? laneLayers.map((layer) => (layer.key === 'hat' ? { ...layer, rgb: hatTone } : layer))
+        : laneLayers
+    const overlayForPaint = overlayLayers.map((layer) =>
+      layer.key === 'hat' ? { ...layer, rgb: hatTone } : layer,
+    )
     if (stackMode === 'overlay') {
       paintOverlayMergedStack(ctx, {
         x,
@@ -1003,7 +1035,7 @@ function paintDrumsMultiBand(
         midY,
         totalAmp,
         past,
-        layers: overlayLayers,
+        layers: overlayForPaint,
         energies,
       })
     } else {
@@ -1015,7 +1047,7 @@ function paintDrumsMultiBand(
         peakLin,
         totalAmp,
         past,
-        layers: laneLayers,
+        layers: lanesForPaint,
         energies,
       })
     }

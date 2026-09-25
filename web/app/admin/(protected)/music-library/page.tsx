@@ -24,7 +24,7 @@ import {
 import { buildFolderHierarchy, type HierarchicalFolder, isDescendant } from '@/utils/buildFolderHierarchy'
 import { displayTrackDrumStyle, displayTrackGenre, displayTrackSubgenre } from '@/lib/audio/track-display'
 import { emitFolderCatalogPatch } from '@/contexts/CatalogSyncContext'
-import { emitCatalogSync, stampLibraryCover, withArtworkCacheBust } from '@/lib/catalog-sync'
+import { emitCatalogSync, stampLibraryCover, forceArtworkCacheBust, withArtworkCacheBust } from '@/lib/catalog-sync'
 
 const DEBUG_INGEST =
   process.env.NODE_ENV !== 'production' && !!process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGGING
@@ -625,7 +625,7 @@ export default function AdminMusicLibrary() {
 
     const artworkUrl = data.artworkUrl as string
     const folderId = (data.folderId as string | undefined) || track.folderId
-    const busted = artworkUrl ? withArtworkCacheBust(artworkUrl) : ''
+    const busted = artworkUrl ? forceArtworkCacheBust(artworkUrl) : ''
     if (folderId && busted) {
       emitFolderCatalogPatch(folderId, { artwork: busted }, data.publishVersion)
       invalidateMusicLibraryCache()

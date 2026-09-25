@@ -59,8 +59,9 @@ describe('mergeReleaseOntoVaultTrack', () => {
         source: 'distrokid-wav',
       },
     )
-    expect(merged.file_url).toContain('/distrokid/')
-    expect(merged.audio_file_id).toBe('audio-dk')
+    expect(merged.file_url).toBe('/audio/vault/soul.mp3')
+    expect(merged.audio_file_id).toBeNull()
+    expect(String(merged.metadata.distribution_wav_url)).toContain('/distrokid/')
     expect(merged.artwork_url).toBe('/art/soul.jpg')
     expect(merged.date).toBe('2025-02-14')
     expect(merged.metadata.isrc).toBe('QZES72569811')
@@ -91,7 +92,10 @@ describe('dedupeTracksPreferringReleaseMasters', () => {
     ])
     expect(out).toHaveLength(1)
     expect(out[0].id).toBe('a')
-    expect(String(out[0].file)).toContain('/distrokid/')
+    expect(String(out[0].file)).toBe('/audio/a.mp3')
+    expect(String((out[0].metadata as { distribution_wav_url?: string })?.distribution_wav_url)).toContain(
+      '/distrokid/',
+    )
     expect(out[0].metadata?.isrc).toBe('QZES72569812')
     expect(out[0].bpm).toBe(88)
   })

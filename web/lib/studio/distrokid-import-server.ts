@@ -3,6 +3,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { distributionWavFromVault } from '@/lib/audio/stream-master'
 import { ALL_DSP_STORE_IDS, orderDspStoreIds } from '@/lib/studio/constants'
 import {
   buildDistroKidCatalogDrafts,
@@ -278,7 +279,8 @@ async function upsertTrack(
   }
   if (opts.vault) {
     payload.music_library_track_id = opts.vault.id
-    if (opts.vault.file_url) payload.wav_url = opts.vault.file_url
+    const distributionWav = distributionWavFromVault(opts.vault)
+    if (distributionWav) payload.wav_url = distributionWav
     if (opts.vault.duration != null) payload.duration = opts.vault.duration
   }
 
@@ -338,7 +340,7 @@ async function upsertTrack(
       ...payload,
       contributors: [],
       splits: [],
-      wav_url: opts.vault?.file_url || '',
+      wav_url: (opts.vault ? distributionWavFromVault(opts.vault) : '') || '',
     })
     .select('id')
     .single()
@@ -352,7 +354,7 @@ async function upsertTrack(
         ...payload,
         contributors: [],
         splits: [],
-        wav_url: opts.vault?.file_url || '',
+        wav_url: (opts.vault ? distributionWavFromVault(opts.vault) : '') || '',
       })
       .select('id')
       .single()

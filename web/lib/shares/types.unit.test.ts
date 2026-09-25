@@ -15,6 +15,8 @@ import {
   resolvePublicOrigin,
   SHARE_EMBED_HEIGHT,
   shareDisplayArtworkUrl,
+  pickShareArtwork,
+  resolveFolderShareCoverArt,
   siteOrigin,
 } from './types'
 
@@ -118,10 +120,41 @@ describe('share link helpers', () => {
   })
 
   it('builds same-origin display artwork URLs', () => {
-    // Display prefers the direct CDN URL (no proxy hop).
-    expect(shareDisplayArtworkUrl('https://cdn.example/a.jpg')).toBe('https://cdn.example/a.jpg')
-    expect(shareDisplayArtworkUrl('/images/a.jpg')).toBe('/images/a.jpg')
-    expect(shareDisplayArtworkUrl(undefined)).toBeUndefined()
+    const prevSite = process.env.NEXT_PUBLIC_SITE_URL
+    const prevSupa = process.env.NEXT_PUBLIC_SUPABASE_URL
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://sergikdropz.com'
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://bjzevrsruixsbypybyiy.supabase.co'
+    try {
+      expect(shareDisplayArtworkUrl('https://cdn.example/a.jpg')).toBe('https://cdn.example/a.jpg')
+      expect(shareDisplayArtworkUrl('/images/a.jpg')).toBe('/images/a.jpg')
+      expect(
+        shareDisplayArtworkUrl('/images/audio/artwork/folder-1790233725753.jpg?v=1'),
+      ).toBe(
+        'https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/audio-files/artwork/folder-1790233725753.jpg?v=1',
+      )
+      expect(shareDisplayArtworkUrl(undefined)).toBeUndefined()
+    } finally {
+      process.env.NEXT_PUBLIC_SITE_URL = prevSite
+      process.env.NEXT_PUBLIC_SUPABASE_URL = prevSupa
+    }
+  })
+
+  it('prefers folder cover art for EP share links', () => {
+    const folderArt = '/images/audio/artwork/folder-1789782894262.jpg?v=1'
+    const trackArt = '/images/audio/artwork/folder-other.jpg'
+    const payload = {
+      share: { token: 't', kind: 'folder' as const, visibility: 'public' as const, title: 'Everyday' },
+      collection: { id: 'f1', title: 'Everyday', type: 'ep', artwork: folderArt, trackCount: 2, hidden: false },
+      tracks: [
+        { id: '1', title: 'A', artist: 'SERGIK', duration: 100, artwork: trackArt, file: '' },
+        { id: '2', title: 'B', artist: 'SERGIK', duration: 100, artwork: trackArt, file: '' },
+      ],
+      urls: { listen: '', embed: '', embedHtml: '' },
+    }
+    expect(pickShareArtwork(payload, 1)).toBe(folderArt)
+    expect(
+      resolveFolderShareCoverArt(payload.collection, payload.tracks),
+    ).toBe(folderArt)
   })
 
   it('creates url-safe random tokens', () => {

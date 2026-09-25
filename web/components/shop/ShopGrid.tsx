@@ -73,6 +73,7 @@ export default function ShopGrid({ products, categories }: ShopGridProps) {
         onSearchChange={setSearchQuery}
         sortBy={sortBy}
         onSortChange={setSortBy}
+        resultCount={filteredProducts.length}
       />
 
       {filteredProducts.length === 0 ? (
