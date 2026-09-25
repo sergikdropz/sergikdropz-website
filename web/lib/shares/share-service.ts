@@ -1,8 +1,10 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { resolveVaultPlaybackUrl } from '@/lib/audio/resolve-vault-playback-url'
-import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
+import { syncMediaProxyPlaybackUrl } from '@/lib/audio/skip-background-resolve'
 import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
+import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
+import { resolveShareArtworkUrl } from '@/lib/shares/share-artwork'
 import {
   createShareToken,
   embedHtmlSnippet,
@@ -16,6 +18,7 @@ import {
   type ShareKind,
   type ShareTrackPayload,
   type ShareVisibility,
+  resolveFolderShareCoverArt,
 } from '@/lib/shares/types'
 
 const SHARE_SELECT =
@@ -28,18 +31,34 @@ function missingTableResponse() {
   }
 }
 
+function rawTrackArtworkUrl(track: any, audio?: any, folder?: any): string | undefined {
+  const folderRow = folder || track.music_library_folders || null
+  const folderType = String(folderRow?.type || '')
+    .trim()
+    .toLowerCase()
+  const inheritFolderArt = folderType !== 'album'
+  const raw =
+    track.artwork_url ||
+    audio?.artwork_url ||
+    (inheritFolderArt ? folderRow?.artwork_url : null) ||
+    undefined
+  return raw ? String(raw).trim() : undefined
+}
+
 function mapTrackRow(track: any, audio?: any, folder?: any): ShareTrackPayload {
+  const folderRow = folder || track.music_library_folders || null
   const mapped = mapLibraryTrackToListItem(track, {
     audio,
-    folder: folder || track.music_library_folders || null,
+    folder: folderRow,
     includeFullMetadata: false,
   })
+  const artRaw = rawTrackArtworkUrl(track, audio, folderRow)
   return {
     id: String(mapped.id),
     title: String(mapped.title || 'Untitled'),
     artist: String(mapped.artist || 'SERGIK'),
     duration: Number(mapped.duration) || 0,
-    artwork: mapped.artwork || undefined,
+    artwork: resolveShareArtworkUrl(artRaw) || resolveShareArtworkUrl(mapped.artwork) || undefined,
     album: mapped.album || undefined,
     file: String(mapped.file || normalizeVaultAudioUrl(track.file_url || '') || ''),
     folderId: mapped.folderId || track.folder_id || undefined,
@@ -70,7 +89,7 @@ async function enrichArtworkFromAudioFiles(
   const byId = new Map<string, string>()
   for (const row of data) {
     const raw = row?.artwork_url ? String(row.artwork_url).trim() : ''
-    if (raw) byId.set(String(row.id), resolveImageUrl(raw))
+    if (raw) byId.set(String(row.id), resolveShareArtworkUrl(raw) || resolveImageUrl(raw))
   }
   if (!byId.size) return tracks
 
@@ -81,10 +100,17 @@ async function enrichArtworkFromAudioFiles(
   })
 }
 
+/** Catalog rows already on the media proxy — skip server R2 probes at share resolve time. */
+function syncSharePlaybackUrlFromFile(file: string): string | null {
+  return syncMediaProxyPlaybackUrl(file)
+}
+
 async function attachPlaybackUrls(tracks: ShareTrackPayload[]): Promise<ShareTrackPayload[]> {
   return Promise.all(
     tracks.map(async (track) => {
       if (!track.file) return { ...track, playbackUrl: null }
+      const direct = syncSharePlaybackUrlFromFile(track.file)
+      if (direct) return { ...track, playbackUrl: direct }
       try {
         const resolved = await resolveVaultPlaybackUrl(track.file)
         return { ...track, playbackUrl: resolved?.url || null }
@@ -135,20 +161,24 @@ async function loadFolderShare(folderId: string): Promise<{
   const tracks = await enrichArtworkFromAudioFiles(
     (trackRows || []).map((row) => mapTrackRow(row, null, folder)),
   )
-  const artwork = folder.artwork_url
-    ? resolveImageUrl(folder.artwork_url)
-    : tracks.find((t) => t.artwork)?.artwork
-
-  return {
-    collection: {
+  const collectionDraft: ShareCollectionPayload = {
       id: String(folder.id),
       title: String(folder.name || 'Untitled'),
       type: String(folder.type || 'folder'),
-      artwork: artwork || undefined,
+      artwork: folder.artwork_url
+        ? resolveShareArtworkUrl(String(folder.artwork_url))
+        : undefined,
       artist: albumArtist || tracks[0]?.artist || 'SERGIK',
       year: folder.year ?? null,
       trackCount: tracks.length,
       hidden: !!folder.hidden,
+    }
+  const artwork = resolveFolderShareCoverArt(collectionDraft, tracks)
+
+  return {
+    collection: {
+      ...collectionDraft,
+      artwork: artwork || collectionDraft.artwork,
     },
     tracks,
   }
@@ -179,7 +209,7 @@ async function loadTrackShare(trackId: string): Promise<{
         title: String(folder.name || ''),
         type: String(folder.type || 'folder'),
         artwork: folder.artwork_url
-          ? resolveImageUrl(folder.artwork_url)
+          ? resolveShareArtworkUrl(String(folder.artwork_url))
           : mapped.artwork,
         artist: mapped.artist,
         year: folder.year ?? null,

@@ -55,12 +55,13 @@ export function isEdgePlaybackUrl(url: string): boolean {
   }
 }
 
-/** Server + client: presigned R2 as `<audio src>` only when CORS is confirmed. */
+/** Server + client: presigned R2 as `<audio src>` only when explicitly enabled. */
 export function isR2BrowserPlayEnabled(): boolean {
-  // Hard-off. Range GET + ACAO can succeed while <audio crossOrigin="anonymous">
-  // still fails (SW, cache, or a signed URL the element cannot use). Playback
-  // stays on same-origin /api/audio/media until that path is proven in-browser.
-  return false
+  const raw =
+    (typeof process !== 'undefined' &&
+      (process.env.NEXT_PUBLIC_R2_BROWSER_PLAY || process.env.R2_BROWSER_PLAY)) ||
+    ''
+  return raw === '1' || raw.toLowerCase() === 'true'
 }
 
 export function isSignedEdgeUrl(url: string): boolean {

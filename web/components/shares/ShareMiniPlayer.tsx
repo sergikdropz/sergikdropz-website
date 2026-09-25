@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { ShareTrackPayload } from '@/lib/shares/types'
 import ShareDockWaveformScrubber from '@/components/shares/ShareDockWaveformScrubber'
+import { playbackTimingMark, playbackTimingStart } from '@/lib/audio/playback-timing'
+import { assignMediaSrcIfChanged } from '@/lib/audio/media-src'
 import { VinylScrubAudio } from '@/lib/shares/vinyl-scrub-audio'
 import { relockVinylTimeline, setVinylTimelineSource } from '@/lib/shares/vinyl-spin-clock'
 
@@ -83,12 +85,15 @@ export default function ShareMiniPlayer({
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const playedOnce = useRef(false)
+  const [bufferAfterPlay, setBufferAfterPlay] = useState(false)
   const playingRef = useRef(playing)
   const currentTimeRef = useRef(currentTime)
   const durationRef = useRef(duration)
   const scrubAudioRef = useRef<VinylScrubAudio | null>(null)
   const vinylScrubbingRef = useRef(false)
   const scrubUiPaintAtRef = useRef(0)
+  const dockProgressRef = useRef(0)
+  const dockTimeUiAtRef = useRef(0)
   playingRef.current = playing
   currentTimeRef.current = currentTime
   durationRef.current = duration
@@ -124,16 +129,40 @@ export default function ShareMiniPlayer({
     if (track) onTrackChange?.(index, track)
   }, [index, track, onTrackChange])
 
+  // Warm current + next track (fetch cache only — does not block the live element).
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const urls = [
+      src,
+      tracks[index + 1]?.playbackUrl || tracks[index + 1]?.file,
+    ].filter((u): u is string => Boolean(u))
+    const links = urls.map((href) => {
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'fetch'
+      link.href = href
+      link.crossOrigin = 'anonymous'
+      document.head.appendChild(link)
+      return link
+    })
+    return () => {
+      links.forEach((link) => link.remove())
+    }
+  }, [index, tracks, src])
+
   useEffect(() => {
     const el = audioRef.current
     if (!el || !src) return
-    el.src = src
-    el.load()
-    setCurrentTime(0)
-    setDuration(Number(track?.duration) || 0)
+    if (track?.id) playbackTimingStart(track.id)
+    const changed = assignMediaSrcIfChanged(el, src)
+    if (changed) {
+      setCurrentTime(0)
+      dockProgressRef.current = 0
+      setDuration(Number(track?.duration) || 0)
+    }
     setError(null)
     if (!scrubAudioRef.current) scrubAudioRef.current = new VinylScrubAudio()
-    void scrubAudioRef.current.prepareTrack(src)
+    // Full decode for vinyl scrub grains runs on first scrub only — not on every track change.
     if (playing) {
       void el.play().catch((err) => {
         setPlaying(false)
@@ -157,6 +186,7 @@ export default function ShareMiniPlayer({
       .then(() => {
         setPlaying(true)
         setError(null)
+        setBufferAfterPlay(true)
         if (!playedOnce.current) {
           playedOnce.current = true
           onPlayed?.()
@@ -173,7 +203,25 @@ export default function ShareMiniPlayer({
     const dur = durationRef.current || el.duration || 0
     const next = Math.max(0, dur > 0 ? Math.min(dur, value) : value)
     el.currentTime = next
+    currentTimeRef.current = next
+    dockProgressRef.current = dur > 0 ? next / dur : 0
     setCurrentTime(next)
+  }, [])
+
+  const syncDockProgressFromAudio = useCallback((el: HTMLAudioElement) => {
+    const t = el.currentTime
+    const dur = el.duration || durationRef.current || 0
+    currentTimeRef.current = t
+    dockProgressRef.current = dur > 0 ? Math.min(1, Math.max(0, t / dur)) : 0
+    const now = performance.now()
+    if (now - dockTimeUiAtRef.current > 180) {
+      dockTimeUiAtRef.current = now
+      setCurrentTime(t)
+      if (dur > 0 && Math.abs(dur - durationRef.current) > 0.01) {
+        durationRef.current = dur
+        setDuration(dur)
+      }
+    }
   }, [])
 
   const playFromApi = useCallback(() => {
@@ -184,6 +232,7 @@ export default function ShareMiniPlayer({
       .then(() => {
         setPlaying(true)
         setError(null)
+        setBufferAfterPlay(true)
         if (!playedOnce.current) {
           playedOnce.current = true
           onPlayed?.()
@@ -211,6 +260,8 @@ export default function ShareMiniPlayer({
         const next = Math.max(0, Number.isFinite(dur) ? Math.min(dur, seconds) : seconds)
         el.currentTime = next
         currentTimeRef.current = next
+        const durForProgress = el.duration || durationRef.current || 0
+        dockProgressRef.current = durForProgress > 0 ? next / durForProgress : 0
         setCurrentTime(next)
       },
       play: playFromApi,
@@ -227,6 +278,8 @@ export default function ShareMiniPlayer({
         const el = audioRef.current
         vinylScrubbingRef.current = true
         if (!scrubAudioRef.current) scrubAudioRef.current = new VinylScrubAudio()
+        const scrubSrc = el?.currentSrc || el?.src || src
+        void scrubAudioRef.current.prepareTrack(scrubSrc)
         void scrubAudioRef.current.begin()
         // Pause media clock so currentTime only moves with the platter —
         // keep React `playing` as-is so the disc motor stay armed.
@@ -245,6 +298,8 @@ export default function ShareMiniPlayer({
           )
           el.currentTime = next
           currentTimeRef.current = next
+          dockProgressRef.current =
+            Number.isFinite(dur) && dur > 0 ? Math.min(1, Math.max(0, next / dur)) : 0
           // Avoid React re-renders on every pointer sample — they can wipe platter transforms.
           const now = performance.now()
           if (now - (scrubUiPaintAtRef.current || 0) > 80) {
@@ -279,7 +334,7 @@ export default function ShareMiniPlayer({
     return () => {
       scrubApiRef.current = null
     }
-  }, [scrubApiRef, playFromApi, pauseFromApi])
+  }, [scrubApiRef, playFromApi, pauseFromApi, src])
 
   const playNext = useCallback(() => {
     if (index >= tracks.length - 1) {
@@ -313,6 +368,7 @@ export default function ShareMiniPlayer({
 
   const displayTitle = tracks.length > 1 ? track.title : title
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0
+  dockProgressRef.current = progress
 
   if (dock) {
     const totalLabel = formatTime(duration || track.duration || 0)
@@ -320,9 +376,26 @@ export default function ShareMiniPlayer({
       <div className={`bg-transparent text-white ${className}`}>
         <audio
           ref={audioRef}
-          preload="metadata"
-          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || Number(track.duration) || 0)}
+          preload={bufferAfterPlay ? 'auto' : 'metadata'}
+          onTimeUpdate={(e) => syncDockProgressFromAudio(e.currentTarget)}
+          onLoadedMetadata={(e) => {
+            const dur = e.currentTarget.duration || Number(track.duration) || 0
+            durationRef.current = dur
+            setDuration(dur)
+            dockProgressRef.current =
+              dur > 0 ? Math.min(1, e.currentTarget.currentTime / dur) : 0
+          }}
+          onCanPlay={() => {
+            if (track?.id) playbackTimingMark(track.id, 'canplay')
+          }}
+          onPlaying={() => {
+            if (track?.id) playbackTimingMark(track.id, 'playing')
+          }}
+          onSeeked={(e) => {
+            currentTimeRef.current = e.currentTarget.currentTime
+            dockTimeUiAtRef.current = 0
+            setCurrentTime(e.currentTarget.currentTime)
+          }}
           onEnded={playNext}
           onError={() => setError('Audio failed to load')}
         />
@@ -331,7 +404,7 @@ export default function ShareMiniPlayer({
             file={track.file}
             trackId={track.id}
             audioFileId={track.audioFileId}
-            progress={progress}
+            progressRef={dockProgressRef}
             duration={duration || track.duration || 0}
             currentTime={currentTime}
             onSeek={seek}
@@ -396,9 +469,15 @@ export default function ShareMiniPlayer({
     >
       <audio
         ref={audioRef}
-        preload="metadata"
+        preload={bufferAfterPlay ? 'auto' : 'metadata'}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || Number(track.duration) || 0)}
+        onCanPlay={() => {
+          if (track?.id) playbackTimingMark(track.id, 'canplay')
+        }}
+        onPlaying={() => {
+          if (track?.id) playbackTimingMark(track.id, 'playing')
+        }}
         onEnded={playNext}
         onError={() => setError('Audio failed to load')}
       />

@@ -79,6 +79,9 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get('content-type') || ''
     let playlistId = ''
+    let folderTargetId = ''
+    let ingestTarget: 'playlist' | 'library' | 'folder' = 'playlist'
+    let previewOnly = false
     let convertToMp3 = false
     const refs: DroppedFileRef[] = []
     const blobs: {
@@ -99,6 +102,16 @@ export async function POST(request: NextRequest) {
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData()
       playlistId = String(form.get('playlistId') || '')
+      folderTargetId = String(form.get('folderId') || '')
+      const targetRaw = String(form.get('target') || '')
+      if (truthyFormFlag(form.get('targetLibrary')) || targetRaw === 'library') {
+        ingestTarget = 'library'
+      } else if (targetRaw === 'folder') {
+        ingestTarget = 'folder'
+      } else {
+        ingestTarget = 'playlist'
+      }
+      previewOnly = truthyFormFlag(form.get('preview'))
       convertToMp3 = truthyFormFlag(form.get('convertToMp3'))
       const pathHints = form.getAll('paths').map((p) => String(p || ''))
       const fileEntries = form.getAll('files').filter((f): f is File => typeof File !== 'undefined' && f instanceof File)
@@ -208,6 +221,15 @@ export async function POST(request: NextRequest) {
     } else {
       const body = await request.json().catch(() => ({}))
       playlistId = typeof body.playlistId === 'string' ? body.playlistId : ''
+      folderTargetId = typeof body.folderId === 'string' ? body.folderId : ''
+      if (body.target === 'folder') {
+        ingestTarget = 'folder'
+      } else if (body.target === 'library' || body.targetLibrary === true) {
+        ingestTarget = 'library'
+      } else {
+        ingestTarget = 'playlist'
+      }
+      previewOnly = body.preview === true
       const filesIn = Array.isArray(body.files) ? body.files : []
       for (const f of filesIn) {
         refs.push({
@@ -217,8 +239,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!playlistId) {
+    if (ingestTarget === 'playlist' && !playlistId) {
       return NextResponse.json({ error: 'playlistId is required' }, { status: 400 })
+    }
+    if (ingestTarget === 'folder' && !folderTargetId) {
+      return NextResponse.json({ error: 'folderId is required' }, { status: 400 })
     }
     if (!refs.length) {
       return NextResponse.json({ error: 'No files in drop' }, { status: 400 })
@@ -238,26 +263,51 @@ export async function POST(request: NextRequest) {
 
     const supabase = createSupabaseServerClient()
 
-    const { data: playlist, error: plErr } = await supabase
-      .from('music_library_playlists')
-      .select('id, name, track_ids')
-      .eq('id', playlistId)
-      .maybeSingle()
+    let playlist: { id: string; name: string; track_ids: string[] | null } | null = null
+    let folderId: string | null = null
+    let folderRecord: { id: string; name: string } | null = null
 
-    if (plErr || !playlist) {
-      return NextResponse.json(
-        { error: plErr?.message || 'Playlist not found' },
-        { status: plErr ? 500 : 404 },
-      )
+    if (ingestTarget === 'folder') {
+      const { data, error: folderErr } = await supabase
+        .from('music_library_folders')
+        .select('id, name')
+        .eq('id', folderTargetId)
+        .maybeSingle()
+      if (folderErr || !data) {
+        return NextResponse.json(
+          { error: folderErr?.message || 'Folder not found' },
+          { status: folderErr ? 500 : 404 },
+        )
+      }
+      folderRecord = { id: data.id, name: data.name }
+    } else if (ingestTarget === 'playlist') {
+      const { data, error: plErr } = await supabase
+        .from('music_library_playlists')
+        .select('id, name, track_ids')
+        .eq('id', playlistId)
+        .maybeSingle()
+
+      if (plErr || !data) {
+        return NextResponse.json(
+          { error: plErr?.message || 'Playlist not found' },
+          { status: plErr ? 500 : 404 },
+        )
+      }
+      playlist = {
+        id: data.id,
+        name: data.name,
+        track_ids: (data.track_ids as string[] | null) ?? null,
+      }
+      folderId = folderIdFromPlaylistId(playlistId)
+      if (!previewOnly) {
+        await ensurePlaylistFolder(folderId, playlist!.name)
+      }
     }
-
-    const folderId = folderIdFromPlaylistId(playlistId)
-    await ensurePlaylistFolder(folderId, playlist.name)
 
     const [{ data: libraryTracks }, { data: audioFiles }] = await Promise.all([
       supabase
         .from('music_library_tracks')
-        .select('id, title, artist, file_url, audio_file_id')
+        .select('id, title, artist, file_url, audio_file_id, folder_id')
         .or('is_archived.is.null,is_archived.eq.false'),
       supabase.from('audio_files').select('id, file_name, file_path, file_url, title, artist'),
     ])
@@ -277,6 +327,55 @@ export async function POST(request: NextRequest) {
     })
 
     const matchResults = matchDropsToVault(audioRefs, candidates)
+
+    if (previewOnly) {
+      const titleByTrackId = new Map(
+        candidates.map((c) => [c.id, { title: c.title, artist: c.artist }]),
+      )
+      const existingPlaylistIds = new Set<string>(
+        ingestTarget === 'playlist' && playlist?.track_ids && Array.isArray(playlist.track_ids)
+          ? playlist.track_ids
+          : [],
+      )
+      const existingFolderTrackIds = new Set<string>(
+        ingestTarget === 'folder' && folderTargetId
+          ? (libraryTracks || [])
+              .filter((t: any) => t.folder_id === folderTargetId)
+              .map((t: any) => t.id)
+          : [],
+      )
+      const duplicates = matchResults
+        .filter((r) => r.reason === 'matched' && r.trackId)
+        .map((r) => {
+          const meta = titleByTrackId.get(r.trackId!)
+          const alreadyInTarget =
+            ingestTarget === 'folder'
+              ? existingFolderTrackIds.has(r.trackId!)
+              : existingPlaylistIds.has(r.trackId!)
+          return {
+            file: dropBasename(r.ref),
+            trackId: r.trackId!,
+            title: meta?.title || dropBasename(r.ref),
+            artist: meta?.artist || null,
+            alreadyInPlaylist: alreadyInTarget,
+            score: r.score,
+          }
+        })
+      const newFiles = matchResults
+        .filter((r) => r.reason === 'unmatched' || r.reason === 'ambiguous')
+        .map((r) => dropBasename(r.ref))
+
+      return NextResponse.json({
+        preview: true,
+        target: ingestTarget,
+        playlistId: ingestTarget === 'playlist' ? playlistId : null,
+        folderId: ingestTarget === 'folder' ? folderTargetId : null,
+        duplicates,
+        newFiles,
+        totalAudio: audioRefs.length,
+      })
+    }
+
     const blobByOriginalBase = new Map(
       blobs.map((b) => [dropBasename({ name: b.originalName }).toLowerCase(), b]),
     )
@@ -309,8 +408,18 @@ export async function POST(request: NextRequest) {
           fileName: ingestName,
           buffer: blob.buffer,
           mimeType: blob.mimeType,
-          playlistName: playlist.name,
-          folderId,
+          playlistName:
+            ingestTarget === 'library'
+              ? 'Library'
+              : ingestTarget === 'folder'
+                ? folderRecord!.name
+                : playlist!.name,
+          folderId:
+            ingestTarget === 'library'
+              ? null
+              : ingestTarget === 'folder'
+                ? folderTargetId
+                : folderId,
           relativeHint: dropVaultRelativeHint({
             name: ingestName,
             path: blob.ref.path,
@@ -337,25 +446,52 @@ export async function POST(request: NextRequest) {
     }
 
     const uniqueMatched = [...new Set(matchedIds)]
-    const existing: string[] = Array.isArray(playlist.track_ids) ? playlist.track_ids : []
-    const nextIds = [...existing]
-    const added: string[] = []
-    for (const id of uniqueMatched) {
-      if (!nextIds.includes(id)) {
-        nextIds.push(id)
-        added.push(id)
-      }
-    }
+    let nextIds = uniqueMatched
+    let added: string[] = []
+    let existing: string[] = []
 
-    if (added.length || created.length) {
-      const { error: upErr } = await supabase
-        .from('music_library_playlists')
-        .update({ track_ids: nextIds, updated_at: new Date().toISOString() })
-        .eq('id', playlistId)
-
-      if (upErr) {
-        return NextResponse.json({ error: upErr.message }, { status: 500 })
+    if (ingestTarget === 'playlist' && playlist) {
+      existing = Array.isArray(playlist.track_ids) ? playlist.track_ids : []
+      nextIds = [...existing]
+      for (const id of uniqueMatched) {
+        if (!nextIds.includes(id)) {
+          nextIds.push(id)
+          added.push(id)
+        }
       }
+
+      if (added.length || created.length) {
+        const { error: upErr } = await supabase
+          .from('music_library_playlists')
+          .update({ track_ids: nextIds, updated_at: new Date().toISOString() })
+          .eq('id', playlistId)
+
+        if (upErr) {
+          return NextResponse.json({ error: upErr.message }, { status: 500 })
+        }
+      }
+    } else if (ingestTarget === 'folder' && folderTargetId) {
+      const inFolder = new Set<string>(
+        (libraryTracks || [])
+          .filter((t: any) => t.folder_id === folderTargetId)
+          .map((t: any) => t.id),
+      )
+      for (const id of uniqueMatched) {
+        if (inFolder.has(id)) continue
+        const { error: upErr } = await supabase
+          .from('music_library_tracks')
+          .update({ folder_id: folderTargetId })
+          .eq('id', id)
+        if (!upErr) {
+          added.push(id)
+          inFolder.add(id)
+        }
+      }
+      for (const row of created) {
+        if (!added.includes(row.trackId)) added.push(row.trackId)
+      }
+    } else {
+      added = [...uniqueMatched]
     }
 
     // Publish catalog version so live music-library clients refresh (same signal as Sync Production).
@@ -388,8 +524,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      playlistId,
-      playlistName: playlist.name,
+      target: ingestTarget,
+      playlistId: ingestTarget === 'playlist' ? playlistId : null,
+      folderId: ingestTarget === 'folder' ? folderTargetId : null,
+      playlistName:
+        ingestTarget === 'playlist'
+          ? playlist?.name
+          : ingestTarget === 'folder'
+            ? folderRecord?.name
+            : 'Songs',
       added,
       created,
       converted,
