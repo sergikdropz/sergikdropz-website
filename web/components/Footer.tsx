@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import SocialLinks from './SocialLinks'
 import artistData from '@/data/artist.json'
 
@@ -27,6 +28,15 @@ export default function Footer() {
         </div>
 
         <div className="mt-6 border-t border-gray-800 pt-6 text-center text-xs text-gray-400 sm:mt-8 sm:pt-8 sm:text-sm">
+          <p className="mb-2">
+            <Link href="/privacy" className="transition-colors hover:text-white">
+              Privacy Policy
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/terms" className="transition-colors hover:text-white">
+              Terms of Service
+            </Link>
+          </p>
           <p>&copy; {new Date().getFullYear()} SERGIK. All rights reserved.</p>
         </div>
       </div>
