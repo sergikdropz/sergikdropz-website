@@ -25,6 +25,29 @@ type PortalPayload = {
     duration: number | null
     playbackUrl: string | null
   }>
+  context: {
+    tracks: Array<{
+      id: string
+      title: string
+      trackNumber: number | null
+      isrc: string | null
+      splitsLabel: string
+      splitsOk: boolean
+    }>
+    packets: Array<{
+      kind: string
+      label: string
+      needed: boolean
+      ready: boolean
+      summary: string
+      status: string | null
+    }>
+    ops: {
+      split_sheet_status: string | null
+      producer_agreement_status: string | null
+      sample_clearance_status: string | null
+    }
+  } | null
   expiresAt: string
 }
 
@@ -174,6 +197,35 @@ export default function CollabPortalClient({ token }: { token: string }) {
           <p className="text-sm text-amber-200 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2">
             {error}
           </p>
+        )}
+
+        {data.context && data.context.packets.length > 0 && (
+          <section className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+            <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
+              Credits & agreements
+            </h2>
+            <ul className="space-y-2 text-sm text-zinc-300">
+              {data.context.tracks.map((t) => (
+                <li key={t.id} className="flex justify-between gap-2">
+                  <span className="truncate">
+                    {t.trackNumber != null ? `${t.trackNumber}. ` : ''}
+                    {t.title}
+                  </span>
+                  <span className={t.splitsOk ? 'text-emerald-400/90 shrink-0' : 'text-amber-300 shrink-0'}>
+                    {t.splitsLabel}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <ul className="mt-3 space-y-1 text-xs text-zinc-500">
+              {data.context.packets.map((p) => (
+                <li key={p.kind}>
+                  {p.label}: {p.status || 'missing'}
+                  {p.summary ? ` — ${p.summary}` : ''}
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section className="space-y-2">

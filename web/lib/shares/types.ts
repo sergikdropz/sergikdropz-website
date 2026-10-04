@@ -64,6 +64,8 @@ export type ResolvedSharePayload = {
     embed: string
     embedHtml: string
   }
+  /** Unreleased or unlisted audio is omitted until the listener unlocks with email or Google. */
+  listenLocked?: boolean
 }
 
 /** Canonical live domain — used when SITE_URL is missing or still points at localhost. */

@@ -139,7 +139,10 @@ export default function FansAdmin() {
         method: 'DELETE',
       })
 
-      if (!res.ok) throw new Error('Failed to delete fan')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null)
+        throw new Error(errorData?.error || 'Failed to delete fan')
+      }
 
       showNotification('Fan deleted', 'success')
       await loadFans()
@@ -266,7 +269,7 @@ export default function FansAdmin() {
   }
 
   const sources = Array.from(
-    new Set(['vault_unlock', 'contact_form', 'smart_link', ...fans.map((f) => f.source).filter(Boolean)])
+    new Set(['vault_unlock', 'google', 'share_listen', 'contact_form', 'smart_link', ...fans.map((f) => f.source).filter(Boolean)])
   )
 
   return (
@@ -320,11 +323,15 @@ export default function FansAdmin() {
                 <option key={source} value={source}>
                   {source === 'vault_unlock'
                     ? 'Vault unlock'
-                    : source === 'contact_form'
-                      ? 'Contact form'
-                      : source === 'smart_link'
-                        ? 'Smart link'
-                        : source}
+                    : source === 'google'
+                      ? 'Google sign-in'
+                      : source === 'share_listen'
+                        ? 'Share listen'
+                        : source === 'contact_form'
+                        ? 'Contact form'
+                        : source === 'smart_link'
+                          ? 'Smart link'
+                          : source}
                 </option>
               ))}
             </select>
@@ -380,6 +387,7 @@ export default function FansAdmin() {
                     <th className="px-6 py-3 text-left text-sm font-semibold">Tags</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">Signed Up</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">Last Visit</th>
                     <th className="px-6 py-3 text-right text-sm font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -447,15 +455,24 @@ export default function FansAdmin() {
                       <td className="px-6 py-4 text-sm text-gray-400">
                         {new Date(fan.created_at).toLocaleDateString()}
                       </td>
+                      <td className="px-6 py-4 text-sm text-gray-400">
+                        {fan.last_engaged_at
+                          ? new Date(fan.last_engaged_at).toLocaleDateString()
+                          : '—'}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
                           <button
+                            type="button"
+                            aria-label={`Edit ${fan.email}`}
                             onClick={() => handleEditFan(fan)}
                             className="text-blue-400 hover:text-blue-300 transition p-2"
                           >
                             <FaEdit />
                           </button>
                           <button
+                            type="button"
+                            aria-label={`Delete ${fan.email}`}
                             onClick={() => handleDeleteFan(fan.id)}
                             className="text-red-400 hover:text-red-300 transition p-2"
                           >

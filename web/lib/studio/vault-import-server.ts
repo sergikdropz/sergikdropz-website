@@ -21,6 +21,11 @@ import {
   type VaultFolderRow,
   type VaultTrackRow,
 } from '@/lib/studio/vault-import'
+import { probeAudioDurationSec } from '@/lib/studio/catalog-timestamp-probe'
+import { normalizeDurationSec, resolveCatalogDuration } from '@/lib/studio/catalog-timestamps'
+import { durationToSeconds } from '@/lib/studio/isrc-format'
+import { extractCopyIntelCard } from '@/lib/studio/copy-intelligence'
+import { loadSonicDnaIntelligenceCard } from '@/lib/audio/load-local-measured'
 import {
   contributorsFromVault,
   mergeContributors,
@@ -95,7 +100,12 @@ async function hydrateVaultTracksWithAudio(
       sonic_dna: row.sonic_dna || audio?.sonic_dna || null,
       sonic_dna_status: audio?.sonic_dna_status || null,
       artwork_url: row.artwork_url || audio?.artwork_url || null,
-      duration: row.duration ?? audio?.duration_seconds ?? null,
+      duration: resolveCatalogDuration({
+        vault: row.duration,
+        audio: audio?.duration_seconds,
+        sonicDna: row.sonic_dna || audio?.sonic_dna,
+        metadata: row.metadata,
+      }).seconds,
     }
   })
 }
@@ -174,9 +184,22 @@ export async function importVaultFolderToStudio(
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message || 'Failed to create release')
-    created = true
-    persistedRelease = release
+    if (error) {
+      const duplicate =
+        error.code === '23505' || /duplicate key|already exists/i.test(error.message || '')
+      if (!duplicate) throw new Error(error.message || 'Failed to create release')
+      // A prior attempt can save the row, then fail while mirroring the calendar file.
+      const { data: existing, error: fetchError } = await supabase
+        .from('distribution_releases')
+        .select('*')
+        .eq('id', releaseId)
+        .single()
+      if (fetchError || !existing) throw new Error(error.message || 'Failed to create release')
+      persistedRelease = existing
+    } else {
+      created = true
+      persistedRelease = release
+    }
   } else {
     const { data: existing, error: fetchError } = await supabase
       .from('distribution_releases')
@@ -381,9 +404,139 @@ export async function importVaultFolderToStudio(
   }
 }
 
+type CatalogTimestampVaultSource = {
+  genre?: string | null
+  subgenre?: string | null
+  sonic_dna?: unknown
+  duration?: number | null
+  audio_duration?: number | null
+  metadata?: unknown
+  audio_file_id?: string | null
+  file_url?: string | null
+}
+
+async function loadCatalogTimestampVaultSources(
+  supabase: SupabaseClient,
+  vaultIds: string[],
+): Promise<Map<string, CatalogTimestampVaultSource>> {
+  const vaultById = new Map<string, CatalogTimestampVaultSource>()
+  const uniqueIds = [...new Set(vaultIds.filter(Boolean))]
+  if (!uniqueIds.length) return vaultById
+
+  const { data: vaultTracks } = await supabase
+    .from('music_library_tracks')
+    .select('id, genre, subgenre, sonic_dna, duration, audio_file_id, file_url, metadata')
+    .in('id', uniqueIds)
+
+  const audioIds = [
+    ...new Set(
+      (vaultTracks || [])
+        .map((row) => row.audio_file_id)
+        .filter((id): id is string => typeof id === 'string' && Boolean(id)),
+    ),
+  ]
+  const audioById = new Map<string, { duration_seconds?: number | null; sonic_dna?: unknown }>()
+  if (audioIds.length) {
+    const { data: audioRows } = await supabase
+      .from('audio_files')
+      .select('id, duration_seconds, sonic_dna')
+      .in('id', audioIds)
+    for (const audio of audioRows || []) {
+      audioById.set(String(audio.id), audio)
+    }
+  }
+
+  for (const row of vaultTracks || []) {
+    const audio = row.audio_file_id ? audioById.get(String(row.audio_file_id)) : undefined
+    const compiled = loadSonicDnaIntelligenceCard({
+      trackId: String(row.id),
+      audioFileId: row.audio_file_id ? String(row.audio_file_id) : null,
+      filePath: typeof row.file_url === 'string' ? row.file_url : null,
+    })
+    vaultById.set(String(row.id), {
+      genre: row.genre,
+      subgenre: row.subgenre,
+      duration: row.duration,
+      audio_duration: audio?.duration_seconds ?? null,
+      metadata: row.metadata,
+      audio_file_id: row.audio_file_id ? String(row.audio_file_id) : null,
+      file_url: typeof row.file_url === 'string' ? row.file_url : null,
+      sonic_dna: compiled || row.sonic_dna || audio?.sonic_dna || null,
+    })
+  }
+  return vaultById
+}
+
+async function persistResolvedCatalogDurations(
+  supabase: SupabaseClient,
+  rows: Array<{
+    id?: unknown
+    duration?: unknown
+    music_library_track_id?: unknown
+    audio_file_id?: unknown
+  }>,
+  resolved: Array<number | null>,
+) {
+  await Promise.all(
+    rows.map(async (row, index) => {
+      const id = typeof row.id === 'string' ? row.id : ''
+      const next = resolved[index]
+      const existing = durationToSeconds(typeof row.duration === 'number' ? row.duration : null)
+      if (next == null || next <= 0) return
+      if (existing != null && existing > 0) return
+      const writes: Promise<unknown>[] = []
+      if (id) {
+        writes.push(Promise.resolve(supabase.from('distribution_tracks').update({ duration: next }).eq('id', id)))
+      }
+      const vaultId = typeof row.music_library_track_id === 'string' ? row.music_library_track_id : ''
+      if (vaultId) {
+        writes.push(
+          Promise.resolve(supabase.from('music_library_tracks').update({ duration: next }).eq('id', vaultId)),
+        )
+      }
+      const audioId = typeof row.audio_file_id === 'string' ? row.audio_file_id : ''
+      if (audioId) {
+        writes.push(
+          Promise.resolve(supabase.from('audio_files').update({ duration_seconds: next }).eq('id', audioId)),
+        )
+      }
+      if (writes.length) await Promise.all(writes)
+    }),
+  )
+}
+
+async function probeMissingCatalogDurations(
+  items: Array<{ seconds: number | null; fileUrl?: string | null; wavUrl?: string | null }>,
+): Promise<Array<number | null>> {
+  const out = items.map((item) => item.seconds)
+  const missing = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.seconds == null)
+  const workers = Math.min(3, missing.length)
+  let cursor = 0
+  await Promise.all(
+    Array.from({ length: workers }, async () => {
+      while (cursor < missing.length) {
+        const current = missing[cursor++]
+        if (!current) return
+        const seconds = await probeAudioDurationSec(current.item.fileUrl || current.item.wavUrl)
+        if (seconds != null) out[current.index] = seconds
+      }
+    }),
+  )
+  return out
+}
+
 function catalogSourceFromDistributionRow(
   row: Record<string, unknown>,
-  vault?: { genre?: string | null; subgenre?: string | null; sonic_dna?: unknown } | null,
+  vault?: {
+    genre?: string | null
+    subgenre?: string | null
+    sonic_dna?: unknown
+    duration?: number | null
+    audio_duration?: number | null
+    metadata?: unknown
+  } | null,
 ): CatalogCopySourceTrack {
   const snap =
     row.sonic_snapshot && typeof row.sonic_snapshot === 'object' && !Array.isArray(row.sonic_snapshot)
@@ -392,10 +545,22 @@ function catalogSourceFromDistributionRow(
   const bpmRaw = snap.bpm ?? row.bpm
   const bpm = Number(bpmRaw)
   const vaultNote = vault ? descriptionFromSonicDna(vault.sonic_dna) : null
+  const duration = resolveCatalogDuration({
+    catalog: row.duration,
+    vault: vault?.duration,
+    audio: vault?.audio_duration,
+    sonicDna: vault?.sonic_dna,
+    metadata: vault?.metadata,
+  }).seconds
+  const isrcRaw = row.isrc_full ?? row.isrc
   return {
     title: typeof row.title === 'string' ? row.title : '',
     track_number: Number(row.track_number) || null,
     contributors: row.contributors,
+    duration,
+    isrc: typeof isrcRaw === 'string' ? isrcRaw : null,
+    sonic_dna: vault?.sonic_dna,
+    copy_intel: extractCopyIntelCard(vault?.sonic_dna, typeof row.title === 'string' ? row.title : ''),
     identity: {
       description:
         (typeof snap.description === 'string' && snap.description) ||
@@ -437,33 +602,75 @@ export async function loadDnaCopyInputForRelease(
   const { data: tracks } = await supabase
     .from('distribution_tracks')
     .select(
-      'title, track_number, description, genre, subgenre, bpm, key_signature, sonic_snapshot, contributors, music_library_track_id',
+      'id, title, track_number, description, genre, subgenre, bpm, key_signature, sonic_snapshot, contributors, music_library_track_id, duration, isrc_full, wav_url',
     )
     .eq('release_id', releaseId)
     .order('created_at', { ascending: true })
 
   const trackRows = (tracks || []) as Array<Record<string, unknown>>
-  const vaultIds = trackRows
-    .map((row) => row.music_library_track_id as string | null)
-    .filter((id): id is string => Boolean(id))
-
-  const vaultById = new Map<string, { genre?: string | null; subgenre?: string | null; sonic_dna?: unknown }>()
-  if (vaultIds.length) {
-    const { data: vaultTracks } = await supabase
-      .from('music_library_tracks')
-      .select('id, genre, subgenre, sonic_dna')
-      .in('id', vaultIds)
-    for (const row of vaultTracks || []) {
-      vaultById.set(String(row.id), row)
-    }
-  }
+  const vaultById = await loadCatalogTimestampVaultSources(
+    supabase,
+    trackRows
+      .map((row) => row.music_library_track_id as string | null)
+      .filter((id): id is string => Boolean(id)),
+  )
 
   const yearRaw = String(release.release_date || '').slice(0, 4)
   const year = Number(yearRaw)
   const catalogTracks = trackRows.map((row) => {
     const vaultId = typeof row.music_library_track_id === 'string' ? row.music_library_track_id : ''
-    return catalogSourceFromDistributionRow(row, vaultId ? vaultById.get(vaultId) : null)
+    const vault = vaultId ? vaultById.get(vaultId) : null
+    const compiled =
+      vaultId
+        ? loadSonicDnaIntelligenceCard({
+            trackId: vaultId,
+            audioFileId: vault?.audio_file_id,
+            filePath: vault?.file_url,
+          })
+        : null
+    const sonic_dna = compiled || vault?.sonic_dna
+    return catalogSourceFromDistributionRow(
+      row,
+      sonic_dna || vault
+        ? {
+            genre: vault?.genre,
+            subgenre: vault?.subgenre,
+            duration: vault?.duration,
+            audio_duration: vault?.audio_duration,
+            metadata: vault?.metadata,
+            sonic_dna,
+          }
+        : null,
+    )
   })
+  const probed = await probeMissingCatalogDurations(
+    catalogTracks.map((track, index) => {
+      const vaultId = typeof trackRows[index]?.music_library_track_id === 'string'
+        ? String(trackRows[index].music_library_track_id)
+        : ''
+      const vault = vaultId ? vaultById.get(vaultId) : null
+      return {
+        seconds: track.duration ?? null,
+        fileUrl: vault?.file_url,
+        wavUrl: typeof trackRows[index]?.wav_url === 'string' ? String(trackRows[index].wav_url) : null,
+      }
+    }),
+  )
+  catalogTracks.forEach((track, index) => {
+    track.duration = probed[index] ?? track.duration ?? null
+  })
+  await persistResolvedCatalogDurations(
+    supabase,
+    trackRows.map((row, index) => {
+      const vaultId = typeof row.music_library_track_id === 'string' ? row.music_library_track_id : ''
+      const vault = vaultId ? vaultById.get(vaultId) : null
+      return {
+        ...row,
+        audio_file_id: vault?.audio_file_id,
+      }
+    }),
+    catalogTracks.map((track) => track.duration ?? null),
+  )
 
   return {
     input: dnaCopyInputFromCatalog({
@@ -573,6 +780,7 @@ export async function enrichDistributionTracksWithVaultIdentity(
 
   const creditSeedIds = new Set<string>()
   const numberSeedIds = new Set<string>()
+  const durationSeedIds = new Set<string>()
   const enriched: Array<
     Record<string, unknown> & {
       identity: StudioTrackIdentity
@@ -602,8 +810,65 @@ export async function enrichDistributionTracksWithVaultIdentity(
     const track_number =
       Number.isFinite(existingNumber) && existingNumber > 0 ? existingNumber : inferredNumber
     if (id && !(Number.isFinite(existingNumber) && existingNumber > 0)) numberSeedIds.add(id)
-    return { ...track, identity, contributors, track_number }
+    const compiled = vaultId
+      ? loadSonicDnaIntelligenceCard({
+          trackId: vaultId,
+          audioFileId: vault?.audio_file_id,
+          filePath: vault?.file_url,
+        })
+      : null
+    const resolved = resolveCatalogDuration({
+      catalog: track.duration,
+      vault: vault?.duration,
+      sonicDna: compiled || vault?.sonic_dna,
+      metadata: vault?.metadata,
+    })
+    const duration = resolved.seconds
+    if (id && resolved.source !== 'catalog' && duration != null && duration > 0) {
+      durationSeedIds.add(id)
+    }
+    return {
+      ...track,
+      identity,
+      contributors,
+      track_number,
+      duration,
+      copy_intel: extractCopyIntelCard(vault?.sonic_dna, typeof track.title === 'string' ? track.title : vault?.title),
+    }
   })
+
+  const probed = await probeMissingCatalogDurations(
+    enriched.map((track) => {
+      const vaultId = typeof track.music_library_track_id === 'string' ? track.music_library_track_id : ''
+      const vault = vaultId ? liveById.get(vaultId) : undefined
+      return {
+        seconds: normalizeDurationSec(track.duration),
+        fileUrl: vault?.file_url,
+        wavUrl: typeof track.wav_url === 'string' ? track.wav_url : null,
+      }
+    }),
+  )
+  enriched.forEach((track, index) => {
+    const seconds = probed[index]
+    if (seconds == null) return
+    track.duration = seconds
+    const id = typeof track.id === 'string' ? track.id : ''
+    if (id) durationSeedIds.add(id)
+  })
+  await persistResolvedCatalogDurations(
+    supabase,
+    enriched.map((track, index) => {
+      const vaultId = typeof track.music_library_track_id === 'string' ? track.music_library_track_id : ''
+      const vault = vaultId ? liveById.get(vaultId) : undefined
+      return {
+        id: track.id,
+        duration: tracks[index]?.duration,
+        music_library_track_id: track.music_library_track_id,
+        audio_file_id: vault?.audio_file_id,
+      }
+    }),
+    probed,
+  )
 
   await Promise.all(
     enriched.map(async (track) => {
@@ -629,6 +894,13 @@ export async function enrichDistributionTracksWithVaultIdentity(
         writes.push(
           Promise.resolve(
             supabase.from('distribution_tracks').update({ track_number: track.track_number }).eq('id', id),
+          ),
+        )
+      }
+      if (durationSeedIds.has(id) && typeof track.duration === 'number' && track.duration > 0) {
+        writes.push(
+          Promise.resolve(
+            supabase.from('distribution_tracks').update({ duration: track.duration }).eq('id', id),
           ),
         )
       }

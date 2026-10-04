@@ -4,7 +4,16 @@ import {
   readReleaseSchedule,
   writeReleaseSchedule,
   type ScheduleRelease,
+  type ScheduleWriteResult,
 } from '@/lib/studio/schedule-bridge'
+
+const READONLY_SCHEDULE_ERROR =
+  'This server cannot update the release calendar file. Create or edit the release in Studio so it is stored in the database.'
+
+function readonlyScheduleResponse(written: ScheduleWriteResult) {
+  if (written.persisted) return null
+  return NextResponse.json({ error: READONLY_SCHEDULE_ERROR }, { status: 503 })
+}
 
 /**
  * GET /api/studio/release-schedule
@@ -70,7 +79,9 @@ export async function POST(request: NextRequest) {
     }
 
     data.schedule.push(newRelease)
-    writeReleaseSchedule(data)
+    const written = writeReleaseSchedule(data)
+    const blocked = readonlyScheduleResponse(written)
+    if (blocked) return blocked
 
     return NextResponse.json({ release: newRelease }, { status: 201 })
   } catch (error: unknown) {
@@ -109,7 +120,9 @@ export async function PUT(request: NextRequest) {
     }
 
     data.schedule[index] = { ...data.schedule[index]!, ...updates }
-    writeReleaseSchedule(data)
+    const written = writeReleaseSchedule(data)
+    const blocked = readonlyScheduleResponse(written)
+    if (blocked) return blocked
 
     return NextResponse.json({ release: data.schedule[index] })
   } catch (error: unknown) {
@@ -148,7 +161,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     data.schedule.splice(index, 1)
-    writeReleaseSchedule(data)
+    const written = writeReleaseSchedule(data)
+    const blocked = readonlyScheduleResponse(written)
+    if (blocked) return blocked
 
     return NextResponse.json({ success: true })
   } catch (error: unknown) {

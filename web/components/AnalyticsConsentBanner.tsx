@@ -58,7 +58,15 @@ function ConsentDialog({
           <div className="text-center text-[11px] leading-relaxed text-gray-400">
             Site cache is stored for your profile memory. That reduces data buffering and speeds up later visits. If
             you subscribe to watch a video, the email from your Google account or one you enter joins the SERGIK
-            contact list for releases and promo. You can unsubscribe from any message.
+            contact list for releases and promo. You can unsubscribe from any message. See the{' '}
+            <a href="/privacy" className="underline decoration-gray-600 underline-offset-2 hover:text-gray-200">
+              Privacy Policy
+            </a>{' '}
+            and{' '}
+            <a href="/terms" className="underline decoration-gray-600 underline-offset-2 hover:text-gray-200">
+              Terms of Service
+            </a>
+            .
           </div>
         ) : null}
       </div>
@@ -72,6 +80,7 @@ export default function AnalyticsConsentBanner() {
   const isMusicLibraryRoute = pathname?.startsWith('/music-library') ?? false
   const isShareEmbedRoute = pathname?.startsWith('/embed/') ?? false
   const isShareListenRoute = pathname?.startsWith('/s/') ?? false
+  const isYoutubeSubscribeRoute = pathname?.startsWith('/youtube-subscribe') ?? false
   const [consent, setConsent] = useState<AnalyticsConsentStatus>('unknown')
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -133,7 +142,14 @@ export default function AnalyticsConsentBanner() {
     return () => observer.disconnect()
   }, [isMusicLibraryRoute, pathname])
 
-  if (!mounted || isAdminRoute || isShareEmbedRoute || isShareListenRoute || consent !== 'unknown') {
+  if (
+    !mounted ||
+    isAdminRoute ||
+    isShareEmbedRoute ||
+    isShareListenRoute ||
+    isYoutubeSubscribeRoute ||
+    consent !== 'unknown'
+  ) {
     return null
   }
 

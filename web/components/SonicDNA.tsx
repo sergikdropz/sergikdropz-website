@@ -5,6 +5,7 @@ import { FaBrain, FaSpinner, FaHeart, FaMusic, FaHistory, FaGlobe, FaTags, FaInf
 import { getSonicDnaReportView } from '@/lib/audio/sonic-dna-report-sections'
 import { measuredGrooveFacts } from '@/lib/audio/sonic-dna-prose'
 import DnaReadableCopy from '@/components/music/DnaReadableCopy'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 import { appendSonicDnaLookupParams, sonicDnaLookupPath } from '@/lib/audio/sonic-dna-query'
 import { parseSonicDna } from '@/lib/audio/sonic-dna-quality'
 import { isSonicDnaReadyForDisplay } from '@/lib/audio/sonic-dna-pipeline'
@@ -1593,6 +1594,7 @@ export default function SonicDNA({
   }
 
   const descriptionModal = expandedCopy ? (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
       onClick={() => setExpandedCopy(null)}
@@ -1623,9 +1625,11 @@ export default function SonicDNA({
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   ) : null
 
   const expandedViewModal = isExpandedView && sonicDNA ? (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
       onClick={() => setIsExpandedView(false)}
@@ -1680,6 +1684,7 @@ export default function SonicDNA({
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   ) : null
 
   if (compact) {

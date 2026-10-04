@@ -72,6 +72,14 @@ describe('catalog-sync artwork helpers', () => {
     ).toBe('folder-collection-unreleased-playlists-deep-n-funky-')
     expect(artworkFileIdFromUrl('/images/audio/unreleased/eps/cover.jpg')).toBeNull()
     expect(collectionIdFromArtwork('/images/audio/artwork/folder-abc.jpg')).toBe('abc')
+    expect(
+      collectionIdFromArtwork('/images/audio/artwork/folder-1790809106718.v1790919000000.jpg'),
+    ).toBe('1790809106718')
+    expect(
+      artworkFileIdFromUrl(
+        '/images/audio/artwork/folder-1790809106718.v1790919000000.jpg?v=1790919000000',
+      ),
+    ).toBe('folder-1790809106718.v1790919000000')
   })
 
   it('detects stamped folder covers vs track-own artwork', () => {

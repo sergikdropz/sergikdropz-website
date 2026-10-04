@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SHARE_CLIP_WAVEFORM_HEIGHT_PX,
   SHARE_DOCK_WAVEFORM_HEIGHT_PX,
   SHARE_DOCK_WAVEFORM_HEIGHT_PX_SM,
   shareWaveformLayoutChanged,
@@ -21,5 +22,6 @@ describe('share dock waveform layout', () => {
   it('locks waveform row heights for mobile and sm breakpoints', () => {
     expect(SHARE_DOCK_WAVEFORM_HEIGHT_PX).toBe(44)
     expect(SHARE_DOCK_WAVEFORM_HEIGHT_PX_SM).toBe(48)
+    expect(SHARE_CLIP_WAVEFORM_HEIGHT_PX).toBe(48)
   })
 })

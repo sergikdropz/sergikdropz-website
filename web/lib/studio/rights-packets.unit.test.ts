@@ -73,6 +73,8 @@ describe('rights packets', () => {
     })
     expect(packet.ready).toBe(true)
     expect(packet.text).toMatch(/SERGIK PRODUCER AGREEMENT/)
+    expect(packet.text).toMatch(/sound recording only/)
+    expect(packet.text).toMatch(/Governing law/)
     expect(packet.text).toMatch(/Elevator Musik/)
     expect(packet.parties.join(' ')).toMatch(/SERGIK/)
   })

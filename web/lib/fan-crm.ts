@@ -2,6 +2,10 @@ import type { createSupabaseServerClient } from '@/lib/supabase'
 
 export const VAULT_UNLOCK_SOURCE = 'vault_unlock'
 export const VAULT_UNLOCK_TAG = 'vault'
+/** Google account sign-in on the vault gate. Also written as the subscriber source. */
+export const GOOGLE_VAULT_SOURCE = 'google'
+/** Site mailing-list tag written when Google sign-in unlocks the vault. */
+export const SITE_SUBSCRIBER_TAG = 'subscriber'
 export const YOUTUBE_UNLOCK_SOURCE = 'youtube_unlock'
 export const YOUTUBE_UNLOCK_TAG = 'youtube'
 
@@ -60,23 +64,36 @@ const SYNTHETIC_FAN_EMAILS = new Set([
   'fan-fallback-test@example.com',
 ])
 
-/** Playwright / Auto DJ unlocks must not enter the Fans CRM. */
+/** Playwright, browser-agent, and audit unlocks must not enter the Fans CRM. */
 export function isSyntheticFanEmail(email: string | null | undefined): boolean {
   if (!email || typeof email !== 'string') return true
   const e = email.trim().toLowerCase()
   if (!e.includes('@') || e.length > 320) return true
   if (e.endsWith('@sergik.local')) return true
   if (SYNTHETIC_FAN_EMAILS.has(e)) return true
-  if (/(^|[.+_-])(autodj|auto-dj|auto_dj)([.+_-]|$)/.test(e.split('@')[0])) return true
-  if (/^e2e[-_.]/.test(e) && e.endsWith('@example.com')) return true
-  if (/^verify[-_.]/.test(e) && e.endsWith('@example.com')) return true
-  if (/^(qa-fan-|vault-crm-verify-|vault-probe-|probe\d+-)/.test(e) && e.endsWith('@example.com')) return true
+  const local = e.split('@')[0]
+  if (/(^|[.+_-])(autodj|auto-dj|auto_dj)([.+_-]|$)/.test(local)) return true
+  const reservedExample = e.endsWith('@example.com') || e.endsWith('@example.org') || e.endsWith('@example.net')
+  if (
+    reservedExample &&
+    /^(agent|audit|e2e|verify|test|qa-fan|vault-crm-verify|vault-probe|probe\d+)[-_.]/.test(local)
+  ) {
+    return true
+  }
+  // Timestamped mailboxes from test runs (Date.now() is 13 digits; shorter probes still qualify).
+  if (reservedExample && /\d{10,}/.test(local)) return true
   return false
 }
 
 export function vaultUnlockSource(source: string | null | undefined): string {
   const trimmed = typeof source === 'string' ? source.trim() : ''
   return trimmed || VAULT_UNLOCK_SOURCE
+}
+
+export function tagsForVaultUnlock(source: string | null | undefined): string[] {
+  const tags = [VAULT_UNLOCK_TAG]
+  if (vaultUnlockSource(source) === GOOGLE_VAULT_SOURCE) tags.push(SITE_SUBSCRIBER_TAG)
+  return tags
 }
 
 export function fanInsertFromVaultUnlock(input: VaultUnlockFanInput, now: string) {
@@ -87,7 +104,7 @@ export function fanInsertFromVaultUnlock(input: VaultUnlockFanInput, now: string
     email: input.email,
     name: input.displayName || '',
     phone: null,
-    tags: [VAULT_UNLOCK_TAG],
+    tags: tagsForVaultUnlock(input.source),
     source: vaultUnlockSource(input.source),
     consent_email: true,
     consent_sms: false,
@@ -102,7 +119,9 @@ export function fanPatchFromVaultUnlock(
   now: string,
 ) {
   const tags = normalizeFanTags(existing.tags)
-  if (!tags.includes(VAULT_UNLOCK_TAG)) tags.push(VAULT_UNLOCK_TAG)
+  for (const tag of tagsForVaultUnlock(input.source)) {
+    if (!tags.includes(tag)) tags.push(tag)
+  }
 
   const metadata =
     existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
@@ -118,6 +137,7 @@ export function fanPatchFromVaultUnlock(
     last_engaged_at: now,
     updated_at: now,
     metadata,
+    ...(vaultUnlockSource(input.source) === GOOGLE_VAULT_SOURCE ? { consent_email: true as const } : {}),
   }
 }
 
@@ -378,6 +398,54 @@ async function knownFanEmails(supabase: SupabaseLike): Promise<Set<string> | nul
     return null
   }
   return new Set((existing || []).map((row) => String(row.email || '').toLowerCase()).filter(Boolean))
+}
+
+/**
+ * Remove a fan from the CRM and from the tables that the list backfill copies from.
+ * Deleting `fans` alone lets the next page load recreate the row from `fan_leads`.
+ */
+export async function deleteFanContact(
+  supabase: SupabaseLike,
+  id: string,
+): Promise<{ email: string }> {
+  const rawId = decodeURIComponent(id).trim()
+  let email: string | null = null
+
+  if (rawId.startsWith('lead:')) {
+    email = rawId.slice('lead:'.length).trim().toLowerCase()
+  } else {
+    const { data, error } = await supabase.from('fans').select('email').eq('id', rawId).maybeSingle()
+    if (error) throw new Error(error.message || 'Failed to look up fan')
+    email = data?.email ? String(data.email).trim() : null
+  }
+
+  if (!email || !email.includes('@')) {
+    const missing = new Error('Fan not found')
+    ;(missing as Error & { status?: number }).status = 404
+    throw missing
+  }
+
+  const emails = Array.from(new Set([email, email.toLowerCase()]))
+
+  const { error: leadErr } = await supabase.from('fan_leads').delete().in('email', emails)
+  if (leadErr && leadErr.code !== 'PGRST205' && leadErr.code !== '42P01') {
+    throw new Error(leadErr.message || 'Failed to delete vault unlock')
+  }
+
+  const { error: subErr } = await supabase.from('email_subscribers').delete().in('email', emails)
+  if (subErr && subErr.code !== 'PGRST205' && subErr.code !== '42P01') {
+    throw new Error(subErr.message || 'Failed to delete subscriber')
+  }
+
+  const { data: deleted, error: fanErr } = await supabase.from('fans').delete().in('email', emails).select('id')
+  if (fanErr) throw new Error(fanErr.message || 'Failed to delete fan')
+  if (!rawId.startsWith('lead:') && (!deleted || deleted.length === 0)) {
+    const missing = new Error('Fan not found')
+    ;(missing as Error & { status?: number }).status = 404
+    throw missing
+  }
+
+  return { email }
 }
 
 /** Copy missing vault unlocks and newsletter subscribers into `fans`. */

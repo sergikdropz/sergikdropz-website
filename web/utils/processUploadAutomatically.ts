@@ -8,6 +8,7 @@ import { generateSonicDNAWithAgents } from './generateSonicDNAWithAgents'
 import { analyzeComprehensive } from './comprehensiveMusicAnalysis'
 import { getMusicBrainzArtistDetails } from './musicbrainz'
 import { extractMeasured, sonicDnaStatusFromMeasured } from '@/lib/audio/sonic-dna-quality'
+import { imprintCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 
 /**
  * Process a newly uploaded track automatically
@@ -136,6 +137,11 @@ export async function processUploadAutomatically(trackId: string) {
       }
 
       console.log(`[Auto-Process] ✅ Successfully processed ${track.title} (${trackId})`)
+      try {
+        await imprintCatalogTags(trackId)
+      } catch (err) {
+        console.warn('[Auto-Process] catalog tag imprint failed:', err instanceof Error ? err.message : err)
+      }
     } catch (error: any) {
       console.error(`[Auto-Process] ❌ Error processing track ${trackId}:`, error)
       

@@ -5,6 +5,7 @@ import {
   EQ_DIAL_MIN_GAIN,
   EQ_DIAL_TRAVEL_PX,
   eqDialPositionToGain,
+  eqDragDeltaY,
   eqGainFromDrag,
   eqGainToDialPosition,
   isEqDialDrag,
@@ -36,6 +37,15 @@ describe('isEqDialDrag', () => {
     expect(isEqDialDrag(1, 1)).toBe(false)
     expect(isEqDialDrag(0, EQ_DIAL_DRAG_SLOP_PX - 1)).toBe(false)
     expect(isEqDialDrag(0, EQ_DIAL_DRAG_SLOP_PX)).toBe(true)
+  })
+})
+
+describe('eqDragDeltaY', () => {
+  it('uses vertical drag as-is and turns a sideways swipe into the same travel', () => {
+    expect(eqDragDeltaY(0, 40)).toBe(40)
+    expect(eqDragDeltaY(0, -40)).toBe(-40)
+    expect(eqDragDeltaY(40, 4)).toBe(-40)
+    expect(eqDragDeltaY(-40, -4)).toBe(40)
   })
 })
 

@@ -8,6 +8,7 @@ import {
   mediaSessionArtworkFetchUrl,
   resolveMediaSessionOrigin,
   lockScreenPrefersTrackSkip,
+  shouldReclaimBackgroundPlayback,
 } from './lock-screen-media'
 
 describe('lock-screen-media', () => {
@@ -51,6 +52,25 @@ describe('lock-screen-media', () => {
   it('builds artwork from catalog ref', () => {
     const entries = buildMediaSessionArtworkFromRef('/images/logo.png', 'https://sergikdropz.com')
     expect(entries[0]?.src).toContain('session-artwork')
+  })
+
+  it('reclaims a stalled lock-screen song unless the listener paused', () => {
+    const base = {
+      userRequestedPause: false,
+      wantsPlayback: true,
+      ended: false,
+      mixing: false,
+      bufferClock: false,
+      withinHandoff: false,
+      audioSessionState: 'active' as string | null,
+    }
+    expect(shouldReclaimBackgroundPlayback(base)).toBe(true)
+    expect(shouldReclaimBackgroundPlayback({ ...base, userRequestedPause: true })).toBe(false)
+    expect(shouldReclaimBackgroundPlayback({ ...base, audioSessionState: 'interrupted' })).toBe(
+      false,
+    )
+    expect(shouldReclaimBackgroundPlayback({ ...base, withinHandoff: true })).toBe(false)
+    expect(shouldReclaimBackgroundPlayback({ ...base, ended: true })).toBe(false)
   })
 
   it('prefers track skip on iPhone / iPad / Android', () => {

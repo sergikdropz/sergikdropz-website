@@ -7,6 +7,7 @@ import {
   collaboratorsFromPartyContacts,
   createCollabInviteToken,
   isCollabInviteActive,
+  isResendInboundReceivedEvent,
   normalizeCollabEmail,
   parseCollabRole,
 } from '@/lib/studio/release-collab'
@@ -60,5 +61,10 @@ describe('release-collab', () => {
 
   it('builds notify subjects', () => {
     expect(collabThreadNotifySubject('Night Drive')).toBe('New message — Night Drive')
+  })
+
+  it('detects inbound webhook events', () => {
+    expect(isResendInboundReceivedEvent('email.received')).toBe(true)
+    expect(isResendInboundReceivedEvent('email.sent')).toBe(false)
   })
 })

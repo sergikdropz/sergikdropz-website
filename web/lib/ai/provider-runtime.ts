@@ -3,7 +3,7 @@
  * Centralizes timeout, model selection metadata, and redaction helpers.
  */
 
-import { resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
+import { crowelogicChatBlockReason, resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
 
 export type AiProviderId = 'anthropic' | 'openai' | 'ollama' | 'crowelogic'
 
@@ -105,7 +105,7 @@ async function completeOpenAiCompatible(
     baseUrl = crowe.baseUrl
     apiKey = crowe.apiKey
     if (!crowe.configured) {
-      throw new Error('Set CROWELOGIC_API_KEY or CROWE_API_KEY for Crowe Logic')
+      throw new Error(crowelogicChatBlockReason(crowe) ?? 'CroweLM chat is not available.')
     }
   }
 

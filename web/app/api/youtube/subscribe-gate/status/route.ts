@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   YT_SUB_GATE_COOKIE,
   channelHandle,
+  fetchSergikChannelPublicStats,
   readYtSubGate,
   youtubeOAuthClientId,
   youtubeOAuthConfigured,
@@ -16,10 +17,14 @@ export async function GET(request: NextRequest) {
   } catch {
     unlocked = false
   }
+  const stats = await fetchSergikChannelPublicStats()
   return NextResponse.json({
     unlocked,
     configured: youtubeOAuthConfigured(),
     googleClientId: youtubeOAuthClientId(),
     channel: channelHandle(),
+    channelId: stats.channelId,
+    subscriberCount: stats.subscriberCount,
+    hiddenSubscriberCount: stats.hiddenSubscriberCount,
   })
 }

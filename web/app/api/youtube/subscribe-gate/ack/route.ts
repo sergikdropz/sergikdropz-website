@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { persistPromoContact, YOUTUBE_UNLOCK_SOURCE, YOUTUBE_UNLOCK_TAG } from '@/lib/fan-crm'
-import { getFanVaultUnlockEmailFromRequest } from '@/lib/fan-vault-unlock-cookie'
 import { checkRateLimit, clientKeyFromRequest } from '@/lib/rate-limit'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import {
   YT_SUB_GATE_COOKIE,
+  confirmViewerSubscribedToSergik,
   emailFromGoogleAccessToken,
   sealYtSubGate,
   ytSubGateCookieOptions,
@@ -12,14 +12,13 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-function normalizeEmail(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const email = value.trim().toLowerCase()
-  if (!email.includes('@') || email.length > 320) return null
-  return email
+const ACK_ERRORS: Record<string, string> = {
+  channel: 'The SERGIK YouTube channel could not be confirmed.',
+  unsubscribed: 'Subscribe to @sergikdropz on YouTube, then try again.',
+  error: 'YouTube could not confirm the subscription. Try again.',
 }
 
-/** In-page unlock. Saves the email to the promo list and never leaves the music library. */
+/** In-page unlock after Google token — verifies subscription via YouTube Data API. */
 export async function POST(request: NextRequest) {
   const rl = checkRateLimit(`yt-sub-gate:${clientKeyFromRequest(request)}`, 20, 15 * 60 * 1000)
   if (!rl.ok) {
@@ -30,40 +29,37 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
-  if (body.promoConsent === 'denied') {
-    try {
-      const { token, maxAgeSec } = sealYtSubGate()
-      const response = NextResponse.json({ unlocked: true })
-      response.cookies.set(YT_SUB_GATE_COOKIE, token, ytSubGateCookieOptions(request, maxAgeSec))
-      return response
-    } catch {
-      return NextResponse.json({ unlocked: false }, { status: 500 })
-    }
-  }
-
-  let email = normalizeEmail(body.email)
-  if (!email) email = getFanVaultUnlockEmailFromRequest(request)
-  if (!email && typeof body.accessToken === 'string') {
-    email = await emailFromGoogleAccessToken(body.accessToken)
-  }
-  if (!email) {
+  const skipCrm = body.promoConsent === 'denied'
+  const accessToken = typeof body.accessToken === 'string' ? body.accessToken.trim() : ''
+  if (!accessToken) {
     return NextResponse.json({ unlocked: false, needsAccount: true })
   }
 
-  try {
-    await persistPromoContact(createSupabaseServerClient(), {
-      email,
-      source: YOUTUBE_UNLOCK_SOURCE,
-      tags: [YOUTUBE_UNLOCK_TAG, 'subscriber'],
-      platforms: ['youtube'],
+  const confirmed = await confirmViewerSubscribedToSergik(accessToken)
+  if (!confirmed.ok) {
+    return NextResponse.json({
+      unlocked: false,
+      error: ACK_ERRORS[confirmed.reason] || ACK_ERRORS.error,
     })
-  } catch (error) {
-    console.warn('youtube unlock contact skipped:', error)
+  }
+
+  const email = await emailFromGoogleAccessToken(accessToken)
+  if (email && !skipCrm) {
+    try {
+      await persistPromoContact(createSupabaseServerClient(), {
+        email,
+        source: YOUTUBE_UNLOCK_SOURCE,
+        tags: [YOUTUBE_UNLOCK_TAG, 'subscriber'],
+        platforms: ['youtube'],
+      })
+    } catch (error) {
+      console.warn('youtube unlock contact skipped:', error)
+    }
   }
 
   try {
     const { token, maxAgeSec } = sealYtSubGate()
-    const response = NextResponse.json({ unlocked: true })
+    const response = NextResponse.json({ unlocked: true, channelId: confirmed.channelId })
     response.cookies.set(YT_SUB_GATE_COOKIE, token, ytSubGateCookieOptions(request, maxAgeSec))
     return response
   } catch {

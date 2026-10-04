@@ -38,6 +38,8 @@ describe('route-policy', () => {
     expect(findRoutePolicy('/api/shares', 'POST')?.access).toBe('admin_write')
     expect(findRoutePolicy('/api/shares/[token]', 'GET')?.access).toBe('public')
     expect(findRoutePolicy('/api/shares/[token]', 'DELETE')?.access).toBe('admin_write')
+    expect(findRoutePolicy('/api/shares/[token]/download/access', 'PUT')?.access).toBe('admin_write')
+    expect(findRoutePolicy('/api/shares/[token]/file', 'GET')?.access).toBe('public')
     expect(findRoutePolicy('/api/oembed', 'GET')?.access).toBe('public')
   })
 

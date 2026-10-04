@@ -97,7 +97,12 @@ export async function GET() {
       OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim()
         ? `✅ ${process.env.OLLAMA_BASE_URL.trim()}`
         : '❌ Missing (default 127.0.0.1:11434)',
-      CROWELOGIC_API_KEY: crowe.configured ? `✅ Set (${crowe.keySource})` : '❌ Missing (try CROWE_API_KEY)',
+      CROWELOGIC_API_KEY:
+        crowe.activation === 'pending_pro_linkage'
+          ? `⏳ Set (${crowe.keySource}); Pro linkage not confirmed`
+          : crowe.configured
+            ? `✅ Set (${crowe.keySource}) · ${crowe.activation}`
+            : '❌ Missing (customer credential; CROWE_API_KEY is Creative only)',
       CROWELOGIC_BASE_URL: crowe.baseUrl,
     }
 

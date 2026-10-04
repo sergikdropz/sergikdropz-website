@@ -44,20 +44,7 @@ export default function Gallery() {
     <div className="pt-20 min-h-screen relative">
       <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16 relative z-10">
         <div className="max-w-4xl mx-auto mb-8 sm:mb-12">
-          <h1 
-            className="text-4xl sm:text-5xl md:text-6xl font-bold mb-3 sm:mb-4 text-center font-six-caps border"
-            style={{
-              fontSize: '84px',
-              lineHeight: '99px',
-              letterSpacing: '3.7px',
-              backgroundImage: 'linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(255, 255, 255, 1) 59%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              color: 'transparent',
-              borderWidth: '1px',
-              borderColor: 'rgba(255, 255, 255, 1)'
-            }}
-          >
+          <h1 className="consumer-display mb-3 text-center font-six-caps font-bold text-white sm:mb-4">
             Gallery
           </h1>
           <p className="text-gray-400 text-base sm:text-lg leading-relaxed">

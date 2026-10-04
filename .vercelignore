@@ -10,6 +10,10 @@ web/public/audio/**
 # Exclude temp files
 web/temp/
 web/temp/**
+web/.tmp-gcp/
+web/.tmp-gcp/**
+.tmp-verify-deploy/
+.tmp-verify-deploy/**
 
 # Exclude React Native / Expo app at repo root only.
 # Bare `mobile/` also drops web/components/mobile/ (needed for web builds).

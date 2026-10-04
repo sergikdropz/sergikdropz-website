@@ -17,6 +17,11 @@ import {
 } from '@/lib/studio/constants'
 import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import type { LaunchHandoffStatus } from '@/lib/studio/launch-handoff'
+import {
+  consumePendingStudioNav,
+  dispatchReleaseMissionRefresh,
+  type AdminAiStudioNavTarget,
+} from '@/lib/admin-ai-studio-nav'
 import { parseStudioWorkflowStep, studioReleaseHref } from '@/lib/studio/studio-ia'
 import { mapSonicGenreToDsp, parseAttestations } from '@/lib/studio/dsp-ingest'
 import { publisherApplyPatch, splitsFromCredits, tracksNeedingSplitSeed } from '@/lib/studio/rights-ops'
@@ -212,7 +217,49 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
     [releaseId, router]
   )
 
+  const applyStudioNavTarget = useCallback(
+    (target: AdminAiStudioNavTarget) => {
+      if (target.releaseId !== releaseId) return
+      const step = target.step
+      if (!step) return
+      const focus: RightsActionFocus | undefined = target.section
+        ? { step, section: target.section, trackId: target.trackId, party: target.party }
+        : undefined
+      goToStep(step, focus)
+    },
+    [releaseId, goToStep],
+  )
+
+  useEffect(() => {
+    const pending = consumePendingStudioNav(releaseId)
+    if (pending) applyStudioNavTarget(pending)
+  }, [releaseId, applyStudioNavTarget])
+
+  useEffect(() => {
+    function onStudioNavigate(event: Event) {
+      const detail = (event as CustomEvent<AdminAiStudioNavTarget>).detail
+      if (!detail?.releaseId) return
+      if (detail.releaseId !== releaseId) return
+      applyStudioNavTarget(detail)
+    }
+    window.addEventListener('admin-ai:studio-navigate', onStudioNavigate as EventListener)
+    return () => window.removeEventListener('admin-ai:studio-navigate', onStudioNavigate as EventListener)
+  }, [releaseId, applyStudioNavTarget])
+
   const clearActionFocus = useCallback(() => setActionFocus(null), [])
+
+  const blockerSignature = (copyright?.blockers ?? []).join('\n')
+  const skipBlockerPing = useRef(true)
+  useEffect(() => {
+    skipBlockerPing.current = true
+  }, [releaseId])
+  useEffect(() => {
+    if (skipBlockerPing.current) {
+      skipBlockerPing.current = false
+      return
+    }
+    dispatchReleaseMissionRefresh(releaseId)
+  }, [releaseId, blockerSignature])
 
   useEffect(() => {
     const fromUrl = parseStudioWorkflowStep(searchParams.get('step'))
@@ -306,7 +353,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
     }
   }
 
-  async function updateTrackRights(trackId: string, patch: Record<string, string | boolean | null>) {
+  async function updateTrackRights(trackId: string, patch: Record<string, unknown>) {
     setSaving(true)
     try {
       const res = await fetch(`/api/studio/tracks/${trackId}`, {
@@ -772,6 +819,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
           goingLive={goingLive}
           copyright={copyright}
           hasArtwork={Boolean(release.artwork_url)}
+          releaseArtworkUrl={release.artwork_url}
           hasGenre={Boolean(release.genre)}
           hasReleaseDate={Boolean(release.release_date)}
           trackCount={tracks.length}

@@ -17,7 +17,7 @@ const links: { href: string; label: string; icon: typeof FaHome; id: StudioNavId
   { id: 'releases', href: STUDIO_PATHS.releases, label: 'Releases', icon: FaCompactDisc },
   { id: 'create', href: STUDIO_PATHS.create, label: 'Create', icon: FaPlus },
   { id: 'pipeline', href: STUDIO_PATHS.pipeline, label: 'Pipeline', icon: FaProjectDiagram },
-  { id: 'collab', href: STUDIO_PATHS.collab, label: 'Release Collab', icon: FaComments },
+  { id: 'collab', href: STUDIO_PATHS.collab, label: 'Collab Hub', icon: FaComments },
   { id: 'royalties', href: STUDIO_PATHS.royalties, label: 'Royalties', icon: FaMoneyBillWave },
 ]
 

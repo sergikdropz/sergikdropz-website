@@ -15,6 +15,8 @@ import {
   parseRightsPacketDrafts,
   type RightsPacketDrafts,
 } from '@/lib/studio/rights-packet-drafts'
+import { splitsBalanceOk } from '@/lib/studio/import-parse'
+import { parseCounselAudit, type CounselAuditRecord } from '@/lib/studio/music-law/release-gate'
 import {
   ensureProducerCredits,
   namesForRole,
@@ -85,6 +87,9 @@ type CopyrightChecklist = {
   publisher_name: string | null
   publisher_ipi: string | null
   writer_ipi: string | null
+  neighboring_rights_registered?: boolean | null
+  neighboring_rights_society?: string | null
+  counsel_audit?: unknown
   updated_at?: string
 }
 
@@ -165,6 +170,11 @@ export type CopyrightReadiness = {
   ugc_pack: UgcPack
   ugc: UgcPackEligibility
   ingest: DspIngestResult
+  collection: {
+    neighboring_rights_registered: boolean
+    neighboring_rights_society: string | null
+  }
+  counsel_audit: CounselAuditRecord | null
 }
 
 const DEFAULT_CHECKLIST: Omit<CopyrightChecklist, 'release_id'> = {
@@ -188,18 +198,6 @@ const DEFAULT_CHECKLIST: Omit<CopyrightChecklist, 'release_id'> = {
   writer_ipi: null,
 }
 
-function readSplitsTotal(rawSplits: unknown): number | null {
-  if (!Array.isArray(rawSplits)) return null
-  let total = 0
-  for (const split of rawSplits) {
-    if (!split || typeof split !== 'object') continue
-    const value = (split as { percentage?: unknown }).percentage
-    const numeric = typeof value === 'number' ? value : Number(value)
-    if (Number.isFinite(numeric)) total += numeric
-  }
-  return total
-}
-
 function buildReadiness(
   release: DistributionRelease,
   tracks: DistributionTrack[],
@@ -209,12 +207,7 @@ function buildReadiness(
   const hasTracks = tracks.length > 0
   const tracksHaveAudio = hasTracks && tracks.every((t) => Boolean(t.wav_url))
   const tracksHaveIsrc = hasTracks && tracks.every((t) => Boolean(t.isrc_full))
-  const splitsTotals = tracks.map((t) => readSplitsTotal(t.splits))
-  const splitsTotal100 =
-    hasTracks &&
-    splitsTotals.every(
-      (total) => total !== null && Math.abs(total - 100) < 0.001
-    )
+  const splitsTotal100 = hasTracks && tracks.every((track) => splitsBalanceOk(track.splits))
   const hasUpc = Boolean(release.upc && release.upc.trim().length > 0)
   const metadataQaPassed =
     hasTracks && tracksHaveAudio && tracksHaveIsrc && splitsTotal100 && hasUpc
@@ -311,7 +304,7 @@ function buildReadiness(
     })
   }
   if (!splitsTotal100) {
-    blockers.push('Track splits must total 100% for every track.')
+    blockers.push('Track splits must total 100% on every table (master and composition each, once both tables exist).')
     blockerActions.push({
       kind: 'fix_splits',
       label: 'Fix track split percentages',
@@ -504,20 +497,37 @@ function buildReadiness(
     ugc_pack: pack,
     ugc: eligibility,
     ingest,
+    collection: {
+      neighboring_rights_registered: checklist.neighboring_rights_registered === true,
+      neighboring_rights_society: checklist.neighboring_rights_society?.trim() || null,
+    },
+    counsel_audit: parseCounselAudit(checklist.counsel_audit),
   }
 }
 
-const CHECKLIST_SELECT =
+const CHECKLIST_SELECT_BASE =
   'release_id, rights_intake_complete, legal_locked, composition_registered, master_registered, pro_registered, monitoring_enabled, owner_name, role_queue, split_sheet_status, producer_agreement_status, sample_clearance_status, due_date, ugc_pack, party_contacts, rights_packets, publisher_name, publisher_ipi, writer_ipi, updated_at'
+
+const CHECKLIST_SELECT = `${CHECKLIST_SELECT_BASE.replace(
+  ', updated_at',
+  ', neighboring_rights_registered, neighboring_rights_society, counsel_audit, updated_at',
+)}`
 
 const CHECKLIST_SELECT_LEGACY =
   'release_id, rights_intake_complete, legal_locked, composition_registered, master_registered, pro_registered, monitoring_enabled, owner_name, role_queue, split_sheet_status, producer_agreement_status, sample_clearance_status, due_date, updated_at'
 
 async function fetchCopyrightChecklists(supabase: any, releaseIds: string[]) {
-  const withPack = await supabase
+  let withPack = await supabase
     .from('release_copyright_checklists')
     .select(CHECKLIST_SELECT)
     .in('release_id', releaseIds)
+
+  if (withPack.error && /counsel_audit|neighboring_rights/i.test(String(withPack.error.message || ''))) {
+    withPack = await supabase
+      .from('release_copyright_checklists')
+      .select(CHECKLIST_SELECT_BASE)
+      .in('release_id', releaseIds)
+  }
 
   if (!withPack.error) return withPack
 
@@ -640,7 +650,7 @@ export async function getCopyrightReadinessByReleaseIds(
     []
   for (const track of tracksResult.data || []) {
     if (!tracksByRelease[track.release_id]) tracksByRelease[track.release_id] = []
-    const hydrated = hydrateRightsPacket(track as Record<string, unknown>) as DistributionTrack
+    const hydrated = hydrateRightsPacket(track as Record<string, unknown>) as unknown as DistributionTrack
     const existing = parseContributors(hydrated.contributors)
     if (!namesForRole(existing, 'producer').length && namesForRole(existing, 'primary').length) {
       const contributors = ensureProducerCredits(existing)

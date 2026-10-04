@@ -8,7 +8,7 @@ import {
   resolveDefaultAdminChatProvider,
 } from '@/lib/ai/admin-chat-providers'
 import { loadAdminAiChatPreferences, mergeResolvedModels, PREF_KEYS } from '@/lib/ai/admin-ai-chat-preferences'
-import { resolveCrowelogicEnv } from '@/lib/ai/crowelogic-env'
+import { CROWELOGIC_CHAT_ACCOUNT, resolveCrowelogicEnv } from '@/lib/ai/crowelogic-env'
 import { normalizeAutoRouterMode, type AdminAiAutoRouterMode } from '@/lib/ai/admin-chat-router'
 import { ADMIN_AI_CHAT_PROVIDERS, type AdminAiChatProvider } from '@/lib/ai/admin-chat-types'
 import { ADMIN_AI_SMART_MODEL_OVERRIDE } from '@/lib/ai/admin-smart-model-picker'
@@ -85,6 +85,9 @@ export async function GET() {
         crowelogicBaseUrl: crowe.baseUrl,
         crowelogicBaseSource: crowe.baseSource,
         crowelogicKeySource: crowe.keySource,
+        crowelogicActivation: crowe.activation,
+        crowelogicCredentialPresent: crowe.credentialPresent,
+        crowelogicAccount: CROWELOGIC_CHAT_ACCOUNT,
       },
       apiKeysPresent: {
         anthropic: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),

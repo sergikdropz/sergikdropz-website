@@ -38,7 +38,13 @@ export async function POST(request: NextRequest) {
           .select('id, title, type, release_date, artwork_url, genre, description, distributor_status')
           .eq('id', row.release_id)
           .maybeSingle()
-        if (release) upsertScheduleFromDistribution(release)
+        if (release) {
+          try {
+            upsertScheduleFromDistribution(release)
+          } catch (err) {
+            console.warn('[from-distrokid] schedule bridge failed', err)
+          }
+        }
       }
 
       await logActivity({

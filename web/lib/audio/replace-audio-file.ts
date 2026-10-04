@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { extractMetadataFromBuffer } from '@/utils/extractMetadataFromBuffer'
 import { generateWaveformFromBuffer } from '@/utils/generateWaveformFromBuffer'
 import { processUploadOptimized } from '@/utils/processUploadOptimized'
+import { scheduleCatalogTagImprint } from '@/lib/audio/imprint-catalog-tags'
 
 export const MAX_MASTER_WAV_BYTES = 250 * 1024 * 1024
 
@@ -135,6 +136,7 @@ export async function replaceLibraryAudioFile(
     waveform,
     musicbrainz: null,
   })
+  scheduleCatalogTagImprint([opts.audioFileId])
 
   return { fileUrl, filePath, duration }
 }

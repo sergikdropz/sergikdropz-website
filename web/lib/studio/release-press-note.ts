@@ -85,7 +85,10 @@ export function buildPressNoteBrief(input: {
   }
 }
 
-export function buildPressNotePrompt(brief: PressNoteBrief): string {
+export function buildPressNotePrompt(
+  brief: PressNoteBrief,
+  opts?: { intelligenceBrief?: string | null },
+): string {
   const facts = [
     `Track: ${brief.title}`,
     `Release: ${brief.releaseTitle}`,
@@ -113,6 +116,8 @@ export function buildPressNotePrompt(brief: PressNoteBrief): string {
         ? 'No sung lyrics detected — treat as instrumental or chopped-vocal atmosphere. Do not invent words.'
         : 'No reliable lyric transcription. Do not invent lyrics.'
 
+  const intel = clean(opts?.intelligenceBrief)
+
   return [
     'Write a journalist / PR press note for ONE SERGIK track heading to stores and press.',
     'Sound like a publisher who actually heard the record: specific, sensory, and inviting.',
@@ -120,6 +125,9 @@ export function buildPressNotePrompt(brief: PressNoteBrief): string {
     'Do not use lab voice (groove class, measured usage, crate name, "kick is used", encyclopedia, DSP).',
     'Make this track feel distinct from the sibling notes. Quote lyrics only if they appear in the listen transcript.',
     'Return JSON only: {"description":"2 short paragraphs, 90-150 words","intention":"one line for the room"}',
+    intel ? '' : null,
+    intel ? '## Unified Sonic DNA + polymath brief (authoritative)' : null,
+    intel || null,
     '',
     facts,
     '',
@@ -131,7 +139,9 @@ export function buildPressNotePrompt(brief: PressNoteBrief): string {
     '',
     'Sonic DNA listen notes (JSON):',
     JSON.stringify(brief.sonic),
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 export function parsePressNoteReply(raw: string): PressNoteDraft {

@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { persistPromoContact, YOUTUBE_UNLOCK_SOURCE, YOUTUBE_UNLOCK_TAG } from '@/lib/fan-crm'
 import { safeInternalPath } from '@/lib/safe-internal-path'
+import { createSupabaseServerClient } from '@/lib/supabase'
 import {
   YT_SUB_GATE_COOKIE,
+  YT_SUB_GATE_POPUP_COOKIE,
   YT_SUB_GATE_STATE_COOKIE,
   clearYtSubGateStateCookie,
-  resolveSergikChannelId,
+  confirmViewerSubscribedToSergik,
+  emailFromGoogleAccessToken,
   sealYtSubGate,
-  subscribeViewerToChannel,
-  viewerSubscribesToChannel,
   youtubeOAuthClient,
+  youtubeSubscribePopupResult,
   ytSubGateCookieOptions,
 } from '@/lib/youtube/subscribe-gate'
 
 export const dynamic = 'force-dynamic'
 
 function finish(request: NextRequest, nextPath: string, flag: string, unlock = false) {
+  if (request.cookies.get(YT_SUB_GATE_POPUP_COOKIE)?.value === '1') {
+    return youtubeSubscribePopupResult(request, flag, unlock)
+  }
   const dest = new URL(nextPath, request.url)
   dest.searchParams.set('ytgate', flag)
   const response = NextResponse.redirect(dest)
@@ -72,19 +78,23 @@ export async function GET(request: NextRequest) {
     return finish(request, returnPath, 'error')
   }
 
-  const channelId = await resolveSergikChannelId(accessToken)
-  if (!channelId) {
-    return finish(request, returnPath, 'channel')
+  const confirmed = await confirmViewerSubscribedToSergik(accessToken)
+  if (!confirmed.ok) {
+    return finish(request, returnPath, confirmed.reason === 'channel' ? 'channel' : 'unsubscribed')
   }
 
-  let subscribed = await viewerSubscribesToChannel(accessToken, channelId)
-  if (!subscribed) {
-    const inserted = await subscribeViewerToChannel(accessToken, channelId)
-    subscribed = inserted && (await viewerSubscribesToChannel(accessToken, channelId))
-  }
-
-  if (!subscribed) {
-    return finish(request, returnPath, 'unsubscribed')
+  const email = await emailFromGoogleAccessToken(accessToken)
+  if (email) {
+    try {
+      await persistPromoContact(createSupabaseServerClient(), {
+        email,
+        source: YOUTUBE_UNLOCK_SOURCE,
+        tags: [YOUTUBE_UNLOCK_TAG, 'subscriber'],
+        platforms: ['youtube'],
+      })
+    } catch (error) {
+      console.warn('youtube oauth unlock contact skipped:', error)
+    }
   }
 
   return finish(request, returnPath, 'ok', true)

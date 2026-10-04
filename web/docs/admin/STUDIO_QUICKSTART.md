@@ -110,13 +110,18 @@ On `/studio/pipeline?tab=marketing` → **Social promo** per release:
 1. Apply migration: `npm run db:migrate-social-promo` (or paste `add_social_promo_to_releases.sql`)
 2. **Generate schedule** — PT-optimized IG Feed / Story / Reel + Facebook posts from street date (T-14 → T+3)
 3. Download **Feed 1080**, **Story still**, or **15s vinyl story/reel video** (needs Catalog WAV)
-4. Copy captions · mark **Posted** after upload in Meta Business Suite / Instagram
+4. Copy captions · mark **Assets ready** on image slots you want Studio to publish
+5. **Connect Meta** (Instagram professional account + its Facebook Page). Redirect URI: `/api/studio/meta/callback` on this site, registered on the Meta app (`META_APP_ID` / `META_APP_SECRET`). Scopes: `pages_show_list`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`, `business_management`
+6. **Publish due slots** sends ready feed posts, story stills, and Page photos whose time has arrived. Future Page posts are scheduled on Facebook. Reels and vinyl videos stay a manual upload (Meta needs a public video file)
+7. Automate while you are away: every 15 minutes `POST /api/cron/meta-promo` with `Authorization: Bearer $CRON_SECRET`
+
+Instagram’s official API cannot message every follower. Studio publishes the scheduled posts only — no promo DMs.
 
 Smoke / E2E:
 - `npm run smoke:studio-social-promo` — authenticated generate + persist
 - `npx playwright test e2e/studio-social-promo.spec.ts` — UI + API (needs E2E_ADMIN_*)
 
-Does not auto-publish to Meta — Studio prepares assets + timing; you post from Meta.
+Does not message Instagram followers. Image slots marked Assets ready publish through the Graph API after **Connect Meta**. Reels stay manual.
 First-party YouTube / TikTok / Meta UGC extra lives on **Rights**, not Delivery, and not DistroKid.
 
 1. Open `/studio/releases/[id]` → Rights

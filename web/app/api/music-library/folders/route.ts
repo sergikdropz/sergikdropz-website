@@ -6,6 +6,7 @@ import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabase
 import { bumpMusicLibraryPublishVersion } from '@/lib/music-library-publish'
 import { persistSystemicCover } from '@/lib/catalog-sync/persist-systemic-cover'
 import { artworkUrlForCatalogStorage } from '@/lib/catalog-sync/artwork'
+import { scheduleFolderCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
 function asJsonObject(value: unknown): Record<string, unknown> {
@@ -302,6 +303,16 @@ export async function PUT(request: NextRequest) {
       } catch (propagateError) {
         console.error('Error propagating folder artwork to tracks:', propagateError)
       }
+    }
+
+    const albumFieldsChanged =
+      updates.name !== undefined ||
+      updates.artwork !== undefined ||
+      updates.year !== undefined ||
+      albumArtist !== undefined ||
+      updates.metadata !== undefined
+    if (albumFieldsChanged) {
+      void scheduleFolderCatalogTags(id)
     }
 
     let publishVersion: number | null = null

@@ -9,6 +9,9 @@ import { fetchBrowserAuthSession } from '@/lib/auth/browser-session'
 
 const TOP_REVEAL_PX = 24
 const SCROLL_DELTA_PX = 8
+/** Stone-eye header mark — 128px MP4 loop (~40KB) + WebP poster for reduced motion. */
+const HEADER_LOGO_POSTER = '/images/gallery/sergik-stone-eye-logo.webp?v=5'
+const HEADER_LOGO_VIDEO = '/images/gallery/sergik-stone-eye-logo.mp4?v=3'
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false)
@@ -205,21 +208,36 @@ export default function Header() {
   return (
     <header
       ref={headerRef}
-      className={`fixed top-0 w-full z-50 bg-black/95 border-b border-gray-800 safe-area-top transition-transform duration-300 ease-out motion-reduce:transition-none ${
+      className={`fixed top-0 w-full z-50 bg-black border-b border-gray-800 safe-area-top transition-transform duration-300 ease-out motion-reduce:transition-none ${
         slideHidden ? '-translate-y-full' : 'translate-y-0'
       }`}
+      data-site-header
       data-header-hidden={slideHidden ? 'true' : 'false'}
     >
       <nav className="w-full max-w-none px-4 py-3 md:py-4">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 md:gap-3 group touch-manipulation">
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 transition-transform duration-300 group-active:scale-95 flex-shrink-0">
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-black overflow-hidden transition-transform duration-300 group-active:scale-95 flex-shrink-0">
+              <video
+                className="object-contain w-full h-full bg-black motion-reduce:hidden"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                poster={resolveImageUrl(HEADER_LOGO_POSTER)}
+                width={128}
+                height={128}
+                aria-hidden
+              >
+                <source src={HEADER_LOGO_VIDEO} type="video/mp4" />
+              </video>
               <Image
-                src={resolveImageUrl('/images/gallery/logo.png')}
+                src={resolveImageUrl(HEADER_LOGO_POSTER)}
                 alt="SERGIK Logo"
                 width={64}
                 height={64}
-                className="object-contain w-full h-full"
+                className="object-contain w-full h-full bg-black hidden motion-reduce:block"
                 priority
               />
             </div>
@@ -239,6 +257,14 @@ export default function Header() {
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-white transition-all duration-300 group-hover:w-full" />
               </Link>
             ))}
+            {fanNav === 'admin' && (
+              <Link
+                href="/admin"
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/25 rounded-md transition-colors duration-300 touch-manipulation"
+              >
+                Admin
+              </Link>
+            )}
             {fanNav === 'fan' && (
               <Link
                 href="/fan/account"
@@ -298,16 +324,16 @@ export default function Header() {
             />
             <div
               ref={menuRef}
-              className="md:hidden fixed top-[73px] right-0 bg-gray-950/95 z-[60] shadow-xl rounded-l-lg [contain:layout_paint]"
+              className="md:hidden fixed right-0 bg-gray-950/95 z-[60] shadow-xl rounded-l-lg [contain:layout_paint]"
               style={{
-                width: '240px',
-                maxWidth: '80vw',
+                top: 'var(--site-header-offset, 4.5rem)',
+                width: 'min(240px, 80vw)',
                 transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
                 transition: 'transform 0.3s ease-out',
                 display: 'block',
                 visibility: 'visible',
                 opacity: 1,
-                maxHeight: 'calc(100vh - 73px)',
+                maxHeight: 'calc(var(--vvh, 100dvh) - var(--site-header-offset, 4.5rem))',
                 overflowY: 'auto',
               }}
             >
@@ -322,6 +348,15 @@ export default function Header() {
                     {item.label}
                   </Link>
                 ))}
+                {fanNav === 'admin' && (
+                  <Link
+                    href="/admin"
+                    className="block px-4 py-3 text-base font-medium text-white hover:bg-gray-800/40 rounded-md touch-manipulation min-h-[44px] flex items-center"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Admin
+                  </Link>
+                )}
                 {fanNav === 'fan' && (
                   <Link
                     href="/fan/account"

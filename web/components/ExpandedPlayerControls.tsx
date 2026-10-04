@@ -625,9 +625,14 @@ export default function ExpandedPlayerControls({
     const onTouchMove = (e: TouchEvent) => {
       const target = e.target as HTMLElement | null
       if (target?.closest('[data-waveform-stage]')) return
-      if (target?.closest('[data-allow-scroll-when-locked]')) return
       if (target?.closest('[data-mix-crossfader]')) return
-      if (target?.closest('[data-eq-dials], [data-eq-dial], [data-deck-tempo]')) return
+      // Knobs live in the scrolling player. If this touch is allowed to scroll,
+      // iPhone and iPad never deliver the drag to LOW / MID / HIGH or tempo.
+      if (target?.closest('[data-eq-dials], [data-eq-dial], [data-deck-tempo]')) {
+        e.preventDefault()
+        return
+      }
+      if (target?.closest('[data-allow-scroll-when-locked]')) return
       e.preventDefault()
     }
 

@@ -1,4 +1,5 @@
 import { getSkillById, getSkillByTool, inferSkillFromIntent } from '@/lib/ai/skills/registry'
+import { isMetaPromoIntent } from '@/lib/meta/promo-workflow'
 
 export type PlannerTool =
   | 'create_release_checklist'
@@ -14,6 +15,13 @@ export type PlannerTool =
   | 'update_copyright_checklist'
   | 'assign_isrcs'
   | 'create_distribution_release_draft'
+  | 'query_intelligence_harness'
+  | 'query_sergikai_chat'
+  | 'query_crowe_creative'
+  | 'audit_music_contract'
+  | 'run_meta_promo_pipeline'
+  | 'admin_browser'
+  | 'query_platform_growth_snapshot'
 
 export type ExecutionPlan = {
   skill: {
@@ -77,7 +85,18 @@ export function buildIntentPlan(
 ) {
   const skill =
     (options?.skillId && getSkillById(options.skillId)) || inferSkillFromIntent(message)
-  const recommendedTool = (skill.allowedTools[0] ?? null) as PlannerTool | null
+  const recommendedTool = (
+    skill.id === 'product_strategy' && isMetaPromoIntent(message)
+      ? 'run_meta_promo_pipeline'
+      : skill.id === 'growth_marketing' &&
+          /campaign draft|create campaign|persist campaign/i.test(message)
+        ? 'generate_campaign_draft'
+        : skill.id === 'growth_marketing' && /smartlink|utm/i.test(message)
+          ? 'generate_smartlink_utm_plan'
+          : skill.id === 'growth_marketing' && /browser|ingest|desk|re-?read/i.test(message)
+            ? 'admin_browser'
+            : (skill.allowedTools[0] ?? null)
+  ) as PlannerTool | null
   return {
     skill: {
       id: skill.id,

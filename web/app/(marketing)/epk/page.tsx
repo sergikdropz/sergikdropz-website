@@ -13,7 +13,7 @@ export default function EPK() {
     <div className="pt-20 min-h-screen relative">
       <div className="container mx-auto px-4 py-16 relative z-10">
         <div className="max-w-4xl mx-auto">
-          <h1 className="font-six-caps text-center mb-12" style={{ fontSize: '70px', letterSpacing: '6.2px' }}>Electronic Press Kit</h1>
+          <h1 className="consumer-display consumer-display-long mb-8 text-center font-six-caps sm:mb-12">Electronic Press Kit</h1>
           
           {/* Contact */}
           <section className="mb-12 bg-gray-900/40 p-8 rounded-lg">

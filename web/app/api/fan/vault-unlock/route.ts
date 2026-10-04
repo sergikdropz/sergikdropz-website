@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { persistVaultUnlockAsFan } from '@/lib/fan-crm'
+import { GOOGLE_VAULT_SOURCE, persistVaultUnlockAsFan } from '@/lib/fan-crm'
 import { checkRateLimit, clientKeyFromRequest } from '@/lib/rate-limit'
 import {
   FAN_VAULT_UNLOCK_COOKIE,
@@ -9,7 +9,8 @@ import {
   hostnameFromRequest,
   sealFanVaultUnlock,
 } from '@/lib/fan-vault-unlock-cookie'
-import { emailFromGoogleAccessToken } from '@/lib/youtube/subscribe-gate'
+import { profileFromGoogleIdToken } from '@/lib/auth/google-id-profile'
+import { profileFromGoogleAccessToken, youtubeOAuthClientId } from '@/lib/youtube/subscribe-gate'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,16 +36,33 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}))
     let email = normalizeEmail(body.email)
+    let googleName: string | null = null
+    let signedInWithGoogle = false
+    if (!email && typeof body.credential === 'string') {
+      const profile = await profileFromGoogleIdToken(body.credential, youtubeOAuthClientId())
+      if (profile) {
+        email = profile.email
+        googleName = profile.name
+        signedInWithGoogle = true
+      }
+    }
     if (!email && typeof body.accessToken === 'string') {
-      email = await emailFromGoogleAccessToken(body.accessToken)
+      const profile = await profileFromGoogleAccessToken(body.accessToken)
+      if (profile) {
+        email = profile.email
+        googleName = profile.name
+        signedInWithGoogle = true
+      }
     }
     if (!email) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 })
     }
 
-    const displayName =
+    const typedName =
       typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 120) || null : null
-    const source = typeof body.source === 'string' ? body.source.trim().slice(0, 64) || null : null
+    const displayName = typedName || googleName
+    const typedSource = typeof body.source === 'string' ? body.source.trim().slice(0, 64) || null : null
+    const source = signedInWithGoogle ? GOOGLE_VAULT_SOURCE : typedSource
     const campaign = typeof body.campaign === 'string' ? body.campaign.trim().slice(0, 64) || null : null
 
     // CRM is best-effort: write `fans` (FansAdmin) + `fan_leads` (unlock timestamps).

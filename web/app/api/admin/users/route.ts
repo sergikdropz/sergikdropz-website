@@ -23,18 +23,11 @@ export async function GET(request: NextRequest) {
 
     const supabase = createSupabaseServerClient()
 
-    // Get all admins
+    // auth.users is not in the PostgREST schema, so embedding it makes the
+    // whole list query fail (PGRST100) and the UI looks like nothing saved.
     const { data: admins, error } = await supabase
       .from('admins')
-      .select(`
-        *,
-        user:auth.users!admins_user_id_fkey (
-          id,
-          email,
-          created_at,
-          last_sign_in_at
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -45,18 +38,39 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const { data: authList, error: authError } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    })
+    if (authError) {
+      console.error('Error listing auth users for admin directory:', authError)
+    }
+    const authById = new Map(
+      (authList?.users ?? []).map((authUser) => [authUser.id, authUser])
+    )
+
     // Get activity logs to find last activity per user
     const { data: activityLogs } = await supabase
       .from('activity_logs')
       .select('admin_id, created_at')
       .order('created_at', { ascending: false })
 
-    // Map last activity to each admin
+    // Map last activity and auth profile to each admin
     const adminsWithActivity = admins?.map((admin: any) => {
+      const authUser = authById.get(admin.user_id)
       const lastActivity = activityLogs?.find((log) => log.admin_id === admin.user_id)
       return {
         ...admin,
+        email: admin.email || authUser?.email || '',
         lastActivity: lastActivity?.created_at || null,
+        user: authUser
+          ? {
+              id: authUser.id,
+              email: authUser.email,
+              created_at: authUser.created_at,
+              last_sign_in_at: authUser.last_sign_in_at,
+            }
+          : null,
       }
     })
 

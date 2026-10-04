@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseClient } from '@/lib/supabase'
-import { checkAdminStatus } from '@/lib/auth'
+import { checkAdminStatus, getServerSessionFromToken } from '@/lib/auth'
 import { checkRateLimit, clientKeyFromRequest } from '@/lib/rate-limit'
+import { isJwtExpired } from '@/lib/auth/token'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,9 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const LOGIN_MAX_ATTEMPTS = 20
 
 function formatAuthError(message: string): string {
+  if (/rate limit/i.test(message)) {
+    return 'Sign-in is temporarily rate limited by the auth service. Wait a few minutes, then click Sign In once. Refreshing this page will not reset it.'
+  }
   if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network/i.test(message)) {
     return 'Cannot reach Supabase. Check that your project is active and NEXT_PUBLIC_SUPABASE_URL in web/.env.local is correct.'
   }
@@ -17,6 +21,33 @@ function formatAuthError(message: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const { email, password, rememberMe } = await request.json()
+
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: 'Email and password are required' },
+        { status: 400 }
+      )
+    }
+
+    const existingToken = request.cookies.get('sb-auth-token')?.value
+    if (existingToken && !isJwtExpired(existingToken)) {
+      const existing = await getServerSessionFromToken(existingToken)
+      const sameAdmin =
+        existing?.isAdmin &&
+        existing.user.email?.toLowerCase() === String(email).trim().toLowerCase()
+      if (sameAdmin) {
+        return NextResponse.json({
+          user: {
+            id: existing.user.id,
+            email: existing.user.email,
+          },
+          session: null,
+          reusedSession: true,
+        })
+      }
+    }
+
     const rl = checkRateLimit(
       `login:${clientKeyFromRequest(request)}`,
       LOGIN_MAX_ATTEMPTS,
@@ -32,15 +63,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { email, password, rememberMe } = await request.json()
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
-      )
-    }
-
     const supabase = createSupabaseClient()
     
     // Sign in the user
@@ -50,9 +72,13 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) {
+      const rateLimited = error.status === 429 || /rate limit/i.test(error.message)
       return NextResponse.json(
         { error: formatAuthError(error.message) },
-        { status: 401 }
+        {
+          status: rateLimited ? 429 : 401,
+          headers: rateLimited ? { 'Retry-After': '300' } : undefined,
+        }
       )
     }
 

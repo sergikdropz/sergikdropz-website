@@ -7,6 +7,9 @@ export const INSTAGRAM_MANUAL_POSTS_KEY = 'instagram_manual_posts' as const
 /** Bumped when admin publishes the music catalog to the live site. Value: number or `{ version: number }`. */
 export const MUSIC_LIBRARY_PUBLISH_VERSION_KEY = 'music_library_publish_version' as const
 
+/** Encrypted Meta Page token used to publish release promo slots. */
+export const META_PUBLISHER_CONNECTION_KEY = 'meta_publisher_connection' as const
+
 /** YouTube catalog for the public /videos page. Value shape matches `web/data/videos.json`. */
 export const VIDEOS_CATALOG_KEY = 'videos_catalog' as const
 

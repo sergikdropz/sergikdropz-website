@@ -5,6 +5,7 @@ import {
   runAdminTool,
   updateAiRun,
 } from '@/lib/admin-ai'
+import { payloadSubmits } from '@/lib/ai/approval-rows'
 import type { OrchestratorStep } from '@/lib/ai/orchestrator'
 import {
   initialTimeline,
@@ -152,7 +153,7 @@ export async function executePlanOnRun(params: {
         payload: step.payload,
         adminId: params.adminId,
         runId: params.runId,
-        dryRun: false,
+        dryRun: !payloadSubmits(step.payload),
       })
 
       const actionId = await createAiAction({

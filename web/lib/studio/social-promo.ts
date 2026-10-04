@@ -47,6 +47,10 @@ export type SocialPromoPost = {
   status: SocialPromoStatus
   caption: string
   notes: string
+  /** Graph media or Page post id after a successful Meta publish. */
+  meta_id?: string | null
+  meta_url?: string | null
+  meta_error?: string | null
 }
 
 export type SocialPromoPlan = {
@@ -384,6 +388,9 @@ export function parseSocialPromoPlan(raw: unknown): SocialPromoPlan {
       status: isStatus(status) ? status : 'planned',
       caption: clean(row.caption),
       notes: clean(row.notes),
+      meta_id: clean(row.meta_id) || null,
+      meta_url: clean(row.meta_url) || null,
+      meta_error: clean(row.meta_error) || null,
     })
   }
   return {
@@ -454,6 +461,10 @@ export function mergeSocialPromoPlan(
         status: isStatus(status) ? status : prev.status,
         caption: row.caption !== undefined ? clean(row.caption) : prev.caption,
         notes: row.notes !== undefined ? clean(row.notes) : prev.notes,
+        meta_id: row.meta_id !== undefined ? clean(row.meta_id) || null : prev.meta_id ?? null,
+        meta_url: row.meta_url !== undefined ? clean(row.meta_url) || null : prev.meta_url ?? null,
+        meta_error:
+          row.meta_error !== undefined ? clean(row.meta_error) || null : prev.meta_error ?? null,
       })
     }
     // Keep template order when possible

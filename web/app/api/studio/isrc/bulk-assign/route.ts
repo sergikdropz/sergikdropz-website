@@ -11,6 +11,7 @@ import {
 import { parseIsrcImportCsv } from '@/lib/studio/import-parse'
 import { logActivity } from '@/lib/activity-log'
 import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
+import { registerMintedIsrcsWithSxDirect } from '@/lib/studio/soundexchange-registry'
 
 type BulkBody =
   | { trackIds: string[] }
@@ -136,11 +137,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const sxDirect = await registerMintedIsrcsWithSxDirect(okIds)
+
     await logActivity({
       actionType: 'bulk_assign_isrc',
       resourceType: 'track',
       resourceId: 'bulk',
-      details: { total: results.length, successful: ok },
+      details: { total: results.length, successful: ok, sxDirect },
     })
 
     return NextResponse.json({
@@ -148,6 +151,7 @@ export async function POST(request: NextRequest) {
       successful: ok,
       failed: results.length - ok,
       results,
+      sxDirect,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Bulk ISRC failed'

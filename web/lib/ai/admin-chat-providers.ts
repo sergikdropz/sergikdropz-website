@@ -4,7 +4,12 @@ import {
   isAnthropicModelNotFoundError,
 } from '@/lib/ai/admin-anthropic-defaults'
 import { ADMIN_AI_CHAT_PROVIDERS, type AdminAiChatProvider } from '@/lib/ai/admin-chat-types'
-import { isCrowelogicConfigured, resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
+import {
+  crowelogicChatBlockReason,
+  isCrowelogicConfigured,
+  resolveCrowelogicEnv,
+  crowelogicOpenAiUrl,
+} from '@/lib/ai/crowelogic-env'
 import { ADMIN_AI_SMART_MODEL_OVERRIDE, pickSmartChatModelId } from '@/lib/ai/admin-smart-model-picker'
 import { buildSmartProviderOrder, type AdminAiAutoRouterMode } from '@/lib/ai/admin-chat-router'
 import { resolveInferredSkillForAdminChat } from '@/lib/ai/admin-chat-infer-skill'
@@ -14,7 +19,14 @@ import {
   type AdminChatEnergyPreset,
   type AdminChatHonestyMode,
 } from '@/lib/ai/admin-chat-session-tuning'
+import { agentToolCatalogPrompt } from '@/lib/ai/admin-ai-agent-tools'
+import { applyDiffPromptHint } from '@/lib/ai/admin-ai-apply-diff'
+import { mentionCatalogPrompt } from '@/lib/ai/admin-ai-mentions'
+import { adminAiToolLiteracyPrompt } from '@/lib/ai/admin-ai-tool-literacy'
 import type { AdminSkill } from '@/lib/ai/skills/types'
+
+const CHAT_MAX_TOKENS = 900
+const AGENT_MAX_TOKENS = 2_500
 
 function readEnvTimeoutMs(name: string, defaultMs: number): number {
   const raw = Number.parseInt(process.env[name] || '', 10)
@@ -40,23 +52,28 @@ function buildSystemPrompt(
   inferredSkill: AdminSkill,
   siteKnowledgePrompt?: string | null,
   pageContextPrompt?: string | null,
-  sessionTuningPrompt?: string | null
+  sessionTuningPrompt?: string | null,
+  agentMode?: boolean,
 ) {
   const globalExecHonesty = [
-    'Chat-only replies cannot execute tools. Live data appears only after the user runs `/exec <tool_name> {<json>}` or uses Plan → Preview → Approve.',
-    'Never claim a snapshot or tool run is in progress unless the user actually submitted execute/plan in this assistant.',
+    'Writes and browser clicks/types need `/exec <tool_name> {<json>}` or Plan → Preview → Approve.',
+    'When LIVE CONTEXT or TOOL RESULT blocks are present, treat them as read-only output already captured for this turn — cite them; do not claim a separate `/exec` ran unless the user submitted one.',
     'Required `/exec` format: one line `/exec <tool_name> ` then a single JSON object with double-quoted keys. Example: `/exec query_ops_snapshot {"focus":"studio"}`. Invalid examples: `/exec query_ops_snapshot focus=studio` or any shell-style `key=value` without JSON.',
   ].join(' ')
 
   const toolHints =
     inferredSkill.id === 'admin_intel'
       ? 'Pipeline-wide summaries: `/exec query_ops_snapshot {"focus":"studio"}` (distribution/releases aggregate), `{"focus":"nurturing"}`, or `{"focus":"all"}`. For **due dates and roll-up priorities**, also suggest `/exec query_studio_command_center {"dueWithinDays":14}` (Release Studio tool—mention explicitly). Never invent counts—pull snapshots first.'
+      : inferredSkill.id === 'sergik_intelligence'
+        ? 'Intelligence stack: `/exec query_intelligence_harness {"mode":"stack","releaseId":"…"}`. SergikAI chat: `/exec query_sergikai_chat {"content":"…","dryRun":true}` then approve. Crowe Creative: `/exec query_crowe_creative {"action":"quote","kind":"video","model":"seedance"}` before generate. Modes on harness: ping | catalog | probe | knowledge | dev_mode.'
+      : inferredSkill.id === 'music_business_counsel'
+        ? 'Contract audit: `/exec audit_music_contract {"releaseId":"<id>","dealKind":"split_sheet"}` or pass `text`. Read-only. Cite topic ids from the memo. Do not write the copyright checklist from this agent.'
       : inferredSkill.id === 'studio_release'
-        ? 'Per-release drill-down: `/exec query_release_studio_snapshot {"releaseId":"<id>"}`. Rolling calendar pressure: `/exec query_studio_command_center {"dueWithinDays":7}`. DSP readiness vs distributor delivery—never claim live unless distributor_status is live.'
+        ? 'Per-release drill-down: `/exec query_release_studio_snapshot {"releaseId":"<id>"}` — response includes adminAiBrief (empty marketing fields, copy_intel per track, sonicDnaUnified, YouTube timestamp timeline). Writes: `/exec patch_release_marketing_copy {"releaseId":"<id>","marketingCopy":{...},"merge":true,"dryRun":true}` then approve without dryRun. Rolling calendar: `/exec query_studio_command_center {"dueWithinDays":7}`. Harness/RAG: query_intelligence_harness with releaseId. For tags/social/store discovery expansion, suggest switching to product_strategy or growth_marketing after the snapshot—never claim live DSP unless distributor_status is live.'
         : inferredSkill.id === 'product_strategy'
-          ? 'Lead with structured scaffolding: Plan mode or `/exec draft_product_strategy_pack` for audits, conversion workflows, SEO outlines, campaign calendars, and paste-ready admin snippets. Ask for URLs and screenshots early; never invent analytics—tell them how to verify. For Supabase campaign rows + tasks use Growth Marketing (`generate_campaign_draft`); for UTM/smartlinks use the Smartlink agent (`generate_smartlink_utm_plan`).'
+          ? 'Lead with structured scaffolding: Plan mode or `/exec draft_product_strategy_pack` for audits, conversion workflows, SEO outlines, campaign calendars, and paste-ready admin snippets. Meta promo publish desk: `/exec run_meta_promo_pipeline {"releaseId":"<id>","action":"status","primaryGoal":"Meta promo"}` with dryRun, then generate, arm, and publish or advance. Never invent post counts or claim Instagram DMs to all followers. Ask for URLs and screenshots early; never invent analytics—tell them how to verify. For Supabase campaign rows + tasks use Growth Marketing (`generate_campaign_draft`); for UTM/smartlinks use the Smartlink agent (`generate_smartlink_utm_plan`).'
           : inferredSkill.id === 'growth_marketing'
-            ? 'Use `generate_campaign_draft` when the user wants campaigns persisted with tasks and smartlinks. Pair with Product Strategy (`draft_product_strategy_pack`) when they need narrative, audits, or calendars before committing rows.'
+            ? 'Always ground in `/exec query_platform_growth_snapshot {}` (or the injected PLATFORM GROWTH SNAPSHOT). Re-ingest desks with `/exec admin_browser {"action":"navigate","url":"…"}` then `{"action":"read"}`. Persist work with `generate_campaign_draft` + `generate_smartlink_utm_plan`. Never invent ML/streams/followers; never push Marquee while ineligible. Hand Meta publish to product_strategy `run_meta_promo_pipeline`.'
             : ''
   const focusCopilot =
     pageContextPrompt?.includes('USER FOCUS')
@@ -65,6 +82,10 @@ function buildSystemPrompt(
 
   return [
     'You are an admin copilot for a music brand.',
+    adminAiToolLiteracyPrompt(),
+    mentionCatalogPrompt(),
+    applyDiffPromptHint(),
+    agentMode ? agentToolCatalogPrompt() : '',
     globalExecHonesty,
     inferredSkill.systemPrompt,
     toolHints,
@@ -138,7 +159,7 @@ function localGuidanceReply(
       `Request received: "${message.slice(0, 500)}${message.length > 500 ? '…' : ''}"`,
       `Detected skill: ${inferredSkill.name} (${inferredSkill.id}).`,
       '',
-      'Configure one of: ANTHROPIC_API_KEY, OPENAI_API_KEY (+ optional OPENAI_CHAT_MODEL), OLLAMA_BASE_URL (+ OLLAMA_MODEL), or CROWELOGIC_BASE_URL + CROWELOGIC_API_KEY (+ CROWELOGIC_MODEL).',
+      'Configure one of: ANTHROPIC_API_KEY, OPENAI_API_KEY (+ optional OPENAI_CHAT_MODEL), OLLAMA_BASE_URL (+ OLLAMA_MODEL), or CROWELOGIC_API_KEY for CroweLM chat (local bridge, or hosted gateway after Pro linkage).',
       'Set ADMIN_AI_CHAT_PROVIDER to anthropic | openai | ollama | crowelogic to force a provider.',
     ].join('\n'),
     skill: inferredSkill,
@@ -156,6 +177,7 @@ async function completeOpenAICompatibleChat(params: {
   timeoutMs?: number
   /** CroweLM hosted gateway uses base ending in /v1 (no double /v1/). */
   crowelogic?: boolean
+  maxTokens?: number
 }): Promise<string> {
   const base = params.baseUrl.replace(/\/$/, '')
   const url =
@@ -183,7 +205,7 @@ async function completeOpenAICompatibleChat(params: {
           { role: 'system', content: params.system },
           { role: 'user', content: params.user },
         ],
-        max_tokens: 900,
+        max_tokens: params.maxTokens ?? CHAT_MAX_TOKENS,
         temperature: 0.35,
       }),
     })
@@ -215,7 +237,12 @@ async function completeOpenAICompatibleChat(params: {
   return text
 }
 
-async function generateWithAnthropic(message: string, system: string, modelOverride?: string | null) {
+async function generateWithAnthropic(
+  message: string,
+  system: string,
+  modelOverride?: string | null,
+  maxTokens?: number,
+) {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new Error('ANTHROPIC_API_KEY is not set')
   const anthropic = new Anthropic({
@@ -228,7 +255,7 @@ async function generateWithAnthropic(message: string, system: string, modelOverr
     try {
       const response = await anthropic.messages.create({
         model,
-        max_tokens: 900,
+        max_tokens: maxTokens ?? CHAT_MAX_TOKENS,
         system,
         messages: [{ role: 'user', content: message }],
       })
@@ -246,7 +273,12 @@ async function generateWithAnthropic(message: string, system: string, modelOverr
   throw lastError instanceof Error ? lastError : new Error('Anthropic model not found')
 }
 
-async function generateWithOpenAI(message: string, system: string, modelOverride?: string | null) {
+async function generateWithOpenAI(
+  message: string,
+  system: string,
+  modelOverride?: string | null,
+  maxTokens?: number,
+) {
   const key = process.env.OPENAI_API_KEY
   if (!key) throw new Error('OPENAI_API_KEY is not set')
   const model = modelOverride?.trim() || process.env.OPENAI_CHAT_MODEL?.trim() || 'gpt-4o-mini'
@@ -258,10 +290,16 @@ async function generateWithOpenAI(message: string, system: string, modelOverride
     system,
     user: message,
     timeoutMs: CHAT_COMPLETION_DEFAULT_TIMEOUT_MS,
+    maxTokens,
   })
 }
 
-async function generateWithOllama(message: string, system: string, modelOverride?: string | null) {
+async function generateWithOllama(
+  message: string,
+  system: string,
+  modelOverride?: string | null,
+  maxTokens?: number,
+) {
   const base = process.env.OLLAMA_BASE_URL?.trim() || 'http://127.0.0.1:11434'
   const model = await resolveOllamaModelIdForRequest(modelOverride)
   return completeOpenAICompatibleChat({
@@ -271,15 +309,19 @@ async function generateWithOllama(message: string, system: string, modelOverride
     system,
     user: message,
     timeoutMs: OLLAMA_CHAT_COMPLETION_TIMEOUT_MS,
+    maxTokens,
   })
 }
 
-async function generateWithCrowelogic(message: string, system: string, modelOverride?: string | null) {
+async function generateWithCrowelogic(
+  message: string,
+  system: string,
+  modelOverride?: string | null,
+  maxTokens?: number,
+) {
   const crowe = resolveCrowelogicEnv()
   if (!crowe.configured) {
-    throw new Error(
-      'Set CROWELOGIC_API_KEY (or CROWE_API_KEY / CROWE_LOGIC_KEY) for Crowe Logic. Optional: CROWELOGIC_BASE_URL.',
-    )
+    throw new Error(crowelogicChatBlockReason(crowe) ?? 'CroweLM chat is not available.')
   }
   const model = modelOverride?.trim() || crowe.model
   return completeOpenAICompatibleChat({
@@ -290,6 +332,7 @@ async function generateWithCrowelogic(message: string, system: string, modelOver
     user: message,
     timeoutMs: CHAT_COMPLETION_DEFAULT_TIMEOUT_MS,
     crowelogic: true,
+    maxTokens,
   })
 }
 
@@ -327,6 +370,8 @@ export async function generateAdminChatReply(
     /** Compact, query-aware route and architecture grounding from the generated site index. */
     siteKnowledgePrompt?: string | null
     pageContextPrompt?: string | null
+    /** Enables /tool mid-turn catalog + higher max_tokens. */
+    agentMode?: boolean
   }
 ): Promise<AdminChatReply> {
   const inferredSkill = resolveInferredSkillForAdminChat(message, {
@@ -334,11 +379,14 @@ export async function generateAdminChatReply(
     stickySkillId: options?.stickySkillId,
   })
   const sessionTuning = buildSessionTuningPrompt(options?.honestyMode ?? null, options?.energyPreset ?? null)
+  const agentMode = Boolean(options?.agentMode)
+  const maxTokens = agentMode ? AGENT_MAX_TOKENS : CHAT_MAX_TOKENS
   const system = buildSystemPrompt(
     inferredSkill,
     options?.siteKnowledgePrompt,
     options?.pageContextPrompt,
-    sessionTuning
+    sessionTuning,
+    agentMode,
   )
 
   const requested = normalizeProvider(
@@ -396,15 +444,15 @@ export async function generateAdminChatReply(
       const modelIdUsed = modelFor(provider)
       if (provider === 'anthropic') {
         if (!isAnthropicConfigured()) continue
-        reply = await generateWithAnthropic(message, system, modelIdUsed)
+        reply = await generateWithAnthropic(message, system, modelIdUsed, maxTokens)
       } else if (provider === 'openai') {
         if (!isOpenAiChatConfigured()) continue
-        reply = await generateWithOpenAI(message, system, modelIdUsed)
+        reply = await generateWithOpenAI(message, system, modelIdUsed, maxTokens)
       } else if (provider === 'ollama') {
-        reply = await generateWithOllama(message, system, modelIdUsed)
+        reply = await generateWithOllama(message, system, modelIdUsed, maxTokens)
       } else {
         if (!isCrowelogicConfigured()) continue
-        reply = await generateWithCrowelogic(message, system, modelIdUsed)
+        reply = await generateWithCrowelogic(message, system, modelIdUsed, maxTokens)
       }
       return {
         reply,

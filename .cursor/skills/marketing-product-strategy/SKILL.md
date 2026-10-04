@@ -1,6 +1,6 @@
 ---
 name: marketing-product-strategy
-description: SERGIK Marketing & Product Strategy agent — site audits from screenshots/URLs, conversion workflows, SEO briefs, campaign calendars, and admin-ready snippets. Use when planning GTM, landing/email drafts, keyword/content strategy, launch timing, or paste-ready config/copy blocks for the Next.js admin.
+description: SERGIK Marketing & Product Strategy agent — site audits, conversion workflows, SEO briefs, campaign calendars, and the Meta promo publish pipeline (Instagram + Facebook Page). Use when planning GTM, landing/email drafts, keyword/content strategy, launch timing, promo schedules, or paste-ready config/copy blocks for the Next.js admin.
 ---
 
 # Marketing & Product Strategy (SERGIK)
@@ -26,8 +26,18 @@ Chat answers never execute tools. Exact execute syntax: `/exec <tool_name> {<jso
 | Campaign blueprint (checklists, calendar, timing) | Same pack (`campaign` focus) |
 | Paste-ready snippets (UTM patterns, email shells) | Same pack (`admin_config` focus) |
 | Persist campaign rows + tasks in Supabase | Agent **`growth_marketing`** / `generate_campaign_draft` |
+| Platform growth scorecard (desk ingest) | Agent **`growth_marketing`** / `query_platform_growth_snapshot` + Weekly Growth Board playbook |
+| Meta promo publish (IG + Facebook Page) | Agent **`product_strategy`** / `run_meta_promo_pipeline` |
 
-Optional `/exec` payload keys: `brandName`, `primaryGoal`, `siteUrl`, `timelineWeeks`, `focusAreas` (`site_audit` \| `conversion` \| `seo` \| `campaign` \| `admin_config`), `refineWithLlm` (boolean — markdown polish on **preview/dry-run** only).
+Meta promo actions: `status` (connection + schedule), `generate` (PT cadence from street date, T-14 → T+3), `arm` (planned feed, story stills, and Facebook Page photos → Assets ready), `publish` (due ready image slots), `advance` (generate if empty, then arm, then publish). Always preview with `dryRun: true`, then approve. Reels and vinyl videos stay a manual upload. Instagram and Messenger cannot message every follower — do not plan promo DMs.
+
+```
+/exec run_meta_promo_pipeline {"releaseId":"<id>","action":"status","primaryGoal":"Meta promo","dryRun":true}
+```
+
+Connect Meta on Release Studio → Launch. Redirect URI: `/api/studio/meta/callback`. Scopes: `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`, `business_management`. Artwork must be a public https URL. Away-from-desk publish: `POST /api/cron/meta-promo` with `Authorization: Bearer $CRON_SECRET` about every 15 minutes. Playbook on a release: **Meta promo pipeline**.
+
+Optional `/exec` payload keys: `brandName`, `primaryGoal`, `siteUrl`, `timelineWeeks`, `focusAreas` (`site_audit` \| `conversion` \| `seo` \| `campaign` \| `admin_config`), `refineWithLlm` (boolean — markdown polish on **preview/dry-run** only). Meta tool keys: `releaseId`, `action`.
 
 **Admin assistant UI:** strategy packs render as structured cards in chat + in the amber approval strip (`density="compact"`). Enable **“LLM polish for draft_product_strategy_pack previews”** in the composer to merge `refineWithLlm: true` into preview payloads (persisted per chat session in localStorage). While approval is pending, use **Regenerate with LLM polish** / **Regenerate (no polish)** to re-run preview without retyping `/exec`. **Add polish to thread** copies the markdown brief into the transcript when polish exists.
 
@@ -36,8 +46,9 @@ Optional `/exec` payload keys: `brandName`, `primaryGoal`, `siteUrl`, `timelineW
 1. **Audit**: Ask for production + mobile screenshots, hero + footer + primary funnel URL; score positioning, proof, CTA, performance hints, a11y.
 2. **Conversion**: Map Awareness → Intent → Action → Nurture; deliver landing blocks + 3–5 email beats with subject angles.
 3. **SEO**: Cluster branded vs intent-led keywords; tie each cluster to a route purpose; note canonical/smart-link hygiene.
-4. **Campaign**: Week-scaffold social cadence + launch checklist + retargeting reminder for smart-link visitors.
-5. **Handoff**: When they need DB-backed campaigns or formal smartlinks, explicitly switch to **Growth Marketing** + Smartlink agents.
+4. **Campaign**: Week-scaffold social cadence + launch checklist + retargeting reminder for smart-link visitors. For a real release, hand the cadence to `run_meta_promo_pipeline` instead of a fictional calendar.
+5. **Meta promo**: Status the connection, generate from the street date, arm image slots, preview due posts, approve publish. One primary listen link per caption. No follower DMs.
+6. **Handoff**: When they need DSP growth scorecards, desk re-ingest, or DB-backed campaigns, explicitly switch to **Growth Marketing** (`query_platform_growth_snapshot`, Growth Board playbook) + Smartlink agents.
 
 ## MCP / external data
 

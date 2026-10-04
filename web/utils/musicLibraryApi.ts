@@ -801,15 +801,20 @@ export async function fetchTracksSummary(
         const data = await response.json()
         const tracks = (data.tracks || []) as Track[]
         tracks.forEach(normalizeTrackMedia)
-        // Prefer live API rows whenever present. Empty 200 with a folderId can be
-        // a real empty folder — but only trust it when total is explicitly 0.
-        // Soft-empty (missing total) falls through to cache/JSON so EP crates
-        // are not wiped by a transient empty payload.
-        if (tracks.length > 0) {
-          return { tracks, total: data.total ?? tracks.length, hasMore: Boolean(data.hasMore) }
-        }
-        if (folderId && typeof data.total === 'number' && data.total === 0) {
-          return { tracks: [], total: 0, hasMore: false }
+        const reportedTotal = typeof data.total === 'number' ? data.total : undefined
+        // A past-the-end page is a real empty result (total set, hasMore false).
+        // Falling through to the unpaginated JSON catalog made hydration treat
+        // those 249 fallback rows as another full page and walk offset forever.
+        const trustedEmptyPage =
+          tracks.length === 0 &&
+          reportedTotal != null &&
+          (reportedTotal === 0 || data.hasMore === false)
+        if (tracks.length > 0 || trustedEmptyPage) {
+          return {
+            tracks,
+            total: reportedTotal ?? tracks.length,
+            hasMore: Boolean(data.hasMore),
+          }
         }
       } else if (response.status >= 500) {
         // Let callers fall through to cache / JSON instead of treating as empty.
@@ -989,9 +994,9 @@ export async function fetchAllTracksSummaryForHydration(
           offset,
         })
         const batch = result.tracks || []
+        if (batch.length === 0 || batch.length > pageSize || !result.hasMore) break
         all.push(...batch)
         onBatch?.(all.length, undefined)
-        if (batch.length === 0 || !result.hasMore) break
         offset += batch.length
       }
       return all
@@ -1016,9 +1021,11 @@ export async function fetchAllTracksSummaryForHydration(
       onBatch?.(all.length, total)
     }
 
-    // Count queries can lag right after ingest — keep paging while full batches arrive.
+    // Count queries can lag right after ingest — keep paging while exact full pages arrive.
+    // Cap the tail so a fallback payload larger than one page cannot walk forever.
     let tailOffset = all.length
-    while (true) {
+    const maxTailPages = 8
+    for (let tailPage = 0; tailPage < maxTailPages; tailPage++) {
       await yieldWhilePaused(shouldPause, signal)
       const tail = await fetchTracksSummary(undefined, {
         includeArchived,
@@ -1027,10 +1034,12 @@ export async function fetchAllTracksSummaryForHydration(
       })
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       const batch = tail.tracks || []
-      if (!batch.length) break
+      const realPage = tail.hasMore === true || tail.hasMore === false
+      // Unpaginated JSON fallback has no hasMore and can be larger than one page.
+      if (!batch.length || !realPage || batch.length > pageSize) break
       all.push(...batch)
       onBatch?.(all.length, total)
-      if (batch.length < pageSize) break
+      if (batch.length !== pageSize || tail.hasMore === false) break
       tailOffset += batch.length
     }
 
@@ -1048,12 +1057,16 @@ export async function fetchAllTracksSummaryForHydration(
         })
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
         const batch = repair.tracks || []
-        if (!batch.length) break
+        if (!batch.length || batch.length > pageSize) break
+        let added = 0
         for (const track of batch) {
-          if (track?.id && !byId.has(track.id)) byId.set(track.id, track)
+          if (track?.id && !byId.has(track.id)) {
+            byId.set(track.id, track)
+            added += 1
+          }
         }
+        if (added === 0 || repair.hasMore === false || batch.length < pageSize) break
         repairOffset += batch.length
-        if (batch.length < pageSize) break
       }
       deduped = [...byId.values()]
     }

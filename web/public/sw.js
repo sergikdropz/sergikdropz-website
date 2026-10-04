@@ -17,7 +17,7 @@ const API_CACHE_NAME = 'sergik-api-cache-v3'
 const API_MAX_ITEMS = 500 // High cap; browser may still evict
 
 // Cover art — only busted artwork URLs (`?v=`). Never bare /images paths.
-const COVER_CACHE_NAME = 'sergik-cover-cache-v1'
+const COVER_CACHE_NAME = 'sergik-cover-cache-v2'
 const COVER_MAX_ITEMS = 200
 const COVER_MAX_SIZE = 80 * 1024 * 1024 // ~80MB
 const COVER_PRELOAD_COUNT = 24

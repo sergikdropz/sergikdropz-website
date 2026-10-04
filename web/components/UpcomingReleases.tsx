@@ -97,14 +97,7 @@ export default function UpcomingReleases({
         aria-expanded={expanded}
         className="relative mb-4 sm:mb-6 flex w-full items-center justify-center rounded-lg border border-gray-800/80 bg-gray-900/40 px-10 py-3 text-center transition-colors hover:border-gray-700 hover:bg-gray-900/70 touch-manipulation sm:px-12"
       >
-        <h2
-          className="origin-center font-six-caps text-3xl font-bold sm:text-4xl md:text-5xl"
-          style={{
-            letterSpacing: '0.22em',
-            transform: 'scaleX(1.12)',
-            textShadow: '0.4px 0 0 currentColor, -0.4px 0 0 currentColor',
-          }}
-        >
+        <h2 className="consumer-section-title origin-center font-six-caps text-3xl font-bold sm:text-4xl md:text-5xl">
           Upcoming Releases
         </h2>
         <span

@@ -12,6 +12,18 @@ import {
 import type { MarketingCopy } from '@/lib/studio/constants'
 import { DEFAULT_LABEL_NAME } from '@/lib/studio/constants'
 import {
+  buildContinuousTimestampCues,
+  catalogTimestampFacts,
+  normalizeDurationSec,
+  resolveCatalogDuration,
+} from '@/lib/studio/catalog-timestamps'
+import { formatYoutubeTimestamp } from '@/lib/studio/isrc-format'
+import {
+  copyIntelHasSignal,
+  extractCopyIntelCard,
+  type CopyIntelCard,
+} from '@/lib/studio/copy-intelligence'
+import {
   contributorsFromVault,
   creditsBlockFromContributors,
   displayArtistLine,
@@ -37,6 +49,7 @@ export type VaultTrackRow = TrackDisplaySource & {
   title: string
   artist?: string | null
   folder_id?: string | null
+  audio_file_id?: string | null
   file_url?: string | null
   artwork_url?: string | null
   duration?: number | null
@@ -637,6 +650,8 @@ const COPY_KEYS: (keyof MarketingCopy)[] = [
   'spotify_pitch',
   'social_caption',
   'store_description',
+  'youtube_visualizer',
+  'platform_tags',
   'credits_block',
 ]
 
@@ -657,6 +672,9 @@ export type DnaCopyTrack = {
   scale?: string | null
   time_signature?: string | null
   lyrics_excerpt?: string | null
+  duration?: number | null
+  isrc?: string | null
+  intel?: CopyIntelCard | null
 }
 
 export type CatalogCopySourceTrack = {
@@ -664,6 +682,11 @@ export type CatalogCopySourceTrack = {
   track_number?: number | null
   identity?: Partial<StudioTrackIdentity> | null
   contributors?: unknown
+  duration?: number | null
+  isrc?: string | null
+  isrc_full?: string | null
+  sonic_dna?: unknown
+  copy_intel?: CopyIntelCard | null
 }
 
 export type DnaCopyInput = {
@@ -693,10 +716,13 @@ export type CatalogCopyFacts = {
   tempo: string | null
   keys: string | null
   pressNotes: number
+  runtimeSec: number | null
+  timestampsReady: boolean
+  missingDurations: string[]
 }
 
-function firstSentence(text: string, max = 180): string {
-  const trimmed = text.trim()
+function firstSentence(text?: string | null, max = 180): string {
+  const trimmed = String(text || '').trim()
   if (!trimmed) return ''
   const sentence = trimmed.split(/(?<=[.!?])\s+/)[0] || trimmed
   if (sentence.length <= max) return sentence
@@ -798,6 +824,140 @@ export function buildLaunchHashtags(input: {
     if (out.length >= (input.max ?? 16)) break
   }
   return out
+}
+
+function keywordTokens(...parts: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of parts) {
+    const value = clean(part)
+    if (!value) continue
+    const key = value.toLowerCase()
+    if (seen.has(key) || value.length < 2) continue
+    seen.add(key)
+    out.push(value)
+  }
+  return out
+}
+
+function clipCommaTags(tags: string[], max = 500): string {
+  const kept: string[] = []
+  let used = 0
+  for (const tag of tags) {
+    const next = clean(tag).replace(/^#/, '')
+    if (!next) continue
+    const add = kept.length ? used + 2 + next.length : next.length
+    if (add > max) break
+    kept.push(next)
+    used = add
+  }
+  return kept.join(', ')
+}
+
+/** Platform-specific YouTube tags + social hashtag blocks. */
+export function buildPlatformTags(input: DnaCopyInput): string {
+  const tracks = resolvedCopyTracks(input)
+  const title = clean(input.title) || 'Untitled'
+  const genre = clean(input.genre) || mostCommonCopyString(tracks.map((t) => t.genre)) || 'electronic'
+  const subgenre = clean(input.subgenre) || mostCommonCopyString(tracks.map((t) => t.subgenre)) || ''
+  const artist =
+    (input.contributors?.length ? displayArtistLine(input.contributors) : '') ||
+    clean(input.artist) ||
+    'SERGIK'
+  const kind = releaseKind(input.type, tracks.length)
+  const tempo = bpmRange(tracks)
+  const billed = uniqueCopyStrings(tracks.map((track) => track.billed)).filter((line) =>
+    /\sx\s|feat\./i.test(line),
+  )
+  const launch = buildLaunchHashtags({
+    title,
+    artist,
+    genre,
+    subgenre,
+    type: input.type,
+    tracks,
+    max: 16,
+  })
+  const youtubeHash = uniqueCopyStrings([
+    '#Visualizer',
+    '#OfficialAudio',
+    '#MusicVisualizer',
+    kind === 'album' ? '#FullAlbum' : kind === 'single' ? '#OfficialVisualizer' : '#FullEP',
+    '#EPVisualizer',
+    ...launch.slice(0, 8),
+  ]).slice(0, 12)
+  const instagram = launch.slice(0, 14)
+  const twitter = uniqueCopyStrings([
+    hashtag(artist) || '#SERGIK',
+    hashtag(title),
+    ...hashtagTokens(genre, subgenre),
+    '#NewMusic',
+    '#OutNow',
+  ]).slice(0, 6)
+  const tiktok = uniqueCopyStrings([
+    hashtag(artist) || '#SERGIK',
+    hashtag(title),
+    ...hashtagTokens(genre, subgenre),
+    '#HouseMusic',
+    '#ElectronicMusic',
+    '#DanceMusic',
+    '#NewMusic',
+    '#NowPlaying',
+  ]).slice(0, 10)
+  const youtubeKeywords = keywordTokens(
+    artist,
+    title,
+    ...billed,
+    genre,
+    subgenre,
+    kind,
+    tempo,
+    'Official Audio',
+    'Visualizer',
+    kind === 'album' ? 'Full Album' : kind === 'single' ? 'Official Visualizer' : 'Full EP',
+    'Electronic Music',
+    'Dance Music',
+    ...tracks.map((track) => track.title),
+  )
+  const soundcloud = keywordTokens(
+    artist,
+    title,
+    genre,
+    subgenre,
+    kind,
+    'electronic',
+    'new music',
+    tempo,
+  ).map((tag) => tag.toLowerCase())
+  const store = keywordTokens(artist, title, genre, subgenre, kind, 'electronic music', 'new music').join(
+    ' · ',
+  )
+
+  return [
+    'YOUTUBE TAGS',
+    clipCommaTags(youtubeKeywords, 500),
+    '',
+    'YOUTUBE HASHTAGS',
+    youtubeHash.join(' '),
+    '',
+    'INSTAGRAM / THREADS',
+    instagram.join(' '),
+    '',
+    'X',
+    twitter.join(' '),
+    '',
+    'TIKTOK',
+    tiktok.join(' '),
+    '',
+    'SOUNDCLOUD',
+    soundcloud.join(', '),
+    '',
+    'BANDCAMP / STORE',
+    `Tags: ${store}`,
+  ]
+    .filter((line, index, arr) => !(line === '' && (arr[index - 1] === '' || index === 0)))
+    .join('\n')
+    .trim()
 }
 
 /** Effective Instagram/X launch caption: hook, facts, CTA, SEO hashtag block. */
@@ -905,9 +1065,9 @@ export function buildStoreDescription(input: DnaCopyInput): string {
           const facts = copyTrackFacts(track)
           const billed =
             track.billed && /\sx\s|feat\./i.test(track.billed) ? ` · ${track.billed}` : ''
-          const note = firstSentence(usableNote(track.description), 120)
+          const note = catalogTrackProse(track, 160)
           const line = `${index + 1}. ${track.title}${facts ? ` — ${facts}` : ''}${billed}`
-          return note ? `${line}\n   ${note}` : line
+          return `${line}\n   ${note}`
         }),
       ].join('\n')
     : ''
@@ -953,6 +1113,197 @@ export function buildStoreDescription(input: DnaCopyInput): string {
     cta,
     '',
     `Tags: ${keywordLine}`,
+  ]
+    .filter((line, index, arr) => !(line === '' && (arr[index - 1] === '' || index === 0)))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export type VisualizerTrackCue = {
+  index: number
+  title: string
+  billed: string
+  startSec: number | null
+  endSec: number | null
+  durationSec: number | null
+}
+
+function visualizerDurationSec(value: number | null | undefined): number | null {
+  return normalizeDurationSec(value)
+}
+
+/** Continuous video cues: each track starts where the previous ends. No gaps. */
+export function buildContinuousVisualizerCues(tracks: DnaCopyTrack[]): VisualizerTrackCue[] {
+  return buildContinuousTimestampCues(
+    tracks.map((track) => ({
+      title: track.title,
+      billed: track.billed,
+      durationSec: visualizerDurationSec(track.duration),
+    })),
+  ).map(({ source: _source, ...cue }) => cue)
+}
+
+function visualizerTimeRange(cue: VisualizerTrackCue): string {
+  const start = formatYoutubeTimestamp(cue.startSec)
+  const end = formatYoutubeTimestamp(cue.endSec)
+  if (start && end) return `${start}–${end}`
+  if (start) return `${start}–pending`
+  return 'time pending'
+}
+
+function visualizerTrackLabel(cue: VisualizerTrackCue): string {
+  return `${cue.index}. ${cue.title}`
+}
+
+/** YouTube full-EP visualizer description: start-to-finish walk, continuous times, catalog credits. */
+export function buildYoutubeVisualizerDescription(input: DnaCopyInput): string {
+  const tracks = resolvedCopyTracks(input)
+  const cues = buildContinuousVisualizerCues(tracks)
+  const title = clean(input.title) || 'Untitled'
+  const genre = clean(input.genre) || mostCommonCopyString(tracks.map((t) => t.genre)) || 'electronic'
+  const subgenre = clean(input.subgenre) || mostCommonCopyString(tracks.map((t) => t.subgenre)) || ''
+  const mood = moodPhrase(genre, subgenre || null)
+  const artist =
+    (input.contributors?.length ? displayArtistLine(input.contributors) : '') ||
+    clean(input.artist) ||
+    'SERGIK'
+  const kind = releaseKind(input.type, tracks.length)
+  const tempo = bpmRange(tracks)
+  const keys = keysLine(tracks)
+  const label = clean(input.label) || artist
+  const year = input.year && input.year > 1900 ? input.year : new Date().getFullYear()
+  const metadataLead = usableNote(input.description)
+  const runtimeSec = cues.every((cue) => cue.endSec != null)
+    ? cues[cues.length - 1]?.endSec ?? 0
+    : null
+  const missingTimes = tracks
+    .filter((track) => visualizerDurationSec(track.duration) == null)
+    .map((track) => track.title)
+
+  const headline = `${title} — Full ${kind === 'single' ? 'Track' : kind.toUpperCase() === 'EP' ? 'EP' : 'Album'} Visualizer | ${artist}`
+  const facts = [
+    tracks.length > 1 ? `${tracks.length}-track ${kind}` : kind,
+    tempo,
+    keys ? `Keys: ${keys}` : '',
+    `${genre}${subgenre ? ` / ${subgenre}` : ''}`,
+    label ? `Label: ${label}` : '',
+    String(year),
+    runtimeSec != null && runtimeSec > 0 ? `Runtime ${formatYoutubeTimestamp(runtimeSec)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const opener = [
+    `This video is the complete "${title}" ${kind} in catalog order — every track added back-to-back, no space between cuts.`,
+    `Start to finish, one continuous visualizer.`,
+  ].join(' ')
+
+  const journey =
+    firstSentence(metadataLead, 280) ||
+    (tracks.length > 1
+      ? `"${title}" is a ${countWord(tracks.length)}-track ${kind} listen — ${mood}${tempo ? `, ${tempo}` : ''}. ${artist} wrote it as one room.`
+      : `"${title}" is ${withArticle(mood)} ${kind}${tempo ? ` at ${tempo}` : ''} from ${artist}.`)
+
+  const walk = tracks.map((track, index) => {
+    const cue = cues[index]
+    const range = visualizerTimeRange(cue)
+    const factsLine = copyTrackFacts(track)
+    const note = catalogTrackProse(track, 240)
+    const intention =
+      firstSentence(usableNote(track.intention), 160) || firstSentence(usableNote(track.intel?.intention), 160)
+    const isrc = clean(track.isrc)
+    const feat = cue.billed && /feat\./i.test(cue.billed) ? cue.billed : ''
+    return [
+      `${range}  ${visualizerTrackLabel(cue)}`,
+      [factsLine, feat].filter(Boolean).join(' · '),
+      note,
+      intention && intention.toLowerCase() !== note.toLowerCase() ? `Intention: ${intention}` : '',
+      isrc ? `ISRC ${isrc}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  })
+
+  const tracklist = tracks.length
+    ? [
+        'TRACKLIST (continuous · no space between tracks)',
+        ...cues.map((cue, index) => {
+          const track = tracks[index]
+          const factsLine = copyTrackFacts(track)
+          const range = visualizerTimeRange(cue)
+          const length = formatYoutubeTimestamp(cue.durationSec)
+          return `${range}  ${visualizerTrackLabel(cue)}${factsLine ? ` — ${factsLine}` : ''}${
+            length ? ` · ${length}` : ''
+          }`
+        }),
+        runtimeSec != null && runtimeSec > 0 ? `Runtime: ${formatYoutubeTimestamp(runtimeSec)}` : '',
+        missingTimes.length
+          ? `Duration pending in Catalog for: ${missingTimes.join(', ')}. Timestamps after those cuts stay unlocked until duration is saved.`
+          : 'Tracks butt together — the finish of one cut is the start of the next.',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : ''
+
+  const chapterLines = cues
+    .filter((cue) => cue.startSec != null)
+    .map((cue) => `${formatYoutubeTimestamp(cue.startSec)} ${cue.title}`)
+  if (chapterLines.length > 0 && chapterLines.length < 3 && runtimeSec != null && runtimeSec > 0) {
+    chapterLines.push(`${formatYoutubeTimestamp(runtimeSec)} End`)
+  }
+  const chapters = chapterLines.length
+    ? ['CHAPTERS', ...chapterLines].join('\n')
+    : 'CHAPTERS\n00:00 Opening'
+
+  const musicCredits = input.contributors?.length
+    ? creditsBlockFromContributors(input.contributors, year)
+    : `Written & produced by ${artist}.\nPublished © ${year} ${artist}. All rights reserved.`
+  const artwork = artworkCreditsBlock(input.artworkCredits)
+  const credits = [
+    'CREDITS',
+    musicCredits,
+    artwork,
+    label ? `Label: ${label}.` : '',
+    `© ${year} ${artist}. All rights reserved.`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const tags = uniqueCopyStrings([
+    ...buildLaunchHashtags({
+      title,
+      artist,
+      genre,
+      subgenre,
+      type: input.type,
+      tracks,
+      max: 12,
+    }),
+    '#Visualizer',
+    '#OfficialAudio',
+    '#MusicVisualizer',
+    kind === 'album' ? '#FullAlbum' : kind === 'single' ? '#OfficialVisualizer' : '#FullEP',
+    '#EPVisualizer',
+  ]).join(' ')
+
+  return [
+    headline,
+    facts,
+    '',
+    opener,
+    journey.replace(/[.!?…]+$/u, '') + '.',
+    '',
+    tracks.length ? 'TRACK BY TRACK' : '',
+    walk.join('\n\n'),
+    '',
+    tracklist,
+    '',
+    chapters,
+    '',
+    credits,
+    '',
+    tags,
   ]
     .filter((line, index, arr) => !(line === '' && (arr[index - 1] === '' || index === 0)))
     .join('\n')
@@ -1096,10 +1447,8 @@ function numberedCatalogTracklist(tracks: DnaCopyTrack[]): string {
   return tracks
     .map((track, index) => {
       const facts = copyTrackFacts(track)
-      const note = firstSentence(usableNote(track.description), 160)
-      return [`${index + 1}. ${track.title}${facts ? ` — ${facts}` : ''}`, note]
-        .filter(Boolean)
-        .join('\n')
+      const note = catalogTrackProse(track, 160)
+      return [`${index + 1}. ${track.title}${facts ? ` — ${facts}` : ''}`, note].join('\n')
     })
     .join('\n\n')
 }
@@ -1133,20 +1482,17 @@ function stitchPressBlurb(input: {
   tracks: DnaCopyTrack[]
   fallback: string
 }): string {
-  const notes = input.tracks
-    .map((track) => ({ title: track.title, note: usableNote(track.description) }))
-    .filter((row) => row.note)
-  if (!notes.length) return input.fallback
+  if (!input.tracks.length) return input.fallback
+  const hasPress = input.tracks.some((track) => Boolean(usableNote(track.description)))
+  if (!hasPress) return input.fallback
   const opener =
     input.tracks.length > 1
       ? `${input.artist} presents "${input.title}", a ${input.tracks.length}-track ${input.kind}.`
       : `${input.artist} presents "${input.title}".`
-  const lead = notes[0]
-  const others = input.tracks
-    .map((track) => track.title)
-    .filter((title) => title.toLowerCase() !== lead.title.toLowerCase())
-  const rest = others.length ? ` Also on the ${input.kind}: ${others.join(', ')}.` : ''
-  return `${opener} ${lead.note}${rest}`.replace(/\s+/g, ' ').trim()
+  const walk = input.tracks
+    .map((track) => `${track.title}: ${catalogTrackProse(track, 160)}`)
+    .join(' ')
+  return `${opener} ${walk}`.replace(/\s+/g, ' ').trim()
 }
 
 function countWord(n: number): string {
@@ -1192,6 +1538,21 @@ function grooveLabel(drum?: string | null): string {
   if (value.includes('half')) return 'half-time'
   if (value.includes('dembow')) return 'dembow'
   return value.replace(/-/g, ' ')
+}
+
+/** Always returns a listener-facing line so no catalog cut is left blank. */
+function catalogTrackProse(track: DnaCopyTrack, max = 220): string {
+  const press = firstSentence(usableNote(track.description), max)
+  if (press) return press
+  const intention = firstSentence(usableNote(track.intention), Math.min(max, 160))
+  if (intention) return intention
+  const intelDesc = firstSentence(usableNote(track.intel?.description), max)
+  if (intelDesc) return intelDesc
+  const culture = firstSentence(usableNote(track.intel?.culture), 160)
+  if (culture) return culture
+  const emotion = firstSentence(usableNote(track.intel?.emotion), 140)
+  if (emotion) return emotion
+  return trackBeat(track) || `${track.title} holds its place in the sequence.`
 }
 
 function trackBeat(track: DnaCopyTrack): string {
@@ -1315,12 +1676,23 @@ export function releaseDescriptionFromCatalog(input: DnaCopyInput): string {
 
 export function catalogCopyFacts(input: DnaCopyInput): CatalogCopyFacts {
   const tracks = resolvedCopyTracks(input)
+  const timeline = catalogTimestampFacts(
+    buildContinuousTimestampCues(
+      tracks.map((track) => ({
+        title: track.title,
+        durationSec: visualizerDurationSec(track.duration),
+      })),
+    ),
+  )
   return {
     trackCount: tracks.length,
     mood: moodPhrase(input.genre || null, input.subgenre || null),
     tempo: bpmRange(tracks),
     keys: keysLine(tracks),
     pressNotes: tracks.filter((track) => Boolean(usableNote(track.description))).length,
+    runtimeSec: timeline.runtimeSec,
+    timestampsReady: timeline.complete,
+    missingDurations: timeline.missingTitles,
   }
 }
 
@@ -1342,9 +1714,15 @@ export function catalogCopyPromptDigest(input: DnaCopyInput): string {
           track.billed && /\sx\s|feat\./i.test(track.billed) ? ` · ${track.billed}` : ''
         }`,
         instruments.length ? `Instruments: ${instruments.join(', ')}` : '',
-        note ? `Press: ${note}` : '',
+        `Press: ${note || catalogTrackProse(track, 200)}`,
         intention ? `Intention: ${intention}` : '',
         lyrics ? `Lyrics: ${lyrics}` : '',
+        visualizerDurationSec(track.duration)
+          ? `Duration: ${formatYoutubeTimestamp(visualizerDurationSec(track.duration))}`
+          : '',
+        clean(track.isrc) ? `ISRC: ${clean(track.isrc)}` : '',
+        track.intel?.culture ? `Culture: ${track.intel.culture}` : '',
+        track.intel?.psychoacoustics ? `Psychoacoustics: ${track.intel.psychoacoustics}` : '',
       ]
         .filter(Boolean)
         .join('\n')
@@ -1377,10 +1755,15 @@ export function dnaCopyInputFromCatalog(input: {
     const instruments = Array.isArray(identity.instruments)
       ? identity.instruments.map((item) => clean(item)).filter(Boolean)
       : []
+    const intel =
+      track.copy_intel && copyIntelHasSignal(track.copy_intel)
+        ? track.copy_intel
+        : extractCopyIntelCard(track.sonic_dna, clean(track.title) || 'Untitled')
+    const intelCard = copyIntelHasSignal(intel) ? { ...intel, title: clean(track.title) || intel.title } : null
     return {
       title: clean(track.title) || 'Untitled',
-      description: identity.description || null,
-      intention: identity.intention || null,
+      description: identity.description || intelCard?.description || null,
+      intention: identity.intention || intelCard?.intention || null,
       genre: identity.genre || null,
       subgenre: identity.subgenre || null,
       bpm: Number.isFinite(bpm) && bpm > 0 ? bpm : null,
@@ -1396,6 +1779,14 @@ export function dnaCopyInputFromCatalog(input: {
       scale: identity.scale || null,
       time_signature: identity.time_signature || null,
       lyrics_excerpt: identity.lyrics_excerpt || null,
+      duration:
+        resolveCatalogDuration({
+          catalog: track.duration,
+          sonicDna: track.sonic_dna || intelCard,
+          metadata: intelCard,
+        }).seconds ?? intelCard?.durationSec ?? null,
+      isrc: clean(track.isrc) || clean(track.isrc_full) || null,
+      intel: intelCard,
     }
   })
   const designer = clean(input.artwork_designer)
@@ -1508,6 +1899,24 @@ export function marketingCopyFromDna(input: DnaCopyInput): MarketingCopy {
       tracks,
       label: label || input.label,
       year,
+    }),
+    youtube_visualizer: buildYoutubeVisualizerDescription({
+      ...input,
+      title,
+      genre,
+      subgenre,
+      artist,
+      tracks,
+      label: label || input.label,
+      year,
+    }),
+    platform_tags: buildPlatformTags({
+      ...input,
+      title,
+      genre,
+      subgenre,
+      artist,
+      tracks,
     }),
     credits_block: [musicCredits, artwork, label ? `Label: ${label}.` : '']
       .filter(Boolean)

@@ -1,5 +1,6 @@
 import { createShareToken } from '@/lib/shares/types'
 import { isValidPartyEmail, parsePartyContacts, type PartyContact } from '@/lib/studio/rights-contract-send'
+import { collabInboundLocalPart, collabReplyToAddress } from '@/lib/studio/collab-inbound'
 
 /** Verified Resend from-address for Release Collab outbound mail. */
 export const RELEASE_COLLAB_FROM_EMAIL = 'release.studio@sergikdropz.com'
@@ -40,6 +41,8 @@ export type ReleaseCollabMessage = {
   author_email: string | null
   body: string
   notify_email: boolean
+  channel?: CollabMessageChannel
+  email_subject?: string | null
   created_at: string
 }
 
@@ -56,7 +59,16 @@ export type ReleaseCollabReview = {
   updated_at?: string
 }
 
-export type CollabEmailKind = 'thread_notify' | 'review_invite' | 'other'
+export type CollabMessageChannel = 'app' | 'inbound_email' | 'system'
+
+export type CollabEmailKind =
+  | 'thread_notify'
+  | 'review_invite'
+  | 'hub_email'
+  | 'other'
+  | 'contract_split_sheet'
+  | 'contract_producer_agreement'
+  | 'contract_collab_agreement'
 export type CollabEmailStatus =
   | 'queued'
   | 'sent'
@@ -239,6 +251,32 @@ export function collabStatusFromResendEvent(
   if (t === 'email.complained') return { status: 'complained', stamp: null }
   if (t === 'email.sent') return { status: 'sent', stamp: null }
   return null
+}
+
+export function isResendInboundReceivedEvent(eventType: string): boolean {
+  return clean(eventType).toLowerCase() === 'email.received'
+}
+
+export function collabInboundReady(): boolean {
+  return process.env.RELEASE_COLLAB_INBOUND_READY === '1'
+}
+
+/**
+ * Reply-To for outbound collab mail.
+ * Uses per-release collab subdomain only when inbound is configured (verified in Resend).
+ * Otherwise plus-tags on the verified From address so Resend accepts the send.
+ */
+export function collabOutboundReplyTo(releaseId: string): string {
+  if (collabInboundReady()) {
+    return collabReplyToAddress(releaseId)
+  }
+  const from = RELEASE_COLLAB_FROM_EMAIL
+  const at = from.indexOf('@')
+  if (at < 1) return RELEASE_COLLAB_REPLY_TO
+  const local = from.slice(0, at)
+  const domain = from.slice(at + 1)
+  const tag = collabInboundLocalPart(releaseId).replace(/^r\./, '')
+  return `${local}+${tag}@${domain}`
 }
 
 export function isMissingCollabTableError(

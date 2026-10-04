@@ -11,6 +11,7 @@ import { updateSonicDNACache } from '@/utils/sonicDNACache'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { findAudioFile } from '@/lib/findAudioFile'
 import { lockAnalysisForAudioFile } from '@/lib/catalog-lock'
+import { imprintCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 
 export const dynamic = 'force-dynamic'
 
@@ -198,6 +199,12 @@ export async function POST(request: Request) {
       }
     } catch (cacheErr) {
       console.warn('Failed to update sonic_dna_cache for audio file', trackId, cacheErr)
+    }
+
+    try {
+      await imprintCatalogTags(track.id)
+    } catch (err) {
+      console.warn('catalog tag imprint failed:', err instanceof Error ? err.message : err)
     }
 
     return NextResponse.json({

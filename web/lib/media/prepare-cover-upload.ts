@@ -6,8 +6,8 @@
 /** Target max file bytes after client re-encode (multipart + metadata headroom). */
 export const ARTWORK_UPLOAD_CLIENT_MAX_BYTES = 3_800_000
 
-/** Longest edge when re-encoding oversized phone photos in the browser. */
-export const ARTWORK_UPLOAD_CLIENT_MAX_EDGE_PX = 2400
+/** Longest edge when re-encoding oversized phone photos in the browser. Matches the server master cap. */
+export const ARTWORK_UPLOAD_CLIENT_MAX_EDGE_PX = 4000
 
 const JPEG_MIME = 'image/jpeg'
 
@@ -58,6 +58,8 @@ export async function prepareCoverArtworkUploadFile(file: File): Promise<File> {
     bitmap.close()
     return file
   }
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(bitmap, 0, 0, width, height)
   bitmap.close()
 

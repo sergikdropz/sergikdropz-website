@@ -36,4 +36,21 @@ describe('resolveInferredSkillForAdminChat', () => {
     })
     expect(s.id).toBe('product_strategy')
   })
+
+  it('routes a DistroKid element pick to studio_release even after a marketing sticky', () => {
+    const s = resolveInferredSkillForAdminChat(
+      [
+        'is distrokid going to set its own upc',
+        'Page: https://distrokid.com/new/',
+        'State: value=(empty)',
+        'HTML Element: <input id="customUpc" placeholder="UPC">',
+      ].join('\n'),
+      {
+        skillId: null,
+        stickySkillId: 'product_strategy',
+      },
+    )
+    expect(s.id).toBe('studio_release')
+  })
 })
+

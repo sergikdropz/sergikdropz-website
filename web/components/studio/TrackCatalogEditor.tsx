@@ -7,10 +7,29 @@ import {
   validateSplitsTotal,
   normalizeSplitRows,
   equalSplitPercentages,
+  separateSplitCopyrights,
+  splitsAreSided,
+  sumSplitPercentage,
   SPLIT_ROLES,
   SPLIT_PROS,
   type SplitRow,
 } from '@/lib/studio/import-parse'
+
+function describeSplitTotals(rows: SplitRow[]): { label: string; ok: boolean } {
+  if (splitsAreSided(rows)) {
+    const master = sumSplitPercentage(rows.filter((row) => row.copyright === 'master'))
+    const composition = sumSplitPercentage(rows.filter((row) => row.copyright === 'composition'))
+    return {
+      label: `Master ${Math.round(master * 100) / 100}% · Composition ${Math.round(composition * 100) / 100}%`,
+      ok: validateSplitsTotal(rows) == null,
+    }
+  }
+  const total = sumSplitPercentage(rows)
+  return {
+    label: `Total ${Math.round(total * 100) / 100}%`,
+    ok: rows.length > 0 && validateSplitsTotal(rows) == null,
+  }
+}
 import {
   US_ISRC_REGISTRANT,
   buildUsisrcLockerCsv,
@@ -45,7 +64,14 @@ import {
 } from '@/lib/studio/songwriter'
 import { enrichSplitSheet, splitsFromCredits } from '@/lib/studio/rights-ops'
 import type { RightsActionFocus } from '@/lib/studio/rights-action-target'
-import { FaCopy, FaDownload, FaExternalLinkAlt, FaMagic, FaPlus, FaSave, FaSpinner, FaUnlink, FaUpload } from 'react-icons/fa'
+import { FaBrain, FaCopy, FaDownload, FaExternalLinkAlt, FaMagic, FaPlus, FaSave, FaSpinner, FaUnlink, FaUpload } from 'react-icons/fa'
+import { useCopyStepIntelligenceStack } from '@/hooks/useCopyStepIntelligenceStack'
+import { dispatchAdminAiPrompt, openAdminAiAssistant } from '@/lib/admin-ai-client'
+import {
+  buildPressNotesAdminAiPrompt,
+  studioIntelligenceContextLine,
+  studioIntelligenceHarnessQuery,
+} from '@/lib/studio/studio-intelligence-actions'
 
 export type CatalogTrack = {
   id: string
@@ -263,9 +289,15 @@ export default function TrackCatalogEditor({
   const [replacingWavId, setReplacingWavId] = useState<string | null>(null)
   const [locatingMasters, setLocatingMasters] = useState(false)
   const [missingMasterIds, setMissingMasterIds] = useState<string[]>([])
+  const [expandedTrackIds, setExpandedTrackIds] = useState<string[]>([])
   const wavInputRef = useRef<HTMLInputElement>(null)
   const wavTargetIdRef = useRef<string | null>(null)
   const locateRanForRef = useRef<string | null>(null)
+  const intelStack = useCopyStepIntelligenceStack(
+    releaseId,
+    Boolean(releaseId),
+    studioIntelligenceHarnessQuery('catalog_press_notes_all'),
+  )
 
   const missing = useMemo(() => tracks.filter((track) => !track.isrc_full), [tracks])
   const missingMasters = useMemo(
@@ -384,6 +416,18 @@ export default function TrackCatalogEditor({
     } finally {
       setAssigningAll(false)
     }
+  }
+
+  function openPressNotesInAdminAi(trackId?: string, trackTitle?: string) {
+    dispatchAdminAiPrompt(
+      buildPressNotesAdminAiPrompt({
+        releaseId,
+        releaseTitle,
+        trackId,
+        trackTitle,
+      }),
+    )
+    openAdminAiAssistant()
   }
 
   async function writePressNotes(trackId?: string) {
@@ -657,13 +701,21 @@ export default function TrackCatalogEditor({
     setSplitRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
 
+  function equalizeNamed(rows: SplitRow[]): SplitRow[] {
+    const percents = equalSplitPercentages(rows.filter((row) => row.name.trim()).length || 1)
+    let cursor = 0
+    return rows.map((row) =>
+      row.name.trim() ? { ...row, percentage: percents[cursor++] ?? row.percentage } : row,
+    )
+  }
+
   function equalizeSplitRows() {
     setSplitRows((rows) => {
-      const percents = equalSplitPercentages(rows.filter((row) => row.name.trim()).length || 1)
-      let cursor = 0
-      return rows.map((row) =>
-        row.name.trim() ? { ...row, percentage: percents[cursor++] ?? row.percentage } : row,
-      )
+      if (!splitsAreSided(rows)) return equalizeNamed(rows)
+      const master = equalizeNamed(rows.filter((row) => row.copyright === 'master'))
+      const composition = equalizeNamed(rows.filter((row) => row.copyright === 'composition'))
+      const legacy = equalizeNamed(rows.filter((row) => row.copyright !== 'master' && row.copyright !== 'composition'))
+      return [...master, ...composition, ...legacy]
     })
   }
 
@@ -748,6 +800,8 @@ export default function TrackCatalogEditor({
       onFocusHandled?.()
       return
     }
+
+    setExpandedTrackIds((prev) => (prev.includes(track.id) ? prev : [...prev, track.id]))
 
     if (focusRequest.section === 'splits') {
       startEditSplits(track)
@@ -1021,8 +1075,8 @@ export default function TrackCatalogEditor({
             </p>
             <p className="text-xs text-zinc-500 mt-2 max-w-2xl">
               Studio mints the next unused designation on {US_ISRC_REGISTRANT.prefix}.
-              The USISRC locker is optional storage — register recordings with
-              SoundExchange after you assign codes.
+              Assigning a code also queues SoundExchange Direct (Pipeline → ISRCs). The USISRC
+              locker is optional storage — not a second mint.
             </p>
           </div>
           <p className="text-sm text-zinc-300">
@@ -1083,7 +1137,32 @@ export default function TrackCatalogEditor({
           }}
         />
         <div className="p-4 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Catalog ({tracks.length})</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold">Catalog ({tracks.length})</h2>
+            {releaseId ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                {intelStack.loading ? (
+                  <span className="text-cyan-400/80">Probing intelligence stack…</span>
+                ) : intelStack.sonicUnified ? (
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-950/30 px-2 py-0.5 text-emerald-200/90">
+                    {intelStack.sonicUnified}
+                  </span>
+                ) : null}
+                {intelStack.summary ? (
+                  <span className="line-clamp-1 max-w-xl" title={intelStack.summary}>
+                    {intelStack.summary}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={intelStack.openInAdminAi}
+                  className="text-cyan-300/80 hover:text-cyan-200"
+                >
+                  Open harness
+                </button>
+              </div>
+            ) : null}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -1101,11 +1180,18 @@ export default function TrackCatalogEditor({
             </button>
             <button
               type="button"
-              onClick={() => void writePressNotes()}
+              onClick={(e) => {
+                if (e.metaKey || e.altKey) {
+                  openPressNotesInAdminAi()
+                  return
+                }
+                void writePressNotes()
+              }}
               disabled={writingAll || savingCatalog || !tracks.length}
+              title={`${studioIntelligenceContextLine('catalog_press_notes_all')} · ⌘/Alt-click to expand in Admin AI`}
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-violet-500/40 text-violet-200 hover:bg-violet-500/10 disabled:opacity-50"
             >
-              {writingAll ? <FaSpinner className="animate-spin" /> : <FaMagic className="text-[10px]" />}
+              {writingAll ? <FaSpinner className="animate-spin" /> : <FaBrain className="text-[10px]" />}
               AI listen + press notes
             </button>
             <button
@@ -1181,9 +1267,9 @@ export default function TrackCatalogEditor({
           </div>
         ) : (
           <ul className="divide-y divide-zinc-800">
-            {tracks.map((track) => {
+            {tracks.map((track, index) => {
               const splits = normalizeSplits(track.splits)
-              const splitTotal = splits.reduce((s, r) => s + r.percentage, 0)
+              const splitTotals = describeSplitTotals(splits)
               const isEditing = editingId === track.id
               const parsed = track.isrc_full ? parseISRC(track.isrc_full) : null
               const display = parsed ? formatISRCDisplay(parsed.isrc_full) : null
@@ -1203,8 +1289,46 @@ export default function TrackCatalogEditor({
                 namesForRole(billedCredits, 'primary'),
               )
 
+              const open =
+                expandedTrackIds.includes(track.id) ||
+                creditsId === track.id ||
+                isEditing ||
+                pasteId === track.id
+              const trackLabel = storeTitle.title || track.title
+              const artistLabel = displayArtistLine(billedCredits, albumArtist || 'SERGIK')
+
               return (
-                <li key={track.id} data-catalog-track={track.id} className="p-4 space-y-3">
+                <li
+                  key={track.id}
+                  data-catalog-track={track.id}
+                  className={open ? 'p-4 space-y-3' : 'px-4 py-2'}
+                >
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => {
+                      if (open) {
+                        setExpandedTrackIds((prev) => prev.filter((id) => id !== track.id))
+                        if (creditsId === track.id) setCreditsId(null)
+                        if (editingId === track.id) setEditingId(null)
+                        if (pasteId === track.id) setPasteId(null)
+                        return
+                      }
+                      setExpandedTrackIds((prev) => [...prev, track.id])
+                    }}
+                    className="flex w-full items-center gap-3 text-left"
+                  >
+                    <span className="w-6 shrink-0 text-xs tabular-nums text-zinc-500">
+                      {track.track_number && track.track_number > 0 ? track.track_number : index + 1}
+                    </span>
+                    <span className="min-w-0 truncate font-medium text-white">{trackLabel}</span>
+                    <span className="min-w-0 truncate text-sm text-zinc-400">{artistLabel}</span>
+                    <span className="ml-auto shrink-0 text-xs text-zinc-500" aria-hidden>
+                      {open ? '▾' : '▸'}
+                    </span>
+                  </button>
+                  {open ? (
+                  <>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       {creditsId === track.id ? (
@@ -1420,8 +1544,15 @@ export default function TrackCatalogEditor({
                         </button>
                         <button
                           type="button"
-                          onClick={() => void writePressNotes(track.id)}
+                          onClick={(e) => {
+                            if (e.metaKey || e.altKey) {
+                              openPressNotesInAdminAi(track.id, track.title)
+                              return
+                            }
+                            void writePressNotes(track.id)
+                          }}
                           disabled={writingAll || writingId === track.id || savingNoteId === track.id}
+                          title={`${studioIntelligenceContextLine('catalog_press_note_track')} · ⌘/Alt-click to expand in Admin AI`}
                           className="text-[11px] text-violet-300 hover:text-violet-200 disabled:opacity-50"
                         >
                           {writingId === track.id ? 'Listening…' : 'Rewrite from listen'}
@@ -2234,6 +2365,7 @@ export default function TrackCatalogEditor({
                             title="Edit splits"
                             className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
                           >
+                            {s.copyright ? `${s.copyright} · ` : ''}
                             {s.name}
                             {s.legal_name ? ` (${s.legal_name})` : ''}: {s.percentage}%
                             {s.role ? ` · ${s.role}` : ''}
@@ -2249,14 +2381,14 @@ export default function TrackCatalogEditor({
                           Add splits
                         </button>
                       )}
-                      {splits.length > 0 && Math.abs(splitTotal - 100) > 0.01 && (
+                      {splits.length > 0 && !splitTotals.ok && (
                         <button
                           type="button"
                           onClick={() => startEditSplits(track)}
                           title="Edit splits"
                           className="text-xs text-amber-400 hover:text-amber-300"
                         >
-                          Total {splitTotal}%
+                          {splitTotals.label}
                         </button>
                       )}
                     </div>
@@ -2288,6 +2420,13 @@ export default function TrackCatalogEditor({
                         </button>
                         <button
                           type="button"
+                          onClick={() => setSplitRows((rows) => separateSplitCopyrights(rows))}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-violet-700/50 text-violet-100 hover:bg-violet-950/40"
+                        >
+                          Separate master & composition
+                        </button>
+                        <button
+                          type="button"
                           onClick={() =>
                             setSplitRows((rows) => [
                               ...rows,
@@ -2308,13 +2447,10 @@ export default function TrackCatalogEditor({
                         </button>
                         <span
                           className={`text-xs px-2 py-1.5 ${
-                            Math.abs(splitRows.reduce((sum, row) => sum + Number(row.percentage || 0), 0) - 100) <
-                            0.01
-                              ? 'text-emerald-400'
-                              : 'text-amber-400'
+                            describeSplitTotals(splitRows).ok ? 'text-emerald-400' : 'text-amber-400'
                           }`}
                         >
-                          Total {Math.round(splitRows.reduce((sum, row) => sum + Number(row.percentage || 0), 0) * 100) / 100}%
+                          {describeSplitTotals(splitRows).label}
                         </span>
                       </div>
                       <div className="space-y-2">
@@ -2343,6 +2479,22 @@ export default function TrackCatalogEditor({
                               }
                               className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white"
                             />
+                            <select
+                              value={row.copyright || ''}
+                              onChange={(e) =>
+                                updateSplitRow(index, {
+                                  copyright:
+                                    e.target.value === 'master' || e.target.value === 'composition'
+                                      ? e.target.value
+                                      : null,
+                                })
+                              }
+                              className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                            >
+                              <option value="">One sheet</option>
+                              <option value="master">Master</option>
+                              <option value="composition">Composition</option>
+                            </select>
                             <select
                               value={row.role || 'performer'}
                               onChange={(e) => updateSplitRow(index, { role: e.target.value })}
@@ -2401,6 +2553,8 @@ export default function TrackCatalogEditor({
                       </button>
                     </div>
                   )}
+                  </>
+                  ) : null}
                 </li>
               )
             })}

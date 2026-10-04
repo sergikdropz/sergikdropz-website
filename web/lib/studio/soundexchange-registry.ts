@@ -11,12 +11,16 @@ import {
 } from '@/lib/studio/isrc-format'
 import {
   artistFromContributors,
+  createSoundExchangeClient,
   latestSubmissionByIsrc,
   mergeRegistryStats,
   normalizeIsrcInput,
   soundExchangeConfigured,
+  SX_DIRECT_HOME,
+  trackToSxDirectSubmission,
   type LocalIsrcHit,
   type RegistryTrackRow,
+  type SoundExchangeMode,
   type SoundExchangeSubmissionStatus,
 } from '@/lib/studio/soundexchange'
 
@@ -208,6 +212,194 @@ export function findCatalogHit(
   const isrc = normalizeIsrcInput(isrcRaw)
   if (!isrc) return null
   return catalog.find((row) => row.isrc === isrc) || null
+}
+
+export type SxDirectRegisterResult = {
+  mode: SoundExchangeMode
+  deskUrl: string
+  total: number
+  successful: number
+  failed: number
+  skipped: number
+  persisted: boolean
+  persistError: string | null
+  results: Array<{
+    isrc: string
+    success: boolean
+    error?: string
+    submissionId?: string
+    mode: SoundExchangeMode
+    skipped?: boolean
+  }>
+}
+
+/**
+ * Register Catalog ISRCs with SX Direct (local registry always; remote when env is set).
+ * Used by Pipeline batch-submit and automatically after Release Studio mints codes.
+ */
+export async function registerTracksWithSoundExchange(
+  trackIds: string[],
+  opts: { skipRegistered?: boolean; source?: 'mint' | 'manual' } = {},
+  supabase = createSupabaseServerClient(),
+): Promise<SxDirectRegisterResult> {
+  const uniqueIds = [...new Set(trackIds.map(String).filter(Boolean))].slice(0, 100)
+  const empty: SxDirectRegisterResult = {
+    mode: soundExchangeConfigured() ? 'remote' : 'local',
+    deskUrl: SX_DIRECT_HOME,
+    total: 0,
+    successful: 0,
+    failed: 0,
+    skipped: 0,
+    persisted: true,
+    persistError: null,
+    results: [],
+  }
+  if (!uniqueIds.length) return empty
+
+  const { data: tracks, error: tracksError } = await supabase
+    .from('distribution_tracks')
+    .select('*')
+    .in('id', uniqueIds)
+    .not('isrc_full', 'is', null)
+
+  if (tracksError) {
+    throw new Error(tracksError.message)
+  }
+  if (!tracks?.length) {
+    return empty
+  }
+
+  const releaseIds = tracks
+    .map((t) => t.release_id)
+    .filter((id): id is string => Boolean(id))
+
+  let releases: Array<{
+    id: string
+    title?: string | null
+    release_date?: string | null
+    genre?: string | null
+    album_artist?: string | null
+  }> = []
+  if (releaseIds.length) {
+    const { data: releasesData } = await supabase
+      .from('distribution_releases')
+      .select('id, title, release_date, genre, album_artist')
+      .in('id', releaseIds)
+    releases = releasesData || []
+  }
+  const releaseMap = new Map(releases.map((r) => [r.id, r]))
+
+  const isrcs = tracks
+    .map((t) => normalizeIsrcInput(t.isrc_full))
+    .filter((isrc): isrc is string => Boolean(isrc))
+
+  const latestByIsrc = new Map<string, { status: string }>()
+  if (opts.skipRegistered && isrcs.length) {
+    const { data: existing } = await supabase
+      .from('soundexchange_submissions')
+      .select('isrc, status, submitted_at, created_at')
+      .in('isrc', isrcs)
+    for (const [isrc, row] of latestSubmissionByIsrc(existing || [])) {
+      latestByIsrc.set(isrc, row)
+    }
+  }
+
+  const soundExchange = createSoundExchangeClient()
+  const submissionData: Array<{
+    track: (typeof tracks)[number]
+    payload: NonNullable<ReturnType<typeof trackToSxDirectSubmission>>
+  }> = []
+  const skippedResults: SxDirectRegisterResult['results'] = []
+
+  for (const track of tracks) {
+    const payload = trackToSxDirectSubmission(
+      track,
+      track.release_id ? releaseMap.get(track.release_id) : null,
+    )
+    if (!payload) continue
+    const prior = latestByIsrc.get(payload.isrc)?.status
+    if (opts.skipRegistered && (prior === 'submitted' || prior === 'accepted')) {
+      skippedResults.push({
+        isrc: payload.isrc,
+        success: true,
+        skipped: true,
+        mode: soundExchange.mode,
+        submissionId: `sx-skip-${payload.isrc}`,
+      })
+      continue
+    }
+    submissionData.push({ track, payload })
+  }
+
+  const submitted = submissionData.length
+    ? await soundExchange.batchSubmitISRCs(submissionData.map((row) => row.payload))
+    : []
+
+  const now = new Date().toISOString()
+  const rows = submitted.map((result, idx) => ({
+    id: result.submissionId || `sx-${opts.source || 'manual'}-${submissionData[idx].payload.isrc}`,
+    track_id: submissionData[idx].track.id,
+    isrc: submissionData[idx].payload.isrc,
+    status: result.success ? 'submitted' : 'error',
+    submitted_at: now,
+    response: {
+      success: result.success,
+      mode: result.mode,
+      source: opts.source || 'manual',
+      desk: 'SX Direct',
+      sxDirect: submissionData[idx].payload.sxDirect,
+    },
+    error: result.error || null,
+  }))
+
+  let persistError: string | null = null
+  if (rows.length) {
+    const { error: insertError } = await supabase.from('soundexchange_submissions').upsert(rows, {
+      onConflict: 'id',
+    })
+    persistError = insertError?.message || null
+  }
+
+  const results = [
+    ...skippedResults,
+    ...submitted.map((row) => ({ ...row, skipped: false as const })),
+  ]
+  const successful = results.filter((r) => r.success && !r.skipped).length
+  const skipped = skippedResults.length
+  const failed = results.filter((r) => !r.success).length
+
+  return {
+    mode: soundExchange.mode,
+    deskUrl: SX_DIRECT_HOME,
+    total: results.length,
+    successful,
+    failed,
+    skipped,
+    persisted: !persistError,
+    persistError,
+    results,
+  }
+}
+
+/** Mint must succeed even if SX Direct queueing fails. */
+export async function registerMintedIsrcsWithSxDirect(trackIds: string[]) {
+  if (!trackIds.length) return null
+  try {
+    return await registerTracksWithSoundExchange(trackIds, { skipRegistered: true, source: 'mint' })
+  } catch (err) {
+    console.warn('[sx-direct] register after mint failed', err)
+    return {
+      mode: soundExchangeConfigured() ? 'remote' : 'local',
+      deskUrl: SX_DIRECT_HOME,
+      total: 0,
+      successful: 0,
+      failed: trackIds.length,
+      skipped: 0,
+      persisted: false,
+      persistError: err instanceof Error ? err.message : 'SX Direct register failed',
+      results: [],
+    } satisfies SxDirectRegisterResult
+  }
 }
 
 export function lockerCsvFromCatalog(rows: RegistryTrackRow[]): string {

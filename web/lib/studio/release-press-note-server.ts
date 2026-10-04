@@ -1,5 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { generateChatReply } from '@/lib/admin-ai'
+import { buildSiteKnowledgeContext } from '@/lib/ai/site-knowledge-context'
+import { getSkillById } from '@/lib/ai/skills/registry'
+import {
+  COPY_FIELD_ADMIN_AGENTS,
+  copyFieldContextLine,
+  copyFieldEnergyPreset,
+  copyFieldKnowledgeQuery,
+  copyFieldPrimarySkillId,
+  formatCopyAdminDeskBrief,
+  formatCopyIntelligenceBrief,
+  type CopyIntelCard,
+} from '@/lib/studio/copy-intelligence'
 import {
   buildPressNoteBrief,
   buildPressNotePrompt,
@@ -155,12 +167,43 @@ export async function writeAiPressNotesForRelease(
       siblings,
     })
 
-    const generated = await generateChatReply(buildPressNotePrompt(brief), {
-      skillId: 'studio_release',
-      honestyMode: 'strict',
-      pageContextPrompt:
-        'Copywriting only. Do not call tools or mention /exec. Return a single JSON object.',
+    const intelCard =
+      track.copy_intel && typeof track.copy_intel === 'object'
+        ? (track.copy_intel as CopyIntelCard)
+        : null
+    const intelligenceBrief = formatCopyIntelligenceBrief({
+      field: 'press_blurb',
+      tracks: [{ title: brief.title, intel: intelCard }],
     })
+    const skillId = copyFieldPrimarySkillId('press_blurb')
+    const knowledge = buildSiteKnowledgeContext({
+      message: copyFieldKnowledgeQuery('press_blurb', String(release.title || '')),
+      pathname: `/studio/releases/${releaseId}`,
+    })
+    const skillDesk = COPY_FIELD_ADMIN_AGENTS.press_blurb
+      .map((id) => {
+        const skill = getSkillById(id)
+        return skill ? `${skill.name}: ${skill.purpose}` : ''
+      })
+      .filter(Boolean)
+      .join(' · ')
+
+    const generated = await generateChatReply(
+      buildPressNotePrompt(brief, { intelligenceBrief }),
+      {
+        skillId,
+        honestyMode: 'strict',
+        energyPreset: copyFieldEnergyPreset('press_blurb'),
+        siteKnowledgePrompt: knowledge.prompt,
+        pageContextPrompt: [
+          'SergikAI catalog press desk. Copywriting only — do not call tools or mention /exec.',
+          `Field context: ${copyFieldContextLine('press_blurb')}.`,
+          `Admin AI desk: ${skillDesk || 'Release Studio'}.`,
+          formatCopyAdminDeskBrief('press_blurb'),
+          'Ground feel in unified Sonic DNA + lyric listen. Return a single JSON object.',
+        ].join('\n'),
+      },
+    )
     const note = parsePressNoteReply(generated.reply)
     const identity: StudioTrackIdentity = {
       ...track.identity,

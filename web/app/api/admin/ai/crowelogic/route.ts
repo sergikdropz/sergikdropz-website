@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
-import { resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
+import {
+  CROWELOGIC_CHAT_ACCOUNT,
+  crowelogicChatBlockReason,
+  resolveCrowelogicEnv,
+  crowelogicOpenAiUrl,
+} from '@/lib/ai/crowelogic-env'
 import { listModelsForAdminProvider } from '@/lib/ai/admin-provider-models'
 
 export const dynamic = 'force-dynamic'
@@ -55,6 +60,10 @@ export async function GET() {
 
   return NextResponse.json({
     configured: env.configured,
+    credentialPresent: env.credentialPresent,
+    activation: env.activation,
+    account: CROWELOGIC_CHAT_ACCOUNT,
+    blockReason: crowelogicChatBlockReason(env),
     baseUrl: env.baseUrl,
     baseSource: env.baseSource,
     keySource: env.keySource,
@@ -63,14 +72,18 @@ export async function GET() {
     chatProbe,
     setup: {
       envExample: [
+        'CROWELOGIC_API_KEY=customer-credential',
         'CROWELOGIC_BASE_URL=http://127.0.0.1:8011',
-        'CROWELOGIC_API_KEY=your-key',
         'CROWELOGIC_MODEL=auto',
-        '# aliases also work: CROWE_API_KEY, CROWE_LOGIC_URL, CROWE_LOGIC_KEY',
+        '# Hosted Pro gateway, only after Crowe confirms linkage and the usage cap:',
+        '# CROWELOGIC_BASE_URL=https://gateway.example/v1',
+        '# CROWELOGIC_PRO_LINKED=1',
       ],
       notes: [
-        'Local: run Crowe Logic Foundry bridge (default port 8011) or Crowe Terminal with Foundry installed.',
-        'Hosted: set CROWELOGIC_BASE_URL to your gateway URL and use the Crowe Logic key from OlliN Pro → Providers.',
+        'Uses the existing Crowe ID. No second account. The value in CROWELOGIC_API_KEY is a customer credential, stored only on the server.',
+        'Hosted usage is metered by Crowe against the existing Pro allowance. Chat stays off until CROWELOGIC_PRO_LINKED=1.',
+        'CROWE_API_KEY is Crowe Creative (image and video) and does not enable this chat provider.',
+        'Local bridge on 127.0.0.1:8011 can be tested without the Pro flag. It is not the Pro bill.',
       ],
     },
   })

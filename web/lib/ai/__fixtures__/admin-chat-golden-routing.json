@@ -19,5 +19,47 @@
     "skillId": "product_strategy",
     "stickySkillId": "admin_intel",
     "expectedInferredSkillId": "product_strategy"
+  },
+  {
+    "id": "grow_spotify_routes_growth",
+    "message": "How do we grow Spotify monthly listeners this month?",
+    "skillId": null,
+    "stickySkillId": null,
+    "expectedInferredSkillId": "growth_marketing"
+  },
+  {
+    "id": "ig_to_dsp_routes_growth",
+    "message": "What's our IG to DSP conversion plan?",
+    "skillId": null,
+    "stickySkillId": "product_strategy",
+    "expectedInferredSkillId": "growth_marketing"
+  },
+  {
+    "id": "marquee_routes_growth_not_meta",
+    "message": "Should we buy Spotify Marquee right now?",
+    "skillId": null,
+    "stickySkillId": null,
+    "expectedInferredSkillId": "growth_marketing"
+  },
+  {
+    "id": "growth_board_routes_growth",
+    "message": "Run the weekly growth board",
+    "skillId": null,
+    "stickySkillId": null,
+    "expectedInferredSkillId": "growth_marketing"
+  },
+  {
+    "id": "meta_promo_stays_product_strategy",
+    "message": "Run the Meta promo pipeline for this release",
+    "skillId": null,
+    "stickySkillId": "growth_marketing",
+    "expectedInferredSkillId": "product_strategy"
+  },
+  {
+    "id": "site_audit_stays_product_strategy",
+    "message": "Do a site audit of the homepage conversion funnel",
+    "skillId": null,
+    "stickySkillId": null,
+    "expectedInferredSkillId": "product_strategy"
   }
 ]

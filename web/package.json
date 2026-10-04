@@ -14,6 +14,7 @@
     "dev:daemon": "node scripts/dev-daemon.mjs",
     "dev:stop": "node scripts/dev-stop.mjs",
     "dev:restart": "node scripts/dev-stop.mjs && node scripts/dev-ensure.mjs",
+    "visualizer:loop": "node scripts/psychoacousnatics-loop-pipeline.mjs",
     "env:cloud": "node ../deploy/home-server/scripts/switch-web-env-cloud.mjs",
     "env:home-server": "node ../deploy/home-server/scripts/switch-web-env.mjs",
     "db:verify": "node ../deploy/supabase-foundation/verify-cloud.mjs",
@@ -73,6 +74,10 @@
     "db:migrate-dsp-verify": "node scripts/apply-dsp-store-link-verification-migration.mjs",
     "smoke:studio-social-promo": "node scripts/smoke-studio-social-promo.mjs",
     "smoke:studio-dsp-connect": "node scripts/smoke-studio-dsp-connect.mjs",
+    "smoke:youtube-subscribe-gate": "node scripts/smoke-youtube-subscribe-gate.mjs",
+    "setup:youtube-subscribe-gate-vercel": "node scripts/push-youtube-subscribe-gate-env.mjs",
+    "setup:youtube-subscribe-gate": "node scripts/setup-youtube-subscribe-gate-interactive.mjs",
+    "setup:youtube-subscribe-gate:chrome": "osascript scripts/setup-youtube-gate-chrome.applescript",
     "setup:release-collab-resend": "node scripts/setup-release-collab-resend.mjs"
   },
   "dependencies": {

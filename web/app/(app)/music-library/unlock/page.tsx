@@ -4,7 +4,12 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FaChevronDown } from 'react-icons/fa'
-import { pickSavedBrowserEmail, requestGoogleAccessToken } from '@/lib/auth/browser-account'
+import {
+  pickSavedBrowserEmail,
+  preloadGoogleIdentity,
+  renderGoogleSignInButton,
+  setGoogleCredentialListener,
+} from '@/lib/auth/browser-account'
 import { safeInternalPath } from '@/lib/safe-internal-path'
 
 function UnlockVaultForm() {
@@ -23,6 +28,10 @@ function UnlockVaultForm() {
   const [signInMenuOpen, setSignInMenuOpen] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
   const signInMenuRef = useRef<HTMLDivElement>(null)
+  const googleSlotRef = useRef<HTMLDivElement>(null)
+  const unlockRef = useRef<(body: { email?: string; credential?: string; source?: string }) => Promise<void>>(
+    async () => {},
+  )
 
   useEffect(() => {
     if (prefEmail) setEmail(prefEmail)
@@ -32,8 +41,15 @@ function UnlockVaultForm() {
     let cancelled = false
     void fetch('/api/fan/vault-unlock/status', { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { googleClientId?: string | null } | null) => {
-        if (!cancelled && data?.googleClientId) setGoogleClientId(data.googleClientId)
+      .then((data: { googleClientId?: string | null; unlocked?: boolean } | null) => {
+        if (cancelled) return
+        if (data?.unlocked) {
+          window.location.assign(nextPath)
+          return
+        }
+        if (!data?.googleClientId) return
+        setGoogleClientId(data.googleClientId)
+        void preloadGoogleIdentity()
       })
       .catch(() => {
         /* the email field still accepts a typed address */
@@ -41,7 +57,7 @@ function UnlockVaultForm() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [nextPath])
 
   useEffect(() => {
     if (prefEmail) return
@@ -85,7 +101,7 @@ function UnlockVaultForm() {
     }
   }, [signInMenuOpen])
 
-  async function unlockWith(body: { email?: string; accessToken?: string; source?: string }) {
+  async function unlockWith(body: { email?: string; credential?: string; accessToken?: string; source?: string }) {
     setError(null)
     setLoading(true)
     try {
@@ -105,6 +121,12 @@ function UnlockVaultForm() {
         setError(typeof data.error === 'string' ? data.error : 'Could not unlock')
         return
       }
+      const statusRes = await fetch('/api/fan/vault-unlock/status', { credentials: 'include', cache: 'no-store' })
+      const status = (await statusRes.json().catch(() => null)) as { unlocked?: boolean } | null
+      if (!status?.unlocked) {
+        setError('Signed in, but the vault did not unlock. Try again.')
+        return
+      }
       window.location.assign(nextPath)
     } catch {
       setError('Something went wrong')
@@ -118,21 +140,23 @@ function UnlockVaultForm() {
     await unlockWith({ email, source: source || 'vault_unlock' })
   }
 
-  async function onGoogle() {
-    setSignInMenuOpen(false)
-    if (googleClientId) {
-      setLoading(true)
-      const accessToken = await requestGoogleAccessToken(googleClientId)
-      if (accessToken) {
-        await unlockWith({ accessToken, source: 'google' })
-        return
-      }
-      setLoading(false)
+  unlockRef.current = unlockWith
+
+  useEffect(() => {
+    const slot = googleSlotRef.current
+    if (!googleClientId || !slot) return
+    let cancelled = false
+    setGoogleCredentialListener((credential) => {
+      void unlockRef.current({ credential, source: 'google' })
+    })
+    void renderGoogleSignInButton(slot, googleClientId).then((ok) => {
+      if (!cancelled && !ok) setError('Google sign-in could not load. Use your email instead.')
+    })
+    return () => {
+      cancelled = true
+      setGoogleCredentialListener(null)
     }
-    const saved = await pickSavedBrowserEmail('optional')
-    if (saved) setEmail(saved)
-    emailRef.current?.focus()
-  }
+  }, [googleClientId])
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-16">
@@ -141,8 +165,18 @@ function UnlockVaultForm() {
           Exclusive ID SoundBank
         </h1>
         <p className="mb-6 text-sm text-gray-400">
-          Use the email already saved in this browser, or pick a sign-in from the menu.
+          Sign in with Google in the small window. This card stays here. The Google email joins the site list, then
+          the vault opens.
         </p>
+
+        {googleClientId ? (
+          <div className="mb-6">
+            <div ref={googleSlotRef} className="flex min-h-11 w-full justify-center" />
+            <p className="mt-2 text-center text-xs text-gray-500">
+              The account chooser opens over this card. This page does not go to Google.
+            </p>
+          </div>
+        ) : null}
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
@@ -159,8 +193,9 @@ function UnlockVaultForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-10 py-2 text-center text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                className={`w-full rounded-lg border border-gray-700 bg-gray-800 py-2 text-center text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 ${savedBrowserEmail ? 'px-10' : 'px-3'}`}
               />
+              {savedBrowserEmail ? (
               <button
                 type="button"
                 aria-haspopup="menu"
@@ -175,38 +210,26 @@ function UnlockVaultForm() {
                   aria-hidden
                 />
               </button>
-              {signInMenuOpen ? (
+              ) : null}
+              {signInMenuOpen && savedBrowserEmail ? (
                 <div
                   role="menu"
                   aria-label="Sign-in options"
                   className="absolute right-0 top-full z-20 mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 py-1 text-center shadow-xl"
                 >
-                  {savedBrowserEmail ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={loading}
-                      onClick={() => {
-                        setEmail(savedBrowserEmail)
-                        setSignInMenuOpen(false)
-                        emailRef.current?.focus()
-                      }}
-                      className="w-full px-3 py-2 text-center text-sm text-gray-100 transition-colors hover:bg-gray-800 hover:text-yellow-400 disabled:opacity-50"
-                    >
-                      Sign in with {savedBrowserEmail}
-                    </button>
-                  ) : null}
-                  {googleClientId || !savedBrowserEmail ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={loading}
-                      onClick={() => void onGoogle()}
-                      className="w-full px-3 py-2 text-center text-sm text-gray-100 transition-colors hover:bg-gray-800 hover:text-yellow-400 disabled:opacity-50"
-                    >
-                      Sign in with Google
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={loading}
+                    onClick={() => {
+                      setEmail(savedBrowserEmail)
+                      setSignInMenuOpen(false)
+                      emailRef.current?.focus()
+                    }}
+                    className="w-full px-3 py-2 text-center text-sm text-gray-100 transition-colors hover:bg-gray-800 hover:text-yellow-400 disabled:opacity-50"
+                  >
+                    Sign in with {savedBrowserEmail}
+                  </button>
                 </div>
               ) : null}
             </div>

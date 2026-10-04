@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { persistSystemicBpm } from '@/lib/catalog-sync/persist-systemic-bpm'
+import { scheduleCatalogTagImprint } from '@/lib/audio/imprint-catalog-tags'
 import { bumpMusicLibraryPublishVersion } from '@/lib/music-library-publish'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     })
 
     const saved = await persistSystemicBpm(supabase, { trackId, bpm: bpmValue })
+    scheduleCatalogTagImprint([saved.audioFileId])
 
     let publishVersion: number | null = null
     try {

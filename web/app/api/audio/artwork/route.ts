@@ -6,6 +6,7 @@ import { isHomeApiPlainTextError, saveLocalArtworkFile, deleteLocalArtworkFiles 
 import { persistSystemicCover, resolveTrackCollection } from '@/lib/catalog-sync/persist-systemic-cover'
 import { artworkFileIdFromUrl, stripArtworkCacheBust } from '@/lib/catalog-sync/artwork'
 import { bumpMusicLibraryPublishVersion } from '@/lib/music-library-publish'
+import { scheduleCatalogTagImprint, scheduleFolderCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 
 export const dynamic = 'force-dynamic'
@@ -97,8 +98,14 @@ export async function POST(request: Request) {
     const buffer = normalized.buffer
     const mimeTypeOut = normalized.mimeType
     const ext = normalized.ext
-    const path = `artwork/${artworkId}.${ext}`
-    const normalizedFileName = `${artworkId}.${ext}`
+    console.info(
+      `[artwork] master ${normalized.width}x${normalized.height} ${buffer.length} bytes from ${file.size} byte upload`,
+    )
+    // New path every save. The previous `folder-{id}.jpg` is cached immutable for a year.
+    const coverVersion = String(Date.now())
+    const versionedId = `${artworkId}.v${coverVersion}`
+    const path = `artwork/${versionedId}.${ext}`
+    const normalizedFileName = `${versionedId}.${ext}`
 
     let artworkUrl: string
     let localUrl: string | null = null
@@ -112,7 +119,7 @@ export async function POST(request: Request) {
         normalizedFileName,
         mimeTypeOut,
         buffer,
-        { normalize: false },
+        { normalize: false, version: coverVersion },
       )
     } catch (err) {
       if (!useLocal) {
@@ -139,7 +146,7 @@ export async function POST(request: Request) {
                 normalizedFileName,
                 mimeTypeOut,
                 buffer,
-                { normalize: false },
+                { normalize: false, version: coverVersion },
               )
             }
             artworkUrl = localUrl
@@ -163,7 +170,7 @@ export async function POST(request: Request) {
             normalizedFileName,
             mimeTypeOut,
             buffer,
-            { normalize: false },
+            { normalize: false, version: coverVersion },
           )
         }
         artworkUrl = localUrl
@@ -215,9 +222,24 @@ export async function POST(request: Request) {
       /* non-fatal */
     }
 
+    if (collectionFolderId) {
+      void scheduleFolderCatalogTags(collectionFolderId)
+    } else if (resolvedAudioFileId) {
+      scheduleCatalogTagImprint([resolvedAudioFileId])
+    } else if (trackId) {
+      void createSupabaseServerClient()
+        .from('music_library_tracks')
+        .select('audio_file_id')
+        .eq('id', trackId)
+        .maybeSingle()
+        .then(({ data }) => scheduleCatalogTagImprint([data?.audio_file_id]))
+    }
+
     return NextResponse.json({
       success: true,
       artworkUrl,
+      width: normalized.width,
+      height: normalized.height,
       folderId: systemic.folderId,
       playlistId: systemic.playlistId,
       tracksUpdated: systemic.tracksUpdated,
@@ -281,6 +303,7 @@ export async function DELETE(request: Request) {
       .limit(200)
 
     let foldersCleared = 0
+    const clearedFolderIds: string[] = []
     for (const row of folders || []) {
       const rowBase = stripArtworkCacheBust(resolveImageUrl(String(row.artwork_url || '')) || String(row.artwork_url || ''))
       if (!rowBase.includes(fileId)) continue
@@ -288,7 +311,10 @@ export async function DELETE(request: Request) {
         .from('music_library_folders')
         .update({ artwork_url: null })
         .eq('id', row.id)
-      if (!error) foldersCleared += 1
+      if (!error) {
+        foldersCleared += 1
+        clearedFolderIds.push(String(row.id))
+      }
     }
 
     const { data: tracks } = await supabase
@@ -298,6 +324,7 @@ export async function DELETE(request: Request) {
       .limit(500)
 
     let tracksCleared = 0
+    const clearedTrackIds: string[] = []
     for (const row of tracks || []) {
       const rowBase = stripArtworkCacheBust(resolveImageUrl(String(row.artwork_url || '')) || String(row.artwork_url || ''))
       if (!rowBase.includes(fileId)) continue
@@ -305,7 +332,10 @@ export async function DELETE(request: Request) {
         .from('music_library_tracks')
         .update({ artwork_url: null })
         .eq('id', row.id)
-      if (!error) tracksCleared += 1
+      if (!error) {
+        tracksCleared += 1
+        clearedTrackIds.push(String(row.id))
+      }
     }
 
     let publishVersion: number | null = null
@@ -313,6 +343,15 @@ export async function DELETE(request: Request) {
       publishVersion = await bumpMusicLibraryPublishVersion()
     } catch {
       /* non-fatal */
+    }
+
+    for (const folderId of clearedFolderIds) void scheduleFolderCatalogTags(folderId)
+    if (clearedTrackIds.length && !clearedFolderIds.length) {
+      void createSupabaseServerClient()
+        .from('music_library_tracks')
+        .select('audio_file_id')
+        .in('id', clearedTrackIds)
+        .then(({ data }) => scheduleCatalogTagImprint((data || []).map((row) => row.audio_file_id)))
     }
 
     return NextResponse.json({

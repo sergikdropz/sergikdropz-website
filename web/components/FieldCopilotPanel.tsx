@@ -154,184 +154,127 @@ export default function FieldCopilotPanel({
 
   const previewValue = draft?.applyValue ?? (draft ? parseAiApplyBlock(draft.reply) : null)
 
+  const chip =
+    'rounded-full border px-2 py-0.5 text-[10px] font-medium disabled:opacity-40'
+
   return (
-    <div className="mb-2 rounded-lg border border-violet-500/30 bg-violet-950/25">
-      <div className="flex items-start justify-between gap-2 border-b border-violet-500/20 px-2.5 py-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300/90">
-            Field copilot
-          </p>
-          <p className="mt-0.5 truncate text-xs text-gray-100">
-            {liveFocus.fieldLabel}
-            <span className="text-gray-500"> · {liveFocus.fieldKey}</span>
-            {liveFocus.section ? (
-              <span className="text-gray-600"> · {liveFocus.section}</span>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {isDirty ? (
-            <span className="rounded-full bg-amber-950/80 px-1.5 py-0.5 text-[9px] font-medium text-amber-200/90">
-              Edited
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="text-[10px] text-violet-300/80 hover:text-violet-200"
-            onClick={() => scrollToField(liveFocus.fieldId)}
-          >
-            Go to field
-          </button>
-          <button
-            type="button"
-            className="text-[10px] text-gray-500 hover:text-gray-300"
-            aria-label="Clear focused field"
-            onClick={onClear}
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      <div className="px-2.5 py-2">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            {liveFocus.value?.trim() ? (
-              <p className="line-clamp-3 rounded border border-gray-800/80 bg-gray-950/60 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-gray-300">
-                {liveFocus.value}
-              </p>
-            ) : (
-              <p className="rounded border border-dashed border-gray-700/80 bg-gray-950/40 px-2 py-1.5 text-[10px] italic text-gray-500">
-                Empty field — use Suggest or Fill to draft
-              </p>
-            )}
-            {charCount > 0 ? (
-              <p className="mt-1 text-[9px] text-gray-600">{charCount} characters</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            disabled={!liveFocus.value}
-            className="shrink-0 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40"
-            onClick={() => void handleCopy()}
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        </div>
-
-        {quickActions.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {quickActions.map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                disabled={!enabled || busy || loading}
-                className="rounded-full border border-violet-500/35 bg-violet-950/50 px-2 py-0.5 text-[10px] text-violet-200/90 hover:bg-violet-900/50 disabled:opacity-40"
-                onClick={() => void runIntent(action.intent, action.label)}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="px-2 pb-1 pt-1.5">
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          className="max-w-[12rem] truncate text-[10px] font-medium text-violet-200 hover:text-white"
+          title={`${liveFocus.fieldLabel} · ${liveFocus.fieldKey}`}
+          onClick={() => scrollToField(liveFocus.fieldId)}
+        >
+          {liveFocus.fieldLabel}
+          {isDirty ? <span className="text-amber-200/90"> · edited</span> : null}
+        </button>
+        <button
+          type="button"
+          disabled={!enabled || busy || loading}
+          className={`${chip} border-violet-500/50 bg-violet-900/50 text-violet-100 hover:bg-violet-800/60`}
+          onClick={() => void runIntent({ kind: 'suggest' }, 'Suggest')}
+        >
+          Suggest
+        </button>
+        {liveFocus.value?.trim() ? (
           <button
             type="button"
             disabled={!enabled || busy || loading}
-            className="rounded-full border border-violet-500/50 bg-violet-900/50 px-2.5 py-0.5 text-[10px] font-medium text-violet-100 hover:bg-violet-800/60 disabled:opacity-40"
-            onClick={() => void runIntent({ kind: 'suggest' }, 'Suggest')}
-          >
-            Suggest
-          </button>
-          <button
-            type="button"
-            disabled={!enabled || busy || loading || !liveFocus.value?.trim()}
-            className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-800 disabled:opacity-40"
+            className={`${chip} border-gray-600 bg-gray-900 text-gray-300 hover:bg-gray-800`}
             onClick={() => void runIntent({ kind: 'improve' }, 'Improve')}
           >
             Improve
           </button>
-          {!liveFocus.value?.trim() ? (
-            <button
-              type="button"
-              disabled={!enabled || busy || loading}
-              className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-800 disabled:opacity-40"
-              onClick={() => void runIntent({ kind: 'fill' }, 'Fill')}
-            >
-              Fill
-            </button>
-          ) : null}
+        ) : (
           <button
             type="button"
-            disabled={!enabled || busy}
-            className="ml-auto rounded-full border border-gray-700/80 px-2 py-0.5 text-[10px] text-gray-500 hover:text-gray-300 disabled:opacity-40"
-            title="Send to full chat thread"
-            onClick={() => openInChat(liveFocus.value?.trim() ? 'improve' : 'suggest')}
+            disabled={!enabled || busy || loading}
+            className={`${chip} border-gray-600 bg-gray-900 text-gray-300 hover:bg-gray-800`}
+            onClick={() => void runIntent({ kind: 'fill' }, 'Fill')}
           >
-            Open in chat
+            Fill
           </button>
-        </div>
-
-        {loading ? (
-          <div className="mt-2 flex items-center gap-2 rounded border border-violet-500/25 bg-violet-950/40 px-2.5 py-2">
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-violet-400/30 border-t-violet-300" />
-            <span className="text-[10px] text-violet-200/80">Drafting…</span>
-          </div>
+        )}
+        {quickActions.slice(0, 2).map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            disabled={!enabled || busy || loading}
+            className={`${chip} border-violet-500/35 bg-violet-950/40 text-violet-200/90 hover:bg-violet-900/50`}
+            onClick={() => void runIntent(action.intent, action.label)}
+          >
+            {action.label}
+          </button>
+        ))}
+        {liveFocus.value?.trim() ? (
+          <button
+            type="button"
+            className="text-[10px] text-gray-500 hover:text-gray-300"
+            onClick={() => void handleCopy()}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
         ) : null}
-
-        {error ? (
-          <p className="mt-2 text-[10px] text-red-300/90">{error}</p>
-        ) : null}
-
-        {draft && !loading ? (
-          <div className="mt-2 rounded border border-emerald-500/30 bg-emerald-950/20 px-2.5 py-2">
-            <p className="text-[10px] font-medium text-emerald-200/90">
-              {draft.actionLabel} preview
-            </p>
-            {previewValue ? (
-              <>
-                {liveFocus.value?.trim() && previewValue !== liveFocus.value ? (
-                  <p className="mt-1.5 text-[9px] text-gray-500 line-through opacity-70">
-                    {liveFocus.value}
-                  </p>
-                ) : null}
-                <p className="mt-1 whitespace-pre-wrap rounded border border-emerald-500/20 bg-gray-950/50 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-emerald-100/95">
-                  {previewValue}
-                </p>
-              </>
-            ) : (
-              <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-[10px] text-gray-400">
-                {draft.reply.replace(/```ai-apply[\s\S]*?```/gi, '').trim() || draft.reply}
-              </p>
-            )}
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                disabled={!previewValue || !liveFocus.canApply}
-                className="rounded-full bg-emerald-600/90 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
-                onClick={handleApply}
-              >
-                Apply to field
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-800"
-                onClick={() => setDraft(null)}
-              >
-                Discard
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-gray-700 px-2.5 py-0.5 text-[10px] text-gray-500 hover:text-gray-300"
-                onClick={handleRefineInChat}
-              >
-                Refine in chat
-              </button>
-            </div>
-          </div>
-        ) : null}
+        <button
+          type="button"
+          className="ml-auto text-[10px] text-gray-500 hover:text-gray-300"
+          aria-label="Clear focused field"
+          onClick={onClear}
+        >
+          Clear
+        </button>
+        <button
+          type="button"
+          disabled={!enabled || busy}
+          className="text-[10px] text-gray-500 hover:text-gray-300 disabled:opacity-40"
+          title="Send to the chat thread"
+          onClick={() => openInChat(liveFocus.value?.trim() ? 'improve' : 'suggest')}
+        >
+          Chat
+        </button>
       </div>
+      {loading ? <p className="mt-1 text-[10px] text-violet-200/80">Drafting…</p> : null}
+      {error ? <p className="mt-1 text-[10px] text-red-300/90">{error}</p> : null}
+      {draft && !loading ? (
+        <div className="mt-1.5">
+          <div
+            className="max-h-28 overflow-y-auto overscroll-contain pr-1 [scrollbar-color:rgba(110,231,183,0.65)_rgba(6,78,59,0.35)] [scrollbar-width:thin]"
+            tabIndex={0}
+            aria-label={`${draft.actionLabel} preview`}
+          >
+            <p className="whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-emerald-100/95">
+              {previewValue ||
+                draft.reply.replace(/```ai-apply[\s\S]*?```/gi, '').trim() ||
+                draft.reply}
+            </p>
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={!previewValue || !liveFocus.canApply}
+              className="rounded-full bg-emerald-600/90 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
+              onClick={handleApply}
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              className="text-[10px] text-gray-500 hover:text-gray-300"
+              onClick={() => setDraft(null)}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              className="text-[10px] text-gray-500 hover:text-gray-300"
+              onClick={handleRefineInChat}
+            >
+              Refine
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

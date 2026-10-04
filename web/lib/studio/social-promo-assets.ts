@@ -4,8 +4,8 @@
  */
 
 import { zipSync, strToU8 } from 'fflate'
+import { loadArtworkForCanvas, pickSocialPromoArtworkUrl } from '@/lib/media/canvas-artwork-load'
 import {
-  proxiedArtworkUrl,
   renderStorySnippet,
   STORY_SNIPPET_DURATION_SEC,
   type StorySnippetLayout,
@@ -50,15 +50,8 @@ export type SocialKitProgress = {
   ratio: number
 }
 
-async function loadImage(url: string): Promise<HTMLImageElement | null> {
-  if (!url || typeof Image === 'undefined') return null
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = url
-  })
+async function loadCoverArt(artworkUrl?: string | null): Promise<HTMLImageElement | null> {
+  return loadArtworkForCanvas(artworkUrl)
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -88,10 +81,8 @@ function videoExtFromMime(mimeType: string): string {
   return mimeType.includes('mp4') ? 'mp4' : 'webm'
 }
 
-function resolveArtworkSrc(artworkUrl?: string | null): string {
-  const raw = clean(artworkUrl)
-  if (!raw) return ''
-  return proxiedArtworkUrl(raw)
+export function resolveSocialPromoArtworkSrc(artworkUrl?: string | null): string {
+  return pickSocialPromoArtworkUrl(artworkUrl)
 }
 
 function drawCoverCard(opts: {
@@ -171,7 +162,7 @@ export async function buildSocialFeedSquareBlob(input: {
   badge?: string
   cta?: string
 }): Promise<{ blob: Blob; filename: string }> {
-  const artwork = await loadImage(resolveArtworkSrc(input.artworkUrl))
+  const artwork = await loadCoverArt(input.artworkUrl)
   const canvas = drawCoverCard({
     width: 1080,
     height: 1080,
@@ -192,7 +183,7 @@ export async function buildSocialStoryStillBlob(input: {
   badge?: string
   cta?: string
 }): Promise<{ blob: Blob; filename: string }> {
-  const artwork = await loadImage(resolveArtworkSrc(input.artworkUrl))
+  const artwork = await loadCoverArt(input.artworkUrl)
   const canvas = drawCoverCard({
     width: 1080,
     height: 1920,

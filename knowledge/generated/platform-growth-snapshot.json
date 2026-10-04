@@ -1,0 +1,67 @@
+{
+  "capturedAt": "2026-10-02",
+  "source": "Admin browser HOMES desks (signed-in)",
+  "scorecard": {
+    "spotifyMonthlyListeners": 55,
+    "spotifyStreams28d": 120,
+    "spotifyStreams28dDeltaPct": -29,
+    "spotifyFollowers": 207,
+    "spotifySuperListeners": 1,
+    "spotifyMarqueeEligible": false,
+    "soundCloudTopPlay": { "title": "Cosmic Cadillac", "plays": 728 },
+    "soundCloudFanSupport": false,
+    "soundCloudSpotlightSlotsFilled": 4,
+    "soundCloudSpotlightSlotsTotal": 5,
+    "youtubeSubscribers": 67,
+    "youtubeViews28d": 98,
+    "youtubeWatchHours28d": 10.4,
+    "instagramFollowers": 2149,
+    "instagramFollowing": 2318,
+    "facebookFollowers": 302,
+    "appleArtistsStatus": "under_review",
+    "revelatorHomesUrlOk": false
+  },
+  "priorities": {
+    "p0": [
+      "Finish Apple Music for Artists claim (Under Review)",
+      "Meta Suite verification + IG messaging Page manager confirm",
+      "Align Spotify/YouTube bios to site underground pitch",
+      "SoundCloud Fan Support on; Spotlight 5/5",
+      "Fix Revelator HOMES URL"
+    ],
+    "p1": [
+      "Every IG drop → smart-link / MusicBank (not Linktree-only)",
+      "Spotify Canvas on A Good Day, Repeat, Cozy Catz, Music Is My Drug",
+      "Weekly YouTube Shorts from visualizer peaks",
+      "Meta promo pipeline on next street date"
+    ],
+    "p2": [
+      "Collab-first releases (Bone / Nood / ROIL) with 7–14d Spotify pitch",
+      "SoundCloud as discovery lab; DistroKid as DSP pipe; MusicBank as monetization"
+    ]
+  },
+  "thresholds": {
+    "deferMarqueeUntilMonthlyListeners": 1000,
+    "deferMerchPushUntilYoutubeSubs": 500,
+    "preferOwnedFunnelUntilMonthlyListeners": 1000
+  },
+  "doctrine": [
+    "Never invent DSP/social analytics — query_platform_growth_snapshot or admin_browser read first",
+    "Owned funnel (sergikdropz.com MusicBank) beats vanity streaming royalties at current scale",
+    "Collabs outperform solo on SoundCloud right now — lean Bone/Nood/ROIL",
+    "IG following > followers is a negative social-proof signal — reduce noise follows",
+    "Do not recommend Marquee/Showcase while spotifyMarqueeEligible is false",
+    "Weekly scorecard: Spotify ML+streams, SC top plays, YT views/subs, IG→site UTM clicks, MusicBank unlocks"
+  ],
+  "homes": [
+    { "label": "Site", "url": "https://sergikdropz.com/music" },
+    { "label": "Spotify Artists", "url": "https://artists.spotify.com/c/artist/7MnvMhWoSe4wYXuiI6iQ8H/home" },
+    { "label": "YouTube Studio", "url": "https://studio.youtube.com" },
+    { "label": "SoundCloud Artists", "url": "https://artists.soundcloud.com/overview" },
+    { "label": "Instagram", "url": "https://www.instagram.com/sergikdropz/" },
+    { "label": "Meta Business Suite", "url": "https://business.facebook.com/" },
+    { "label": "Apple Artists", "url": "https://artists.apple.com/ui" },
+    { "label": "DistroKid", "url": "https://distrokid.com/mymusic/" }
+  ],
+  "markdownPath": "knowledge/PLATFORM_GROWTH_SNAPSHOT.md"
+}

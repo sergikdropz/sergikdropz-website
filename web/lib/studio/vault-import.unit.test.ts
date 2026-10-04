@@ -7,6 +7,8 @@ import {
   dnaCopyInputFromCatalog,
   dnaCopyInputFromDraft,
   isAnalysisCopy,
+  buildContinuousVisualizerCues,
+  buildYoutubeVisualizerDescription,
   marketingCopyFromDna,
   mergeGeneratedMarketingCopy,
   mergeStudioTrackIdentity,
@@ -479,6 +481,142 @@ describe('marketingCopyFromDna', () => {
     expect(generated.social_caption).toMatch(/#SERGIK/)
     expect(generated.social_caption).toMatch(/#NewMusic|#OutNow/)
     expect(generated.credits_block).toMatch(/Written by SERGIK/)
+    expect(generated.youtube_visualizer).toMatch(/Full EP Visualizer/)
+    expect(generated.youtube_visualizer).toMatch(/TRACK BY TRACK/)
+    expect(generated.youtube_visualizer).toMatch(/TRACKLIST \(continuous/)
+    expect(generated.youtube_visualizer).toMatch(/CHAPTERS/)
+    expect(generated.youtube_visualizer).toMatch(/CREDITS/)
+    expect(generated.platform_tags).toMatch(/YOUTUBE TAGS/)
+    expect(generated.platform_tags).toMatch(/YOUTUBE HASHTAGS/)
+    expect(generated.platform_tags).toMatch(/#Visualizer/)
+    expect(generated.platform_tags).toMatch(/INSTAGRAM \/ THREADS/)
+    expect(generated.platform_tags).toMatch(/TIKTOK/)
+    expect(generated.platform_tags).not.toMatch(/YOUTUBE TAGS\n#/)
+  })
+
+  it('builds a continuous YouTube visualizer description with start–finish times', () => {
+    const input = dnaCopyInputFromCatalog({
+      title: 'Are We Awake?',
+      type: 'ep',
+      genre: 'Funky House',
+      subgenre: 'Deep n Funky',
+      description: '"Are We Awake?" is a two-track EP listen written as one late-night room.',
+      artist: 'SERGIK',
+      label: 'SERGIKdropz',
+      year: 2026,
+      artwork_designer: 'Maya Lane',
+      tracks: [
+        {
+          title: 'It Is What It Is',
+          track_number: 1,
+          duration: 204,
+          isrc: 'QTA532600001',
+          contributors: [
+            { role: 'primary', name: 'SERGIK' },
+            { role: 'writer', name: 'SERGIK' },
+            { role: 'producer', name: 'SERGIK' },
+          ],
+          identity: {
+            description: 'A funky house cut at 124 BPM in C# major, built for full-time boogie floors.',
+            genre: 'Funky House',
+            bpm: 124,
+            key_signature: 'C# major',
+            intention: 'Hold the floor without crowding it.',
+          },
+        },
+        {
+          title: 'Elevator Musik',
+          track_number: 2,
+          duration: 217,
+          isrc_full: 'QTA532600002',
+          identity: {
+            description: 'A tighter late-night roller with hats that ride the bar.',
+            genre: 'Funky House',
+            bpm: 127,
+            key_signature: 'A minor',
+          },
+        },
+      ],
+    })
+
+    const cues = buildContinuousVisualizerCues(input.tracks || [])
+    expect(cues).toEqual([
+      expect.objectContaining({ title: 'It Is What It Is', startSec: 0, endSec: 204, durationSec: 204 }),
+      expect.objectContaining({ title: 'Elevator Musik', startSec: 204, endSec: 421, durationSec: 217 }),
+    ])
+
+    const copy = buildYoutubeVisualizerDescription(input)
+    expect(copy).toMatch(/Are We Awake\? — Full EP Visualizer \| SERGIK/)
+    expect(copy).toMatch(/no space between/)
+    expect(copy).toMatch(/00:00–03:24 {2}1\. It Is What It Is/)
+    expect(copy).toMatch(/03:24–07:01 {2}2\. Elevator Musik/)
+    expect(copy).toMatch(/CHAPTERS\n00:00 It Is What It Is\n03:24 Elevator Musik\n07:01 End/)
+    expect(copy).toMatch(/ISRC QTA532600001/)
+    expect(copy).toMatch(/Written by SERGIK/)
+    expect(copy).toMatch(/Design: Maya Lane/)
+    expect(copy).toMatch(/#Visualizer/)
+    expect(copy).not.toMatch(/pending/)
+    expect(copy.length).toBeLessThanOrEqual(5000)
+  })
+
+  it('writes a unique description for every catalog track on a six-cut EP', () => {
+    const titles = ['Dandelicious', 'Jahdelicah', 'Night Drive', 'Horizon', 'Afterglow', 'Closer']
+    const input = dnaCopyInputFromCatalog({
+      title: 'Synthedelics',
+      type: 'ep',
+      artist: 'SERGIK',
+      tracks: titles.map((title, index) => ({
+        title,
+        track_number: index + 1,
+        duration: 180,
+        identity: {
+          description: `${title} has its own floor story at ${120 + index} BPM.`,
+          intention: `Carry ${title} as its own room.`,
+          bpm: 120 + index,
+          genre: 'Funky House',
+        },
+      })),
+    })
+    expect(catalogCopyFacts(input)).toMatchObject({
+      trackCount: 6,
+      timestampsReady: true,
+      runtimeSec: 1080,
+      missingDurations: [],
+    })
+    const youtube = buildYoutubeVisualizerDescription(input)
+    const store = marketingCopyFromDna(input).store_description || ''
+    const press = marketingCopyFromDna(input).press_blurb || ''
+    for (const title of titles) {
+      expect(youtube).toMatch(new RegExp(`${title} has its own floor story`))
+      expect(store).toMatch(new RegExp(`${title} has its own floor story`))
+      expect(press).toMatch(new RegExp(`${title} has its own floor story`))
+    }
+    expect(youtube.match(/TRACK BY TRACK/g)?.length).toBe(1)
+  })
+
+  it('does not invent visualizer times when Catalog duration is missing', () => {
+    const copy = buildYoutubeVisualizerDescription({
+      title: 'Night Drive',
+      type: 'ep',
+      artist: 'SERGIK',
+      tracks: [
+        { title: 'Neon', duration: 180, description: 'Opens warm.' },
+        { title: 'Horizon', description: 'Keeps the lights low.' },
+      ],
+    })
+    expect(copy).toMatch(/00:00–03:00 {2}1\. Neon/)
+    expect(copy).toMatch(/03:00–pending {2}2\. Horizon/)
+    expect(copy).toMatch(/Duration pending in Catalog for: Horizon/)
+    expect(copy).not.toMatch(/03:00–0[6-9]/)
+  })
+
+  it('treats a zero catalog duration as missing for visualizer cues', () => {
+    const cues = buildContinuousVisualizerCues([
+      { title: 'Neon', duration: 0 },
+      { title: 'Horizon', duration: 180 },
+    ])
+    expect(cues[0]).toMatchObject({ startSec: 0, endSec: null, durationSec: null })
+    expect(cues[1]).toMatchObject({ startSec: null, endSec: null })
   })
 
   it('builds SEO launch captions with a discovery hashtag block', () => {

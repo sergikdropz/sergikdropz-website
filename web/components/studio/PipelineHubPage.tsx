@@ -67,7 +67,7 @@ const COPY: Record<StudioPipelineTab, { subtitle: string }> = {
   },
   isrcs: {
     subtitle:
-      'Local-first SoundExchange registry — lookup, register QTA53 codes, export USISRC locker CSV, and mark accepted.',
+      'SoundExchange Direct registry — mint QTA53 in Catalog, auto-queue SX Direct, export USISRC locker CSV, and mark accepted.',
   },
 }
 

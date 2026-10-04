@@ -1,10 +1,23 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { sendEmail } from '@/lib/email'
 import {
+  buildReleaseCollabContext,
+  collabContextForPortal,
+  type ReleaseCollabContext,
+} from '@/lib/studio/collab-context'
+import {
+  collabHubEmailHtml,
+  collabHubEmailSubject,
+  collabPromoExtraHtml,
+} from '@/lib/studio/collab-email-compose'
+import { recordCollabEmailSend } from '@/lib/studio/collab-email-log'
+import { collabOutboundReplyTo } from '@/lib/studio/release-collab'
+import { collabReviewChecklistPatch } from '@/lib/studio/collab-review-writeback'
+import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
+import {
   COLLAB_TABLE_MISSING_HINT,
   RELEASE_COLLAB_FROM_EMAIL,
   RELEASE_COLLAB_FROM_NAME,
-  RELEASE_COLLAB_REPLY_TO,
   collabInviteExpiresAt,
   collabPortalUrl,
   collabReviewInviteHtml,
@@ -28,8 +41,15 @@ import { resolveVaultPlaybackUrl } from '@/lib/audio/resolve-vault-playback-url'
 
 const COLLAB_SELECT =
   'id,release_id,name,email,role,notes,created_at,updated_at'
-const MESSAGE_SELECT =
+const MESSAGE_SELECT_FULL =
+  'id,release_id,collaborator_id,author_type,author_name,author_email,body,notify_email,channel,email_subject,created_at'
+const MESSAGE_SELECT_LEGACY =
   'id,release_id,collaborator_id,author_type,author_name,author_email,body,notify_email,created_at'
+
+function isMissingMessageColumnError(error: { message?: string } | null): boolean {
+  const msg = String(error?.message || '')
+  return /channel|email_subject|inbound_email_id/i.test(msg) && /column|schema cache/i.test(msg)
+}
 const INVITE_SELECT =
   'id,release_id,collaborator_id,token,expires_at,revoked_at,last_accessed_at,created_at'
 const REVIEW_SELECT =
@@ -57,6 +77,7 @@ function mapCollaborator(row: Record<string, unknown>): ReleaseCollaborator {
 }
 
 function mapMessage(row: Record<string, unknown>): ReleaseCollabMessage {
+  const channel = row.channel === 'inbound_email' || row.channel === 'system' ? row.channel : 'app'
   return {
     id: String(row.id),
     release_id: String(row.release_id),
@@ -66,6 +87,8 @@ function mapMessage(row: Record<string, unknown>): ReleaseCollabMessage {
     author_email: row.author_email ? String(row.author_email) : null,
     body: String(row.body || ''),
     notify_email: Boolean(row.notify_email),
+    channel,
+    email_subject: row.email_subject != null ? String(row.email_subject) : null,
     created_at: String(row.created_at || ''),
   }
 }
@@ -192,14 +215,30 @@ export async function listMessages(
   releaseId: string,
 ): Promise<{ messages: ReleaseCollabMessage[] } | CollabMissing | { error: string }> {
   const supabase = createSupabaseServerClient()
-  const { data, error } = await supabase
+  let data: Record<string, unknown>[] | null = null
+  let error: { message?: string; code?: string } | null = null
+
+  const full = await supabase
     .from('release_collab_messages')
-    .select(MESSAGE_SELECT)
+    .select(MESSAGE_SELECT_FULL)
     .eq('release_id', releaseId)
     .order('created_at', { ascending: true })
+  data = full.data as Record<string, unknown>[] | null
+  error = full.error
+
+  if (error && isMissingMessageColumnError(error)) {
+    const legacy = await supabase
+      .from('release_collab_messages')
+      .select(MESSAGE_SELECT_LEGACY)
+      .eq('release_id', releaseId)
+      .order('created_at', { ascending: true })
+    data = legacy.data as Record<string, unknown>[] | null
+    error = legacy.error
+  }
+
   if (error) {
     if (isMissingCollabTableError(error)) return missing()
-    return { error: error.message }
+    return { error: error.message || 'Failed to load messages' }
   }
   return { messages: (data || []).map((row) => mapMessage(row as Record<string, unknown>)) }
 }
@@ -234,33 +273,6 @@ export async function listReviews(
     return { error: error.message }
   }
   return { reviews: (data || []).map((row) => mapReview(row as Record<string, unknown>)) }
-}
-
-async function recordEmailSend(input: {
-  releaseId: string
-  collaboratorId?: string | null
-  messageId?: string | null
-  inviteId?: string | null
-  resendId?: string | null
-  toEmail: string
-  subject: string
-  kind: CollabEmailKind
-  status?: ReleaseCollabEmailSend['status']
-  errorMessage?: string | null
-}) {
-  const supabase = createSupabaseServerClient()
-  await supabase.from('release_collab_email_sends').insert({
-    release_id: input.releaseId,
-    collaborator_id: input.collaboratorId || null,
-    message_id: input.messageId || null,
-    invite_id: input.inviteId || null,
-    resend_id: input.resendId || null,
-    to_email: input.toEmail,
-    subject: input.subject,
-    kind: input.kind,
-    status: input.status || (input.resendId ? 'sent' : 'failed'),
-    error_message: input.errorMessage || null,
-  })
 }
 
 async function activeInviteForCollaborator(
@@ -305,8 +317,9 @@ export async function postStudioMessage(input: {
       author_email: input.authorEmail || null,
       body,
       notify_email: Boolean(input.notify),
+      channel: 'app',
     })
-    .select(MESSAGE_SELECT)
+    .select(MESSAGE_SELECT_FULL)
     .single()
 
   if (error) {
@@ -338,7 +351,7 @@ export async function postStudioMessage(input: {
     for (const collab of collabs.collaborators) {
       const invite = await activeInviteForCollaborator(input.releaseId, collab.id)
       const portalUrl = invite ? collabPortalUrl(invite.token, input.siteOrigin) : undefined
-      const subject = collabThreadNotifySubject(releaseTitle)
+      const subject = collabHubEmailSubject(releaseTitle, 'New message')
       try {
         const result = await sendEmail({
           to: collab.email,
@@ -351,13 +364,14 @@ export async function postStudioMessage(input: {
             portalUrl,
           }),
           from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
-          replyTo: RELEASE_COLLAB_REPLY_TO,
+          replyTo: collabOutboundReplyTo(input.releaseId),
           tags: [
             { name: 'type', value: 'release_collab' },
             { name: 'kind', value: 'thread_notify' },
+            { name: 'release_id', value: input.releaseId.slice(0, 200) },
           ],
         })
-        await recordEmailSend({
+        await recordCollabEmailSend({
           releaseId: input.releaseId,
           collaboratorId: collab.id,
           messageId: message.id,
@@ -370,7 +384,7 @@ export async function postStudioMessage(input: {
         })
         notified += 1
       } catch (err) {
-        await recordEmailSend({
+        await recordCollabEmailSend({
           releaseId: input.releaseId,
           collaboratorId: collab.id,
           messageId: message.id,
@@ -385,6 +399,169 @@ export async function postStudioMessage(input: {
   }
 
   return { message, notified }
+}
+
+export async function sendCollabHubEmail(input: {
+  releaseId: string
+  body: string
+  subject?: string
+  authorName: string
+  authorEmail?: string | null
+  collaboratorIds?: string[]
+  promoLinks?: Array<{ label: string; url: string }>
+  siteOrigin?: string
+}): Promise<
+  | {
+      message: ReleaseCollabMessage
+      sent: number
+      subject: string
+      failures?: Array<{ email: string; message: string }>
+    }
+  | CollabMissing
+  | { error: string; failures?: Array<{ email: string; message: string }> }
+> {
+  const body = String(input.body || '').trim()
+  if (!body) return { error: 'Message body is required' }
+
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    return {
+      error:
+        'RESEND_API_KEY is not configured. Add an active (uncommented) RESEND_API_KEY=re_... line in web/.env.local, then run: npm run dev:restart',
+    }
+  }
+
+  const collabs = await listCollaborators(input.releaseId)
+  if ('code' in collabs || 'error' in collabs) return collabs
+
+  const idSet = new Set((input.collaboratorIds || []).map(String))
+  const recipients = collabs.collaborators.filter((c) =>
+    idSet.size ? idSet.has(c.id) : true,
+  )
+  if (!recipients.length) {
+    return { error: 'Add collaborators or select who should receive this email.' }
+  }
+
+  const supabase = createSupabaseServerClient()
+  const { data: release } = await supabase
+    .from('distribution_releases')
+    .select('title')
+    .eq('id', input.releaseId)
+    .maybeSingle()
+  const releaseTitle = String(release?.title || 'SERGIK release')
+  const subject = collabHubEmailSubject(releaseTitle, String(input.subject || 'Collaboration update'))
+
+  let message: ReleaseCollabMessage
+
+  const { data: inserted, error } = await supabase
+    .from('release_collab_messages')
+    .insert({
+      release_id: input.releaseId,
+      author_type: 'studio',
+      author_name: input.authorName.trim() || 'SERGIK',
+      author_email: input.authorEmail || null,
+      body,
+      notify_email: true,
+      channel: 'app',
+      email_subject: subject,
+    })
+    .select(MESSAGE_SELECT_FULL)
+    .single()
+
+  if (error) {
+    if (isMissingMessageColumnError(error)) {
+      const legacy = await supabase
+        .from('release_collab_messages')
+        .insert({
+          release_id: input.releaseId,
+          author_type: 'studio',
+          author_name: input.authorName.trim() || 'SERGIK',
+          author_email: input.authorEmail || null,
+          body,
+          notify_email: true,
+        })
+        .select(MESSAGE_SELECT_LEGACY)
+        .single()
+      if (legacy.error) {
+        if (isMissingCollabTableError(legacy.error)) return missing()
+        return { error: legacy.error.message }
+      }
+      message = mapMessage(legacy.data as Record<string, unknown>)
+    } else {
+      if (isMissingCollabTableError(error)) return missing()
+      return { error: error.message }
+    }
+  } else {
+    message = mapMessage(inserted as Record<string, unknown>)
+  }
+
+  let sent = 0
+  const failures: Array<{ email: string; message: string }> = []
+
+  for (const collab of recipients) {
+    const invite = await activeInviteForCollaborator(input.releaseId, collab.id)
+    const portalUrl = invite ? collabPortalUrl(invite.token, input.siteOrigin) : undefined
+    const links = [...(input.promoLinks || [])]
+    if (portalUrl) {
+      links.push({ label: 'Review portal', url: portalUrl })
+    }
+    try {
+      const result = await sendEmail({
+        to: collab.email,
+        subject,
+        html: collabHubEmailHtml({
+          recipientName: collab.name,
+          releaseTitle,
+          authorName: message.author_name,
+          body: message.body,
+          extraHtml: collabPromoExtraHtml(links),
+        }),
+        from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
+        replyTo: collabOutboundReplyTo(input.releaseId),
+        tags: [
+          { name: 'type', value: 'release_collab' },
+          { name: 'kind', value: 'hub_email' },
+          { name: 'release_id', value: input.releaseId.slice(0, 200) },
+        ],
+      })
+      await recordCollabEmailSend({
+        releaseId: input.releaseId,
+        collaboratorId: collab.id,
+        messageId: message.id,
+        inviteId: invite?.id,
+        resendId: result.messageId || null,
+        toEmail: collab.email,
+        subject,
+        kind: 'hub_email',
+        status: 'sent',
+      })
+      sent += 1
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Send failed'
+      failures.push({ email: collab.email, message: errMsg })
+      await recordCollabEmailSend({
+        releaseId: input.releaseId,
+        collaboratorId: collab.id,
+        messageId: message.id,
+        toEmail: collab.email,
+        subject,
+        kind: 'hub_email',
+        status: 'failed',
+        errorMessage: errMsg,
+      })
+    }
+  }
+
+  if (!sent) {
+    const detail = failures[0]?.message
+    return {
+      error: detail
+        ? `Email could not be sent: ${detail}`
+        : 'Email could not be sent to any recipient.',
+      failures,
+    }
+  }
+
+  return { message, sent, subject, failures: failures.length ? failures : undefined }
 }
 
 export async function createReviewInvite(input: {
@@ -470,13 +647,14 @@ export async function createReviewInvite(input: {
           note: input.note,
         }),
         from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
-        replyTo: RELEASE_COLLAB_REPLY_TO,
+        replyTo: collabOutboundReplyTo(input.releaseId),
         tags: [
           { name: 'type', value: 'release_collab' },
           { name: 'kind', value: 'review_invite' },
+          { name: 'release_id', value: input.releaseId.slice(0, 200) },
         ],
       })
-      await recordEmailSend({
+      await recordCollabEmailSend({
         releaseId: input.releaseId,
         collaboratorId: collaborator.id,
         inviteId: invite.id,
@@ -488,7 +666,7 @@ export async function createReviewInvite(input: {
       })
       emailed = true
     } catch (err) {
-      await recordEmailSend({
+      await recordCollabEmailSend({
         releaseId: input.releaseId,
         collaboratorId: collaborator.id,
         inviteId: invite.id,
@@ -526,6 +704,7 @@ export type CollabPortalPayload = {
   messages: ReleaseCollabMessage[]
   review: ReleaseCollabReview | null
   tracks: CollabPortalTrack[]
+  context: ReturnType<typeof collabContextForPortal> | null
 }
 
 export async function resolveCollabPortal(
@@ -608,6 +787,11 @@ export async function resolveCollabPortal(
     }),
   )
 
+  const replyTo = collabOutboundReplyTo(invite.release_id)
+  const fullContext = await buildReleaseCollabContext(supabase, invite.release_id, {
+    replyToAddress: replyTo,
+  })
+
   return {
     release: {
       id: String(release.id),
@@ -621,6 +805,7 @@ export async function resolveCollabPortal(
     messages: messagesResult.messages,
     review: reviewRow ? mapReview(reviewRow as Record<string, unknown>) : null,
     tracks,
+    context: fullContext ? collabContextForPortal(fullContext) : null,
   }
 }
 
@@ -646,8 +831,9 @@ export async function postCollaboratorMessage(input: {
       author_email: portal.collaborator.email,
       body,
       notify_email: false,
+      channel: 'app',
     })
-    .select(MESSAGE_SELECT)
+    .select(MESSAGE_SELECT_FULL)
     .single()
 
   if (error) {
@@ -705,9 +891,65 @@ export async function submitCollabReview(input: {
       ? `${portal.collaborator.name} ${statusLabel} this release: ${input.note.trim()}`
       : `${portal.collaborator.name} ${statusLabel} this release.`,
     notify_email: false,
+    channel: 'app',
   })
 
-  return { review: mapReview(data as Record<string, unknown>) }
+  const review = mapReview(data as Record<string, unknown>)
+
+  const collabsResult = await listCollaborators(portal.release.id)
+  const reviewsResult = await listReviews(portal.release.id)
+  if (
+    input.status === 'approved' &&
+    !('code' in collabsResult) &&
+    !('error' in collabsResult) &&
+    !('code' in reviewsResult) &&
+    !('error' in reviewsResult)
+  ) {
+    const { data: trackRows } = await supabase
+      .from('distribution_tracks')
+      .select('id, title, splits, contributors')
+      .eq('release_id', portal.release.id)
+    const readiness = await getSingleReleaseCopyrightReadiness(supabase, portal.release.id)
+    const patch = collabReviewChecklistPatch({
+      collaborators: collabsResult.collaborators,
+      reviews: reviewsResult.reviews.map((r) => ({
+        collaborator_id: r.collaborator_id,
+        status: r.status,
+      })),
+      ops: readiness?.ops ?? {
+        split_sheet_status: 'missing',
+        producer_agreement_status: 'missing',
+        sample_clearance_status: 'missing',
+      },
+      tracks: trackRows || [],
+    })
+    if (patch) {
+      await supabase
+        .from('release_copyright_checklists')
+        .upsert({ release_id: portal.release.id, ...patch }, { onConflict: 'release_id' })
+      await supabase.from('release_collab_messages').insert({
+        release_id: portal.release.id,
+        author_type: 'studio',
+        author_name: 'Release Studio',
+        author_email: null,
+        body: `All collaborator reviews approved — updated rights checklist (${Object.keys(patch).join(', ')}).`,
+        notify_email: false,
+        channel: 'system',
+      })
+    }
+  }
+
+  return { review }
+}
+
+export async function loadReleaseCollabContext(
+  releaseId: string,
+): Promise<ReleaseCollabContext | null | CollabMissing | { error: string }> {
+  const supabase = createSupabaseServerClient()
+  const ctx = await buildReleaseCollabContext(supabase, releaseId, {
+    replyToAddress: collabOutboundReplyTo(releaseId),
+  })
+  return ctx
 }
 
 export async function getCollabOverview(): Promise<
@@ -717,10 +959,14 @@ export async function getCollabOverview(): Promise<
         title: string
         artworkUrl: string | null
         releaseDate: string | null
+        trackCount: number
+        projectKind: 'single' | 'ep' | 'release'
         collaboratorCount: number
         messageCount: number
         pendingReviews: number
         lastMessageAt: string | null
+        lastMessageAuthor: string | null
+        lastMessagePreview: string | null
       }>
     }
   | CollabMissing
@@ -743,11 +989,22 @@ export async function getCollabOverview(): Promise<
     return { error: cError.message }
   }
 
-  const { data: messages } = await supabase
+  let messages: Array<Record<string, unknown>> | null = null
+  const msgFull = await supabase
     .from('release_collab_messages')
-    .select('release_id,created_at')
+    .select('release_id,created_at,author_name,body,author_type,channel')
     .order('created_at', { ascending: false })
-    .limit(500)
+    .limit(800)
+  if (msgFull.error && isMissingMessageColumnError(msgFull.error)) {
+    const legacy = await supabase
+      .from('release_collab_messages')
+      .select('release_id,created_at,author_name,body,author_type')
+      .order('created_at', { ascending: false })
+      .limit(800)
+    messages = (legacy.data || []) as Array<Record<string, unknown>>
+  } else {
+    messages = (msgFull.data || []) as Array<Record<string, unknown>>
+  }
 
   const { data: reviews } = await supabase
     .from('release_collab_reviews')
@@ -760,10 +1017,27 @@ export async function getCollabOverview(): Promise<
   }
   const messageCount = new Map<string, number>()
   const lastMessage = new Map<string, string>()
+  const lastPreview = new Map<string, { author: string; preview: string }>()
   for (const row of messages || []) {
     const id = String(row.release_id)
     messageCount.set(id, (messageCount.get(id) || 0) + 1)
-    if (!lastMessage.has(id) && row.created_at) lastMessage.set(id, String(row.created_at))
+    if (!lastMessage.has(id) && row.created_at) {
+      lastMessage.set(id, String(row.created_at))
+      const rawBody = String(row.body || '').trim()
+      lastPreview.set(id, {
+        author: String(row.author_name || 'Unknown'),
+        preview: rawBody.length > 120 ? `${rawBody.slice(0, 117)}…` : rawBody,
+      })
+    }
+  }
+
+  const { data: trackCounts } = await supabase
+    .from('distribution_tracks')
+    .select('release_id')
+  const tracksPerRelease = new Map<string, number>()
+  for (const row of trackCounts || []) {
+    const id = String(row.release_id)
+    tracksPerRelease.set(id, (tracksPerRelease.get(id) || 0) + 1)
   }
   const pending = new Map<string, number>()
   for (const row of reviews || []) {
@@ -772,26 +1046,36 @@ export async function getCollabOverview(): Promise<
     pending.set(id, (pending.get(id) || 0) + 1)
   }
 
-  const withActivity = (releases || [])
-    .map((r) => {
-      const id = String(r.id)
-      return {
-        id,
-        title: String(r.title || 'Untitled'),
-        artworkUrl: r.artwork_url ? String(r.artwork_url) : null,
-        releaseDate: r.release_date ? String(r.release_date) : null,
-        collaboratorCount: collabCount.get(id) || 0,
-        messageCount: messageCount.get(id) || 0,
-        pendingReviews: pending.get(id) || 0,
-        lastMessageAt: lastMessage.get(id) || null,
-      }
-    })
-    .filter((r) => r.collaboratorCount > 0 || r.messageCount > 0)
-    .sort((a, b) => {
-      const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0
-      const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0
-      return tb - ta
-    })
+  const mapped = (releases || []).map((r) => {
+    const id = String(r.id)
+    const trackCount = tracksPerRelease.get(id) || 0
+    const preview = lastPreview.get(id)
+    const projectKind: 'single' | 'ep' | 'release' =
+      trackCount === 1 ? 'single' : trackCount > 1 ? 'ep' : 'release'
+    return {
+      id,
+      title: String(r.title || 'Untitled'),
+      artworkUrl: r.artwork_url ? String(r.artwork_url) : null,
+      releaseDate: r.release_date ? String(r.release_date) : null,
+      trackCount,
+      projectKind,
+      collaboratorCount: collabCount.get(id) || 0,
+      messageCount: messageCount.get(id) || 0,
+      pendingReviews: pending.get(id) || 0,
+      lastMessageAt: lastMessage.get(id) || null,
+      lastMessageAuthor: preview?.author || null,
+      lastMessagePreview: preview?.preview || null,
+    }
+  })
 
-  return { releases: withActivity }
+  const withCollaborators = mapped.filter((r) => r.collaboratorCount > 0)
+
+  withCollaborators.sort((a, b) => {
+    const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0
+    const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0
+    if (ta !== tb) return tb - ta
+    return a.title.localeCompare(b.title)
+  })
+
+  return { releases: withCollaborators }
 }

@@ -27,9 +27,17 @@ export const metadata: Metadata = {
   keywords: ['SERGIK', 'electronic music', 'DJ', 'producer', 'house music', 'tech house', 'Phoenix', 'underground'],
   authors: [{ name: 'SERGIK' }],
   icons: {
-    icon: '/images/gallery/logo.png',
-    shortcut: '/images/gallery/logo.png',
-    apple: '/images/gallery/logo.png',
+    icon: [
+      { url: '/favicon.ico?v=6', sizes: 'any' },
+      { url: '/icons/touch-v6/icon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icons/touch-v6/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    shortcut: '/favicon.ico?v=6',
+    apple: [
+      { url: '/icons/touch-v6/icon-152.png', sizes: '152x152', type: 'image/png' },
+      { url: '/icons/touch-v6/icon-167.png', sizes: '167x167', type: 'image/png' },
+      { url: '/icons/touch-v6/icon-180.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
   appleWebApp: {
     capable: true,
@@ -124,7 +132,9 @@ export default function RootLayout({
         {/* Six Caps is loaded via next/font (self-hosted) — do not also pull Google Fonts CSS */}
         
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/images/gallery/logo.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/touch-v6/icon-152.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/icons/touch-v6/icon-167.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/touch-v6/icon-180.png" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="SERGIK" />

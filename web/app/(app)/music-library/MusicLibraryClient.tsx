@@ -2461,14 +2461,10 @@ function MusicLibraryMain({
               ). You can still listen in the vault with email unlock.
             </div>
           )}
-          <div className="flex flex-col items-center justify-center mb-3 sm:mb-6 w-full px-1">
+          <div className="exclusive-musicbank-stretch mb-3 flex w-full max-w-full justify-center px-1 sm:mb-6">
             <h1
               data-label="SERGIK Music Vault"
-              className="exclusive-musicbank-glow text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold mb-1 font-six-caps text-center border border-yellow-400 px-2.5 sm:px-4 py-1 sm:py-2 rounded text-wrap leading-tight max-w-full"
-              style={{
-                letterSpacing: '0.22em',
-                transform: 'scaleX(1.12)',
-              }}
+              className="exclusive-musicbank-glow mb-1 max-w-full text-wrap rounded border border-yellow-400 px-2.5 py-1 text-center font-six-caps text-2xl font-semibold leading-tight tracking-[0.12em] sm:px-4 sm:py-2 sm:text-4xl sm:tracking-[0.16em] md:text-5xl md:tracking-[0.2em] lg:text-6xl lg:tracking-[0.22em]"
             >
               SERGIK Music Vault
             </h1>

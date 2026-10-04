@@ -16,6 +16,7 @@ import { syncCatalogFieldsToCache } from '@/utils/sonicDNACache'
 import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
 import { persistedCreatedDateFields, normalizeTrackCreatedDate } from '@/lib/music-library/track-created-date'
 import { persistSystemicCover } from '@/lib/catalog-sync/persist-systemic-cover'
+import { scheduleCatalogTagImprint, scheduleFolderCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 
 export const dynamic = 'force-dynamic'
 
@@ -700,6 +701,12 @@ export async function PUT(request: NextRequest) {
         publishVersion = await bumpMusicLibraryPublishVersion()
       } catch (bumpError) {
         console.warn('[tracks PUT] Failed to bump catalog version:', bumpError)
+      }
+      const coverFolderId = (dbUpdates.folder_id as string | undefined) || currentTrack?.folder_id || null
+      if (updates.artwork !== undefined && coverFolderId) {
+        void scheduleFolderCatalogTags(coverFolderId)
+      } else {
+        scheduleCatalogTagImprint([audioFileId || saved?.audio_file_id || null])
       }
     }
 

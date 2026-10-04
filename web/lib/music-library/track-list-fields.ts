@@ -9,18 +9,27 @@ import { createdDateFromTrack, originalDateFromMetadata } from '@/lib/music-libr
 
 export { originalDateFromMetadata }
 
-const UNKNOWN = new Set(['', 'unknown', 'n/a', 'none', 'null', 'unclassified'])
+const UNKNOWN = new Set(['', 'unknown', 'n/a', 'none', 'null', 'unclassified', '[object object]'])
 
 function clean(value: unknown): string {
-  if (value == null) return ''
+  if (value == null || typeof value === 'object') return ''
   const text = String(value).trim()
   if (!text || UNKNOWN.has(text.toLowerCase())) return ''
   return text
 }
 
 function numOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null
+  if (typeof value === 'object') return null
   const n = Number(value)
   return Number.isFinite(n) ? n : null
+}
+
+/** Musical tempo only — 0/null must not block a Sonic DNA BPM. */
+function usableBpm(value: unknown): number | null {
+  const n = numOrNull(value)
+  if (n == null || n < 40 || n > 240) return null
+  return Math.round(n)
 }
 
 /** Prefer a positive length; fall back to any finite value (including 0). */
@@ -48,6 +57,10 @@ export type TrackListAudio = {
   sonic_dna_status?: string | null
   bpm?: number | null
   key_signature?: string | null
+  genre?: string | null
+  subgenre?: string | null
+  energy_level?: number | null
+  danceability?: number | null
   sonic_dna?: unknown
 }
 
@@ -166,9 +179,9 @@ export function mapLibraryTrackToListItem(
   const originalDate = createdDateFromTrack(track) || undefined
 
   const bpm =
-    numOrNull(lock.bpm) ??
-    numOrNull(track.bpm) ??
-    numOrNull(audio?.bpm) ??
+    usableBpm(lock.bpm) ??
+    usableBpm(track.bpm) ??
+    usableBpm(audio?.bpm) ??
     hints.bpm ??
     null
   const key_signature =
@@ -177,8 +190,9 @@ export function mapLibraryTrackToListItem(
     clean(audio?.key_signature) ||
     hints.key ||
     undefined
-  const genre = clean(lock.genre) || clean(track.genre) || hints.genre || undefined
-  const subgenre = clean(lock.subgenre) || clean(track.subgenre) || hints.subgenre || undefined
+  const genre = clean(lock.genre) || clean(track.genre) || clean(audio?.genre) || hints.genre || undefined
+  const subgenre =
+    clean(lock.subgenre) || clean(track.subgenre) || clean(audio?.subgenre) || hints.subgenre || undefined
   const title = clean(lock.title) || clean(track.title) || track.title
   const artist = clean(lock.artist) || clean(track.artist) || track.artist
   const year =
@@ -226,8 +240,8 @@ export function mapLibraryTrackToListItem(
     artwork: artworkRaw ? resolveImageUrl(artworkRaw) : undefined,
     bpm: bpm ?? undefined,
     key_signature,
-    energy_level: track.energy_level,
-    danceability: track.danceability,
+    energy_level: numOrNull(track.energy_level) ?? numOrNull(audio?.energy_level) ?? undefined,
+    danceability: numOrNull(track.danceability) ?? numOrNull(audio?.danceability) ?? undefined,
     sonic_dna_status: audio?.sonic_dna_status || track.sonic_dna_status || null,
     created_at: audio?.created_at || track.created_at || track.created_at_timestamp,
     date: track.date || undefined,

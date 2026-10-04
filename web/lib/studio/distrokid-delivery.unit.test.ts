@@ -76,6 +76,35 @@ describe('distrokid delivery pipe', () => {
     expect(packet.csv).toContain('SERGIKdropz')
     expect(packet.worksheet).toContain('https://distrokid.com/new/')
 
+    const withFeat = buildDistroKidPacket(
+      readyRelease({
+        genre: 'Dance',
+        subgenre: 'Boogie',
+        tracks: [
+          {
+            title: 'Hydrate',
+            isrc: 'QTA532600008',
+            wav_url: 'https://cdn.example/hydrate.wav',
+            track_number: 1,
+            contributors: [
+              { role: 'primary', name: 'SERGIK' },
+              { role: 'featured', name: 'Janis' },
+              { role: 'writer', name: 'SERGIK' },
+              { role: 'writer', name: 'Janis' },
+            ],
+            writer_legal_names: JSON.stringify([
+              { stage: 'SERGIK', legal: 'Jordan Caboga' },
+              { stage: 'Janis', legal: 'Janis Carrasco' },
+            ]),
+          },
+        ],
+      }),
+    )
+    expect(withFeat.release.primary_genre).toBe('Dance')
+    expect(withFeat.release.secondary_genre).toBe('House')
+    expect(withFeat.tracks[0]?.featuring).toBe('Janis')
+    expect(withFeat.tracks[0]?.songwriters).toBe('Jordan Caboga, Janis Carrasco')
+
     const blocked = buildDistroKidPacket(
       readyRelease({
         label_name: 'SERGIK',
@@ -86,6 +115,23 @@ describe('distrokid delivery pipe', () => {
     expect(blocked.blockers.join(' ')).toMatch(/SERGIKdropz/)
     expect(blocked.blockers.join(' ')).toMatch(/ISRC/)
     expect(blocked.blockers.join(' ')).toMatch(/stage name/i)
+
+    const distroMinted = buildDistroKidPacket(
+      readyRelease({
+        tracks: [
+          {
+            title: 'Utopia',
+            isrc: 'QZES72569811',
+            wav_url: 'https://cdn.example/utopia.wav',
+            track_number: 1,
+            contributors: [{ role: 'primary', name: 'SERGIK' }, { role: 'writer', name: 'SERGIK' }],
+            writer_legal_names: 'Jordan Caboga',
+          },
+        ],
+      }),
+    )
+    expect(distroMinted.ok).toBe(false)
+    expect(distroMinted.blockers.join(' ')).toMatch(/QTA53/)
   })
 
   it('sorts the slate with late uploads first and old street dates last', () => {

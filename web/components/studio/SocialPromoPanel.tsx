@@ -6,14 +6,23 @@ import {
   FaCheck,
   FaCopy,
   FaDownload,
+  FaExternalLinkAlt,
+  FaEye,
   FaFileArchive,
   FaSpinner,
   FaSync,
+  FaTimes,
   FaVideo,
 } from 'react-icons/fa'
 import { useNotifications } from '@/contexts/NotificationContext'
+import MetaPromoConnect from '@/components/studio/MetaPromoConnect'
+import { dispatchAdminAiBrowserHydrate } from '@/lib/admin-ai-client'
+import { buildSocialPromoBrowserHydrate } from '@/lib/ai/social-promo-browser-hydrate'
 import {
   badgeForPost,
+  buildSocialFeedSquareBlob,
+  buildSocialStoryStillBlob,
+  buildSocialStoryVideoBlob,
   downloadSocialFeedSquare,
   downloadSocialPromoAssetZip,
   downloadSocialStoryStill,
@@ -68,6 +77,14 @@ export default function SocialPromoPanel({
   const [resolvedArtwork, setResolvedArtwork] = useState<string | null>(artworkUrl || null)
   const [resolvedArtist, setResolvedArtist] = useState<string | null>(artist || null)
   const [resolvedStreet, setResolvedStreet] = useState<string | null>(streetDate || null)
+  const [assetPreview, setAssetPreview] = useState<{
+    postLabel: string
+    assetKind: SocialPromoPost['asset']
+    kind: 'image' | 'video' | 'caption'
+    objectUrl: string
+    mimeType?: string
+    caption?: string
+  } | null>(null)
 
   const selectedTrack =
     tracks.find((t) => t.id === selectedTrackId) || tracks.find((t) => t.wav_url) || null
@@ -84,7 +101,9 @@ export default function SocialPromoPanel({
       setSummary(data.summary || null)
       setTracks(data.tracks || [])
       setColumnMissing(Boolean(data.column_missing))
-      setResolvedArtwork(data.release?.artwork_url || artworkUrl || null)
+      setResolvedArtwork(
+        data.release?.artwork_resolved || data.release?.artwork_url || artworkUrl || null
+      )
       setResolvedArtist(data.release?.album_artist || artist || 'SERGIK')
       setResolvedStreet(data.release?.release_date || streetDate || null)
       const firstWithAudio = (data.tracks || []).find((t: TrackRow) => t.wav_url)
@@ -100,6 +119,106 @@ export default function SocialPromoPanel({
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    return () => {
+      if (assetPreview?.objectUrl) URL.revokeObjectURL(assetPreview.objectUrl)
+    }
+  }, [assetPreview?.objectUrl])
+
+  function closeAssetPreview() {
+    setAssetPreview((prev) => {
+      if (prev?.objectUrl) URL.revokeObjectURL(prev.objectUrl)
+      return null
+    })
+  }
+
+  async function previewForPost(post: SocialPromoPost) {
+    const key = `${post.id}-preview`
+    setBusyAsset(key)
+    closeAssetPreview()
+    try {
+      const badge = badgeForPost(post)
+      if (post.asset === 'caption_only') {
+        setAssetPreview({
+          postLabel: post.label,
+          assetKind: post.asset,
+          kind: 'caption',
+          objectUrl: '',
+          caption: post.caption,
+        })
+        return
+      }
+      if (post.asset === 'feed_square') {
+        const { blob } = await buildSocialFeedSquareBlob({
+          artworkUrl: resolvedArtwork,
+          title,
+          artist: resolvedArtist,
+          badge,
+          cta: 'Listen · link in bio',
+        })
+        setAssetPreview({
+          postLabel: post.label,
+          assetKind: post.asset,
+          kind: 'image',
+          objectUrl: URL.createObjectURL(blob),
+          mimeType: blob.type,
+        })
+        return
+      }
+      if (post.asset === 'story_static') {
+        const { blob } = await buildSocialStoryStillBlob({
+          artworkUrl: resolvedArtwork,
+          title,
+          artist: resolvedArtist,
+          badge,
+          cta: 'Add link sticker',
+        })
+        setAssetPreview({
+          postLabel: post.label,
+          assetKind: post.asset,
+          kind: 'image',
+          objectUrl: URL.createObjectURL(blob),
+          mimeType: blob.type,
+        })
+        return
+      }
+      if (post.asset === 'story_video') {
+        if (!selectedTrack?.wav_url) {
+          throw new Error('Add a WAV to Catalog before previewing story/reel video')
+        }
+        const { blob, mimeType } = await buildSocialStoryVideoBlob({
+          artworkUrl: resolvedArtwork,
+          title: selectedTrack.title || title,
+          artist: resolvedArtist,
+          audioUrl: selectedTrack.wav_url,
+          startSec: selectedTrack.preview_start_seconds ?? 0,
+          layout: 'vinyl',
+          cta:
+            post.channel === 'instagram_reel'
+              ? 'OUT NOW · link in bio'
+              : 'Listen · link sticker',
+          onProgress: (phase, ratio) => {
+            setKitProgress(`${phase} ${Math.round((ratio || 0) * 100)}%`)
+          },
+        })
+        setAssetPreview({
+          postLabel: post.label,
+          assetKind: post.asset,
+          kind: 'video',
+          objectUrl: URL.createObjectURL(blob),
+          mimeType,
+        })
+        return
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Preview failed'
+      showNotification(message, 'error')
+    } finally {
+      setBusyAsset(null)
+      setKitProgress(null)
+    }
+  }
 
   async function generatePlan() {
     setSaving(true)
@@ -181,6 +300,51 @@ export default function SocialPromoPanel({
       showNotification('Caption copied', 'success')
     } catch {
       showNotification('Could not copy caption', 'error')
+    }
+  }
+
+  function hydrateDesk(post: SocialPromoPost) {
+    const detail = buildSocialPromoBrowserHydrate({
+      releaseId,
+      releaseTitle: title,
+      post,
+    })
+    dispatchAdminAiBrowserHydrate(detail)
+    showNotification(
+      `Opened Admin browser on ${detail.deskLabel} with “${post.label}”. Paste caption when the compose box is focused.`,
+      'success'
+    )
+  }
+
+  async function publishNow(post: SocialPromoPost) {
+    setSaving(true)
+    try {
+      const res = await fetch(
+        `/api/studio/releases/${encodeURIComponent(releaseId)}/social-promo/publish`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'now', post_id: post.id }),
+        }
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Meta publish failed')
+      if (data.plan) setPlan(data.plan)
+      if (data.summary) setSummary(data.summary)
+      const row = Array.isArray(data.results)
+        ? data.results.find((item: { id?: string }) => item.id === post.id)
+        : null
+      if (row?.ok) {
+        showNotification(row.permalink ? 'Published to Meta.' : 'Sent to Meta.', 'success')
+      } else {
+        showNotification(row?.reason || 'Meta did not publish this slot.', 'error')
+      }
+      onChanged?.()
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Meta publish failed'
+      showNotification(message, 'error')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -361,8 +525,10 @@ export default function SocialPromoPanel({
             Social / Meta promo schedule
           </h4>
           <p className="text-xs text-zinc-500 mt-1 max-w-xl">
-            One kit for Meta + Spotify: feed square, story stills, spinning-vinyl Story/Reel,
-            Spotify Canvas cover drift, and timed captions. Upload, then mark posted here.
+            One kit for Meta + Spotify. Ready image slots publish to Instagram and the Facebook Page
+            when they are due. Reels and vinyl videos still upload from the downloaded file. Use{' '}
+            <span className="text-zinc-300">Hydrate desk</span> to stage a slot in the Admin AI
+            browser (Instagram / Facebook HOMES) — caption paste only when you direct it.
           </p>
           {summary?.has_plan ? (
             <p className="text-xs text-zinc-400 mt-2">
@@ -473,6 +639,35 @@ export default function SocialPromoPanel({
         </div>
       </div>
 
+      <MetaPromoConnect
+        releaseId={releaseId}
+        saving={saving}
+        onPublished={(nextPlan, nextSummary) => {
+          setPlan(nextPlan)
+          setSummary(nextSummary)
+          onChanged?.()
+        }}
+      />
+
+      {resolvedArtwork ? (
+        <div className="flex items-center gap-3 mb-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={resolvedArtwork}
+            alt=""
+            className="h-14 w-14 rounded-md object-cover border border-zinc-700"
+          />
+          <p className="text-[11px] text-zinc-500">
+            Cover source for feed, story stills, vinyl, and Spotify Canvas exports.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-amber-300 mb-4">
+          No cover art resolved — add Metadata artwork (or DSP-ready cover) before downloading promo
+          assets.
+        </p>
+      )}
+
       {columnMissing ? (
         <p className="text-xs text-amber-300 mb-3">
           Apply migration <code>add_social_promo_to_releases.sql</code> so schedules persist.
@@ -539,6 +734,19 @@ export default function SocialPromoPanel({
                   <td className="px-3 py-2">
                     <p className="text-white font-medium">{post.label}</p>
                     <p className="text-zinc-500 mt-0.5 max-w-xs">{post.hint}</p>
+                    {post.meta_error ? (
+                      <p className="text-amber-300/90 mt-1 max-w-xs">{post.meta_error}</p>
+                    ) : null}
+                    {post.meta_url ? (
+                      <a
+                        href={post.meta_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-violet-300 mt-1 inline-block"
+                      >
+                        View on Meta
+                      </a>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2 text-zinc-300">
                     {socialPromoChannelLabel(post.channel)}
@@ -568,6 +776,28 @@ export default function SocialPromoPanel({
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
+                        disabled={
+                          busyAsset === `${post.id}-preview` ||
+                          (post.asset === 'story_video' && !hasAudio)
+                        }
+                        onClick={() => void previewForPost(post)}
+                        data-testid={`social-asset-preview-${post.id}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-violet-800/60 text-violet-200 hover:bg-violet-950/40 disabled:opacity-40"
+                        title={
+                          post.asset === 'story_video' && !hasAudio
+                            ? 'Needs Catalog WAV'
+                            : 'Preview generated asset in browser'
+                        }
+                      >
+                        {busyAsset === `${post.id}-preview` ? (
+                          <FaSpinner className="animate-spin" />
+                        ) : (
+                          <FaEye />
+                        )}
+                        Preview
+                      </button>
+                      <button
+                        type="button"
                         disabled={busyAsset === `${post.id}-dl`}
                         onClick={() => downloadForPost(post)}
                         className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-700 hover:bg-zinc-800"
@@ -590,6 +820,30 @@ export default function SocialPromoPanel({
                       >
                         <FaCopy /> Caption
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => hydrateDesk(post)}
+                        data-testid={`social-hydrate-desk-${post.id}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-amber-800/70 text-amber-200 hover:bg-amber-950/40"
+                        title="Open Admin AI browser on Instagram/Facebook and stage this caption — paste only when you click Paste caption"
+                      >
+                        <FaExternalLinkAlt /> Hydrate desk
+                      </button>
+                      {post.asset !== 'story_video' &&
+                      post.asset !== 'caption_only' &&
+                      post.channel !== 'instagram_reel' &&
+                      post.channel !== 'facebook_story' &&
+                      post.status !== 'posted' ? (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void publishNow(post)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-blue-800/70 text-blue-200 hover:bg-blue-950/40 disabled:opacity-40"
+                          title="Publish this image slot to Instagram or the Facebook Page now"
+                        >
+                          Post to Meta
+                        </button>
+                      ) : null}
                       {post.status !== 'posted' ? (
                         <button
                           type="button"
@@ -607,6 +861,57 @@ export default function SocialPromoPanel({
           </table>
         </div>
       )}
+
+      {assetPreview ? (
+        <div
+          className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Asset preview: ${assetPreview.postLabel}`}
+          onClick={closeAssetPreview}
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-white">{assetPreview.postLabel}</p>
+                <p className="text-[11px] text-zinc-500">{assetPreview.assetKind}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeAssetPreview}
+                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                aria-label="Close preview"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black p-3">
+              {assetPreview.kind === 'caption' ? (
+                <pre className="max-h-[70vh] w-full whitespace-pre-wrap p-4 text-sm text-zinc-200">
+                  {assetPreview.caption || '(empty caption)'}
+                </pre>
+              ) : assetPreview.kind === 'video' ? (
+                <video
+                  src={assetPreview.objectUrl}
+                  controls
+                  playsInline
+                  className="max-h-[75vh] w-full rounded-lg object-contain"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={assetPreview.objectUrl}
+                  alt={assetPreview.postLabel}
+                  className="max-h-[75vh] w-full rounded-lg object-contain"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

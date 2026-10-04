@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
-import { planImportedAudio, transcodeAudioToMp3 } from '@/lib/audio/stream-master'
+import { planImportedAudio, transcodeAudioToMp3, DSP_LIBRARY_WAV_PREFIX, isWavFileName } from '@/lib/audio/stream-master'
 import { getR2MediaConfig, putR2Object, vaultMediaProxyUrl } from '@/lib/audio/r2Media'
 import { createSupabaseServerClient } from '@/lib/supabase'
 
@@ -113,6 +113,12 @@ export async function ingestAudioIntoVault(opts: {
   relativeHint?: string | null
   /** Browser File.lastModified — used as original export/creation date when tags lack a date. */
   lastModifiedMs?: number | null
+  /**
+   * Original lossless WAV when the route pre-converted an oversize drop to MP3.
+   * The WAV is kept as the distribution master under dsp-masters/ while the
+   * (converted) buffer remains the website streaming file.
+   */
+  masterWav?: { buffer: Buffer; originalName: string }
 }): Promise<IngestedVaultTrack> {
   const supabase = createSupabaseServerClient()
   const { title, artist } = parseAudioFileName(opts.fileName)
@@ -146,6 +152,17 @@ export async function ingestAudioIntoVault(opts: {
     dspWavPath = wavStored.relativePath
     streamBuffer = await transcodeAudioToMp3(opts.buffer)
     streamType = 'audio/mpeg'
+  } else if (opts.masterWav && opts.masterWav.buffer.length) {
+    // Oversize-drop convert path: the route already turned the WAV into the MP3
+    // stream buffer — still park the original WAV master under dsp-masters/.
+    const wavBaseRaw = opts.masterWav.originalName.split('/').pop() || 'master.wav'
+    const wavBase = safeSegment(isWavFileName(wavBaseRaw) ? wavBaseRaw : `${wavBaseRaw}.wav`)
+    const wavStored = await storeVaultObject(
+      `${DSP_LIBRARY_WAV_PREFIX}/${wavBase}`,
+      opts.masterWav.buffer,
+      'audio/wav',
+    )
+    dspWavPath = wavStored.relativePath
   }
 
   const stored = await storeVaultObject(planned.streamRelativePath, streamBuffer, streamType)
@@ -290,7 +307,7 @@ export async function ingestAudioIntoVault(opts: {
       source: libraryInbox ? 'library-drop-ingest' : 'playlist-drop-ingest',
       ingested_at: new Date().toISOString(),
       stream_format: 'mp3',
-      stream_bitrate: planned.isWav ? '320k' : null,
+      stream_bitrate: planned.isWav || opts.masterWav ? '320k' : null,
       ...(dspWavPath
         ? {
             dspMastersPath: dspWavPath,

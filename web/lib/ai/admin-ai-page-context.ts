@@ -58,7 +58,20 @@ export function formatAdminAiPageContextForPrompt(ctx: AdminAiPageContext | null
       '',
       'When the user asks what is missing, blockers, or readiness for "this release", use release id above.',
       'Prefer /exec query_release_studio_snapshot with that releaseId, or query_ops_snapshot focus=studio for pipeline-wide counts.',
-      'Do not invent ISRCs, UPCs, or live DSP status — only state what context or tools return.'
+      'Do not invent ISRCs, UPCs, or live DSP status — only state what context or tools return.',
+      r.activeStep === 'copy'
+        ? [
+            '',
+            'User is on the Copy workflow step — prioritize marketing_copy fields using snapshot adminAiBrief (Sonic DNA intel + YouTube timestamps).',
+            'Preview with /exec patch_release_marketing_copy merge:true dryRun:true; pair product_strategy for discovery expansion on tags/social/store.',
+          ].join('\n')
+        : '',
+      r.activeStep === 'catalog'
+        ? '\nUser is on Catalog — check ISRCs, preview clips, DSP ingest hygiene, and durations for YouTube visualizer timelines.'
+        : '',
+      r.activeStep === 'rights'
+        ? '\nUser is on Rights — copyright checklist + SERGIK UGC pack only; never claim YouTube/TikTok/Meta earnings unless ugc_pack is live.'
+        : ''
     )
   } else if (ctx.surface === 'studio') {
     lines.push(

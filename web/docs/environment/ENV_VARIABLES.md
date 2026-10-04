@@ -71,9 +71,13 @@ YOUTUBE_API_KEY=your_youtube_api_key
 YOUTUBE_CHANNEL_ID=@sergikdropz
 # Subscribe gate on public release videos. OAuth client (Web) with redirect
 # {origin}/api/youtube/subscribe-gate/callback and the YouTube Data API enabled.
-# Scope requested at sign-in: https://www.googleapis.com/auth/youtube.force-ssl
+# Scope requested at sign-in: https://www.googleapis.com/auth/youtube
+# Full checklist: web/docs/youtube/YOUTUBE_SUBSCRIBE_GATE_SETUP.md
+# Smoke: npm run smoke:youtube-subscribe-gate
+# Vercel push (after .env.local filled): npm run setup:youtube-subscribe-gate-vercel
 YOUTUBE_OAUTH_CLIENT_ID=
 YOUTUBE_OAUTH_CLIENT_SECRET=
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 # Optional. Falls back to FAN_VAULT_UNLOCK_SECRET, then a dev-only value.
 YT_SUB_GATE_SECRET=
 
@@ -88,6 +92,11 @@ INSTAGRAM_ACCESS_TOKEN=your_instagram_access_token
 INSTAGRAM_USER_ID=your_instagram_user_id
 # Optional: Secret for cron job security (generate a random string)
 INSTAGRAM_CRON_SECRET=your_random_secret_here
+# Release promo publishing (Studio → Social promo → Connect Meta)
+# Redirect URI on the Meta app: https://sergikdropz.com/api/studio/meta/callback
+# Scopes: pages_show_list, pages_read_engagement, pages_manage_posts,
+# instagram_basic, instagram_content_publish, business_management
+# Cron: POST /api/cron/meta-promo  Authorization: Bearer $CRON_SECRET
 
 # ============================================
 # CRON SECURITY (Optional - for cron endpoints)
@@ -134,11 +143,23 @@ ADMIN_AI_CHAT_PROVIDER=anthropic
 # OPENAI_API_KEY=
 # OPENAI_CHAT_MODEL=gpt-4o-mini
 
-# Crowe Logic / CroweLM (OpenAI-compatible — local bridge or hosted gateway)
+# CroweLM admin chat — existing Crowe ID, customer credential, server-side /v1/chat/completions.
+# Hosted usage is metered by Crowe against the existing Pro allowance. Not a second account.
+# Chat stays off for a hosted base URL until Pro linkage and the usage cap are confirmed.
+# CROWELOGIC_API_KEY=
 # CROWELOGIC_BASE_URL=http://127.0.0.1:8011
-# CROWELOGIC_API_KEY=your-key
 # CROWELOGIC_MODEL=auto
-# Aliases: CROWE_API_KEY, CROWE_LOGIC_URL, CROWE_LOGIC_KEY, FOUNDRY_BASE_URL
+# CROWELOGIC_PRO_LINKED=1
+# Local/terminal aliases for the chat credential only: CROWE_LOGIC_KEY, FOUNDRY_API_KEY, CROWE_LOGIC_URL, FOUNDRY_BASE_URL
+# CROWE_API_KEY is Crowe Creative (below) and does not enable chat.
+
+# OlliN Pro / SergikAI harness (Admin AI `/exec query_intelligence_harness`)
+# Same API as Cursor MCP user-ollin-pro-sergikai (harness_probe, knowledge_search).
+# AIBLETON_API_BASE=http://127.0.0.1:8000
+# AIBLETON_MCP_JWT=   # optional Bearer for secured local API
+# AIBLETON_MCP_SESSION_ID=  # optional default chat session (MCP + Admin AI query_sergikai_chat)
+# CROWE_API_KEY=            # Crowe Creative media API (same key as OlliN Pro Providers)
+# CROWE_API_URL=https://api.crowelogic.com
 
 # ============================================
 # ISRC (Optional — Studio assign defaults to QTA53)
@@ -146,9 +167,10 @@ ADMIN_AI_CHAT_PROVIDER=anthropic
 # US ISRC Agency Rights Owner prefix allocated 2026-09-17 to Jordan Caboga.
 # ISRC_PREFIX=QTA53
 
-# SoundExchange / US ISRC (optional — Pipeline → ISRCs works in local registry mode without these)
+# SoundExchange / SX Direct (optional — Pipeline → ISRCs works in local registry mode without these)
+# Minting ISRCs in Release Studio always writes a local SX Direct queue row.
 # SOUNDEXCHANGE_API_KEY=
-# SOUNDEXCHANGE_ACCOUNT_ID=
+# SOUNDEXCHANGE_ACCOUNT_ID=2181363681
 # SOUNDEXCHANGE_BASE_URL=https://api.soundexchange.com
 ```
 

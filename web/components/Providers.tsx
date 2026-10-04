@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import ConsumerViewportFit from '@/components/ConsumerViewportFit'
 import MusicLibraryQueryBridge from '@/components/MusicLibraryQueryBridge'
 
 /**
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ConsumerViewportFit />
       <MusicLibraryQueryBridge />
       {children}
     </QueryClientProvider>

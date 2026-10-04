@@ -126,6 +126,7 @@ if (existing) {
         'email.opened',
         'email.bounced',
         'email.complained',
+        'email.received',
       ],
     }),
   })

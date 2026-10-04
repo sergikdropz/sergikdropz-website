@@ -36,7 +36,7 @@ export default function SocialLinks() {
   ]
 
   return (
-    <div className="flex justify-center space-x-6">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
       {platforms.map((platform) => {
         const Icon = platform.icon
         return (
@@ -45,7 +45,7 @@ export default function SocialLinks() {
             href={platform.url}
             target="_blank"
             rel="noopener noreferrer"
-            className={`text-2xl md:text-3xl text-gray-300 transition-all duration-300 ${platform.color} hover:scale-125 transform`}
+            className={`inline-flex h-11 w-11 items-center justify-center text-2xl text-gray-300 transition-colors md:h-12 md:w-12 md:text-3xl ${platform.color}`}
             aria-label={platform.name}
           >
             <Icon />

@@ -3,7 +3,7 @@ import type { WorkflowStepId } from '@/lib/studio/constants'
 export type StudioAiStepPrompt = {
   label: string
   message: string
-  agentMode?: 'studio_release' | 'growth_marketing' | 'product_strategy'
+  agentMode?: 'studio_release' | 'growth_marketing' | 'product_strategy' | 'music_business_counsel'
 }
 
 export function getStudioStepAiPrompt(
@@ -23,7 +23,7 @@ export function getStudioStepAiPrompt(
           `Help me complete the catalog step for release ${title} (${releaseId}).`,
           `First run: /exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
           `Then preview ISRC assignment: /exec assign_isrcs ${JSON.stringify({ releaseId, dryRun: true })}`,
-          `If tracks lack ISRCs, propose assign_isrcs (approve to execute).`,
+          `If tracks lack ISRCs, propose assign_isrcs (approve to execute). That mints QTA53 and queues SX Direct. DistroKid only pastes those codes.`,
           'Also check DSP ingest: cover vs original, songwriter legal names, AI declaration, Apple performer+producer, title hygiene (no feat./years/emoji), version/featured radios, and preview-clip start.',
         ].join('\n'),
       }
@@ -40,11 +40,13 @@ export function getStudioStepAiPrompt(
     case 'rights':
       return {
         label: 'Complete rights with AI',
-        agentMode: 'studio_release',
+        agentMode: 'music_business_counsel',
         message: [
-          `Help complete rights/copyright for "${title}" (${releaseId}).`,
-          `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
-          'Suggest update_copyright_checklist fields (preview with dryRun in plan first). Only mark checklist items true when justified by blockers resolved. SERGIK UGC pack is first-party (not DistroKid). Never claim YouTube/TikTok/Meta UGC earnings unless ugc_pack.status is live. DSP attestations (worldwide rights, no other artist names, no fake streams, YouTube Music, artwork owned) live on the release, not the DistroKid form.',
+          `Audit rights paperwork for "${title}" (${releaseId}) with Music Business Counsel.`,
+          `/exec audit_music_contract ${JSON.stringify({ releaseId })}`,
+          'List blockers and material issues from the memo (master vs composition, splits, term, territory, governing law, samples, neighboring rights).',
+          'Do not invent licenses or change split percentages. Do not mark checklist items true from this pass — preview update_copyright_checklist on Release Studio only where a blocker is actually resolved.',
+          'SERGIK UGC pack is first-party (not DistroKid). Never claim YouTube/TikTok/Meta UGC earnings unless ugc_pack.status is live.',
         ].join('\n'),
       }
     case 'copy':
@@ -54,6 +56,7 @@ export function getStudioStepAiPrompt(
         message: [
           `Draft marketing copy for "${title}" (${releaseId}) from Metadata + Catalog + Sonic DNA.`,
           `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
+          'Read adminAiBrief on the snapshot: empty marketing fields, copy_intel per track, and youtubeTimestampTimeline before writing.',
           `Then preview: /exec patch_release_marketing_copy ${JSON.stringify({
             releaseId,
             marketingCopy: {
@@ -62,12 +65,14 @@ export function getStudioStepAiPrompt(
               spotify_pitch: '',
               social_caption: '',
               store_description: '',
+              youtube_visualizer: '',
+              platform_tags: '',
               credits_block: '',
             },
             merge: true,
             dryRun: true,
           })}`,
-          'Ground every field in release metadata (description, DSP genres, artwork credits), each track Sonic DNA identity (BPM, key, groove, energy, instruments, intention), press notes, tracklist, and contributor credits. Do not invent guests, cities, or chart facts. After I approve, execute patch_release_marketing_copy without dryRun.',
+          'Ground every field in release metadata (description, DSP genres, artwork credits), each track Sonic DNA identity (BPM, key, groove, energy, instruments, intention), press notes, tracklist, durations, and contributor credits. YouTube visualizer copy must be the full EP as one continuous video (no gaps) with start–finish times in catalog order. Tags & hashtags must keep labeled platform blocks (YouTube comma tags vs hashed IG/X/TikTok/SoundCloud/Bandcamp). Pair Release Studio with product_strategy + growth_marketing for discovery expansion — never invent guests, cities, chart facts, analytics, or durations. After I approve, execute patch_release_marketing_copy without dryRun.',
         ].join('\n'),
       }
     case 'delivery':
@@ -78,6 +83,7 @@ export function getStudioStepAiPrompt(
           `Help with DSP delivery for "${title}" (${releaseId}).`,
           `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
           'Use Delivery → Connect stores (ISRC / UPC / seed URL). Providers: Spotify/Apple/Deezer/YouTube search, song.link Odesli fan-out, MusicBrainz URL relations, plus DistroKid regional paste targets (iHeart, Qobuz, Anghami, Saavn, Boomplay, Claro, NetEase, Tencent, Joox, Flo). Kuack/Adaptr/MediaNet are DistroKid B2B submitted. Confirm Spotify/Apple/YouTube/Instagram/Facebook artist match cards from artist.json. Bandcamp, Traxsource, and Mixcloud need a pasted artist URL. Do not claim a store is live unless a store link exists.',
+          'DistroKid interim: Mission → DistroKid → Fill DistroKid desk fills metadata + artwork + WAV masters. You QC and click Continue on DistroKid (never auto-submit). Then Mark submitted on the DistroKid schedule card (Studio stamp).',
         ].join('\n'),
       }
     case 'launch':
@@ -89,6 +95,13 @@ export function getStudioStepAiPrompt(
           `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
           'If ready, outline go-live blockers including DSP ingest (attestations, AI declaration, previously released, Apple credits). Go-live now also creates campaign + smart link; use Launch step Ensure handoff if already live.',
           'Then `/plan` or `/exec draft_product_strategy_pack` for audit + calendar + conversion scaffold.',
+          `Meta promo pipeline: /exec run_meta_promo_pipeline ${JSON.stringify({
+            releaseId,
+            action: 'status',
+            primaryGoal: `Meta promo for ${releaseTitle}`,
+            dryRun: true,
+          })}`,
+          'If status shows no schedule, preview action generate, then arm, then publish. Approve advance only after the preview lists the image slots. Reels stay manual. Do not DM Instagram followers.',
           'Switch agent to **growth_marketing** and plan `generate_campaign_draft` + `generate_smartlink_utm_plan` when you want deeper rows/tasks in admin.',
         ].join('\n'),
       }

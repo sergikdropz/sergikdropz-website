@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { FaSearch, FaTimes, FaPlus, FaMusic, FaFolder, FaPlay, FaPause, FaEdit, FaTrash, FaSave, FaEye, FaEyeSlash, FaChevronRight, FaArrowLeft, FaStar, FaCheckSquare, FaSquare, FaBrain, FaSort, FaSortAlphaDown, FaSortAlphaUp, FaCog } from 'react-icons/fa'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useMusicPlayer } from '@/contexts/MusicPlayerContext'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 import { useRouter } from 'next/navigation'
 import {
   fetchMusicLibrary,
@@ -713,6 +714,7 @@ export default function AdminMusicVault() {
 
       {/* Context Menu */}
       {contextMenu && (
+        <FloatingMenuPortal>
         <div
           ref={contextMenuRef}
           className="fixed z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-1.5 min-w-[180px]"
@@ -728,6 +730,7 @@ export default function AdminMusicVault() {
           <div className="border-t border-gray-800 my-1" />
           <CtxItem label="Archive Track" danger onClick={() => { handleDeleteTrack(contextMenu.track.id); setContextMenu(null) }} />
         </div>
+        </FloatingMenuPortal>
       )}
 
       {/* Smart Playlist Builder */}

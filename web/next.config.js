@@ -46,6 +46,7 @@ const nextConfig = {
   compress: true, // Enable gzip compression
   experimental: {
     optimizePackageImports: ['react-icons', 'react-icons/fa', 'react-icons/lu'],
+    serverComponentsExternalPackages: ['playwright'],
     // Keep vault media out of serverless NFT traces (api/download hit 303MB on Vercel).
     outputFileTracingExcludes: {
       '*': [
@@ -209,6 +210,11 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'unload=*',
+          },
+          {
+            // Lets the Google sign-in popup keep window.opener so gsi/transform can close.
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
           },
         ],
       },

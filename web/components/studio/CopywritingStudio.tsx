@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useCopyStepIntelligenceStack } from '@/hooks/useCopyStepIntelligenceStack'
 import AiField from '@/components/AiField'
 import { COPY_TEMPLATES, type MarketingCopy } from '@/lib/studio/constants'
 import {
@@ -10,6 +11,17 @@ import {
   releaseDescriptionFromCatalog,
   type CatalogCopySourceTrack,
 } from '@/lib/studio/vault-import'
+import {
+  buildContinuousTimestampCues,
+  catalogTimestampFacts,
+  formatCatalogTimestampRange,
+} from '@/lib/studio/catalog-timestamps'
+import { dispatchAdminAiPrompt } from '@/lib/admin-ai-client'
+import {
+  buildCopyFieldAdminAiPrompt,
+  copyFieldAdminAgentLabels,
+  copyFieldContextLine,
+} from '@/lib/studio/copy-intelligence'
 import {
   FaBrain,
   FaCheck,
@@ -111,7 +123,8 @@ export default function CopywritingStudio({
   const [draftError, setDraftError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [fillEmptyOnly, setFillEmptyOnly] = useState(true)
-  const [refining, setRefining] = useState(false)
+  const [busy, setBusy] = useState<'draft' | 'refine' | 'refine-all' | null>(null)
+  const intelStack = useCopyStepIntelligenceStack(releaseId, Boolean(releaseId))
 
   const catalogInput = useMemo(
     () =>
@@ -165,7 +178,12 @@ export default function CopywritingStudio({
         facts.tempo,
         facts.keys,
         `${facts.pressNotes} press note${facts.pressNotes === 1 ? '' : 's'}`,
-        'metadata + Sonic DNA',
+        facts.timestampsReady && facts.runtimeSec
+          ? `runtime ${Math.floor(facts.runtimeSec / 60)}:${String(facts.runtimeSec % 60).padStart(2, '0')}`
+          : facts.missingDurations.length
+            ? `timestamps pending (${facts.missingDurations.length})`
+            : '',
+        'unified intelligence + polymath + Admin AI desk',
       ]
         .filter(Boolean)
         .join(' · ')
@@ -200,12 +218,7 @@ export default function CopywritingStudio({
     if (blurb) onDescriptionDraft?.(blurb)
   }
 
-  function fillActiveFromCatalog() {
-    setDraftError(null)
-    if (!facts.trackCount) {
-      setDraftError('Add tracks in Catalog first.')
-      return
-    }
+  function applyLocalDraft() {
     const value = generated[activeField]
     if (!value) {
       setDraftError(`No catalog draft for ${meta.label.toLowerCase()} yet.`)
@@ -214,16 +227,53 @@ export default function CopywritingStudio({
     updateField(activeField, value)
   }
 
-  async function refineActiveField() {
-    if (!releaseId) return
+  async function fillActiveFromCatalog() {
     setDraftError(null)
-    setRefining(true)
+    if (!facts.trackCount) {
+      setDraftError('Add tracks in Catalog first.')
+      return
+    }
+    if (!releaseId) {
+      applyLocalDraft()
+      return
+    }
+    setBusy('draft')
     try {
       const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/refine-copy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           field: activeField,
+          mode: 'draft',
+          draft: '',
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Draft failed')
+      const text = typeof data.text === 'string' ? data.text.trim() : ''
+      if (!text) throw new Error('No draft returned')
+      updateField(activeField, text)
+    } catch (e: unknown) {
+      applyLocalDraft()
+      if (!generated[activeField]) {
+        setDraftError(e instanceof Error ? e.message : 'Draft failed')
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function refineActiveField() {
+    if (!releaseId) return
+    setDraftError(null)
+    setBusy('refine')
+    try {
+      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/refine-copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          field: activeField,
+          mode: 'refine',
           draft: copy[activeField] || '',
         }),
       })
@@ -235,14 +285,14 @@ export default function CopywritingStudio({
     } catch (e: unknown) {
       setDraftError(e instanceof Error ? e.message : 'Refine failed')
     } finally {
-      setRefining(false)
+      setBusy(null)
     }
   }
 
   async function refineAllFields() {
     if (!releaseId) return
     setDraftError(null)
-    setRefining(true)
+    setBusy('refine-all')
     try {
       const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/refine-copy`, {
         method: 'POST',
@@ -260,7 +310,7 @@ export default function CopywritingStudio({
     } catch (e: unknown) {
       setDraftError(e instanceof Error ? e.message : 'Refine failed')
     } finally {
-      setRefining(false)
+      setBusy(null)
     }
   }
 
@@ -289,7 +339,19 @@ export default function CopywritingStudio({
         ? activeValue.split('\n')[0]?.slice(0, 140) || ''
         : activeField === 'elevator_pitch'
           ? activeValue.slice(0, 160)
-          : ''
+          : activeField === 'youtube_visualizer'
+            ? activeValue
+                .split('\n')
+                .filter((line) => /^\d{1,2}:\d{2}/.test(line.trim()) || /Visualizer/i.test(line))
+                .slice(0, 8)
+                .join('\n') || activeValue.slice(0, 220)
+            : activeField === 'platform_tags'
+              ? activeValue
+                  .split('\n')
+                  .filter((line) => /^(YOUTUBE|INSTAGRAM|X|TIKTOK|#)/i.test(line.trim()) || line.includes(','))
+                  .slice(0, 8)
+                  .join('\n') || activeValue.slice(0, 220)
+              : ''
 
   return (
     <div
@@ -312,6 +374,35 @@ export default function CopywritingStudio({
               </span>
             </div>
             <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{sourceLine}</p>
+            {releaseId ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                {intelStack.loading ? (
+                  <span className="text-cyan-400/80">Probing intelligence stack…</span>
+                ) : intelStack.error ? (
+                  <span className="text-amber-400/90">{intelStack.error}</span>
+                ) : (
+                  <>
+                    {intelStack.sonicUnified ? (
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-950/30 px-2 py-0.5 text-emerald-200/90">
+                        {intelStack.sonicUnified}
+                      </span>
+                    ) : null}
+                    {intelStack.summary ? (
+                      <span className="text-zinc-500 max-w-2xl line-clamp-2" title={intelStack.summary}>
+                        {intelStack.summary}
+                      </span>
+                    ) : null}
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={intelStack.openInAdminAi}
+                  className="text-cyan-300/90 hover:text-cyan-200 underline-offset-2 hover:underline"
+                >
+                  Open harness in Admin AI
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500 px-2">
@@ -335,11 +426,11 @@ export default function CopywritingStudio({
               <button
                 type="button"
                 onClick={() => void refineAllFields()}
-                disabled={refining}
+                disabled={Boolean(busy)}
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-violet-500/50 text-violet-100 hover:bg-violet-500/15 transition disabled:opacity-50"
               >
                 <FaBrain />
-                {refining ? 'Refining…' : 'Refine all with AI'}
+                {busy === 'refine-all' ? 'Refining…' : 'Refine all with AI'}
               </button>
             ) : null}
             <button
@@ -391,28 +482,56 @@ export default function CopywritingStudio({
               <p className="text-[10px] uppercase tracking-wide text-zinc-500">{meta.channel}</p>
               <h4 className="text-base font-semibold text-white mt-0.5">{meta.label}</h4>
               <p className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-2xl">
-                {meta.hint} Refine uses Metadata description + Catalog press notes for a tight
-                professional structure.
+                {meta.hint} Draft and Refine pull Catalog, metadata, unified Sonic DNA, the
+                SergikAI polymath desk, and Admin AI (strategy · growth · smartlink · ops intel)
+                for this field.
               </p>
+              {releaseId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prompt = buildCopyFieldAdminAiPrompt({
+                      field: activeField,
+                      releaseId,
+                      releaseTitle: title,
+                    })
+                    dispatchAdminAiPrompt(prompt)
+                  }}
+                  title="Open Admin AI with this field’s strategy + intelligence desk"
+                  className="text-left text-[11px] text-violet-300/80 mt-1 hover:text-violet-200 underline-offset-2 hover:underline"
+                >
+                  {copyFieldContextLine(activeField)}
+                </button>
+              ) : (
+                <p className="text-[11px] text-violet-300/80 mt-1">{copyFieldContextLine(activeField)}</p>
+              )}
+              {copyFieldAdminAgentLabels(activeField).length ? (
+                <p className="text-[10px] text-zinc-600 mt-0.5">
+                  Click to expand with Admin AI · {copyFieldAdminAgentLabels(activeField).join(' · ')}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={fillActiveFromCatalog}
-                className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-full border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                onClick={() => void fillActiveFromCatalog()}
+                disabled={Boolean(busy)}
+                title={copyFieldContextLine(activeField)}
+                className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-full border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
               >
                 <FaMagic className="text-[10px]" />
-                Draft this
+                {busy === 'draft' ? 'Drafting…' : 'Draft this'}
               </button>
               {releaseId ? (
                 <button
                   type="button"
                   onClick={() => void refineActiveField()}
-                  disabled={refining}
+                  disabled={Boolean(busy)}
+                  title={copyFieldContextLine(activeField)}
                   className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-full border border-violet-500/40 text-violet-200 hover:bg-violet-500/10 disabled:opacity-50"
                 >
                   <FaBrain className="text-[10px]" />
-                  {refining ? 'Refining…' : 'Refine this'}
+                  {busy === 'refine' ? 'Refining…' : 'Refine this'}
                 </button>
               ) : null}
               <button
@@ -440,6 +559,10 @@ export default function CopywritingStudio({
             {meta.tip}
           </div>
 
+          {activeField === 'youtube_visualizer' && tracks.length > 0 ? (
+            <VisualizerTimeline tracks={tracks} />
+          ) : null}
+
           {limit ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[11px]">
@@ -450,7 +573,9 @@ export default function CopywritingStudio({
                   {status.label}
                 </span>
                 {meta.hardMax ? (
-                  <span className="text-zinc-600">Spotify hard cap</span>
+                  <span className="text-zinc-600">
+                    {activeField === 'youtube_visualizer' ? 'YouTube hard cap' : 'Spotify hard cap'}
+                  </span>
                 ) : (
                   <span className="text-zinc-600">Soft target</span>
                 )}
@@ -478,7 +603,11 @@ export default function CopywritingStudio({
             placeholder={meta.placeholder}
             rows={meta.rows}
             maxLength={meta.hardMax}
-            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-violet-500 resize-y min-h-[180px] leading-relaxed"
+            className={`w-full bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-violet-500 resize-y leading-relaxed ${
+              activeField === 'youtube_visualizer' || activeField === 'platform_tags'
+                ? 'min-h-[280px]'
+                : 'min-h-[180px]'
+            }`}
           />
 
           {preview ? (
@@ -488,13 +617,56 @@ export default function CopywritingStudio({
                   ? 'Editorial paste preview'
                   : activeField === 'social_caption'
                     ? 'First-line feed preview'
-                    : 'SEO / card preview'}
+                    : activeField === 'youtube_visualizer'
+                      ? 'YouTube description / chapters preview'
+                      : activeField === 'platform_tags'
+                        ? 'YouTube tags + social hashtag preview'
+                        : 'SEO / card preview'}
               </p>
               <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{preview || '—'}</p>
             </div>
           ) : null}
         </div>
       </div>
+    </div>
+  )
+}
+
+function VisualizerTimeline({ tracks }: { tracks: CatalogCopySourceTrack[] }) {
+  const timeline = useMemo(() => {
+    const cues = buildContinuousTimestampCues(
+      tracks.map((track) => ({
+        title: track.title,
+        durationSec: track.duration,
+      })),
+    )
+    return { cues, facts: catalogTimestampFacts(cues) }
+  }, [tracks])
+  const runtime =
+    timeline.facts.complete && timeline.facts.runtimeSec != null
+      ? ` · runtime ${Math.floor(timeline.facts.runtimeSec / 60)}:${String(timeline.facts.runtimeSec % 60).padStart(2, '0')}`
+      : timeline.facts.missingTitles.length
+        ? ` · pending ${timeline.facts.missingTitles.join(', ')}`
+        : ''
+
+  if (!timeline.cues.length) return null
+
+  return (
+    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400 space-y-1.5">
+      <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+        Visualizer timeline
+        {runtime}
+      </p>
+      <ol className="grid gap-1 sm:grid-cols-2">
+        {timeline.cues.map((cue) => (
+          <li key={`${cue.index}-${cue.title}`} className="font-mono text-[11px] text-zinc-300">
+            {formatCatalogTimestampRange(cue)}{' '}
+            <span className="text-zinc-100">
+              {cue.index}. {cue.title}
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

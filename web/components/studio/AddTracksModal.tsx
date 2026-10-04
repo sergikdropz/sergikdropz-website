@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { studioCreateHref } from '@/lib/studio/studio-ia'
 import { FaPlus, FaSearch, FaSpinner, FaTimes } from 'react-icons/fa'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 
 type AvailableTrack = {
   id: string
@@ -217,6 +218,7 @@ export default function AddTracksModal({
   if (!open) return null
 
   return (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       role="dialog"
@@ -454,5 +456,6 @@ export default function AddTracksModal({
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   )
 }

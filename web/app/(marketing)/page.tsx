@@ -41,7 +41,7 @@ export default async function Home() {
 
   return (
     <div className="pt-20">
-      <section className="relative flex min-h-screen items-center justify-center overflow-hidden">
+      <section className="relative flex min-h-[100dvh] w-full max-w-full items-center justify-center overflow-x-clip py-8">
         <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/50 via-black/35 to-black/80" aria-hidden />
 
         <div className="relative z-10 container mx-auto px-4 text-center sm:px-6">
@@ -68,11 +68,11 @@ export default async function Home() {
             </div>
             <HomeFollowCta />
           </div>
-          <div className="mb-6 flex flex-wrap items-center justify-center gap-4 text-sm text-ink-subtle">
-            <Link href="/epk" className="hover:text-ink">
+          <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-sm text-ink-subtle">
+            <Link href="/epk" className="inline-flex min-h-11 items-center px-3 hover:text-ink">
               Press / EPK
             </Link>
-            <Link href="/shop" className="hover:text-ink">
+            <Link href="/shop" className="inline-flex min-h-11 items-center px-3 hover:text-ink">
               Shop
             </Link>
           </div>
@@ -95,7 +95,7 @@ export default async function Home() {
             ))}
           </div>
           <div className="text-center mt-12">
-            <Link href="/music" className="text-gray-400 hover:text-white transition-colors">
+            <Link href="/music" className="inline-flex min-h-11 items-center text-base text-gray-300 transition-colors hover:text-white">
               View All Releases →
             </Link>
           </div>

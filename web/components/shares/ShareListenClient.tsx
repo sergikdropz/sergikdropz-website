@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import ShareListenUnlockGate from '@/components/shares/ShareListenUnlockGate'
 import ShareMiniPlayer, { type ShareScrubApi } from '@/components/shares/ShareMiniPlayer'
 import ShareStoryClipPicker from '@/components/shares/ShareStoryClipPicker'
 import ShareVinylStage from '@/components/shares/ShareVinylStage'
@@ -66,16 +67,26 @@ export default function ShareListenClient({
   const scrubWasPlayingRef = useRef(false)
   const visualBottomOffset = useVisualViewportBottomOffset()
 
+  const loadShare = useCallback(async () => {
+    const res = await fetch(`/api/shares/${encodeURIComponent(token)}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(json.error || 'Share not found')
+    }
+    const payload = json as ResolvedSharePayload
+    setData(payload)
+    setError(null)
+    return payload
+  }, [token])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`/api/shares/${encodeURIComponent(token)}`)
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          throw new Error(json.error || 'Share not found')
-        }
-        if (!cancelled) setData(json as ResolvedSharePayload)
+        await loadShare()
       } catch (err: any) {
         if (!cancelled) setError(err?.message || 'Failed to load')
       } finally {
@@ -85,16 +96,23 @@ export default function ShareListenClient({
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [loadShare])
+
+  const onShareUnlocked = useCallback(async () => {
+    const payload = await loadShare()
+    if (payload.listenLocked) {
+      throw new Error('Signed in, but the music did not unlock. Try again.')
+    }
+  }, [loadShare])
 
   useEffect(() => {
-    if (!data?.tracks?.length) return
+    if (!data?.tracks?.length || data.listenLocked) return
     const urls = data.tracks
       .slice(0, 3)
       .map((t) => resolveWarmPlaybackUrl(t.playbackUrl || t.file))
       .filter((u): u is string => Boolean(u))
     if (urls.length) void warmAudioByteHints(urls)
-  }, [data?.tracks])
+  }, [data?.listenLocked, data?.tracks])
 
   const artworkRaw = data ? pickShareArtwork(data, activeIndex) : undefined
   const artwork = shareDisplayArtworkUrl(artworkRaw) || artworkRaw
@@ -120,7 +138,10 @@ export default function ShareListenClient({
   }, [artwork])
 
   const onPlayed = useCallback(() => {
-    void fetch(`/api/shares/${encodeURIComponent(token)}?play=1`).catch(() => undefined)
+    void fetch(`/api/shares/${encodeURIComponent(token)}?play=1`, {
+      credentials: 'include',
+      cache: 'no-store',
+    }).catch(() => undefined)
   }, [token])
 
   const onPlayingChange = useCallback((next: boolean) => {
@@ -210,6 +231,12 @@ export default function ShareListenClient({
       >
         Loading…
       </div>
+    )
+  }
+
+  if (data?.listenLocked) {
+    return (
+      <ShareListenUnlockGate token={token} kind={data.share.kind} variant={variant} onUnlocked={onShareUnlocked} />
     )
   }
 
@@ -475,6 +502,10 @@ export default function ShareListenClient({
           artist={activeTrack.artist || artist}
           trackDurationSec={clipTrackDuration || activeTrack.duration || 0}
           initialStartSec={clipInitialStart}
+          file={activeTrack.file}
+          trackId={activeTrack.id}
+          audioFileId={activeTrack.audioFileId}
+          scrubApiRef={scrubApiRef}
           busy={igBusy}
           busyLabel={igBusy ? igNotice : null}
           onCancel={() => {

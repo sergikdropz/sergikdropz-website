@@ -5,6 +5,9 @@ import { sameOriginApiUrl } from '@/lib/same-origin-api'
 
 type CroweStatus = {
   configured: boolean
+  credentialPresent?: boolean
+  activation?: 'off' | 'local_bridge' | 'pending_pro_linkage' | 'pro_gateway'
+  blockReason?: string | null
   baseUrl: string
   baseSource: string | null
   keySource: string | null
@@ -45,7 +48,8 @@ export function CroweLogicSetupPanel() {
         <div>
           <h3 className="text-sm font-semibold text-violet-200">Crowe Logic / CroweLM</h3>
           <p className="text-xs text-gray-400">
-            OpenAI-compatible gateway for admin assistant and Sonic DNA. Keys are read from env only.
+            Server-side OpenAI-compatible chat on the existing Crowe ID. Usage on the hosted gateway
+            counts against the Pro allowance. The customer credential stays in server env.
           </p>
         </div>
         <button
@@ -63,9 +67,13 @@ export function CroweLogicSetupPanel() {
       {status && (
         <div className="space-y-2 text-xs text-gray-300">
           <p>
-            Key:{' '}
+            Chat:{' '}
             <span className={status.configured ? 'text-emerald-400' : 'text-amber-400'}>
-              {status.configured ? `set (${status.keySource})` : 'missing'}
+              {status.activation === 'pending_pro_linkage'
+                ? `credential set (${status.keySource}); waiting on Pro linkage`
+                : status.configured
+                  ? `on (${status.activation}, ${status.keySource})`
+                  : 'off'}
             </span>
             {' · '}
             Bridge: <span className="font-mono text-gray-400">{status.baseUrl}</span>
@@ -75,6 +83,7 @@ export function CroweLogicSetupPanel() {
             {' · '}
             Model: <span className="font-mono text-gray-400">{status.model}</span>
           </p>
+          {status.blockReason ? <p className="text-amber-400/90">{status.blockReason}</p> : null}
           {status.models?.message ? (
             <p className={status.models.status === 'ok' ? 'text-emerald-400/90' : 'text-amber-400/90'}>
               Models: {status.models.message}
@@ -93,19 +102,22 @@ export function CroweLogicSetupPanel() {
           Add to web/.env.local
         </p>
         <pre className="overflow-x-auto text-[11px] leading-relaxed text-gray-400">
-{`# Local Foundry bridge (Crowe Terminal default)
-CROWELOGIC_BASE_URL=http://127.0.0.1:8011
-CROWELOGIC_API_KEY=your-crowe-logic-key
+{`# Customer credential for the existing Crowe ID (server only)
+CROWELOGIC_API_KEY=
 CROWELOGIC_MODEL=auto
 
-# Aliases also work (OlliN Pro → Providers):
-# CROWE_API_KEY=...
-# CROWE_LOGIC_URL=...`}
+# Local bridge (not the Pro bill)
+CROWELOGIC_BASE_URL=http://127.0.0.1:8011
+
+# Hosted gateway — set only after Crowe confirms Pro linkage and the usage cap
+# CROWELOGIC_BASE_URL=https://gateway.example/v1
+# CROWELOGIC_PRO_LINKED=1`}
         </pre>
         <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-gray-500">
-          <li>Local: start Crowe Terminal or Foundry bridge on port 8011.</li>
-          <li>Hosted: paste your Crowe Logic key from OlliN Pro and set the gateway URL.</li>
-          <li>Restart dev server after editing env, then click Test connection.</li>
+          <li>No second Crowe account. Do not put a password in env.</li>
+          <li>Hosted chat stays off until Crowe confirms the Pro link. Then set CROWELOGIC_PRO_LINKED=1.</li>
+          <li>CROWE_API_KEY is Crowe Creative only. It does not enable this chat.</li>
+          <li>Restart the dev server after editing env, then test the connection.</li>
         </ul>
       </div>
     </div>

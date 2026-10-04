@@ -1,7 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import ShareClipWindowWaveform from '@/components/shares/ShareClipWindowWaveform'
+import type { ShareScrubApi } from '@/components/shares/ShareMiniPlayer'
 import { clampSnippetWindow, STORY_SNIPPET_DURATION_SEC } from '@/lib/shares/story-snippet'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 
 function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00'
@@ -18,6 +21,11 @@ export type ShareStoryClipPickerProps = {
   /** Initial window start (e.g. current playhead). */
   initialStartSec?: number
   snippetDurationSec?: number
+  file?: string
+  trackId?: string
+  audioFileId?: string
+  /** Live share player — preview the 15s window without a second <audio>. */
+  scrubApiRef?: MutableRefObject<ShareScrubApi | null>
   busy?: boolean
   busyLabel?: string | null
   onCancel: () => void
@@ -34,6 +42,10 @@ export default function ShareStoryClipPicker({
   trackDurationSec,
   initialStartSec = 0,
   snippetDurationSec = STORY_SNIPPET_DURATION_SEC,
+  file,
+  trackId,
+  audioFileId,
+  scrubApiRef,
   busy = false,
   busyLabel = null,
   onCancel,
@@ -47,6 +59,30 @@ export default function ShareStoryClipPicker({
   const maxStart = Math.max(0, trackDur - windowSec)
 
   const [startSec, setStartSec] = useState(0)
+  const [previewing, setPreviewing] = useState(false)
+  const previewingRef = useRef(false)
+  const startSecRef = useRef(0)
+  const progressRef = useRef(0)
+  previewingRef.current = previewing
+  startSecRef.current = startSec
+
+  const applyStart = useCallback(
+    (value: number, opts?: { seek?: boolean }) => {
+      const next = clampSnippetWindow({
+        startSec: value,
+        durationSec: windowSec,
+        trackDurationSec: trackDur || undefined,
+      }).startSec
+      setStartSec(next)
+      startSecRef.current = next
+      progressRef.current = trackDur > 0 ? next / trackDur : 0
+      if (opts?.seek !== false) {
+        scrubApiRef?.current?.seek(next)
+      }
+      return next
+    },
+    [scrubApiRef, trackDur, windowSec],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -56,31 +92,84 @@ export default function ShareStoryClipPicker({
       trackDurationSec: trackDur || undefined,
     })
     setStartSec(clamped.startSec)
+    startSecRef.current = clamped.startSec
+    progressRef.current = trackDur > 0 ? clamped.startSec / trackDur : 0
+    setPreviewing(false)
+    previewingRef.current = false
   }, [open, initialStartSec, windowSec, trackDur])
+
+  useEffect(() => {
+    if (open && !busy) return
+    if (!previewingRef.current) return
+    scrubApiRef?.current?.pause()
+    setPreviewing(false)
+    previewingRef.current = false
+    progressRef.current = trackDur > 0 ? startSecRef.current / trackDur : 0
+  }, [busy, open, scrubApiRef, trackDur])
+
+  useEffect(() => {
+    if (!open || !previewing) return
+    let raf = 0
+    const endPad = 0.04
+    const loop = () => {
+      raf = requestAnimationFrame(loop)
+      const api = scrubApiRef?.current
+      if (!api) return
+      const pos = api.getPosition()
+      const start = startSecRef.current
+      const end = Math.min(trackDur || start + windowSec, start + windowSec)
+      if (pos.currentTime >= end - endPad) {
+        api.seek(start)
+        progressRef.current = trackDur > 0 ? start / trackDur : 0
+        return
+      }
+      progressRef.current = trackDur > 0 ? pos.currentTime / trackDur : 0
+      if (!pos.playing) {
+        setPreviewing(false)
+        previewingRef.current = false
+        progressRef.current = trackDur > 0 ? start / trackDur : 0
+      }
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [open, previewing, scrubApiRef, trackDur, windowSec])
 
   const endSec = useMemo(
     () => Math.min(trackDur || startSec + windowSec, startSec + windowSec),
     [startSec, trackDur, windowSec],
   )
 
-  const startRatio = trackDur > 0 ? startSec / trackDur : 0
-  const widthRatio = trackDur > 0 ? windowSec / trackDur : 1
-
   const onRangeChange = useCallback(
     (value: number) => {
-      const next = clampSnippetWindow({
-        startSec: value,
-        durationSec: windowSec,
-        trackDurationSec: trackDur || undefined,
-      }).startSec
-      setStartSec(next)
+      applyStart(value)
     },
-    [trackDur, windowSec],
+    [applyStart],
   )
+
+  const togglePreview = useCallback(() => {
+    if (busy) return
+    const api = scrubApiRef?.current
+    if (!api) return
+    if (previewingRef.current) {
+      api.pause()
+      setPreviewing(false)
+      previewingRef.current = false
+      progressRef.current = trackDur > 0 ? startSecRef.current / trackDur : 0
+      return
+    }
+    api.seek(startSecRef.current)
+    progressRef.current = trackDur > 0 ? startSecRef.current / trackDur : 0
+    api.play()
+    setPreviewing(true)
+    previewingRef.current = true
+  }, [busy, scrubApiRef, trackDur])
+
+  const canPreview = Boolean(scrubApiRef) && !busy
 
   if (!open) return null
 
   return (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 px-4 pb-6 pt-10 sm:items-center sm:pb-10"
       role="dialog"
@@ -109,19 +198,17 @@ export default function ShareStoryClipPicker({
         </p>
 
         <div className="mt-5">
-          <div className="relative h-10 overflow-hidden rounded-sm bg-white/5 ring-1 ring-white/10">
-            <div
-              className="absolute inset-y-1 rounded-sm bg-white/25"
-              style={{
-                left: `${startRatio * 100}%`,
-                width: `${Math.max(4, widthRatio * 100)}%`,
-              }}
-            />
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-2 text-[10px] tabular-nums text-zinc-500">
-              <span>0:00</span>
-              <span>{formatTime(trackDur)}</span>
-            </div>
-          </div>
+          <ShareClipWindowWaveform
+            file={file}
+            trackId={trackId}
+            audioFileId={audioFileId}
+            trackDurationSec={trackDur}
+            startSec={startSec}
+            windowSec={windowSec}
+            progressRef={progressRef}
+            disabled={busy}
+            onPickStart={applyStart}
+          />
 
           <label className="mt-4 block">
             <span className="sr-only">Clip start</span>
@@ -137,14 +224,25 @@ export default function ShareStoryClipPicker({
             />
           </label>
 
-          <p className="mt-2 text-center text-sm tabular-nums text-white/90">
-            {formatTime(startSec)}
-            <span className="text-zinc-500"> → </span>
-            {formatTime(endSec)}
-            <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-              {Math.round(windowSec)}s clip
-            </span>
-          </p>
+          <div className="mt-3 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              disabled={!canPreview}
+              onClick={togglePreview}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition hover:bg-zinc-200 disabled:opacity-40"
+              aria-label={previewing ? 'Pause clip preview' : 'Play clip preview'}
+            >
+              <span className="text-xs leading-none">{previewing ? '❚❚' : '▶'}</span>
+            </button>
+            <p className="text-sm tabular-nums text-white/90">
+              {formatTime(startSec)}
+              <span className="text-zinc-500"> → </span>
+              {formatTime(endSec)}
+              <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                {Math.round(windowSec)}s clip
+              </span>
+            </p>
+          </div>
         </div>
 
         {busyLabel ? (
@@ -153,7 +251,9 @@ export default function ShareStoryClipPicker({
           </p>
         ) : (
           <p className="mt-4 text-center text-[10px] uppercase tracking-[0.14em] text-zinc-600">
-            Drag to choose the section fans hear
+            {canPreview
+              ? 'Play the 15s fans hear · drag the waveform to move it'
+              : 'Drag to choose the section fans hear'}
           </p>
         )}
 
@@ -177,5 +277,6 @@ export default function ShareStoryClipPicker({
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   )
 }

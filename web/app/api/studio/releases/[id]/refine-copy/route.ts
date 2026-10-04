@@ -50,6 +50,7 @@ export async function POST(
       field,
       draft: typeof body?.draft === 'string' ? body.draft : null,
       useAi,
+      mode: body?.mode === 'draft' ? 'draft' : 'refine',
     })
 
     return NextResponse.json({

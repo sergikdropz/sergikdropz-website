@@ -22,6 +22,7 @@ import type { AdminChatEnergyPreset, AdminChatHonestyMode } from '@/lib/ai/admin
 import { isContinuationOnlyUserMessage } from '@/lib/ai/chat-skill-context'
 import { suggestAnchorSnippetsFromUserText } from '@/lib/admin-ai-anchor-suggestions'
 import { shallowPayloadDiffLines } from '@/lib/admin-ai-exec-preview-diff'
+import { buildApprovalRows, payloadWithoutDryRun, type ApprovalRow } from '@/lib/ai/approval-rows'
 import { formatReleaseCountdownLabel } from '@/lib/admin-ai-release-countdown'
 import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
 import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
@@ -32,6 +33,89 @@ import {
 } from '@/lib/ai/admin-ai-focus-context'
 import FieldCopilotPanel from '@/components/FieldCopilotPanel'
 import { ProductStrategyPackCard } from '@/components/admin/ProductStrategyPackCard'
+import AdminAiQuickStartPanel from '@/components/admin/AdminAiQuickStartPanel'
+import AdminAiBrowserDock from '@/components/admin/AdminAiBrowserDock'
+import AdminAiElementPickerButton from '@/components/admin/AdminAiElementPickerButton'
+import AdminAiComposerField, {
+  type AdminAiComposerFieldHandle,
+  type ComposerChipView,
+} from '@/components/admin/AdminAiComposerField'
+import {
+  appendMissingChipTokens,
+  chipsIn,
+  composerDisplayText,
+  composerLinkLabel,
+  composerPlainText,
+  expandComposerMessage,
+  insertChipToken,
+  isHttpUrl,
+  linksFromDrop,
+  removeChipToken,
+  stripChipKind,
+  stripPlanPrefix,
+  type ComposerChipKind,
+} from '@/lib/ai/admin-ai-composer-chips'
+import AdminAiStudioMissionStrip from '@/components/admin/AdminAiStudioMissionStrip'
+import {
+  AdminAiApplyDiffCards,
+  AdminAiMentionChips,
+  AdminAiMemoryStrip,
+  AdminAiToolStepCards,
+} from '@/components/admin/AdminAiAgentPanels'
+import type { AdminAiApplyDiff } from '@/lib/ai/admin-ai-apply-diff'
+import type { AdminAiAgentToolStep } from '@/lib/ai/admin-ai-agent-loop'
+import {
+  checkpointFromMarketingPatch,
+  previousFieldsFromPreview,
+  pushCheckpoint,
+  type AdminAiCheckpoint,
+} from '@/lib/ai/admin-ai-checkpoints'
+import {
+  emptyThreadMemory,
+  mergeThreadMemory,
+  normalizeThreadMemory,
+  type AdminAiThreadMemory,
+} from '@/lib/ai/admin-ai-thread-memory'
+import { buildMissionDock, type MissionDockAction } from '@/lib/admin-ai-mission-dock'
+import {
+  dispatchAdminAiStudioNavigate,
+  studioNavigateHref,
+  type AdminAiStudioNavTarget,
+} from '@/lib/admin-ai-studio-nav'
+import {
+  findPlaybookById,
+  parsePlaybookIdFromQuickStart,
+  playbookPoolAsQuickStarts,
+  type AdminAiPlaybook,
+} from '@/lib/admin-ai-playbooks'
+import {
+  buildCreativeSuggestionPool,
+  buildPrioritySuggestionPool,
+  collectAllUnfinishedBusinessFromSessions,
+  createInitialCreativeQuickStartState,
+  createInitialPlaybookQuickStartState,
+  createInitialPriorityQuickStartState,
+  createInitialUnfinishedBusinessViewState,
+  historyEntryToQuickStart,
+  isFreshAdminChat,
+  markCreativeQuickStartAttended,
+  markPlaybookQuickStartAttended,
+  markPriorityQuickStartAttended,
+  pickVisibleUnfinishedBusiness,
+  refreshCreativeQuickStartState,
+  refreshPlaybookQuickStartState,
+  refreshPriorityQuickStartState,
+  refreshUnfinishedBusinessViewState,
+  sanitizeAdminChatMessagesForDisplay,
+  unfinishedBusinessEntryToQuickStart,
+  type AdminAiCreativeQuickStartState,
+  type AdminAiPriorityQuickStartState,
+  type AdminAiQuickStart,
+  type AdminAiUnfinishedBusinessEntry,
+  type UnfinishedBusinessViewState,
+} from '@/lib/admin-ai-quick-starts'
+import { consumePendingAdminAiPrompt } from '@/lib/admin-ai-client'
+import { getStudioStepAiPrompt } from '@/lib/studio/admin-ai-step-prompts'
 import { sameOriginApiUrl } from '@/lib/same-origin-api'
 import { AdminAssistantRichText, AdminChatPlainText } from '@/components/AdminChatMessageContent'
 
@@ -59,6 +143,8 @@ type ChatMessage = {
   role: ChatRole
   content: string
   embed?: ChatEmbedProductStrategyPack
+  toolSteps?: AdminAiAgentToolStep[]
+  applyDiffs?: AdminAiApplyDiff[]
 }
 
 type ExecuteTool =
@@ -75,6 +161,13 @@ type ExecuteTool =
   | 'update_copyright_checklist'
   | 'assign_isrcs'
   | 'create_distribution_release_draft'
+  | 'query_intelligence_harness'
+  | 'query_sergikai_chat'
+  | 'query_crowe_creative'
+  | 'audit_music_contract'
+  | 'run_meta_promo_pipeline'
+  | 'admin_browser'
+  | 'query_platform_growth_snapshot'
 
 type ToolPreview = {
   tool: ExecuteTool
@@ -131,7 +224,9 @@ const AGENT_SKILL_MODES = [
   'e2e_qa',
   'mac_automation',
   'admin_intel',
+  'sergik_intelligence',
   'studio_release',
+  'music_business_counsel',
 ] as const
 type AgentSkillModeId = (typeof AGENT_SKILL_MODES)[number]
 type AgentModeChoice = 'auto' | 'chat' | 'plan' | AgentSkillModeId
@@ -154,6 +249,10 @@ type ChatResponse = {
   runFingerprint?: string
   honestyMode?: AdminChatHonestyMode | null
   energyPreset?: AdminChatEnergyPreset | null
+  toolSteps?: AdminAiAgentToolStep[]
+  applyDiffs?: AdminAiApplyDiff[]
+  memory?: AdminAiThreadMemory
+  memoryPatch?: Record<string, unknown>
 }
 
 type ChatProvidersApi = {
@@ -262,19 +361,34 @@ type PendingAttachment = {
   error?: string
 }
 
-const DEFAULT_ASSISTANT_INTRO =
-  'How can I help? `/exec <tool> {<json>}` runs tools (example: `/exec query_ops_snapshot {"focus":"studio"}`). Plan → Preview → Approve for runbooks. Also: `/plan …`, attach files, mic. Strategy pack `draft_product_strategy_pack`; ops `query_ops_snapshot`; checklist `create_release_checklist`; studio `create_distribution_release_draft`; smartlink UTM; E2E; AppleScript. Agents: **product_strategy**, **growth_marketing**, **studio_release**, **admin_intel**, etc.'
+/** Element reference kept beside the composer. The chip itself sits inline in `input`. */
+type ElementPickChip = {
+  id: string
+  label: string
+  text: string
+}
 
-const STUDIO_ASSISTANT_INTRO =
-  'Release Studio copilot — I see the release you have open. Ask what is blocking go-live, draft copy, or run `/exec query_release_studio_snapshot` for a live snapshot. Use agent mode **studio_release** for drafts and readiness.'
+type ComposerLink = {
+  id: string
+  url: string
+  label: string
+}
 
 const ADMIN_AI_SESSIONS_KEY = 'admin-ai-chat-sessions-v1'
+const ADMIN_AI_UNFINISHED_DISMISS_LS = 'admin-ai-unfinished-dismissed-v1'
+const ADMIN_AI_UNFINISHED_ARCHIVE_LS = 'admin-ai-unfinished-archive-v1'
 const ADMIN_AI_HONESTY_LS = 'admin-ai-honesty-v1'
 const ADMIN_AI_ENERGY_LS = 'admin-ai-energy-v1'
 const ADMIN_AI_ANCHORS_PANEL_LS = 'admin-ai-anchors-panel-v1'
 const ADMIN_AI_DOCK_MODE_KEY = 'admin-ai-dock-mode-v2'
 const ADMIN_AI_DOCK_WIDTH_KEY = 'admin-ai-dock-width-v1'
-const DOCK_PANEL_MAX_W = 720
+const ADMIN_AI_STANDALONE_CHAT_W_KEY = 'admin-ai-standalone-chat-width-v1'
+const ADMIN_AI_DOCK_BROWSER_CHAT_W_KEY = 'admin-ai-dock-browser-chat-w'
+const ADMIN_AI_BROWSER_WORKSPACE_KEY = 'admin-ai-browser-workspace'
+const DOCK_PANEL_MAX_W = 1440
+const STANDALONE_CHAT_MIN_W = 280
+const STANDALONE_BROWSER_MIN_W = 320
+const STANDALONE_CHAT_DEFAULT_W = 420
 const MAX_CHAT_SESSIONS = 8
 const MAX_PERSISTED_MESSAGES_PER_SESSION = 100
 
@@ -308,8 +422,33 @@ type AdminChatSession = {
   anchorSuggestions: string[]
   input: string
   attachments: PendingAttachment[]
+  /** Element picker chips. Full DOM reference is expanded where the chip sits in `input`. */
+  elementPicks: ElementPickChip[]
+  /** Dropped http(s) links. The chip sits inline in `input`. */
+  links: ComposerLink[]
   /** When true, strategy pack previews merge refineWithLlm into payloads (LLM polish on dry-run). */
   preferStrategyPackRefine: boolean
+  /** Sticky goal / release / desk across skill switches. */
+  threadMemory: AdminAiThreadMemory
+  /** Undo stack for approved Apply diffs. */
+  checkpoints: AdminAiCheckpoint[]
+  /** Rotating high-priority quick starts (fresh chat only). */
+  priorityQuickStart?: AdminAiPriorityQuickStartState
+  /** Rotating explore quick starts (fresh chat only). */
+  creativeQuickStart?: AdminAiCreativeQuickStartState
+  /** Rotating release playbooks (fresh chat only). */
+  playbookQuickStart?: AdminAiPriorityQuickStartState
+  /** Rotation state for unfinished business rows. */
+  unfinishedView?: UnfinishedBusinessViewState
+}
+
+function releaseAdminBrowserChat(id: string) {
+  void fetch('/api/admin/ai/browser', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'release', actor: 'user', chatSessionId: id }),
+  }).catch(() => undefined)
 }
 
 function createMessageId() {
@@ -319,12 +458,81 @@ function createMessageId() {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function sanitizeRotatingQuickStartState(
+  raw: unknown,
+): AdminAiPriorityQuickStartState | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const s = raw as AdminAiPriorityQuickStartState
+  if (!Array.isArray(s.current)) return undefined
+  return {
+    current: s.current.filter((r) => r && typeof r.id === 'string'),
+    attended: Array.isArray(s.attended) ? s.attended.filter((e) => e && typeof e.id === 'string') : [],
+    ignored: Array.isArray(s.ignored) ? s.ignored.filter((e) => e && typeof e.id === 'string') : [],
+    refreshCount: typeof s.refreshCount === 'number' ? s.refreshCount : 0,
+    poolExhausted: Boolean(s.poolExhausted),
+  }
+}
+
+function sanitizeElementPicks(raw: unknown): ElementPickChip[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as { id?: unknown; label?: unknown; text?: unknown }
+      if (typeof row.text !== 'string' || !row.text.trim()) return []
+      const label = typeof row.label === 'string' && row.label.trim() ? row.label.trim().slice(0, 80) : 'element'
+      return [
+        {
+          id: typeof row.id === 'string' && row.id ? row.id : createMessageId(),
+          label,
+          text: row.text.slice(0, 4000),
+        },
+      ]
+    })
+    .slice(0, 8)
+}
+
+function composerDraftFromSession(input: unknown, picksRaw: unknown, linksRaw: unknown): {
+  input: string
+  elementPicks: ElementPickChip[]
+  links: ComposerLink[]
+} {
+  const elementPicks = sanitizeElementPicks(picksRaw)
+  const links = sanitizeComposerLinks(linksRaw)
+  return {
+    input: appendMissingChipTokens(
+      appendMissingChipTokens(stripChipKind(typeof input === 'string' ? input : '', 'file'), 'element', elementPicks.map((pick) => pick.id)),
+      'link',
+      links.map((link) => link.id),
+    ),
+    elementPicks,
+    links,
+  }
+}
+
+function sanitizeComposerLinks(raw: unknown): ComposerLink[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as { id?: unknown; url?: unknown; label?: unknown }
+      if (typeof row.url !== 'string' || !isHttpUrl(row.url)) return []
+      const id = typeof row.id === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(row.id) ? row.id : createMessageId()
+      const label =
+        typeof row.label === 'string' && row.label.trim()
+          ? row.label.trim().slice(0, 80)
+          : composerLinkLabel(row.url)
+      return [{ id, url: row.url.slice(0, 2000), label }]
+    })
+    .slice(0, 8)
+}
+
 function createEmptySession(id: string): AdminChatSession {
   return {
     id,
     title: 'New chat',
     updatedAt: Date.now(),
-    messages: [{ id: createMessageId(), role: 'assistant', content: DEFAULT_ASSISTANT_INTRO }],
+    messages: [],
     activeSkill: null,
     activeSkillInferredAt: null,
     anchors: ['', '', ''],
@@ -339,7 +547,11 @@ function createEmptySession(id: string): AdminChatSession {
     anchorSuggestions: [],
     input: '',
     attachments: [],
+    elementPicks: [],
+    links: [],
     preferStrategyPackRefine: false,
+    threadMemory: emptyThreadMemory(),
+    checkpoints: [],
   }
 }
 
@@ -444,7 +656,14 @@ function parseExecuteCommand(input: string): { tool: ExecuteTool; payload: Recor
     toolRaw !== 'patch_release_marketing_copy' &&
     toolRaw !== 'update_copyright_checklist' &&
     toolRaw !== 'assign_isrcs' &&
-    toolRaw !== 'create_distribution_release_draft'
+    toolRaw !== 'create_distribution_release_draft' &&
+    toolRaw !== 'query_intelligence_harness' &&
+    toolRaw !== 'query_sergikai_chat' &&
+    toolRaw !== 'query_crowe_creative' &&
+    toolRaw !== 'audit_music_contract' &&
+    toolRaw !== 'run_meta_promo_pipeline' &&
+    toolRaw !== 'admin_browser' &&
+    toolRaw !== 'query_platform_growth_snapshot'
   ) {
     return null
   }
@@ -549,6 +768,36 @@ function StrategyPackPolishToggle({
   )
 }
 
+function canConsumeWheel(el: HTMLElement, deltaX: number, deltaY: number): boolean {
+  const style = getComputedStyle(el)
+  const overflowY = style.overflowY
+  const overflowX = style.overflowX
+  if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && el.scrollHeight > el.clientHeight + 1) {
+    if (deltaY < 0 && el.scrollTop > 0) return true
+    if (deltaY > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true
+  }
+  if ((overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') && el.scrollWidth > el.clientWidth + 1) {
+    if (deltaX < 0 && el.scrollLeft > 0) return true
+    if (deltaX > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true
+  }
+  return false
+}
+
+/** Wheel over the assistant must not scroll the page behind it. Inner scrollers still move. */
+function wheelStaysInsideAdminAiPanel(event: WheelEvent): boolean {
+  const target = event.target
+  if (!(target instanceof Element)) return false
+  const panel = target.closest('[data-admin-ai-panel]')
+  if (!panel) return false
+  let node: Element | null = target
+  while (node && panel.contains(node)) {
+    if (node instanceof HTMLElement && canConsumeWheel(node, event.deltaX, event.deltaY)) return true
+    if (node === panel) break
+    node = node.parentElement
+  }
+  return false
+}
+
 export default function AdminAiAssistant({
   presentation = 'overlay',
   defaultOpen = false,
@@ -577,13 +826,46 @@ export default function AdminAiAssistant({
   const [showSessionHistory, setShowSessionHistory] = useState(false)
   const historyPopoverRef = useRef<HTMLDivElement | null>(null)
   const sessionsHydrated = useRef(false)
+  const unfinishedDismissHydrated = useRef(false)
+  const [dismissedUnfinishedIds, setDismissedUnfinishedIds] = useState<string[]>([])
+  const [dismissedUnfinishedArchive, setDismissedUnfinishedArchive] = useState<
+    AdminAiUnfinishedBusinessEntry[]
+  >([])
+  const [missionRefreshNonce, setMissionRefreshNonce] = useState(0)
+  const [missionBlockerCount, setMissionBlockerCount] = useState(0)
 
   const [sending, setSending] = useState(false)
+  const [approvalEditId, setApprovalEditId] = useState<string | null>(null)
+  const [approvalEditDraft, setApprovalEditDraft] = useState('')
+  const [approvalEditError, setApprovalEditError] = useState<string | null>(null)
+  const [approvalHiddenRowIds, setApprovalHiddenRowIds] = useState<string[]>([])
   const panelRef = useRef<HTMLDivElement | null>(null)
   const dragOffsetRef = useRef({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
   const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
+  const [browserPaneOpen, setBrowserPaneOpen] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.localStorage.getItem('admin-ai-browser-side-expanded') !== '0'
+  })
+  const [dockBrowserWorkspace, setDockBrowserWorkspace] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(ADMIN_AI_BROWSER_WORKSPACE_KEY) === '1'
+  })
+  const [chatPaneWidth, setChatPaneWidth] = useState(() => {
+    if (typeof window === 'undefined') return STANDALONE_CHAT_DEFAULT_W
+    const stored = Number(window.localStorage.getItem(ADMIN_AI_STANDALONE_CHAT_W_KEY))
+    return Number.isFinite(stored) && stored >= STANDALONE_CHAT_MIN_W
+      ? stored
+      : STANDALONE_CHAT_DEFAULT_W
+  })
+  const [dockBesideChatW, setDockBesideChatW] = useState(() => {
+    if (typeof window === 'undefined') return 440
+    const stored = Number(window.localStorage.getItem(ADMIN_AI_DOCK_BROWSER_CHAT_W_KEY))
+    return Number.isFinite(stored) && stored >= STANDALONE_CHAT_MIN_W ? stored : 440
+  })
+  const splitResizeRef = useRef<{ startX: number; startW: number; dock: boolean; grow: 1 | -1 } | null>(null)
+  const [isSplitResizing, setIsSplitResizing] = useState(false)
   const resizeStartRef = useRef<{
     edge: ResizeEdge
     startLeft: number
@@ -618,6 +900,7 @@ export default function AdminAiAssistant({
   const [speechError, setSpeechError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const composerRef = useRef<AdminAiComposerFieldHandle | null>(null)
   const [honestyMode, setHonestyMode] = useState<AdminChatHonestyMode>('strict')
   const [energyPreset, setEnergyPreset] = useState<AdminChatEnergyPreset>('default')
   const [explainOpen, setExplainOpen] = useState(false)
@@ -635,6 +918,8 @@ export default function AdminAiAssistant({
     messages,
     input,
     attachments,
+    elementPicks,
+    links,
     activeSkill,
     activeSkillInferredAt,
     anchors,
@@ -648,7 +933,80 @@ export default function AdminAiAssistant({
     execPreviewDiffBaseline,
     anchorSuggestions,
     preferStrategyPackRefine,
+    threadMemory,
+    checkpoints,
   } = activeSession
+  const picks = elementPicks ?? []
+  const linkChips = links ?? []
+  const inputLiveRef = useRef(input)
+  const attachmentsLiveRef = useRef(attachments)
+  const picksLiveRef = useRef(picks)
+  const linksLiveRef = useRef(linkChips)
+  inputLiveRef.current = input
+  attachmentsLiveRef.current = attachments
+  picksLiveRef.current = picks
+  linksLiveRef.current = linkChips
+
+  const visibleMessages = useMemo(() => sanitizeAdminChatMessagesForDisplay(messages), [messages])
+  const showQuickStart = useMemo(() => isFreshAdminChat(messages), [messages])
+  const prioritySuggestionPool = useMemo(
+    () => buildPrioritySuggestionPool(pageCtx?.pageContext ?? null),
+    [pageCtx?.pageContext],
+  )
+  const creativeSuggestionPool = useMemo(
+    () => buildCreativeSuggestionPool(pageCtx?.pageContext ?? null),
+    [pageCtx?.pageContext],
+  )
+  const priorityQuickStart = activeSession.priorityQuickStart
+  const creativeQuickStart = activeSession.creativeQuickStart
+  const priorityHistory = useMemo(() => {
+    const p = priorityQuickStart
+    if (!p) return []
+    return [...p.attended, ...p.ignored].sort((a, b) => b.at - a.at)
+  }, [priorityQuickStart])
+  const creativeHistory = useMemo(() => {
+    const c = creativeQuickStart
+    if (!c) return []
+    return [...c.attended, ...c.ignored].sort((a, b) => b.at - a.at)
+  }, [creativeQuickStart])
+  const allUnfinishedBusiness = useMemo(
+    () => collectAllUnfinishedBusinessFromSessions(sessions, new Set(dismissedUnfinishedIds)),
+    [sessions, dismissedUnfinishedIds],
+  )
+
+  const unfinishedView =
+    activeSession.unfinishedView ?? createInitialUnfinishedBusinessViewState()
+
+  const visibleUnfinishedBusiness = useMemo(
+    () =>
+      pickVisibleUnfinishedBusiness(allUnfinishedBusiness, unfinishedView, activeSessionId),
+    [allUnfinishedBusiness, unfinishedView, activeSessionId],
+  )
+
+  const playbookSuggestionPool = useMemo(
+    () => playbookPoolAsQuickStarts(pageCtx?.pageContext ?? null),
+    [pageCtx?.pageContext],
+  )
+
+  const playbookQuickStart = activeSession.playbookQuickStart
+  const playbookHistory = useMemo(() => {
+    const p = playbookQuickStart
+    if (!p) return []
+    return [...p.attended, ...p.ignored].sort((a, b) => b.at - a.at)
+  }, [playbookQuickStart])
+
+  const visiblePlaybookRows = useMemo(() => {
+    const ids = playbookQuickStart?.current ?? []
+    return ids
+      .map((row) => {
+        const id = parsePlaybookIdFromQuickStart(row)
+        if (!id) return null
+        return findPlaybookById(pageCtx?.pageContext ?? null, id) ?? null
+      })
+      .filter((book): book is AdminAiPlaybook => Boolean(book))
+  }, [playbookQuickStart, pageCtx?.pageContext])
+
+  const studioMissionReleaseId = pageCtx?.pageContext?.studio?.releaseId
 
   const mergeIntoActive = useCallback(
     (patch: Partial<AdminChatSession> | ((s: AdminChatSession) => Partial<AdminChatSession>)) => {
@@ -665,6 +1023,36 @@ export default function AdminAiAssistant({
     },
     [activeSessionId]
   )
+
+  useEffect(() => {
+    const patch: Partial<AdminChatSession> = {}
+    if (!activeSession.priorityQuickStart) {
+      patch.priorityQuickStart = createInitialPriorityQuickStartState(prioritySuggestionPool, activeSessionId)
+    }
+    if (!activeSession.creativeQuickStart) {
+      patch.creativeQuickStart = createInitialCreativeQuickStartState(creativeSuggestionPool, activeSessionId)
+    }
+    if (!activeSession.playbookQuickStart && playbookSuggestionPool.length > 0) {
+      patch.playbookQuickStart = createInitialPlaybookQuickStartState(
+        playbookSuggestionPool,
+        activeSessionId,
+      )
+    }
+    if (!activeSession.unfinishedView) {
+      patch.unfinishedView = createInitialUnfinishedBusinessViewState()
+    }
+    if (Object.keys(patch).length > 0) mergeIntoActive(patch)
+  }, [
+    activeSession.priorityQuickStart,
+    activeSession.creativeQuickStart,
+    activeSession.playbookQuickStart,
+    activeSession.unfinishedView,
+    prioritySuggestionPool,
+    creativeSuggestionPool,
+    playbookSuggestionPool,
+    activeSessionId,
+    mergeIntoActive,
+  ])
 
   const setMessages = useCallback(
     (up: SetStateAction<ChatMessage[]>) => {
@@ -690,6 +1078,38 @@ export default function AdminAiAssistant({
     },
     [mergeIntoActive]
   )
+  const setElementPicks = useCallback(
+    (up: SetStateAction<ElementPickChip[]>) => {
+      mergeIntoActive((s) => ({
+        elementPicks:
+          typeof up === 'function' ? (up as (picks: ElementPickChip[]) => ElementPickChip[])(s.elementPicks ?? []) : up,
+      }))
+    },
+    [mergeIntoActive]
+  )
+  const setLinks = useCallback(
+    (up: SetStateAction<ComposerLink[]>) => {
+      mergeIntoActive((s) => ({
+        links: typeof up === 'function' ? (up as (rows: ComposerLink[]) => ComposerLink[])(s.links ?? []) : up,
+      }))
+    },
+    [mergeIntoActive]
+  )
+
+  useEffect(() => {
+    const present = chipsIn(input)
+    const elementIds = new Set(present.filter((chip) => chip.kind === 'element').map((chip) => chip.id))
+    const fileIds = new Set(present.filter((chip) => chip.kind === 'file').map((chip) => chip.id))
+    const linkIds = new Set(present.filter((chip) => chip.kind === 'link').map((chip) => chip.id))
+    const nextPicks = picks.filter((pick) => elementIds.has(pick.id))
+    const nextLinks = linkChips.filter((link) => linkIds.has(link.id))
+    const nextFiles = attachments.filter((file) => fileIds.has(file.id))
+    if (nextPicks.length === picks.length && nextLinks.length === linkChips.length && nextFiles.length === attachments.length) {
+      return
+    }
+    mergeIntoActive({ elementPicks: nextPicks, links: nextLinks, attachments: nextFiles })
+  }, [input, picks, linkChips, attachments, mergeIntoActive])
+
   const setActiveSkill = useCallback(
     (up: SetStateAction<ChatResponse['inferredSkill'] | null>) => {
       mergeIntoActive((s) => {
@@ -811,6 +1231,7 @@ export default function AdminAiAssistant({
     setSessions((prev) => {
       if (prev.length >= MAX_CHAT_SESSIONS) {
         const dropId = [...prev].sort((a, b) => a.updatedAt - b.updatedAt)[0]!.id
+        releaseAdminBrowserChat(dropId)
         return [...prev.filter((s) => s.id !== dropId), createEmptySession(id)]
       }
       return [...prev, createEmptySession(id)]
@@ -821,6 +1242,7 @@ export default function AdminAiAssistant({
 
   const removeSession = useCallback((id: string) => {
     setSessions((prev) => (prev.length <= 1 ? prev : prev.filter((s) => s.id !== id)))
+    releaseAdminBrowserChat(id)
   }, [])
 
   useEffect(() => {
@@ -840,7 +1262,9 @@ export default function AdminAiAssistant({
             id: s.id,
             title: s.title || 'Chat',
             updatedAt: s.updatedAt ?? Date.now(),
-            messages: Array.isArray(s.messages) && s.messages.length > 0 ? s.messages : createEmptySession(s.id).messages,
+            messages: sanitizeAdminChatMessagesForDisplay(
+              Array.isArray(s.messages) ? s.messages : [],
+            ) as AdminChatSession['messages'],
             activeSkill: s.activeSkill ?? null,
             activeSkillInferredAt: typeof s.activeSkillInferredAt === 'number' ? s.activeSkillInferredAt : null,
             anchors:
@@ -876,9 +1300,32 @@ export default function AdminAiAssistant({
             anchorSuggestions: Array.isArray(s.anchorSuggestions)
               ? s.anchorSuggestions.filter((x) => typeof x === 'string').slice(0, 5)
               : [],
-            input: s.input ?? '',
+            ...composerDraftFromSession(s.input, s.elementPicks, s.links),
             attachments: [],
             preferStrategyPackRefine: Boolean(s.preferStrategyPackRefine),
+            threadMemory: normalizeThreadMemory(
+              (s as { threadMemory?: unknown }).threadMemory ?? emptyThreadMemory(),
+            ),
+            checkpoints: Array.isArray((s as { checkpoints?: unknown }).checkpoints)
+              ? ((s as { checkpoints: AdminAiCheckpoint[] }).checkpoints || []).slice(-12)
+              : [],
+            priorityQuickStart: sanitizeRotatingQuickStartState(s.priorityQuickStart),
+            creativeQuickStart: sanitizeRotatingQuickStartState(s.creativeQuickStart),
+            playbookQuickStart: sanitizeRotatingQuickStartState(s.playbookQuickStart),
+            unfinishedView:
+              s.unfinishedView && typeof s.unfinishedView === 'object'
+                ? {
+                    refreshCount:
+                      typeof (s.unfinishedView as UnfinishedBusinessViewState).refreshCount === 'number'
+                        ? (s.unfinishedView as UnfinishedBusinessViewState).refreshCount
+                        : 0,
+                    rotatedIds: Array.isArray((s.unfinishedView as UnfinishedBusinessViewState).rotatedIds)
+                      ? (s.unfinishedView as UnfinishedBusinessViewState).rotatedIds.filter(
+                          (id) => typeof id === 'string',
+                        )
+                      : [],
+                  }
+                : undefined,
           }))
           setSessions(cleaned)
           if (data.activeSessionId && cleaned.some((x) => x.id === data.activeSessionId)) {
@@ -893,6 +1340,58 @@ export default function AdminAiAssistant({
     }
     sessionsHydrated.current = true
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || unfinishedDismissHydrated.current) return
+    try {
+      const archiveRaw = localStorage.getItem(ADMIN_AI_UNFINISHED_ARCHIVE_LS)
+      if (archiveRaw) {
+        const parsed = JSON.parse(archiveRaw) as AdminAiUnfinishedBusinessEntry[]
+        if (Array.isArray(parsed)) {
+          setDismissedUnfinishedArchive(parsed.filter((row) => row && typeof row.id === 'string').slice(0, 40))
+        }
+      }
+      const raw = localStorage.getItem(ADMIN_AI_UNFINISHED_DISMISS_LS)
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown
+        if (Array.isArray(parsed)) {
+          setDismissedUnfinishedIds(parsed.filter((x) => typeof x === 'string').slice(0, 80))
+        }
+      }
+    } catch {
+      /* keep */
+    }
+    unfinishedDismissHydrated.current = true
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !unfinishedDismissHydrated.current) return
+    try {
+      localStorage.setItem(ADMIN_AI_UNFINISHED_DISMISS_LS, JSON.stringify(dismissedUnfinishedIds.slice(0, 80)))
+      localStorage.setItem(
+        ADMIN_AI_UNFINISHED_ARCHIVE_LS,
+        JSON.stringify(dismissedUnfinishedArchive.slice(0, 40)),
+      )
+    } catch {
+      /* quota */
+    }
+  }, [dismissedUnfinishedIds, dismissedUnfinishedArchive])
+
+  const dismissedUnfinishedHistory = useMemo(
+    () =>
+      dismissedUnfinishedArchive.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        detail: `${entry.detail} · dismissed`,
+        message: entry.message,
+        skillId: entry.skillId,
+        priorityScore: entry.priorityScore,
+        at: entry.at,
+        status: 'ignored' as const,
+        nav: entry.nav,
+      })),
+    [dismissedUnfinishedArchive],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -982,6 +1481,7 @@ export default function AdminAiAssistant({
             sessions: sessions.map((s) => ({
               ...s,
               attachments: [],
+              input: stripChipKind(s.input, 'file'),
               messages: s.messages.slice(-MAX_PERSISTED_MESSAGES_PER_SESSION),
             })),
           })
@@ -1065,8 +1565,11 @@ export default function AdminAiAssistant({
       setOpen(true)
       if (
         detail?.agentMode === 'studio_release' ||
+        detail?.agentMode === 'sergik_intelligence' ||
+        detail?.agentMode === 'admin_intel' ||
         detail?.agentMode === 'growth_marketing' ||
-        detail?.agentMode === 'product_strategy'
+        detail?.agentMode === 'product_strategy' ||
+        detail?.agentMode === 'music_business_counsel'
       ) {
         setAgentMode(detail.agentMode)
       }
@@ -1086,13 +1589,18 @@ export default function AdminAiAssistant({
     window.addEventListener('admin-ai:prompt', onPrompt as EventListener)
     window.addEventListener('admin-ai:apply-field', onApplyField as EventListener)
 
+    const pending = consumePendingAdminAiPrompt()
+    if (pending) {
+      onPrompt(new CustomEvent('admin-ai:prompt', { detail: pending }))
+    }
+
     return () => {
       window.removeEventListener('admin-ai:toggle', onToggle as EventListener)
       window.removeEventListener('admin-ai:open', onOpen as EventListener)
       window.removeEventListener('admin-ai:prompt', onPrompt as EventListener)
       window.removeEventListener('admin-ai:apply-field', onApplyField as EventListener)
     }
-  }, [])
+  }, [setInput])
 
   useEffect(() => {
     async function loadSkills() {
@@ -1114,11 +1622,18 @@ export default function AdminAiAssistant({
           'run_applescript',
           'query_ops_snapshot',
           'create_distribution_release_draft',
+          'query_intelligence_harness',
+          'query_sergikai_chat',
+          'query_crowe_creative',
+          'audit_music_contract',
           'query_release_studio_snapshot',
           'query_studio_command_center',
           'patch_release_marketing_copy',
           'update_copyright_checklist',
           'assign_isrcs',
+          'run_meta_promo_pipeline',
+          'admin_browser',
+          'query_platform_growth_snapshot',
         ]
         setDisabledTools(dt.filter((t): t is ExecuteTool => known.includes(t as ExecuteTool)))
       } catch {
@@ -1236,6 +1751,18 @@ export default function AdminAiAssistant({
       document.documentElement.style.removeProperty('--admin-ai-dock-inset-right')
     }
   }, [isStandalone, dockMode, enabled, open, panelSize])
+
+  useEffect(() => {
+    if (!isStandalone && !(enabled && open)) return
+    const onWheel = (event: WheelEvent) => {
+      if (wheelStaysInsideAdminAiPanel(event)) return
+      const target = event.target
+      if (!(target instanceof Element) || !target.closest('[data-admin-ai-panel]')) return
+      event.preventDefault()
+    }
+    document.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    return () => document.removeEventListener('wheel', onWheel, { capture: true })
+  }, [isStandalone, enabled, open])
 
   useEffect(() => {
     if (!open || isStandalone || dockMode === 'dock-right' || dockMode === 'dock-left') return
@@ -1439,6 +1966,89 @@ export default function AdminAiAssistant({
   }, [isResizing, dockMode, panelSize?.w, isStandalone])
 
   useEffect(() => {
+    if (!isSplitResizing) return
+    function onMove(event: PointerEvent) {
+      const drag = splitResizeRef.current
+      if (!drag) return
+      const panel = panelRef.current
+      const total = panel?.clientWidth || window.innerWidth
+      const browserMin = drag.dock ? 640 : STANDALONE_BROWSER_MIN_W
+      const maxChat = Math.max(STANDALONE_CHAT_MIN_W, total - browserMin)
+      const next = Math.round(
+        Math.min(maxChat, Math.max(STANDALONE_CHAT_MIN_W, drag.startW + drag.grow * (event.clientX - drag.startX)))
+      )
+      if (drag.dock) setDockBesideChatW(next)
+      else setChatPaneWidth(next)
+    }
+    function onUp() {
+      const drag = splitResizeRef.current
+      splitResizeRef.current = null
+      setIsSplitResizing(false)
+      if (drag?.dock) {
+        setDockBesideChatW((w) => {
+          try {
+            localStorage.setItem(ADMIN_AI_DOCK_BROWSER_CHAT_W_KEY, String(Math.round(w)))
+          } catch {
+            /* quota */
+          }
+          return w
+        })
+        return
+      }
+      setChatPaneWidth((w) => {
+        try {
+          localStorage.setItem(ADMIN_AI_STANDALONE_CHAT_W_KEY, String(Math.round(w)))
+        } catch {
+          /* quota */
+        }
+        return w
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [isSplitResizing])
+
+  useEffect(() => {
+    if (!isStandalone || !browserPaneOpen) return
+    function clampChatWidth() {
+      const total = panelRef.current?.clientWidth || window.innerWidth
+      const maxChat = Math.max(STANDALONE_CHAT_MIN_W, total - STANDALONE_BROWSER_MIN_W)
+      setChatPaneWidth((w) => Math.min(maxChat, Math.max(STANDALONE_CHAT_MIN_W, w)))
+    }
+    clampChatWidth()
+    window.addEventListener('resize', clampChatWidth)
+    return () => window.removeEventListener('resize', clampChatWidth)
+  }, [isStandalone, browserPaneOpen])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(ADMIN_AI_BROWSER_WORKSPACE_KEY, dockBrowserWorkspace ? '1' : '0')
+    } catch {
+      /* quota */
+    }
+  }, [dockBrowserWorkspace])
+
+  useEffect(() => {
+    if (isStandalone || !dockBrowserWorkspace || (dockMode !== 'dock-left' && dockMode !== 'dock-right')) return
+    function clampChatWidth() {
+      const total = panelRef.current?.clientWidth || 0
+      if (total < 480) return
+      const maxChat = Math.max(STANDALONE_CHAT_MIN_W, total - 640)
+      setDockBesideChatW((w) => Math.min(maxChat, Math.max(STANDALONE_CHAT_MIN_W, w)))
+    }
+    clampChatWidth()
+    window.addEventListener('resize', clampChatWidth)
+    return () => window.removeEventListener('resize', clampChatWidth)
+  }, [isStandalone, dockBrowserWorkspace, dockMode])
+
+  useEffect(() => {
     return () => {
       try {
         recognitionRef.current?.stop()
@@ -1449,12 +2059,52 @@ export default function AdminAiAssistant({
     }
   }, [])
 
-  const hasReadyAttachments = useMemo(
-    () => attachments.some((a) => a.status === 'ready' && Boolean(a.excerpt?.trim())),
-    [attachments]
-  )
   const attachmentsBusy = useMemo(() => attachments.some((a) => a.status === 'reading'), [attachments])
-  const canSend = enabled && !sending && !attachmentsBusy && (input.trim().length > 0 || hasReadyAttachments)
+  const canSend =
+    enabled &&
+    !sending &&
+    !attachmentsBusy &&
+    (composerPlainText(input).length > 0 ||
+      chipsIn(input).some((chip) => {
+        if (chip.kind === 'element' || chip.kind === 'link') return true
+        const file = attachments.find((row) => row.id === chip.id)
+        return file?.status === 'ready' && Boolean(file.excerpt?.trim())
+      }))
+
+  const composerChipViews = useMemo<ComposerChipView[]>(() => {
+    return chipsIn(input).map((chip) => {
+      if (chip.kind === 'element') {
+        const pick = picks.find((row) => row.id === chip.id)
+        return {
+          kind: chip.kind,
+          id: chip.id,
+          label: pick?.label ?? 'element',
+          title: pick?.text ?? '',
+          tone: 'element' as const,
+        }
+      }
+      if (chip.kind === 'file') {
+        const file = attachments.find((row) => row.id === chip.id)
+        const tone =
+          file?.status === 'error' ? ('file-error' as const) : file?.status === 'reading' ? ('file-reading' as const) : ('file' as const)
+        return {
+          kind: chip.kind,
+          id: chip.id,
+          label: file?.label ?? 'file',
+          title: file?.error || file?.excerpt?.slice(0, 280) || '',
+          tone,
+        }
+      }
+      const link = linkChips.find((row) => row.id === chip.id)
+      return {
+        kind: chip.kind,
+        id: chip.id,
+        label: link?.label ?? 'link',
+        title: link?.url ?? '',
+        tone: 'link' as const,
+      }
+    })
+  }, [input, picks, attachments, linkChips])
 
   const lastRunId = useMemo(() => {
     const fromPending = pendingAction?.runId
@@ -1478,11 +2128,30 @@ export default function AdminAiAssistant({
     return data.text.trim()
   }
 
-  async function ingestFiles(fileList: File[]) {
-    const files = Array.from(fileList).slice(0, 8)
-    for (const file of files) {
-      const kind = classifyFile(file)
+  function composerValueNow() {
+    return composerRef.current?.currentValue() ?? inputLiveRef.current
+  }
+
+  function dropOldestChip<T extends { id: string }>(kind: ComposerChipKind, value: string, rows: T[]): { value: string; rows: T[] } {
+    if (rows.length < 8) return { value, rows }
+    const oldest = rows[0]
+    if (!oldest) return { value, rows }
+    return { value: removeChipToken(value, kind, oldest.id), rows: rows.slice(1) }
+  }
+
+  async function ingestFiles(fileList: File[], atOffset?: number | null) {
+    const incoming = Array.from(fileList).slice(0, 8)
+    let value = composerValueNow()
+    let files = [...attachmentsLiveRef.current]
+    let cursor = atOffset ?? composerRef.current?.insertionOffset() ?? value.length
+    const jobs: Array<{ id: string; file: File; kind: 'text' | 'audio' }> = []
+
+    for (const file of incoming) {
+      const trimmed = dropOldestChip('file', value, files)
+      value = trimmed.value
+      files = trimmed.rows
       const id = nextId()
+      const kind = classifyFile(file)
       const lowerName = file.name.trim().toLowerCase()
       const looksSecret =
         lowerName === '.env' ||
@@ -1492,68 +2161,95 @@ export default function AdminAiAssistant({
         lowerName.includes('id_rsa') ||
         lowerName.includes('credentials') ||
         lowerName.includes('service_account')
+      const storedKind: 'text' | 'audio' = kind === 'audio' ? 'audio' : 'text'
+      let status: PendingAttachment['status'] = 'reading'
+      let error: string | undefined
       if (looksSecret) {
-        setAttachments((prev) => [
-          ...prev,
-          {
-            id,
-            file,
-            kind: 'text',
-            label: file.name,
-            status: 'error',
-            error: 'Secret-bearing files are blocked (.env, keys, credentials).',
-          },
-        ])
-        continue
+        status = 'error'
+        error = 'Secret-bearing files are blocked (.env, keys, credentials).'
+      } else if (kind === 'unsupported') {
+        status = 'error'
+        error = 'Unsupported type. Use text/markdown/json/csv or common audio formats.'
       }
-      if (kind === 'unsupported') {
-        setAttachments((prev) => [
-          ...prev,
-          {
-            id,
-            file,
-            kind: 'text',
-            label: file.name,
-            status: 'error',
-            error: 'Unsupported type. Use text/markdown/json/csv or common audio formats.',
-          },
-        ])
-        continue
-      }
+      const placed = insertChipToken(value, cursor, 'file', id)
+      value = placed.value
+      cursor = placed.caret
+      files = [...files, { id, file, kind: storedKind, label: file.name, status, error }]
+      if (status === 'reading') jobs.push({ id, file, kind: storedKind })
+    }
 
-      setAttachments((prev) => [
-        ...prev,
-        { id, file, kind, label: file.name, status: 'reading' },
-      ])
+    if (!incoming.length) return
+    inputLiveRef.current = value
+    composerRef.current?.expectCaretAt(cursor)
+    mergeIntoActive({ input: value, attachments: files })
 
+    for (const job of jobs) {
       try {
         const excerpt =
-          kind === 'text'
-            ? truncateBody(await readTextFile(file), MAX_ATTACHMENT_CHARS)
-            : truncateBody(await transcribeWithServer(file), MAX_ATTACHMENT_CHARS)
-        setAttachments((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, status: 'ready' as const, excerpt } : a))
-        )
+          job.kind === 'text'
+            ? truncateBody(await readTextFile(job.file), MAX_ATTACHMENT_CHARS)
+            : truncateBody(await transcribeWithServer(job.file), MAX_ATTACHMENT_CHARS)
+        setAttachments((prev) => prev.map((row) => (row.id === job.id ? { ...row, status: 'ready' as const, excerpt } : row)))
       } catch (e) {
         setAttachments((prev) =>
-          prev.map((a) =>
-            a.id === id ? { ...a, status: 'error' as const, error: getErrorMessage(e) } : a
-          )
+          prev.map((row) => (row.id === job.id ? { ...row, status: 'error' as const, error: getErrorMessage(e) } : row))
         )
       }
     }
   }
 
-  function buildAttachmentBlock(atts: PendingAttachment[]): string {
-    const parts = atts.filter((a) => a.status === 'ready' && a.excerpt?.trim())
-    if (!parts.length) return ''
-    return parts.map((a) => `--- Attached: ${a.label} ---\n${a.excerpt!.trim()}`).join('\n\n')
+  function insertLinks(urls: string[], atOffset?: number | null) {
+    if (!urls.length) return
+    let value = composerValueNow()
+    let rows = [...linksLiveRef.current]
+    let cursor = atOffset ?? composerRef.current?.insertionOffset() ?? value.length
+    for (const url of urls) {
+      const trimmed = dropOldestChip('link', value, rows)
+      value = trimmed.value
+      rows = trimmed.rows
+      const id = nextId()
+      const placed = insertChipToken(value, cursor, 'link', id)
+      value = placed.value
+      cursor = placed.caret
+      rows = [...rows, { id, url, label: composerLinkLabel(url) }]
+    }
+    inputLiveRef.current = value
+    composerRef.current?.expectCaretAt(cursor)
+    mergeIntoActive({ input: value, links: rows })
   }
 
-  function composeWithAttachments(base: string, atts: PendingAttachment[]) {
-    const block = buildAttachmentBlock(atts)
-    const raw = [base.trim(), block].filter(Boolean).join('\n\n')
-    return truncateBody(raw, MAX_COMPOSED_MESSAGE_CHARS)
+  function insertElementPick(pick: { label: string; text: string }) {
+    let value = composerValueNow()
+    let rows = [...picksLiveRef.current]
+    const trimmed = dropOldestChip('element', value, rows)
+    value = trimmed.value
+    rows = trimmed.rows
+    const id = nextId()
+    const placed = insertChipToken(value, composerRef.current?.insertionOffset() ?? value.length, 'element', id)
+    inputLiveRef.current = placed.value
+    composerRef.current?.expectCaretAt(placed.caret)
+    mergeIntoActive({
+      input: placed.value,
+      elementPicks: [...rows, { id, label: pick.label, text: pick.text }],
+    })
+  }
+
+  function removeComposerChip(kind: ComposerChipKind, id: string) {
+    const value = removeChipToken(composerValueNow(), kind, id)
+    inputLiveRef.current = value
+    mergeIntoActive({ input: value })
+  }
+
+  function composeComposerMessage(
+    base: string,
+    atts: PendingAttachment[],
+    pickRows: ElementPickChip[],
+    linkRows: ComposerLink[],
+  ) {
+    return truncateBody(
+      expandComposerMessage(base, { elements: pickRows, attachments: atts, links: linkRows }),
+      MAX_COMPOSED_MESSAGE_CHARS,
+    )
   }
 
   function speechRecognitionCtor(): (new () => SpeechRecognition) | null {
@@ -1608,7 +2304,12 @@ export default function AdminAiAssistant({
     }
   }
 
-  async function sendChatMessage(content: string, skillId?: string) {
+  async function sendChatMessage(
+    content: string,
+    skillId?: string,
+    options?: { onToolStep?: (step: AdminAiAgentToolStep) => void },
+  ) {
+    const agentEnabled = agentMode !== 'chat'
     const payload: {
       message: string
       provider?: string
@@ -1618,7 +2319,19 @@ export default function AdminAiAssistant({
       honestyMode?: AdminChatHonestyMode
       energyPreset?: AdminChatEnergyPreset
       pageContext?: AdminAiPageContext
-    } = { message: content, honestyMode, energyPreset }
+      agent?: boolean
+      stream?: boolean
+      threadMemory?: AdminAiThreadMemory
+      chatSessionId?: string
+    } = {
+      message: content,
+      honestyMode,
+      energyPreset,
+      agent: agentEnabled,
+      stream: agentEnabled,
+      threadMemory: threadMemory ?? emptyThreadMemory(),
+      chatSessionId: activeSessionId,
+    }
     if (chatProvider !== 'auto') {
       payload.provider = chatProvider
     }
@@ -1645,6 +2358,43 @@ export default function AdminAiAssistant({
       throw new Error(errorData.error || 'Failed to contact AI chat API.')
     }
 
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('ndjson') && response.body) {
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalPayload: ChatResponse | null = null
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const row = JSON.parse(line) as {
+              type?: string
+              event?: { type?: string; step?: AdminAiAgentToolStep }
+              error?: string
+            } & ChatResponse
+            if (row.type === 'event' && row.event?.step) {
+              options?.onToolStep?.(row.event.step)
+            } else if (row.type === 'done') {
+              finalPayload = row
+            } else if (row.type === 'error') {
+              throw new Error(row.error || 'Chat stream failed')
+            }
+          } catch (err) {
+            if (err instanceof SyntaxError) continue
+            throw err
+          }
+        }
+      }
+      if (!finalPayload) throw new Error('Chat stream ended without a result')
+      return finalPayload
+    }
+
     return (await response.json()) as ChatResponse
   }
 
@@ -1668,13 +2418,18 @@ export default function AdminAiAssistant({
       !('payload' in params)
 
     const requestBody = useApproveShortcut
-      ? { approve: true, runId: (params as { approve: true; runId: string }).runId }
+      ? {
+          approve: true,
+          runId: (params as { approve: true; runId: string }).runId,
+          chatSessionId: activeSessionId,
+        }
       : {
           tool: 'tool' in params ? params.tool : undefined,
           payload: 'payload' in params ? params.payload : undefined,
           approve: Boolean('approve' in params && params.approve),
           runId: 'runId' in params ? params.runId : undefined,
           planSteps: 'planSteps' in params ? params.planSteps : undefined,
+          chatSessionId: activeSessionId,
         }
     const response = await adminAiFetch('/api/admin/ai/execute', {
       method: 'POST',
@@ -1765,7 +2520,8 @@ export default function AdminAiAssistant({
           id: nextId(),
           role: 'assistant',
           content:
-            result.message || 'Full runbook preview is ready. Review the timeline and approve when ready.',
+            result.message ||
+              'Runbook preview is ready. Each action is its own row. A submit row is the only control that sends that step.',
         },
         ...strategyPackEmbedChatMessagesFromResult(result),
       ])
@@ -1855,7 +2611,10 @@ export default function AdminAiAssistant({
   }
 
   /** Plan + dry-run execute preview (shared by `/exec` submit and Studio quick actions). */
-  async function runExecDryRun(tool: ExecuteTool, basePayload: Record<string, unknown>) {
+  async function runExecDryRun(
+    tool: ExecuteTool,
+    basePayload: Record<string, unknown>,
+  ): Promise<AssistantActionResponse | undefined> {
     let execPayload = basePayload
     if (preferStrategyPackRefine && tool === 'draft_product_strategy_pack') {
       execPayload = { ...execPayload, refineWithLlm: true }
@@ -1909,6 +2668,8 @@ export default function AdminAiAssistant({
       },
       ...strategyPackEmbedChatMessagesFromResult(result),
     ])
+    if (studioMissionReleaseId) setMissionRefreshNonce((n) => n + 1)
+    return result
   }
 
   async function triggerStudioPipelineSnapshot(e: ReactMouseEvent<HTMLButtonElement>) {
@@ -1939,10 +2700,19 @@ export default function AdminAiAssistant({
     const turnSessionId = activeSessionId
     const userText = input.trim()
     const attachmentSnapshot = [...attachments]
-    const userLabel = `${userText || '(attachments only)'}${attachmentSnapshot.length ? ` · ${attachmentSnapshot.length} file(s)` : ''}`
+    const pickSnapshot = [...picks]
+    const linkSnapshot = [...linkChips]
+    const plain = composerPlainText(userText)
+    const userLabel = composerDisplayText(userText, [
+      ...pickSnapshot.map((pick) => ({ kind: 'element' as const, id: pick.id, label: pick.label })),
+      ...attachmentSnapshot.map((file) => ({ kind: 'file' as const, id: file.id, label: file.label })),
+      ...linkSnapshot.map((link) => ({ kind: 'link' as const, id: link.id, label: link.label })),
+    ])
 
     setInput('')
     setAttachments([])
+    setElementPicks([])
+    setLinks([])
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: userLabel }])
     setSending(true)
 
@@ -1953,13 +2723,12 @@ export default function AdminAiAssistant({
       const agentSkillId = isAgentSkillMode(agentMode) ? agentMode : null
 
       if (!isPureChat) {
+        const hasPlanBody = plain.length > 0 || chipsIn(userText).length > 0
         const forcedPlanMessage =
-          agentMode === 'plan' && userText && !userText.toLowerCase().startsWith('/plan ')
-            ? userText
-            : null
-        const planMessage = forcedPlanMessage ?? parsePlanCommand(userText)
-        if (planMessage) {
-          const messageForPlan = composeWithAttachments(planMessage, attachmentSnapshot)
+          agentMode === 'plan' && hasPlanBody && !plain.toLowerCase().startsWith('/plan ') ? userText : null
+        const planMessage = forcedPlanMessage ?? stripPlanPrefix(userText)
+        if (planMessage && (composerPlainText(planMessage).length > 0 || chipsIn(planMessage).length > 0)) {
+          const messageForPlan = composeComposerMessage(planMessage, attachmentSnapshot, pickSnapshot, linkSnapshot)
           const data = await fetchIntentPlan(
             messageForPlan,
             agentSkillId ?? undefined
@@ -1983,7 +2752,7 @@ export default function AdminAiAssistant({
           return
         }
 
-        const execLine = userText.split(/\r?\n/, 1)[0]?.trim() ?? ''
+        const execLine = plain.split(/\r?\n/, 1)[0]?.trim() ?? ''
         const exec = parseExecuteCommand(execLine)
         if (exec) {
           if (attachmentSnapshot.some((a) => a.status === 'ready')) {
@@ -2003,15 +2772,236 @@ export default function AdminAiAssistant({
         }
       }
 
-      const chatBody = composeWithAttachments(userText, attachmentSnapshot)
+      const chatBody = composeComposerMessage(userText, attachmentSnapshot, pickSnapshot, linkSnapshot)
       const chatSkillId =
         isPureChat || agentMode === 'auto' || agentMode === 'plan'
           ? undefined
           : isAgentSkillMode(agentMode)
             ? agentMode
             : undefined
+      mergeIntoActive({ anchorSuggestions: suggestAnchorSnippetsFromUserText(plain) })
+      const liveSteps: AdminAiAgentToolStep[] = []
+      const streamingId = nextId()
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: streamingId,
+          role: 'assistant',
+          content: agentMode === 'chat' ? '…' : 'Working…',
+          toolSteps: [],
+        },
+      ])
+      const result = await sendChatMessage(chatBody, chatSkillId, {
+        onToolStep: (step) => {
+          const idx = liveSteps.findIndex((s) => s.id === step.id)
+          if (idx >= 0) liveSteps[idx] = step
+          else liveSteps.push(step)
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingId
+                ? { ...m, content: 'Working…', toolSteps: [...liveSteps] }
+                : m,
+            ),
+          )
+        },
+      })
+      setActiveSkill(result.inferredSkill ?? null)
+      mergeIntoActive({
+        lastRoutingEcho: result.routing ?? null,
+        lastRunFingerprint: result.runFingerprint ?? null,
+        threadMemory: result.memory
+          ? normalizeThreadMemory(result.memory)
+          : mergeThreadMemory(threadMemory ?? emptyThreadMemory(), result.memoryPatch as never),
+        skillShiftNotice:
+          prevSkillForHandoff.id &&
+          result.inferredSkill?.id &&
+          prevSkillForHandoff.id !== result.inferredSkill.id &&
+          !chatSkillId &&
+          !isContinuationOnlyUserMessage(plain)
+            ? {
+                fromId: prevSkillForHandoff.id,
+                fromName: prevSkillForHandoff.name ?? prevSkillForHandoff.id,
+                toId: result.inferredSkill.id,
+                toName: result.inferredSkill.name,
+              }
+            : null,
+      })
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId
+            ? {
+                ...m,
+                content: result.reply,
+                toolSteps: result.toolSteps?.length ? result.toolSteps : liveSteps,
+                applyDiffs: result.applyDiffs ?? [],
+              }
+            : m,
+        ),
+      )
+      setSessions((prev) => {
+        const i = prev.findIndex((s) => s.id === turnSessionId)
+        if (i < 0) return prev
+        const s = prev[i]!
+        if (s.title !== 'New chat') return prev
+        const firstLine = (userLabel.split('\n')[0] ?? userLabel).trim()
+        if (!firstLine) return prev
+        const short = firstLine.length > 40 ? `${firstLine.slice(0, 38)}…` : firstLine
+        const copy = [...prev]
+        copy[i] = { ...s, title: short, updatedAt: Date.now() }
+        return copy
+      })
+    } catch (error: unknown) {
+      setMessages((prev) => {
+        const errText = `Error: ${getErrorMessage(error)}`
+        const workingIdx = [...prev]
+          .reverse()
+          .findIndex((m) => m.role === 'assistant' && (m.content === 'Working…' || m.content === '…'))
+        if (workingIdx >= 0) {
+          const idx = prev.length - 1 - workingIdx
+          return prev.map((m, i) => (i === idx ? { ...m, content: errText, toolSteps: m.toolSteps } : m))
+        }
+        return [...prev, { id: nextId(), role: 'assistant', content: errText }]
+      })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function applyStudioNav(nav: AdminAiStudioNavTarget) {
+    dispatchAdminAiStudioNavigate(nav)
+    const onRelease = pageCtx?.pageContext?.studio?.releaseId === nav.releaseId
+    if (!onRelease && typeof window !== 'undefined') {
+      window.location.assign(studioNavigateHref(nav))
+    }
+  }
+
+  async function handlePlaybookRun(playbook: AdminAiPlaybook) {
+    if (!enabled || sending) return
+    const releaseId = pageCtx?.pageContext?.studio?.releaseId
+    if (playbook.requiresRelease && !releaseId) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: 'assistant',
+          content: 'Open a release in Release Studio first — this playbook needs an active release id.',
+        },
+      ])
+      return
+    }
+    if (playbook.openStep && releaseId) {
+      applyStudioNav({ releaseId, step: playbook.openStep })
+    }
+    const playbookRow = playbookSuggestionPool.find(
+      (row) => parsePlaybookIdFromQuickStart(row) === playbook.id,
+    )
+    if (playbookRow && activeSession.playbookQuickStart) {
+      mergeIntoActive({
+        playbookQuickStart: markPlaybookQuickStartAttended(activeSession.playbookQuickStart, playbookRow),
+      })
+    }
+    if (isAgentSkillMode(playbook.skillId as AgentModeChoice)) {
+      setAgentMode(playbook.skillId as AgentModeChoice)
+    }
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: nextId(),
+        role: 'user',
+        content: `Playbook: ${playbook.label} (${playbook.steps.length} dry-run steps)`,
+      },
+    ])
+    setSending(true)
+    try {
+      mergeIntoActive({ anchorSuggestions: [] })
+      for (const step of playbook.steps) {
+        if (step.kind !== 'exec') continue
+        const payload = { ...step.payload }
+        if (releaseId && payload.releaseId == null) {
+          payload.releaseId = releaseId
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextId(),
+            role: 'system',
+            content: `Playbook step — ${step.label}`,
+          },
+        ])
+        await runExecDryRun(step.tool as ExecuteTool, payload)
+      }
+    } catch (error: unknown) {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: 'assistant', content: `Playbook error: ${getErrorMessage(error)}` },
+      ])
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleQuickStartPick(start: AdminAiQuickStart) {
+    if (!enabled || sending) return
+    if (start.nav) {
+      applyStudioNav(start.nav)
+    }
+    if (start.kind === 'priority' && activeSession.priorityQuickStart) {
+      mergeIntoActive({
+        priorityQuickStart: markPriorityQuickStartAttended(activeSession.priorityQuickStart, start),
+      })
+    }
+    if (start.kind === 'creative' && activeSession.creativeQuickStart) {
+      mergeIntoActive({
+        creativeQuickStart: markCreativeQuickStartAttended(activeSession.creativeQuickStart, start),
+      })
+    }
+    if (start.skillId && isAgentSkillMode(start.skillId as AgentModeChoice)) {
+      setAgentMode(start.skillId as AgentModeChoice)
+    }
+
+    const userText = start.message.trim()
+    const turnSessionId = activeSessionId
+    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: userText }])
+    setSending(true)
+
+    try {
+      mergeIntoActive({ anchorSuggestions: [] })
+      const prevSkillForHandoff = { id: activeSkill?.id ?? null, name: activeSkill?.name ?? null }
+      const agentSkillId =
+        start.skillId && isAgentSkillMode(start.skillId as AgentModeChoice)
+          ? start.skillId
+          : isAgentSkillMode(agentMode)
+            ? agentMode
+            : null
+
+      const planMessage = parsePlanCommand(userText)
+      if (planMessage) {
+        const data = await fetchIntentPlan(planMessage, agentSkillId ?? undefined)
+        setLastRunbookGraph(data.graph ?? null)
+        if (data.plan?.skill) {
+          setActiveSkill({
+            id: data.plan.skill.id,
+            name: data.plan.skill.name,
+            description: data.plan.skill.description,
+          })
+        }
+        setMessages((prev) => [
+          ...prev,
+          { id: nextId(), role: 'assistant', content: formatRunbookMessage(data) },
+        ])
+        return
+      }
+
+      const execLine = userText.split(/\r?\n/, 1)[0]?.trim() ?? ''
+      const exec = parseExecuteCommand(execLine)
+      if (exec) {
+        await runExecDryRun(exec.tool, exec.payload)
+        return
+      }
+
+      const chatSkillId = agentSkillId ?? undefined
       mergeIntoActive({ anchorSuggestions: suggestAnchorSnippetsFromUserText(userText) })
-      const result = await sendChatMessage(chatBody, chatSkillId)
+      const result = await sendChatMessage(userText, chatSkillId)
       setActiveSkill(result.inferredSkill ?? null)
       mergeIntoActive({
         lastRoutingEcho: result.routing ?? null,
@@ -2030,19 +3020,14 @@ export default function AdminAiAssistant({
               }
             : null,
       })
-      setMessages((prev) => [
-        ...prev,
-        { id: nextId(), role: 'assistant', content: result.reply },
-      ])
+      setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: result.reply }])
       setSessions((prev) => {
         const i = prev.findIndex((s) => s.id === turnSessionId)
         if (i < 0) return prev
         const s = prev[i]!
         if (s.title !== 'New chat') return prev
-        const firstLine = (userText.split(/\n/)[0] ?? userText).trim() ||
-          (attachmentSnapshot[0]?.label ? `File: ${attachmentSnapshot[0].label}` : '')
-        if (!firstLine) return prev
-        const short = firstLine.length > 40 ? `${firstLine.slice(0, 38)}…` : firstLine
+        const short =
+          start.label.length > 40 ? `${start.label.slice(0, 38)}…` : start.label
         const copy = [...prev]
         copy[i] = { ...s, title: short, updatedAt: Date.now() }
         return copy
@@ -2050,11 +3035,7 @@ export default function AdminAiAssistant({
     } catch (error: unknown) {
       setMessages((prev) => [
         ...prev,
-        {
-          id: nextId(),
-          role: 'assistant',
-          content: `Error: ${getErrorMessage(error)}`,
-        },
+        { id: nextId(), role: 'assistant', content: `Error: ${getErrorMessage(error)}` },
       ])
     } finally {
       setSending(false)
@@ -2086,50 +3067,161 @@ export default function AdminAiAssistant({
     )
   }
 
-  async function approvePendingAction() {
-    if (!pendingAction?.toolPreview) return
-    const missingFieldsFromPlan = pendingPlanSteps.flatMap((step) => getMissingRequiredFields(step.tool, step.payload))
-    const missingFields = missingFieldsFromPlan.length
-      ? missingFieldsFromPlan
-      : getMissingRequiredFields(pendingAction.toolPreview.tool, pendingAction.toolPreview.payload || {})
-    if (missingFields.length) {
+  function heldApprovalSteps(): PlanStep[] {
+    if (pendingPlanSteps.length) return pendingPlanSteps
+    const preview = pendingAction?.toolPreview
+    if (!preview) return []
+    return [
+      {
+        id: 'single-step',
+        tool: preview.tool,
+        payload: preview.payload ?? {},
+        requiresApproval: true,
+        riskTier: preview.riskTier,
+        skillId: null,
+      },
+    ]
+  }
+
+  function replaceHeldSteps(next: PlanStep[]) {
+    setApprovalEditId(null)
+    setApprovalEditError(null)
+    setPendingPlanSteps(next)
+    if (!next.length) {
+      setPendingAction(null)
+      return
+    }
+    const first = next[0]!
+    setPendingAction((prev) =>
+      prev?.toolPreview
+        ? {
+            ...prev,
+            toolPreview: {
+              ...prev.toolPreview,
+              tool: first.tool,
+              payload: first.payload,
+              riskTier: first.riskTier,
+            },
+          }
+        : prev
+    )
+  }
+
+  function beginApprovalEdit(row: ApprovalRow) {
+    setApprovalEditId(row.id)
+    setApprovalEditDraft(JSON.stringify(payloadWithoutDryRun(row.payload), null, 2))
+    setApprovalEditError(null)
+  }
+
+  function saveApprovalEdit(row: ApprovalRow) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(approvalEditDraft)
+    } catch {
+      setApprovalEditError('Payload must be valid JSON.')
+      return
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setApprovalEditError('Payload must be a JSON object.')
+      return
+    }
+    const payload = payloadWithoutDryRun(parsed as Record<string, unknown>)
+    const missing = getMissingRequiredFields(row.tool, payload)
+    if (missing.length) {
+      setApprovalEditError(`Missing required fields: ${missing.join(', ')}`)
+      return
+    }
+    replaceHeldSteps(
+      heldApprovalSteps().map((step) => (step.id === row.sourceStepId ? { ...step, payload } : step))
+    )
+  }
+
+  function dropApprovalSource(sourceStepId: string) {
+    setApprovalHiddenRowIds((ids) => ids.filter((id) => id !== sourceStepId && !id.startsWith(`${sourceStepId}:`)))
+    replaceHeldSteps(heldApprovalSteps().filter((step) => step.id !== sourceStepId))
+  }
+
+  function dropApprovalRow(row: ApprovalRow) {
+    const steps = heldApprovalSteps()
+    const siblings = buildApprovalRows(steps).filter(
+      (candidate) => candidate.sourceStepId === row.sourceStepId && candidate.id !== row.id && !approvalHiddenRowIds.includes(candidate.id)
+    )
+    if (!siblings.length) {
+      dropApprovalSource(row.sourceStepId)
+      return
+    }
+    setApprovalHiddenRowIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
+  }
+
+  async function approveApprovalRow(row: ApprovalRow) {
+    const missing = getMissingRequiredFields(row.tool, row.payload)
+    if (missing.length) {
       setMessages((prev) => [
         ...prev,
         {
           id: nextId(),
           role: 'assistant',
-          content: `Cannot approve yet. Missing required fields: ${missingFields.join(', ')}`,
+          content: `Cannot approve yet. Missing required fields: ${missing.join(', ')}`,
         },
       ])
       return
     }
     setSending(true)
     try {
-      const runId = pendingAction.runId || lastRunId || undefined
-      const result = await runExecute(
-        runId
-          ? { approve: true, runId }
-          : {
-              tool: pendingAction.toolPreview.tool,
-              payload: pendingAction.toolPreview.payload || {},
-              approve: true,
-              planSteps: pendingPlanSteps.length ? pendingPlanSteps : undefined,
-            }
-      )
+      const heldPreview = row.id.endsWith(':preview')
+      if (heldPreview) {
+        const result = await runExecute({
+          tool: row.tool,
+          payload: row.payload,
+          approve: false,
+        })
+        setPendingAction((prev) =>
+          prev ? { ...prev, message: result.message, stepPreviews: result.stepPreviews ?? prev.stepPreviews } : result
+        )
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextId(),
+            role: 'assistant',
+            content: result.message || `${row.label} refreshed. Nothing was submitted.`,
+          },
+          ...strategyPackEmbedChatMessagesFromResult(result),
+        ])
+        return
+      }
+      const prepared = await runExecute({
+        tool: row.tool,
+        payload: row.payload,
+        approve: false,
+      })
+      if (!prepared.runId) {
+        throw new Error('Preview did not return a run to approve.')
+      }
+      const result = await runExecute({
+        tool: row.tool,
+        payload: row.payload,
+        approve: true,
+        runId: prepared.runId,
+        planSteps: [
+          {
+            id: row.sourceStepId,
+            tool: row.tool,
+            payload: row.payload,
+            requiresApproval: true,
+            riskTier: row.riskTier,
+            skillId: null,
+          },
+        ],
+      })
       setMessages((prev) => [
         ...prev,
         {
           id: nextId(),
           role: 'assistant',
-          content:
-            result.message ||
-            (result.results && result.results.length > 1
-              ? `${result.results.length} plan steps executed.`
-              : 'Action approved and executed.'),
+          content: result.message || `${row.label} approved and sent.`,
         },
       ])
-      setPendingAction(null)
-      setPendingPlanSteps([])
+      dropApprovalSource(row.sourceStepId)
     } catch (error: unknown) {
       setMessages((prev) => [
         ...prev,
@@ -2240,9 +3332,42 @@ export default function AdminAiAssistant({
     }
     setIsResizing(true)
   }
+
+  function startStandaloneSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isStandalone || !browserPaneOpen) return
+    event.preventDefault()
+    event.stopPropagation()
+    splitResizeRef.current = { startX: event.clientX, startW: chatPaneWidth, dock: false, grow: 1 }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      /* ignore */
+    }
+    setIsSplitResizing(true)
+  }
+
+  function startDockBrowserSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (isStandalone || !dockBrowserWorkspace) return
+    event.preventDefault()
+    event.stopPropagation()
+    splitResizeRef.current = {
+      startX: event.clientX,
+      startW: dockBesideChatW,
+      dock: true,
+      grow: dockMode === 'dock-right' ? -1 : 1,
+    }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      /* ignore */
+    }
+    setIsSplitResizing(true)
+  }
+
   const dockRightLayout = !isStandalone && dockMode === 'dock-right'
   const dockLeftLayout = !isStandalone && dockMode === 'dock-left'
   const dockEdgeLayout = dockRightLayout || dockLeftLayout
+  const dockBrowserBeside = dockEdgeLayout && dockBrowserWorkspace
 
   const handleAdminAiFabClick = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -2282,8 +3407,253 @@ export default function AdminAiAssistant({
   }
 
   function renderAssistantInterior() {
+    const composerToggles = (
+      <>
+        {setFocusCopilotEnabled ? (
+          <FieldFocusToggle
+            copilotOn={focusCopilotEnabled}
+            disabled={!enabled || sending}
+            onToggle={() => setFocusCopilotEnabled(!focusCopilotEnabled)}
+          />
+        ) : null}
+        <AnchorsPanelToggle
+          open={anchorsPanelOpen}
+          disabled={!enabled || sending}
+          onToggle={() => {
+            if (anchorsPanelOpen) setExplainOpen(false)
+            setAnchorsPanelOpen((o) => !o)
+          }}
+        />
+        <StrategyPackPolishToggle
+          on={preferStrategyPackRefine}
+          disabled={!enabled || sending}
+          onToggle={() => setPreferStrategyPackRefine((v) => !v)}
+        />
+      </>
+    )
+
+    const missionDock = buildMissionDock(pageCtx?.pageContext ?? null)
+
+    function handleMissionAction(action: MissionDockAction) {
+      if (action.type === 'prompt') {
+        setInput(action.message)
+        return
+      }
+      if (action.type === 'week') {
+        setInput(`/exec query_studio_command_center ${JSON.stringify({ dueWithinDays: 7 })}`)
+        return
+      }
+      if (action.type === 'open-launch') {
+        if (studioMissionReleaseId) applyStudioNav({ releaseId: studioMissionReleaseId, step: 'launch' })
+        return
+      }
+      if (action.type === 'distrokid-hydrate') {
+        if (!studioMissionReleaseId) return
+        const releaseId = studioMissionReleaseId
+        const target = action.target === 'my_music' ? 'my_music' : 'upload'
+        void (async () => {
+          setSending(true)
+          try {
+            applyStudioNav({ releaseId, step: 'delivery' })
+            const res = await adminAiFetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/distrokid`)
+            const json = (await res.json().catch(() => ({}))) as {
+              error?: string
+              packet?: {
+                worksheet?: string
+                upload_url?: string
+                my_music_url?: string
+                blockers?: string[]
+                release?: { title?: string; release_date?: string }
+              }
+              window?: {
+                label?: string
+                upload_by?: string | null
+                release_date?: string | null
+              }
+            }
+            if (!res.ok) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: nextId(),
+                  role: 'assistant',
+                  content: json.error || 'Could not load DistroKid packet for hydrate.',
+                },
+              ])
+              return
+            }
+            const { buildDistroKidBrowserHydrate } = await import('@/lib/ai/distrokid-browser-hydrate')
+            const { dispatchAdminAiBrowserHydrate } = await import('@/lib/admin-ai-client')
+            const packet = json.packet as {
+              worksheet?: string
+              upload_url?: string
+              my_music_url?: string
+              blockers?: string[]
+              ok?: boolean
+              release?: Record<string, unknown>
+              tracks?: unknown[]
+            } | undefined
+            const detail = buildDistroKidBrowserHydrate({
+              releaseId,
+              releaseTitle: String(packet?.release?.title || pageCtx?.pageContext?.studio?.title || ''),
+              target,
+              worksheet: packet?.worksheet || '',
+              uploadBy: json.window?.upload_by,
+              streetDate: String(packet?.release?.release_date || json.window?.release_date || ''),
+              windowLabel: json.window?.label,
+              blockers: packet?.blockers,
+              uploadUrl: packet?.upload_url,
+              myMusicUrl: packet?.my_music_url,
+            })
+            dispatchAdminAiBrowserHydrate(detail)
+            if (target === 'upload' && packet?.release && Array.isArray(packet.tracks) && !packet.blockers?.length) {
+              await new Promise((r) => window.setTimeout(r, 1200))
+              await adminAiFetch('/api/admin/ai/browser', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  actor: 'user',
+                  action: 'navigate',
+                  url: packet.upload_url || 'https://distrokid.com/new/',
+                }),
+              })
+              await new Promise((r) => window.setTimeout(r, 1800))
+              const prefillRes = await adminAiFetch('/api/admin/ai/browser', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  actor: 'user',
+                  action: 'distrokid_prefill',
+                  distrokidPacket: { release: packet.release, tracks: packet.tracks },
+                }),
+              })
+              const prefillJson = (await prefillRes.json().catch(() => ({}))) as {
+                distrokidPrefill?: { filled?: string[]; skipped?: string[] }
+                error?: string
+              }
+              const filled = prefillJson.distrokidPrefill?.filled?.length || 0
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: nextId(),
+                  role: 'assistant',
+                  content: [
+                    `Filled DistroKid desk for “${detail.releaseTitle || releaseId}” (${filled} field(s)).`,
+                    'Social Media Pack stays off. Metadata + artwork/WAV uploads run on the desk — review, Continue in DistroKid, then Mark submitted on the schedule card.',
+                  ].join(' '),
+                },
+              ])
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: nextId(),
+                  role: 'assistant',
+                  content: `Opened DistroKid ${target === 'my_music' ? 'My Music' : 'upload'} desk for “${detail.releaseTitle || releaseId}”. Worksheet staged — use Paste worksheet if needed. Mark submitted on the DistroKid schedule card after upload.`,
+                },
+              ])
+            }
+          } finally {
+            setSending(false)
+          }
+        })()
+        return
+      }
+      if (action.type === 'harness') {
+        const query = action.query
+        const payload = {
+          mode: 'stack' as const,
+          query,
+          ...(studioMissionReleaseId ? { releaseId: studioMissionReleaseId } : {}),
+        }
+        void (async () => {
+          setSending(true)
+          try {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: nextId(),
+                role: 'user',
+                content: `/exec query_intelligence_harness ${JSON.stringify(payload)}`,
+              },
+            ])
+            await runExecDryRun('query_intelligence_harness', payload)
+          } finally {
+            setSending(false)
+          }
+        })()
+        return
+      }
+      if (action.type === 'fix-blocker' || !studioMissionReleaseId) return
+      const releaseId = studioMissionReleaseId
+      if (action.type === 'snapshot') {
+        void (async () => {
+          setSending(true)
+          try {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: nextId(),
+                role: 'user',
+                content: `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
+              },
+            ])
+            await runExecDryRun('query_release_studio_snapshot', { releaseId })
+          } finally {
+            setSending(false)
+          }
+        })()
+        return
+      }
+      if (action.type === 'copy-dry-run') {
+        void (async () => {
+          setSending(true)
+          try {
+            applyStudioNav({ releaseId, step: 'copy' })
+            const payload = { releaseId, merge: true, dryRun: true, marketingCopy: {} }
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: nextId(),
+                role: 'user',
+                content: `/exec patch_release_marketing_copy ${JSON.stringify(payload)}`,
+              },
+            ])
+            await runExecDryRun('patch_release_marketing_copy', payload)
+          } finally {
+            setSending(false)
+          }
+        })()
+      }
+    }
+
+    const dockBrowserPane = (
+      <>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat and browser"
+          title="Drag to resize"
+          onPointerDown={isStandalone ? startStandaloneSplitResize : startDockBrowserSplitResize}
+          className="group relative z-10 w-1.5 shrink-0 cursor-ew-resize touch-none bg-gray-800/80 hover:bg-purple-600/50"
+        >
+          <span className="pointer-events-none absolute inset-y-0 -left-1 -right-1" />
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-gray-800 bg-gray-950">
+          <AdminAiBrowserDock
+            layout="side"
+            chatSessionId={activeSessionId}
+            expanded={isStandalone ? browserPaneOpen : true}
+            onExpandedChange={isStandalone ? setBrowserPaneOpen : undefined}
+            onExitWorkspace={isStandalone ? undefined : () => setDockBrowserWorkspace(false)}
+            persistExpanded={isStandalone}
+          />
+        </div>
+      </>
+    )
+
     return (
-          <div className="relative flex h-full min-h-0 flex-col" data-admin-ai-root>
+          <div className="relative flex h-full min-h-0 flex-1 flex-col" data-admin-ai-root>
             <div className="select-none border-b border-gray-800">
               <div className="flex items-stretch gap-0.5 px-1.5 py-1">
                 {isStandalone ? (
@@ -2420,6 +3790,17 @@ export default function AdminAiAssistant({
                       <path d="M12.5 3.5h3v3" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
+                  {isStandalone && !browserPaneOpen ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center gap-1 rounded px-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300/90 hover:bg-gray-800 hover:text-amber-200"
+                      aria-label="Show browser pane"
+                      title="Show browser beside chat"
+                      onClick={() => setBrowserPaneOpen(true)}
+                    >
+                      Browser
+                    </button>
+                  ) : null}
                   {showSessionHistory ? (
                     <div className="absolute right-0 top-8 z-[80] w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-600 bg-gray-900 shadow-2xl">
                       <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
@@ -2466,55 +3847,255 @@ export default function AdminAiAssistant({
                   ) : null}
                 </div>
               </div>
-              <div className="border-t border-gray-800/80 bg-gray-950/60 px-2.5 py-1.5">
-                <p className="text-[10px] leading-relaxed text-gray-500">
-                  <span className="font-mono text-gray-400">/plan</span> runbook ·{' '}
-                  <span className="font-mono text-gray-400">/exec</span> tools — publish/spend/delete blocked in v1.
-                </p>
-                {activeSkill?.name ? (
-                  <p className="mt-0.5 truncate text-[10px] text-purple-300/90">Active skill: {activeSkill.name}</p>
-                ) : null}
-                {disabledTools.length > 0 ? (
-                  <p className="mt-0.5 truncate text-[10px] text-amber-300/90">Disabled: {disabledTools.join(', ')}</p>
-                ) : null}
-              </div>
+              <AdminAiMemoryStrip
+                memory={threadMemory ?? null}
+                checkpoints={checkpoints ?? []}
+                undoBusy={sending}
+                onUndo={(checkpoint) => {
+                  void (async () => {
+                    try {
+                      await runExecDryRun(
+                        checkpoint.tool as ExecuteTool,
+                        { ...checkpoint.restorePayload, dryRun: true },
+                      )
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: nextId(),
+                          role: 'assistant',
+                          content: `Undo staged for “${checkpoint.label}”. Approve the preview to restore the previous values.`,
+                        },
+                      ])
+                    } catch (error: unknown) {
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: nextId(),
+                          role: 'assistant',
+                          content: `Undo failed: ${getErrorMessage(error)}`,
+                        },
+                      ])
+                    }
+                  })()
+                }}
+              />
+              {activeSkill?.name || disabledTools.length > 0 ? (
+                <div className="border-t border-gray-800/80 bg-gray-950/60 px-2.5 py-1.5">
+                  {activeSkill?.name ? (
+                    <p className="truncate text-[10px] text-purple-300/90">Active skill: {activeSkill.name}</p>
+                  ) : null}
+                  {disabledTools.length > 0 ? (
+                    <p className="truncate text-[10px] text-amber-300/90">Disabled: {disabledTools.join(', ')}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-lg px-3 py-3 text-sm leading-relaxed ${
-                    message.role === 'user'
-                      ? 'ml-8 bg-purple-600/20 text-purple-100'
-                      : message.role === 'assistant'
-                      ? 'mr-8 bg-gray-800/95 text-gray-100 ring-1 ring-gray-700/80'
-                      : 'bg-gray-900 text-gray-400'
-                  }`}
-                >
-                  {message.role === 'assistant' ? (
-                    <>
-                      <AdminAssistantRichText content={message.content} />
-                      {renderFocusApplyActions(message.content, pageFocus)}
-                      {message.embed?.type === 'product_strategy_pack' ? (
-                        <div className="mt-3 border-t border-gray-700/80 pt-3">
-                          <ProductStrategyPackCard
-                            output={message.embed.output}
-                            onSendPolishToChat={appendStrategyPolishToThread}
+            <div
+              className={`flex min-h-0 flex-1 ${(isStandalone && browserPaneOpen) || dockBrowserBeside ? 'flex-row' : 'flex-col'} ${
+                isSplitResizing ? 'select-none' : ''
+              }`}
+            >
+              {dockRightLayout && dockBrowserWorkspace ? dockBrowserPane : null}
+              <div
+                className={`flex min-h-0 flex-col ${isStandalone || dockBrowserBeside ? '' : 'min-h-0 flex-1'}`}
+                style={
+                  isStandalone && browserPaneOpen
+                    ? { width: chatPaneWidth, flex: '0 0 auto', maxWidth: '70%' }
+                    : isStandalone
+                      ? { flex: '1 1 auto', width: '100%' }
+                      : dockBrowserBeside
+                        ? { width: dockBesideChatW, flex: '0 0 auto', minWidth: STANDALONE_CHAT_MIN_W }
+                        : undefined
+                }
+              >
+            {!isStandalone && !dockBrowserBeside ? (
+              <AdminAiBrowserDock
+                layout="stack"
+                chatSessionId={activeSessionId}
+                onWorkspaceExpand={() => setDockBrowserWorkspace(true)}
+              />
+            ) : null}
+                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain px-3 py-3">
+              <AdminAiQuickStartPanel
+                  compact={!showQuickStart}
+                  sessionId={activeSessionId}
+                  smartExpand={{
+                    hasRelease: Boolean(studioMissionReleaseId),
+                    unfinishedCount: allUnfinishedBusiness.length,
+                    priorityCount: priorityQuickStart?.current.length ?? prioritySuggestionPool.length,
+                    blockerCount: Math.max(
+                      missionBlockerCount,
+                      pageCtx?.pageContext?.studio?.blockers?.length ?? 0,
+                    ),
+                  }}
+                  sectionCounts={{
+                    priority: priorityQuickStart?.current.length ?? 0,
+                    unfinished: allUnfinishedBusiness.length,
+                    playbooks: playbookSuggestionPool.length,
+                    creative: creativeQuickStart?.current.length ?? 0,
+                  }}
+                  priority={priorityQuickStart?.current ?? []}
+                  creative={creativeQuickStart?.current ?? []}
+                  priorityHistory={priorityHistory}
+                  creativeHistory={creativeHistory}
+                  unfinishedBusiness={visibleUnfinishedBusiness}
+                  allUnfinishedCount={allUnfinishedBusiness.length}
+                  dismissedUnfinishedHistory={dismissedUnfinishedHistory}
+                  onRefreshUnfinished={() => {
+                    const next = refreshUnfinishedBusinessViewState(
+                      allUnfinishedBusiness,
+                      unfinishedView,
+                      activeSessionId,
+                    )
+                    mergeIntoActive({ unfinishedView: next.view })
+                  }}
+                  onRestoreDismissedUnfinished={(entry) => {
+                    const archived = dismissedUnfinishedArchive.find((row) => row.id === entry.id)
+                    setDismissedUnfinishedIds((prev) => prev.filter((id) => id !== entry.id))
+                    setDismissedUnfinishedArchive((prev) => prev.filter((row) => row.id !== entry.id))
+                    if (archived) void handleQuickStartPick(unfinishedBusinessEntryToQuickStart(archived))
+                  }}
+                  showPlaybookSection={playbookSuggestionPool.length > 0}
+                  playbooks={visiblePlaybookRows}
+                  playbookHistory={playbookHistory}
+                  playbookPoolExhaustedHint={Boolean(playbookQuickStart?.poolExhausted)}
+                  onRefreshPlaybooks={() => {
+                    if (!activeSession.playbookQuickStart) return
+                    mergeIntoActive({
+                      playbookQuickStart: refreshPlaybookQuickStartState(
+                        activeSession.playbookQuickStart,
+                        playbookSuggestionPool,
+                        activeSessionId,
+                      ),
+                    })
+                  }}
+                  onRunPlaybook={(book) => void handlePlaybookRun(book)}
+                  onPickPlaybookHistory={(entry) => {
+                    const id = parsePlaybookIdFromQuickStart(historyEntryToQuickStart(entry))
+                    if (!id) return
+                    const book = findPlaybookById(pageCtx?.pageContext ?? null, id)
+                    if (book) void handlePlaybookRun(book)
+                  }}
+                  priorityPoolExhaustedHint={Boolean(priorityQuickStart?.poolExhausted)}
+                  creativePoolExhaustedHint={Boolean(creativeQuickStart?.poolExhausted)}
+                  disabled={!enabled || sending}
+                  onDismissUnfinished={(id) => {
+                    const entry = allUnfinishedBusiness.find((row) => row.id === id)
+                    if (entry) {
+                      setDismissedUnfinishedArchive((prev) => [
+                        entry,
+                        ...prev.filter((row) => row.id !== id),
+                      ].slice(0, 40))
+                    }
+                    setDismissedUnfinishedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+                  }}
+                  onRefreshPriority={() => {
+                    if (!activeSession.priorityQuickStart) return
+                    mergeIntoActive({
+                      priorityQuickStart: refreshPriorityQuickStartState(
+                        activeSession.priorityQuickStart,
+                        prioritySuggestionPool,
+                        activeSessionId,
+                      ),
+                    })
+                  }}
+                  onRefreshCreative={() => {
+                    if (!activeSession.creativeQuickStart) return
+                    mergeIntoActive({
+                      creativeQuickStart: refreshCreativeQuickStartState(
+                        activeSession.creativeQuickStart,
+                        creativeSuggestionPool,
+                        activeSessionId,
+                      ),
+                    })
+                  }}
+                  onPick={(start) => void handleQuickStartPick(start)}
+                />
+              {!showQuickStart
+                ? visibleMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-lg px-3 py-3 text-sm leading-relaxed ${
+                      message.role === 'user'
+                        ? 'ml-8 bg-purple-600/20 text-purple-100'
+                        : message.role === 'assistant'
+                          ? 'mr-8 bg-gray-800/95 text-gray-100 ring-1 ring-gray-700/80'
+                          : 'bg-gray-900 text-gray-400'
+                    }`}
+                  >
+                    {message.role === 'assistant' ? (
+                      <>
+                        <AdminAssistantRichText content={message.content} />
+                        {message.toolSteps?.length ? (
+                          <AdminAiToolStepCards steps={message.toolSteps} />
+                        ) : null}
+                        {message.applyDiffs?.length ? (
+                          <AdminAiApplyDiffCards
+                            diffs={message.applyDiffs}
+                            busy={sending}
+                            onApprove={(diff, payload) => {
+                              void (async () => {
+                                try {
+                                  const previewResult = await runExecDryRun(
+                                    'patch_release_marketing_copy',
+                                    payload,
+                                  )
+                                  const preview =
+                                    previewResult?.toolPreview?.preview ||
+                                    previewResult?.stepPreviews?.find(
+                                      (row) => row.tool === 'patch_release_marketing_copy',
+                                    )?.preview
+                                  mergeIntoActive({
+                                    checkpoints: pushCheckpoint(
+                                      checkpoints ?? [],
+                                      checkpointFromMarketingPatch({
+                                        releaseId: diff.releaseId,
+                                        fields: { [diff.field]: diff.after },
+                                        previous: previousFieldsFromPreview(
+                                          diff.field,
+                                          diff.before,
+                                          preview,
+                                        ),
+                                        summary: `Proposed ${diff.label || diff.field}`,
+                                      }),
+                                    ),
+                                  })
+                                } catch (error: unknown) {
+                                  setMessages((prev) => [
+                                    ...prev,
+                                    {
+                                      id: nextId(),
+                                      role: 'assistant',
+                                      content: `Apply preview failed: ${getErrorMessage(error)}`,
+                                    },
+                                  ])
+                                }
+                              })()
+                            }}
                           />
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <AdminChatPlainText
-                      content={message.content}
-                      className={
-                        message.role === 'user' ? 'text-purple-50/95' : 'font-mono text-[11px] text-gray-500'
-                      }
-                    />
-                  )}
-                </div>
-              ))}
+                        ) : null}
+                        {renderFocusApplyActions(message.content, pageFocus)}
+                        {message.embed?.type === 'product_strategy_pack' ? (
+                          <div className="mt-3 border-t border-gray-700/80 pt-3">
+                            <ProductStrategyPackCard
+                              output={message.embed.output}
+                              onSendPolishToChat={appendStrategyPolishToThread}
+                            />
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <AdminChatPlainText
+                        content={message.content}
+                        className={
+                          message.role === 'user' ? 'text-purple-50/95' : 'font-mono text-[11px] text-gray-500'
+                        }
+                      />
+                    )}
+                  </div>
+                ))
+                : null}
             </div>
 
             {lastRunbookGraph && lastRunbookGraph.steps.length > 0 && (
@@ -2572,6 +4153,8 @@ export default function AdminAiAssistant({
                   onClick={() => {
                     setPendingAction(null)
                     setPendingPlanSteps([])
+                    setApprovalHiddenRowIds([])
+                    setApprovalEditId(null)
                   }}
                   className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded text-amber-300/80 hover:bg-amber-900/50 hover:text-amber-50"
                   aria-label="Dismiss pending approval"
@@ -2589,20 +4172,10 @@ export default function AdminAiAssistant({
 
                   return (
                     <>
-                      <p className="font-semibold">Pending approval</p>
-                      <p>
-                        Tool: {pendingAction.toolPreview.tool} | Risk: {pendingAction.toolPreview.riskTier}
+                      <p className="font-semibold">Held actions</p>
+                      <p className="mt-0.5 text-[11px] text-amber-100/90">
+                        Edit or drop any row. A submit row is the only control that sends that step.
                       </p>
-                      {pendingPlanSteps.length > 0 && (
-                        <div className="mt-1 rounded border border-amber-800/70 bg-black/20 p-2">
-                          <p className="font-semibold text-amber-100">Runbook timeline ({pendingPlanSteps.length} steps)</p>
-                          {pendingPlanSteps.map((step, index) => (
-                            <p key={step.id} className="mt-1 text-[11px] text-amber-200">
-                              {index + 1}. {step.tool} ({step.riskTier})
-                            </p>
-                          ))}
-                        </div>
-                      )}
                       {skill && (
                         <p className="mt-1 text-amber-100">
                           Skill: {skill.name} ({skill.id})
@@ -2660,14 +4233,74 @@ export default function AdminAiAssistant({
                           </button>
                         </div>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={approvePendingAction}
-                        disabled={sending || missingFields.length > 0}
-                        className="mt-2 rounded bg-amber-500 px-2 py-1 font-semibold text-black hover:bg-amber-400 disabled:opacity-60"
-                      >
-                        Approve and execute
-                      </button>
+                      {buildApprovalRows(heldApprovalSteps())
+                        .filter((row) => !approvalHiddenRowIds.includes(row.id))
+                        .map((row, index) => {
+                        const rowMissing = getMissingRequiredFields(row.tool, row.payload)
+                        const editing = approvalEditId === row.id
+                        return (
+                          <div key={row.id} className="mt-2 rounded border border-amber-800/70 bg-black/20 p-2">
+                            <p className="font-semibold text-amber-50">
+                              {index + 1}. {row.label}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-amber-100/90">
+                              {row.phase === 'submit'
+                                ? 'Held. Approve sends this step only.'
+                                : row.id.endsWith(':preview')
+                                  ? 'Preview. Approve refreshes the draft and does not send it.'
+                                  : 'Read. Approve runs this lookup only.'}
+                            </p>
+                            {row.detail ? <p className="mt-0.5 text-[11px] text-amber-200/90">{row.detail}</p> : null}
+                            {rowMissing.length > 0 ? (
+                              <p className="mt-1 text-red-300">Missing: {rowMissing.join(', ')}</p>
+                            ) : null}
+                            {editing ? (
+                              <div className="mt-1">
+                                <textarea
+                                  value={approvalEditDraft}
+                                  onChange={(e) => setApprovalEditDraft(e.target.value)}
+                                  rows={6}
+                                  spellCheck={false}
+                                  aria-label={`Edit payload for ${row.label}`}
+                                  className="w-full rounded border border-amber-800/70 bg-gray-950 p-2 font-mono text-[10px] leading-snug text-amber-50"
+                                />
+                                {approvalEditError ? <p className="mt-1 text-red-300">{approvalEditError}</p> : null}
+                                <button
+                                  type="button"
+                                  onClick={() => saveApprovalEdit(row)}
+                                  className="mt-1 rounded bg-amber-500 px-2 py-1 text-[10px] font-semibold text-black hover:bg-amber-400"
+                                >
+                                  Save edit
+                                </button>
+                              </div>
+                            ) : null}
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                onClick={() => (editing ? setApprovalEditId(null) : beginApprovalEdit(row))}
+                                className="rounded border border-amber-600/60 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/60"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => dropApprovalRow(row)}
+                                className="rounded border border-amber-600/60 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/60"
+                              >
+                                Drop
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void approveApprovalRow(row)}
+                                disabled={sending || rowMissing.length > 0}
+                                className="rounded bg-amber-500 px-2 py-1 text-[10px] font-semibold text-black hover:bg-amber-400 disabled:opacity-60"
+                              >
+                                Approve
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </>
                   )
                 })()}
@@ -2707,7 +4340,7 @@ export default function AdminAiAssistant({
 
             <form
               onSubmit={onSubmit}
-              className={`border-t border-gray-800 p-3 transition-colors ${
+              className={`shrink-0 border-t border-gray-800 p-3 transition-colors ${
                 fileDragDepth > 0 ? 'bg-purple-950/40 ring-1 ring-inset ring-purple-500/60' : ''
               }`}
               onDragEnter={(e) => {
@@ -2729,8 +4362,18 @@ export default function AdminAiAssistant({
                 e.stopPropagation()
                 setFileDragDepth(0)
                 if (!enabled) return
+                const offset = composerRef.current?.offsetFromPoint(e.clientX, e.clientY) ?? null
                 const { files } = e.dataTransfer
-                if (files?.length) void ingestFiles(Array.from(files))
+                if (files?.length) {
+                  void ingestFiles(Array.from(files), offset)
+                  return
+                }
+                const urls = linksFromDrop({
+                  uriList: e.dataTransfer.getData('text/uri-list'),
+                  plain: e.dataTransfer.getData('text/plain'),
+                  moz: e.dataTransfer.getData('text/x-moz-url'),
+                })
+                if (urls.length) insertLinks(urls, offset)
               }}
             >
               <input
@@ -2858,169 +4501,180 @@ export default function AdminAiAssistant({
                 ) : null}
               </div>
               ) : null}
-              {attachments.length > 0 ? (
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {attachments.map((a) => (
-                    <span
-                      key={a.id}
-                      className={`inline-flex max-w-full items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
-                        a.status === 'error'
-                          ? 'bg-red-900/50 text-red-200'
-                          : a.status === 'reading'
-                            ? 'bg-gray-800 text-gray-300'
-                            : 'bg-gray-800 text-emerald-200'
-                      }`}
-                      title={a.error || a.excerpt?.slice(0, 200)}
-                    >
-                      <span className="truncate">{a.label}</span>
-                      {a.status === 'reading' ? <span className="text-gray-500">…</span> : null}
-                      <button
-                        type="button"
-                        className="text-gray-400 hover:text-white"
-                        aria-label={`Remove ${a.label}`}
-                        onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              ) : null}
               {fileDragDepth > 0 ? (
-                <p className="mb-1 text-center text-[11px] font-medium text-purple-200">Drop files to attach</p>
+                <p className="mb-1 text-center text-[11px] font-medium text-purple-200">Drop files or links into the message</p>
               ) : null}
               {speechError ? (
                 <p className="mb-1 text-[11px] text-amber-300">{speechError}</p>
               ) : null}
-              {isStudioSurface ? (
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  {(() => {
-                    const countdown = formatReleaseCountdownLabel(pageCtx?.pageContext.studio?.releaseDate ?? null)
-                    return countdown ? (
-                      <span
-                        className="rounded-full border border-fuchsia-500/35 bg-fuchsia-950/40 px-2.5 py-1 text-[10px] font-medium text-fuchsia-100/95"
-                        title={pageCtx?.pageContext.studio?.releaseDate ?? undefined}
-                      >
-                        {countdown}
-                      </span>
-                    ) : null
-                  })()}
-                  {pageCtx?.pageContext.studio?.releaseId ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={!enabled || sending}
-                        className="rounded-full border border-violet-500/40 bg-violet-950/50 px-2.5 py-1 text-[10px] font-medium text-violet-200 hover:bg-violet-900/60 disabled:opacity-40"
-                        onClick={() =>
-                          setInput('What is blocking this release from going live? List blockers and the next workflow step.')
-                        }
-                      >
-                        Blockers & next step
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!enabled || sending}
-                        className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-1 text-[10px] font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-40"
-                        onClick={() =>
-                          setInput(
-                            `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId: pageCtx.pageContext.studio!.releaseId })}`
-                          )
-                        }
-                      >
-                        Live snapshot
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!enabled || sending}
-                        className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-1 text-[10px] font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-40"
-                        onClick={() =>
-                          setInput(
-                            'Draft a Spotify editorial pitch and Instagram launch caption for this release. Use only metadata you know from context; ask before inventing facts.'
-                          )
-                        }
-                      >
-                        Draft copy
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!enabled || sending}
-                      className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-1 text-[10px] font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-40"
-                      title="Run Release Studio ops snapshot (one tap). Shift-click to paste /exec into the composer instead."
-                      onClick={triggerStudioPipelineSnapshot}
-                    >
-                      Studio pipeline
-                    </button>
-                  )}
-                  {setFocusCopilotEnabled ? (
-                    <FieldFocusToggle
-                      copilotOn={focusCopilotEnabled}
-                      disabled={!enabled || sending}
-                      onToggle={() => setFocusCopilotEnabled(!focusCopilotEnabled)}
-                    />
-                  ) : null}
-                  <AnchorsPanelToggle
-                    open={anchorsPanelOpen}
-                    disabled={!enabled || sending}
-                    onToggle={() => {
-                      if (anchorsPanelOpen) setExplainOpen(false)
-                      setAnchorsPanelOpen((o) => !o)
-                    }}
-                  />
-                  <StrategyPackPolishToggle
-                    on={preferStrategyPackRefine}
-                    disabled={!enabled || sending}
-                    onToggle={() => setPreferStrategyPackRefine((v) => !v)}
-                  />
-                </div>
-              ) : (
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  {setFocusCopilotEnabled ? (
-                    <FieldFocusToggle
-                      copilotOn={focusCopilotEnabled}
-                      disabled={!enabled || sending}
-                      onToggle={() => setFocusCopilotEnabled(!focusCopilotEnabled)}
-                    />
-                  ) : null}
-                  <AnchorsPanelToggle
-                    open={anchorsPanelOpen}
-                    disabled={!enabled || sending}
-                    onToggle={() => {
-                      if (anchorsPanelOpen) setExplainOpen(false)
-                      setAnchorsPanelOpen((o) => !o)
-                    }}
-                  />
-                  <StrategyPackPolishToggle
-                    on={preferStrategyPackRefine}
-                    disabled={!enabled || sending}
-                    onToggle={() => setPreferStrategyPackRefine((v) => !v)}
-                  />
-                </div>
-              )}
-              {focusCopilotEnabled && pageFocus && setPageFocus ? (
-                <FieldCopilotPanel
-                  focus={pageFocus}
-                  enabled={enabled}
-                  busy={sending}
-                  onClear={() => setPageFocus(null)}
-                  onFocusUpdate={setPageFocus}
-                  requestCopilot={async (prompt) => {
-                    const result = await sendChatMessage(prompt, 'studio_release')
-                    return { reply: result.reply }
+              {pageCtx ? (
+                <AdminAiStudioMissionStrip
+                  docked
+                  dock={missionDock}
+                  onAction={handleMissionAction}
+                  releaseId={studioMissionReleaseId}
+                  releaseTitle={pageCtx?.pageContext?.studio?.title}
+                  activeStep={pageCtx?.pageContext?.studio?.activeStep}
+                  refreshNonce={missionRefreshNonce}
+                  disabled={!enabled || sending}
+                  onMissionChange={(mission) => setMissionBlockerCount(mission?.blockers?.length ?? 0)}
+                  onFixTopBlocker={(start) => void handleQuickStartPick(start)}
+                  onOpenBlocker={applyStudioNav}
+                  draftCopyLabel={
+                    pageCtx?.pageContext?.studio?.activeStep === 'copy' ? 'Full copy runbook' : 'Draft copy'
+                  }
+                  onDraftCopy={() => {
+                    const studio = pageCtx?.pageContext.studio
+                    if (!studio?.releaseId) return
+                    const prompt = getStudioStepAiPrompt('copy', studio.releaseId, studio.title)
+                    setInput(prompt.message)
+                  }}
+                  onWeekPriorities={() =>
+                    setInput(`/exec query_studio_command_center ${JSON.stringify({ dueWithinDays: 7 })}`)
+                  }
+                  onSnapshot={() => {
+                    void (async () => {
+                      setSending(true)
+                      try {
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: nextId(),
+                            role: 'user',
+                            content: `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId: studioMissionReleaseId })}`,
+                          },
+                        ])
+                        await runExecDryRun('query_release_studio_snapshot', {
+                          releaseId: studioMissionReleaseId,
+                        })
+                      } finally {
+                        setSending(false)
+                      }
+                    })()
+                  }}
+                  onHarness={() => {
+                    void (async () => {
+                      setSending(true)
+                      try {
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: nextId(),
+                            role: 'user',
+                            content: `/exec query_intelligence_harness ${JSON.stringify({
+                              mode: 'stack',
+                              releaseId: studioMissionReleaseId,
+                              query: 'Sonic DNA unified intelligence Release Studio polymath',
+                            })}`,
+                          },
+                        ])
+                        await runExecDryRun('query_intelligence_harness', {
+                          mode: 'stack',
+                          releaseId: studioMissionReleaseId,
+                          query: 'Sonic DNA unified intelligence Release Studio polymath',
+                        })
+                      } finally {
+                        setSending(false)
+                      }
+                    })()
+                  }}
+                  onCopyDryRun={() => {
+                    void (async () => {
+                      if (!studioMissionReleaseId) return
+                      setSending(true)
+                      try {
+                        applyStudioNav({ releaseId: studioMissionReleaseId, step: 'copy' })
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: nextId(),
+                            role: 'user',
+                            content: `/exec patch_release_marketing_copy ${JSON.stringify({
+                              releaseId: studioMissionReleaseId,
+                              merge: true,
+                              dryRun: true,
+                              marketingCopy: {},
+                            })}`,
+                          },
+                        ])
+                        await runExecDryRun('patch_release_marketing_copy', {
+                          releaseId: studioMissionReleaseId,
+                          merge: true,
+                          dryRun: true,
+                          marketingCopy: {},
+                        })
+                      } finally {
+                        setSending(false)
+                      }
+                    })()
+                  }}
+                  onOpenLaunch={() => {
+                    if (!studioMissionReleaseId) return
+                    applyStudioNav({ releaseId: studioMissionReleaseId, step: 'launch' })
                   }}
                 />
+              ) : isStudioSurface ? (
+                <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={!enabled || sending}
+                    className="rounded-full border border-gray-600 bg-gray-900 px-2.5 py-1 text-[10px] font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-40"
+                    title="Run Release Studio ops snapshot (one tap). Shift-click to paste /exec into the composer instead."
+                    onClick={triggerStudioPipelineSnapshot}
+                  >
+                    Studio pipeline
+                  </button>
+                </div>
               ) : null}
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="h-24 w-full resize-none rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                placeholder={
-                  enabled
-                    ? 'Type or dictate · /plan … · /exec … · drop text or audio files'
-                    : 'Toggle AI ON to start'
+              <div className="mb-1.5">
+                <AdminAiMentionChips
+                  onInsert={(text) => {
+                    const next = `${input.trimEnd()}${input.trim() ? ' ' : ''}${text}`
+                    setInput(next)
+                    composerRef.current?.focus?.()
+                  }}
+                />
+              </div>
+              <div
+                className={
+                  focusCopilotEnabled && pageFocus
+                    ? 'rounded-lg border border-violet-500/40 bg-gray-900 shadow-inner'
+                    : ''
                 }
-              />
+              >
+                {focusCopilotEnabled && pageFocus && setPageFocus ? (
+                  <FieldCopilotPanel
+                    focus={pageFocus}
+                    enabled={enabled}
+                    busy={sending}
+                    onClear={() => setPageFocus(null)}
+                    onFocusUpdate={setPageFocus}
+                    requestCopilot={async (prompt) => {
+                      const result = await sendChatMessage(prompt, 'studio_release')
+                      return { reply: result.reply }
+                    }}
+                  />
+                ) : null}
+                <AdminAiComposerField
+                  ref={composerRef}
+                  value={input}
+                  chips={composerChipViews}
+                  disabled={!enabled}
+                  framed={!(focusCopilotEnabled && pageFocus)}
+                  onChange={setInput}
+                  onRemoveChip={removeComposerChip}
+                  placeholder={
+                    !enabled
+                      ? 'Toggle AI ON to start'
+                      : focusCopilotEnabled && pageFocus
+                        ? `Draft ${pageFocus.fieldLabel} · or type a message`
+                        : focusCopilotEnabled
+                          ? 'Click a field to draft it here · or type a message'
+                          : 'Type · @release · /plan · /exec · drop files'
+                  }
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">{composerToggles}</div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-1 text-[11px] text-gray-400">
@@ -3030,7 +4684,7 @@ export default function AdminAiAssistant({
                       onChange={(e) => setAgentMode(e.target.value as AgentModeChoice)}
                       disabled={!enabled}
                       className="max-w-[min(220px,38vw)] min-w-[9.5rem] rounded border border-gray-700 bg-gray-950 px-1.5 py-1 text-[11px] text-gray-200"
-                      title="Behaviors: Auto (detect /plan and /exec), Chat (no commands), Plan (runbook from text). Agents: lock persona and planning to a registered admin skill."
+                      title="Behaviors: Auto (detect /plan and /exec, Agent tools on), Chat (no tools), Plan (runbook from text). Agents: lock persona and planning to a registered admin skill."
                     >
                       <optgroup label="Behaviors">
                         <option value="auto">Auto</option>
@@ -3045,6 +4699,14 @@ export default function AdminAiAssistant({
                         ))}
                       </optgroup>
                     </select>
+                    {agentMode === 'chat' ? (
+                      <span
+                        className="max-w-[14rem] text-[10px] leading-tight text-amber-300/90"
+                        title="Chat mode skips Agent tools, live desk probes, and /exec detection. Switch to Auto to look things up."
+                      >
+                        Tools off — switch to Auto to look up desks and releases
+                      </span>
+                    ) : null}
                   </label>
                   <div ref={chatSettingsMenuRef} className="relative">
                     <button
@@ -3131,6 +4793,12 @@ export default function AdminAiAssistant({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <AdminAiElementPickerButton
+                    disabled={!enabled}
+                    onPick={(pick) => {
+                      insertElementPick(pick)
+                    }}
+                  />
                   <button
                     type="button"
                     aria-label="Attach files"
@@ -3167,6 +4835,10 @@ export default function AdminAiAssistant({
                 </div>
               </div>
             </form>
+              </div>
+
+              {(isStandalone && browserPaneOpen) || (dockLeftLayout && dockBrowserWorkspace) ? dockBrowserPane : null}
+            </div>
           </div>
     )
   }
@@ -3218,7 +4890,8 @@ export default function AdminAiAssistant({
         <div className="fixed inset-0 z-[11000] box-border flex flex-col bg-neutral-950 p-3">
           <div
             ref={panelRef}
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl"
+            data-admin-ai-panel
+            className="flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain rounded-xl border border-gray-700 bg-gray-950 shadow-2xl"
           >
             {renderAssistantInterior()}
           </div>
@@ -3226,7 +4899,8 @@ export default function AdminAiAssistant({
       ) : (
         <div
           ref={panelRef}
-          className={`fixed z-[11000] overflow-hidden border border-gray-700 bg-gray-950 shadow-2xl ${
+          data-admin-ai-panel
+          className={`fixed z-[11000] flex flex-col overflow-hidden overscroll-contain border border-gray-700 bg-gray-950 shadow-2xl ${
             dockRightLayout
               ? 'rounded-l-xl rounded-r-none border-r-0'
               : dockLeftLayout
@@ -3240,28 +4914,30 @@ export default function AdminAiAssistant({
                   right: 0,
                   top: PANEL_PAD,
                   bottom: `calc(${PANEL_PAD}px + var(--global-music-player-height, 0px))`,
-                  width:
-                    panelSize?.w ??
-                    (typeof window !== 'undefined'
-                      ? Math.min(
-                          DOCK_PANEL_MAX_W,
-                          Math.min(420, window.innerWidth - PANEL_PAD * 2)
-                        )
-                      : 420),
-                }
-              : dockLeftLayout
-                ? {
-                    right: 'auto',
-                    top: PANEL_PAD,
-                    bottom: `calc(${PANEL_PAD}px + var(--global-music-player-height, 0px))`,
-                    width:
-                      panelSize?.w ??
+                  width: dockBrowserBeside
+                    ? 'calc(100vw - var(--shell-nav-width, 14rem) - 12px)'
+                    : panelSize?.w ??
                       (typeof window !== 'undefined'
                         ? Math.min(
                             DOCK_PANEL_MAX_W,
                             Math.min(420, window.innerWidth - PANEL_PAD * 2)
                           )
                         : 420),
+                }
+              : dockLeftLayout
+                ? {
+                    right: 'auto',
+                    top: PANEL_PAD,
+                    bottom: `calc(${PANEL_PAD}px + var(--global-music-player-height, 0px))`,
+                    width: dockBrowserBeside
+                      ? 'calc(100vw - var(--shell-nav-width, 14rem) - 12px)'
+                      : panelSize?.w ??
+                        (typeof window !== 'undefined'
+                          ? Math.min(
+                              DOCK_PANEL_MAX_W,
+                              Math.min(420, window.innerWidth - PANEL_PAD * 2)
+                            )
+                          : 420),
                   }
               : {
                   left: position?.x ?? 16,
@@ -3271,7 +4947,7 @@ export default function AdminAiAssistant({
           }
         >
           {renderAssistantInterior()}
-          {dockRightLayout ? (
+          {dockBrowserBeside ? null : dockRightLayout ? (
             <div
               className="pointer-events-auto absolute inset-y-0 left-0 z-[62] w-3 cursor-ew-resize touch-none border-l border-gray-600/80 bg-gradient-to-r from-gray-800/95 to-transparent shadow-[2px_0_8px_rgba(0,0,0,0.35)] hover:border-purple-500/50 hover:from-purple-950/35"
               onPointerDown={(e) => startResize(e, 'w')}

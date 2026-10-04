@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 
 type FollowEmailModalProps = {
   open: boolean
@@ -76,6 +77,7 @@ export default function FollowEmailModal({ open, onClose }: FollowEmailModalProp
   if (!open) return null
 
   return (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       role="presentation"
@@ -162,5 +164,6 @@ export default function FollowEmailModal({ open, onClose }: FollowEmailModalProp
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   )
 }

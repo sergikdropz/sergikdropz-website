@@ -6,9 +6,11 @@ import {
   listEmailSends,
   listMessages,
   listReviews,
+  loadReleaseCollabContext,
 } from '@/lib/studio/release-collab-server'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { collaboratorsFromPartyContacts } from '@/lib/studio/release-collab'
+import { loadCollabPromoSnippets } from '@/lib/studio/collab-promo-snippets'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +19,7 @@ export const dynamic = 'force-dynamic'
  * Bundle: collaborators, messages, reviews, email sends, rights contact seeds.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ) {
   const session = await getServerSession()
@@ -36,12 +38,13 @@ export async function GET(
     return NextResponse.json({ error: 'Release not found' }, { status: 404 })
   }
 
-  const [collaborators, messages, sends, reviews, readiness] = await Promise.all([
+  const [collaborators, messages, sends, reviews, readiness, contextResult] = await Promise.all([
     listCollaborators(params.id),
     listMessages(params.id),
     listEmailSends(params.id),
     listReviews(params.id),
     getSingleReleaseCopyrightReadiness(supabase, params.id),
+    loadReleaseCollabContext(params.id),
   ])
 
   for (const part of [collaborators, messages, sends, reviews]) {
@@ -52,6 +55,16 @@ export async function GET(
       return NextResponse.json({ error: part.error }, { status: 500 })
     }
   }
+
+  const context =
+    contextResult && !('code' in contextResult) && !('error' in contextResult)
+      ? contextResult
+      : null
+
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+    (typeof request.url === 'string' ? new URL(request.url).origin : '')
+  const promoSnippets = await loadCollabPromoSnippets(params.id, origin)
 
   return NextResponse.json({
     release: {
@@ -67,5 +80,7 @@ export async function GET(
     sends: 'sends' in sends ? sends.sends : [],
     reviews: 'reviews' in reviews ? reviews.reviews : [],
     rightsContactSeeds: collaboratorsFromPartyContacts(readiness?.party_contacts),
+    context,
+    promoSnippets,
   })
 }

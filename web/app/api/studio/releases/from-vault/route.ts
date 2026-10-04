@@ -40,7 +40,11 @@ export async function POST(request: NextRequest) {
       description?: string | null
       distributor_status?: string | null
     }
-    upsertScheduleFromDistribution(release)
+    try {
+      upsertScheduleFromDistribution(release)
+    } catch (err) {
+      console.warn('[from-vault] schedule bridge failed', err)
+    }
 
     await logActivity({
       actionType: result.created ? 'import_vault_folder_to_release' : 'fill_release_from_vault',

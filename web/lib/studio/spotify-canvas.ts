@@ -6,11 +6,8 @@
  * Browser MediaRecorder usually yields WebM — convert to H.264 MP4 before upload.
  */
 
-import {
-  pickRecorderMimeType,
-  proxiedArtworkUrl,
-  sanitizeStoryFilenamePart,
-} from '@/lib/shares/story-snippet'
+import { loadArtworkForCanvas } from '@/lib/media/canvas-artwork-load'
+import { pickRecorderMimeType, sanitizeStoryFilenamePart } from '@/lib/shares/story-snippet'
 
 export const SPOTIFY_CANVAS_WIDTH = 720
 export const SPOTIFY_CANVAS_HEIGHT = 1280
@@ -93,17 +90,6 @@ export function canvasPoseAtElapsed(
   const pair = CANVAS_DRIFT_VARIANTS[idx]!
   const u = canvasReboundUnit(elapsedSec, durationSec)
   return lerpCanvasPose(pair.from, pair.to, u)
-}
-
-function loadImage(url: string): Promise<HTMLImageElement | null> {
-  if (!url || typeof Image === 'undefined') return Promise.resolve(null)
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = url
-  })
 }
 
 /** Cover-fit artwork, then apply CSS-like translate(%) + scale from center. */
@@ -190,9 +176,8 @@ export async function renderSpotifyCanvas(input: {
 
   onProgress?.('loading artwork', 0)
 
-  const artUrl = input.artworkUrl ? proxiedArtworkUrl(clean(input.artworkUrl)) : ''
-  if (!artUrl) throw new Error('Cover art required for Spotify Canvas')
-  const artwork = await loadImage(artUrl)
+  if (!clean(input.artworkUrl)) throw new Error('Cover art required for Spotify Canvas')
+  const artwork = await loadArtworkForCanvas(input.artworkUrl)
   if (!artwork) throw new Error('Could not load cover art for Spotify Canvas')
 
   const canvas = document.createElement('canvas')

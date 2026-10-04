@@ -20,6 +20,7 @@ import {
   type ShareVisibility,
   resolveFolderShareCoverArt,
 } from '@/lib/shares/types'
+import { lockSharePlayback, shareNeedsListenUnlock } from '@/lib/shares/share-listen-gate'
 
 const SHARE_SELECT =
   'id,token,kind,target_id,visibility,title_override,created_by,expires_at,revoked_at,play_count,last_played_at,created_at,updated_at'
@@ -357,7 +358,16 @@ export async function revokeShareLink(token: string): Promise<boolean> {
 
 export async function resolveShareByToken(
   token: string,
-  opts?: { includePlaybackUrls?: boolean; bumpPlayCount?: boolean; origin?: string },
+  opts?: {
+    includePlaybackUrls?: boolean
+    bumpPlayCount?: boolean
+    origin?: string
+    /**
+     * When false, unreleased, hidden, or unlisted shares omit audio and do not count a play.
+     * Signed-in listeners and the vault unlock cookie pass true.
+     */
+    playbackAllowed?: boolean
+  },
 ): Promise<ResolvedSharePayload | null> {
   const supabase = createSupabaseServerClient()
   const { data, error } = await supabase
@@ -382,12 +392,20 @@ export async function resolveShareByToken(
   // Hidden folders/tracks are only reachable via unlisted (or public) share tokens —
   // resolveShareByToken is the gate; no extra catalog visibility check here.
 
+  const listenLocked =
+    opts?.playbackAllowed === false &&
+    shareNeedsListenUnlock({
+      share: { visibility: row.visibility },
+      collection: loaded.collection,
+      tracks: loaded.tracks,
+    })
+
   let tracks = loaded.tracks
-  if (opts?.includePlaybackUrls !== false) {
+  if (!listenLocked && opts?.includePlaybackUrls !== false) {
     tracks = await attachPlaybackUrls(tracks)
   }
 
-  if (opts?.bumpPlayCount) {
+  if (opts?.bumpPlayCount && !listenLocked) {
     void Promise.resolve(
       supabase
         .from('music_share_links')
@@ -400,7 +418,8 @@ export async function resolveShareByToken(
     ).catch(() => undefined)
   }
 
-  return buildResolved(row, loaded.collection, tracks, opts?.origin)
+  const resolved = buildResolved(row, loaded.collection, tracks, opts?.origin)
+  return listenLocked ? lockSharePlayback(resolved) : resolved
 }
 
 export async function adminShareBundle(

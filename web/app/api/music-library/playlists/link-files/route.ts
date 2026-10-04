@@ -17,6 +17,7 @@ import {
   ingestAudioIntoVault,
 } from '@/lib/music-library/ingest-vault-audio'
 import { convertBufferToHighQualityMp3 } from '@/lib/audio/convert-buffer-to-mp3'
+import { isWavFileName } from '@/lib/audio/stream-master'
 import { extractMetadataFromBuffer } from '@/utils/extractMetadataFromBuffer'
 import {
   formatBytesMb,
@@ -90,6 +91,8 @@ export async function POST(request: NextRequest) {
       mimeType: string
       originalName: string
       lastModifiedMs?: number
+      /** Original WAV bytes when this blob was pre-converted to MP3 (kept as DSP master). */
+      masterWav?: { buffer: Buffer; originalName: string }
     }[] = []
     const oversized: {
       file: string
@@ -163,6 +166,11 @@ export async function POST(request: NextRequest) {
                 mimeType: mp3.mimeType,
                 originalName: file.name,
                 lastModifiedMs: typeof file.lastModified === 'number' ? file.lastModified : undefined,
+                // Keep the original WAV as the distribution master (dsp-masters/)
+                // instead of discarding it after conversion.
+                ...(isWavFileName(file.name)
+                  ? { masterWav: { buffer, originalName: file.name } }
+                  : {}),
               })
             } catch (err: any) {
               return NextResponse.json(
@@ -425,6 +433,7 @@ export async function POST(request: NextRequest) {
             path: blob.ref.path,
           }),
           lastModifiedMs: blob.lastModifiedMs,
+          masterWav: blob.masterWav,
         })
         matchedIds.push(ingested.trackId)
         if (ingested.created) {

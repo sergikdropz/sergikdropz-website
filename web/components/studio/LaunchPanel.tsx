@@ -45,6 +45,7 @@ type Props = {
   goingLive: boolean
   copyright: CopyrightReadiness | null
   hasArtwork: boolean
+  releaseArtworkUrl?: string | null
   hasGenre: boolean
   hasReleaseDate: boolean
   trackCount: number
@@ -75,6 +76,7 @@ export default function LaunchPanel({
   goingLive,
   copyright,
   hasArtwork,
+  releaseArtworkUrl,
   hasGenre,
   hasReleaseDate,
   trackCount,
@@ -145,8 +147,8 @@ export default function LaunchPanel({
       label: 'ISRCs assigned',
       ok: Boolean(copyright?.checks.tracks_have_isrc),
       hint: copyright?.checks.tracks_have_isrc
-        ? 'QTA53 codes on every track'
-        : 'Assign QTA53 codes in Rights',
+        ? 'QTA53 codes on every track (SX Direct queued on mint)'
+        : 'Assign QTA53 codes in Catalog',
     },
     {
       id: 'audio',
@@ -544,7 +546,7 @@ export default function LaunchPanel({
       <SocialPromoPanel
         releaseId={releaseId}
         title={title}
-        artworkUrl={tracks.find((t) => t.artwork_url)?.artwork_url || null}
+        artworkUrl={releaseArtworkUrl || tracks.find((t) => t.artwork_url)?.artwork_url || null}
       />
     </div>
   )

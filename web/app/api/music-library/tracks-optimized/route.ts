@@ -178,38 +178,68 @@ export async function GET(request: NextRequest) {
     const total = count || 0
     const hasMore = offset + limit < total
 
-    // Many vault rows keep length on audio_files.duration_seconds while
-    // music_library_tracks.duration is null — fill only those gaps (lean select).
+    // Many vault rows keep catalog fields on audio_files / sonic_dna_cache
+    // while music_library_tracks columns are null. Fill those gaps from scalar
+    // columns only — never TOAST-read sonic_dna blobs for a list page.
     const rows = data || []
-    const audioMap = new Map<
-      string,
-      { id: string; duration_seconds?: number | null; artwork_url?: string | null }
-    >()
-    const needsAudioDuration = rows.filter((track: any) => {
-      const d = Number(track.duration)
-      return !(Number.isFinite(d) && d > 0) && track.audio_file_id
-    })
+    const catalogBlank = (track: any) => {
+      const bpm = Number(track.bpm)
+      const bpmMissing = !(Number.isFinite(bpm) && bpm >= 40 && bpm <= 240)
+      const key = String(track.key_signature || '').trim().toLowerCase()
+      const keyMissing = !key || key === 'unknown' || key === '[object object]'
+      const genreMissing = !String(track.genre || '').trim()
+      const subgenreMissing = !String(track.subgenre || '').trim()
+      const durationMissing = !(Number(track.duration) > 0)
+      return bpmMissing || keyMissing || genreMissing || subgenreMissing || durationMissing
+    }
+    const sparseRows = rows.filter((track: any) => catalogBlank(track))
+    const audioMap = new Map<string, any>()
+    const cacheMap = new Map<string, any>()
     const audioFileIds = [
-      ...new Set(needsAudioDuration.map((track: any) => track.audio_file_id).filter(Boolean)),
+      ...new Set(sparseRows.map((track: any) => track.audio_file_id).filter(Boolean)),
     ] as string[]
+    const sparseIds = sparseRows.map((track: any) => track.id).filter(Boolean) as string[]
     if (audioFileIds.length > 0) {
       const { data: audioMeta } = await supabase
         .from('audio_files')
-        .select('id, duration_seconds, artwork_url')
+        .select('id, duration_seconds, artwork_url, sonic_dna_status, bpm, key_signature, energy_level, danceability')
         .in('id', audioFileIds)
       audioMeta?.forEach((file: any) => audioMap.set(file.id, file))
     }
+    if (sparseIds.length > 0) {
+      const { data: cacheRows } = await supabase
+        .from('sonic_dna_cache')
+        .select('track_id, bpm, key_signature, key, primary_genre, subgenre, energy_level, danceability')
+        .in('track_id', sparseIds)
+      cacheRows?.forEach((row: any) => cacheMap.set(row.track_id, row))
+    }
 
-    // List loads use key_signature on the track row only — no sonic_dna blobs.
+    // List loads use scalar DNA cache columns — no sonic_dna blobs.
     let keyMissing = 0
     const tracks = rows.map((track: any) => {
       const folder = Array.isArray(track.music_library_folders)
         ? track.music_library_folders[0]
         : track.music_library_folders
-      const audio = track.audio_file_id ? audioMap.get(track.audio_file_id) : null
+      const audioFile = track.audio_file_id ? audioMap.get(track.audio_file_id) : null
+      const cache = cacheMap.get(track.id)
+      const audio = audioFile || cache
+        ? {
+            duration_seconds: audioFile?.duration_seconds,
+            artwork_url: audioFile?.artwork_url,
+            sonic_dna_status: audioFile?.sonic_dna_status,
+            // Cache scalars are the measured catalog. audio_files.bpm is often a
+            // placeholder 120 on rows that were never analyzed.
+            bpm: cache?.bpm,
+            key_signature: cache?.key_signature || cache?.key,
+            genre: cache?.primary_genre,
+            subgenre: cache?.subgenre,
+            energy_level: cache?.energy_level,
+            danceability: cache?.danceability,
+          }
+        : null
       const mapped = mapLibraryTrackToListItem(track, {
         folder: folder || null,
-        audio: audio || null,
+        audio,
       })
       if (!mapped.key_signature || mapped.key_signature === 'Unknown') {
         keyMissing += 1

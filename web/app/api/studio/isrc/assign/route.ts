@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { assignISRC, resolveIsrcPrefix } from '@/lib/studio/isrc'
 import { logActivity } from '@/lib/activity-log'
 import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
+import { registerMintedIsrcsWithSxDirect } from '@/lib/studio/soundexchange-registry'
 
 /**
  * POST /api/studio/isrc/assign
@@ -48,14 +49,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Log the ISRC assignment
+    const sxDirect = await registerMintedIsrcsWithSxDirect([trackId])
+
     await logActivity({
       actionType: 'assign_isrc',
       resourceType: 'track',
       resourceId: trackId,
-      details: { isrc: assignment.isrc },
+      details: { isrc: assignment.isrc, sxDirect },
     })
 
-    return NextResponse.json(assignment)
+    return NextResponse.json({ ...assignment, sxDirect })
   } catch (error: any) {
     console.error('ISRC assignment error:', error)
     return NextResponse.json(

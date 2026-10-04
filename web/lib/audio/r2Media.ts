@@ -74,16 +74,27 @@ export function publicR2MediaUrl(relativePath: string): string | null {
 export async function presignR2ObjectUrl(
   relativePath: string,
   expiresIn = DEFAULT_PRESIGN_SEC,
+  opts?: { downloadName?: string },
 ): Promise<string | null> {
   const cfg = getR2MediaConfig()
   if (!cfg) return null
   const client = clientFor(cfg)
   const Key = r2ObjectKey(relativePath)
+  const downloadName = opts?.downloadName?.replace(/["\r\n]/g, '').trim()
   try {
     const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner')
     return await getSignedUrl(
       client,
-      new GetObjectCommand({ Bucket: cfg.bucket, Key }),
+      new GetObjectCommand({
+        Bucket: cfg.bucket,
+        Key,
+        ...(downloadName
+          ? {
+              ResponseContentDisposition: `attachment; filename="${downloadName}"`,
+              ResponseContentType: contentTypeForPath(relativePath),
+            }
+          : {}),
+      }),
       { expiresIn },
     )
   } catch (err) {

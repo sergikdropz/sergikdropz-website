@@ -142,6 +142,8 @@ function countFilledCopy(copy: MarketingCopy | null | undefined): number {
     'spotify_pitch',
     'social_caption',
     'store_description',
+    'youtube_visualizer',
+    'platform_tags',
     'credits_block',
   ]
   return keys.filter((key) => clean(copy[key]).length >= 12).length

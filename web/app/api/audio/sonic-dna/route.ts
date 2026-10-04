@@ -6,6 +6,7 @@ import { updateSonicDNACache } from '@/utils/sonicDNACache'
 import { mergeSonicDNA } from '@/utils/mergeSonicDNA'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { lockAnalysisForAudioFile } from '@/lib/catalog-lock'
+import { imprintCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 import { findAudioFile, hasStoredSonicDna } from '@/lib/findAudioFile'
 import { loadSonicDnaIntelligenceCard, resolveMeasuredLookupIds } from '@/lib/audio/load-local-measured'
 import {
@@ -698,6 +699,12 @@ async function analyzeTrackAsync(track: any, supabase: any) {
       }
     } catch (cacheErr) {
       console.warn('Failed to update sonic_dna_cache for audio file', track.id, cacheErr)
+    }
+
+    try {
+      await imprintCatalogTags(track.id)
+    } catch (err) {
+      console.warn('catalog tag imprint failed:', err instanceof Error ? err.message : err)
     }
 
     console.log('✅ Analysis completed and stored for track:', track.id)

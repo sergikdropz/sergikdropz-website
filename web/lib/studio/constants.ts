@@ -88,6 +88,8 @@ export type MarketingCopy = {
   spotify_pitch?: string
   social_caption?: string
   store_description?: string
+  youtube_visualizer?: string
+  platform_tags?: string
   credits_block?: string
 }
 
@@ -158,6 +160,29 @@ export const COPY_TEMPLATES: Record<keyof MarketingCopy, CopyTemplateMeta> = {
       'Are We Awake? by SERGIK — Funky House EP\n5-track EP · 124–127 BPM · Funky House\n\nPress lead…\n\nWhy press play: …\n\nTracklist\n1. …\n\nListen to “Are We Awake?” …\n\nTags: SERGIK · Are We Awake? · Funky House · EP',
     rows: 14,
     softMax: 2800,
+  },
+  youtube_visualizer: {
+    label: 'YouTube visualizer',
+    short: 'YouTube',
+    channel: 'YouTube · full EP video',
+    hint: 'Full-experience description for a continuous visualizer: start-to-finish walk, start/end times, catalog credits.',
+    tip: 'Headline = Title — Full EP Visualizer | Artist. The video is the EP in catalog order with no gaps. Track by track with start–finish times. Tracklist + CHAPTERS (first stamp 00:00). Credits from Catalog/metadata only — never invent durations.',
+    placeholder:
+      'Are We Awake? — Full EP Visualizer | SERGIK\n5-track EP · 124–127 BPM · Funky House\n\nThis video is the complete EP in catalog order — tracks run back-to-back with no gaps.\n\nTRACK BY TRACK\n00:00–03:24  1. It Is What It Is\nA funky house cut at 124 BPM…\n\nTRACKLIST (continuous · no space between tracks)\n00:00–03:24  1. It Is What It Is\n\nCHAPTERS\n00:00 It Is What It Is\n\nCREDITS\nWritten by SERGIK',
+    rows: 18,
+    softMax: 4200,
+    hardMax: 5000,
+  },
+  platform_tags: {
+    label: 'Tags & hashtags',
+    short: 'Tags',
+    channel: 'YouTube · Instagram · X · TikTok · SoundCloud',
+    hint: 'Platform-specific tags and hashtags: YouTube comma tags (500-char field) plus hashtag blocks for Instagram, X, TikTok, SoundCloud, and Bandcamp.',
+    tip: 'Keep YouTube TAGS as comma keywords (no #). HASHTAGS stay hashed. Each platform block is copy-ready — do not invent chart or playlist claims.',
+    placeholder:
+      'YOUTUBE TAGS\nSERGIK, Are We Awake, Funky House, Official Audio, Visualizer, Full EP\n\nYOUTUBE HASHTAGS\n#Visualizer #OfficialAudio #FullEP #SERGIK #FunkyHouse\n\nINSTAGRAM / THREADS\n#SERGIK #AreWeAwake #FunkyHouse #NewEP #NewMusic #OutNow\n\nX\n#SERGIK #NewMusic #OutNow #FunkyHouse\n\nTIKTOK\n#SERGIK #FunkyHouse #HouseMusic #NewMusic\n\nSOUNDCLOUD\nsergik, funky house, electronic, new music\n\nBANDCAMP / STORE\nTags: SERGIK · Are We Awake? · Funky House · EP',
+    rows: 16,
+    softMax: 1800,
   },
   credits_block: {
     label: 'Credits',

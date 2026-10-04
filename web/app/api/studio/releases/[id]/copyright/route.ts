@@ -5,6 +5,9 @@ import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipel
 import { mergeUgcPack, parseUgcPack } from '@/lib/studio/ugc-pack'
 import { mergePartyContacts, parsePartyContacts } from '@/lib/studio/rights-contract-send'
 import { mergeRightsPacketDrafts, parseRightsPacketDrafts } from '@/lib/studio/rights-packet-drafts'
+import { applyRightsPacketDrafts, buildRightsPackets } from '@/lib/studio/rights-packets'
+import { counselAuditRecord, counselGateForPacket } from '@/lib/studio/music-law/release-gate'
+import { parseTrackClearance } from '@/lib/studio/rights-ops'
 import { normalizeIpi } from '@/lib/studio/dsp-package'
 
 const ALLOWED_FIELDS = [
@@ -23,6 +26,8 @@ const ALLOWED_FIELDS = [
   'publisher_name',
   'publisher_ipi',
   'writer_ipi',
+  'neighboring_rights_registered',
+  'neighboring_rights_society',
 ] as const
 
 type AllowedField = (typeof ALLOWED_FIELDS)[number]
@@ -46,7 +51,8 @@ function pickAllowedFields(body: Record<string, unknown>) {
         field === 'due_date' ||
         field === 'publisher_name' ||
         field === 'publisher_ipi' ||
-        field === 'writer_ipi') &&
+        field === 'writer_ipi' ||
+        field === 'neighboring_rights_society') &&
       typeof body[field] === 'string'
     ) {
       if (field === 'publisher_ipi' || field === 'writer_ipi') {
@@ -135,6 +141,57 @@ export async function PUT(
       updates.rights_packets = mergeRightsPacketDrafts(current?.rights_packets, body.rights_packets)
     } else if (body.rights_packets !== undefined) {
       updates.rights_packets = mergeRightsPacketDrafts(current?.rights_packets, body.rights_packets)
+    }
+
+    const approvingSplit = updates.split_sheet_status === 'approved'
+    const approvingProducer = updates.producer_agreement_status === 'approved'
+    if (approvingSplit || approvingProducer) {
+      const [{ data: trackRows }, { data: releaseRow }] = await Promise.all([
+        supabase
+          .from('distribution_tracks')
+          .select('id, title, contributors, splits, isrc_full, origin, writer_legal_names, mechanical_licensed, contains_samples, sonic_snapshot')
+          .eq('release_id', params.id),
+        supabase.from('distribution_releases').select('title, album_artist, label_name').eq('id', params.id).maybeSingle(),
+      ])
+      const counselTracks = (trackRows || []).map((track) => ({
+        ...track,
+        clearance: parseTrackClearance(
+          track.sonic_snapshot && typeof track.sonic_snapshot === 'object'
+            ? (track.sonic_snapshot as { clearance?: unknown }).clearance
+            : null,
+        ),
+      }))
+      const packets = applyRightsPacketDrafts(
+        buildRightsPackets({
+          releaseTitle: releaseRow?.title || 'Untitled',
+          albumArtist: releaseRow?.album_artist || releaseRow?.label_name || 'SERGIK',
+          publisherName: current?.rights.publisher_name,
+          tracks: counselTracks,
+        }),
+        updates.rights_packets || current?.rights_packets,
+      )
+      const kinds = [
+        approvingSplit ? 'split_sheet' : null,
+        approvingProducer ? 'producer_agreement' : null,
+        approvingProducer ? 'collab_agreement' : null,
+      ].filter(Boolean) as Array<'split_sheet' | 'producer_agreement' | 'collab_agreement'>
+      for (const kind of kinds) {
+        const packet = packets.find((row) => row.kind === kind)
+        if (!packet?.needed || !packet.text) continue
+        const gate = counselGateForPacket({ text: packet.text, kind, tracks: counselTracks })
+        await supabase
+          .from('release_copyright_checklists')
+          .upsert({ release_id: params.id, counsel_audit: counselAuditRecord(gate.report) }, { onConflict: 'release_id' })
+        if (gate.blockers.length) {
+          return NextResponse.json(
+            {
+              error: `Music Business Counsel blocked approval: ${gate.blockers[0]?.title || 'open blockers'}.`,
+              blockers: gate.blockers.map((finding) => ({ title: finding.title, address: finding.address })),
+            },
+            { status: 409 },
+          )
+        }
+      }
     }
 
     const { error } = await supabase.from('release_copyright_checklists').upsert(

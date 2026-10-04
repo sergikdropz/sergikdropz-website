@@ -1,4 +1,4 @@
-import { normalizeSplitRows } from '@/lib/studio/import-parse'
+import { normalizeSplitRows, splitsAreSided, type SplitRow } from '@/lib/studio/import-parse'
 import {
   displayArtistLine,
   namesForRole,
@@ -52,6 +52,30 @@ function uniqueNames(values: string[]): string[] {
   return out
 }
 
+function formatSplitLine(row: SplitRow): string {
+  const legal = row.legal_name ? ` · legal ${row.legal_name}` : ''
+  const role = row.role ? ` · ${row.role}` : ''
+  const pub = row.publisher ? ` · pub ${row.publisher}` : ''
+  const pro = row.pro ? ` · pro ${row.pro}` : ''
+  const ipi = row.ipi ? ` · ipi ${row.ipi}` : ''
+  return `  - ${row.name || '—'}: ${row.percentage}%${role}${legal}${pub}${pro}${ipi}`
+}
+
+function ownershipLines(rows: SplitRow[]): string[] {
+  if (!rows.length) return ['Ownership:', '  - (no split rows)']
+  if (!splitsAreSided(rows)) {
+    return ['Ownership:', ...rows.map(formatSplitLine)]
+  }
+  const master = rows.filter((row) => row.copyright === 'master')
+  const composition = rows.filter((row) => row.copyright === 'composition')
+  return [
+    'Master ownership (sound recording, total 100%):',
+    ...(master.length ? master.map(formatSplitLine) : ['  - (no master rows)']),
+    'Composition ownership (musical work, total 100%):',
+    ...(composition.length ? composition.map(formatSplitLine) : ['  - (no composition rows)']),
+  ]
+}
+
 function partyLine(stage: string, legal?: string | null): string {
   const stageName = clean(stage)
   const legalName = clean(legal) || knownLegalName(stageName) || ''
@@ -102,15 +126,7 @@ export function buildSplitSheetPacket(input: RightsPacketInput): RightsPacket {
         `Track: ${track.title || 'Untitled'}`,
         `Billed: ${trackBilled(track)}`,
         `ISRC: ${track.isrc_full || '—'}`,
-        'Ownership:',
-        ...(rows.length
-          ? rows.map((row) => {
-              const legal = row.legal_name ? ` · legal ${row.legal_name}` : ''
-              const role = row.role ? ` · ${row.role}` : ''
-              const pub = row.publisher ? ` · pub ${row.publisher}` : ''
-              return `  - ${row.name || '—'}: ${row.percentage}%${role}${legal}${pub}`
-            })
-          : ['  - (no split rows)']),
+        ...ownershipLines(rows),
         `Writers: ${
           writers.map((row) => partyLine(row.stage, row.legal)).join(', ') || '—'
         }`,
@@ -126,9 +142,11 @@ export function buildSplitSheetPacket(input: RightsPacketInput): RightsPacket {
     `Publisher: ${publisher}`,
     `Generated: ${date}`,
     '',
-    'This first-party split sheet records master ownership for the tracks below.',
-    'Each party confirms the percentages total 100% and match Catalog credits.',
+    'This first-party split sheet records ownership for the tracks below.',
+    'Composition shares and master shares are separate copyrights. Each table must total 100% and match Catalog credits.',
+    'Writer PRO/CMO income is not SoundExchange or other neighboring-rights income.',
     'It is not a DistroKid product — SERGIK Studio package paperwork only.',
+    'Governing law: ____________________   Territory: ____________________',
     '',
     body.join('\n\n'),
     '',
@@ -186,7 +204,8 @@ export function buildProducerAgreementPacket(input: RightsPacketInput): RightsPa
     `Generated: ${date}`,
     '',
     'First-party producer paperwork for this release package.',
-    'Producer confirms creative contribution to the master(s) listed and that SERGIK may distribute, promote, and monetize them worldwide.',
+    'Producer confirms their contribution to the master(s) listed.',
+    'This license covers the sound recording only. Composition ownership stays on the split sheet.',
     'No DistroKid add-on — this lives in SERGIK Studio Rights.',
     '',
     'Producers & tracks:',
@@ -196,10 +215,16 @@ export function buildProducerAgreementPacket(input: RightsPacketInput): RightsPa
     ),
     '',
     'Terms (summary)',
-    '1. Producer warrants they have authority to grant these rights for their contribution.',
-    '2. Ownership percentages remain as stated on the SERGIK split sheet.',
-    '3. SERGIK / album artist may register ISRCs, deliver to DSPs, and collect neighboring rights via SoundExchange where applicable.',
-    '4. Moral rights waived to the extent permitted for distribution and promotion of the masters.',
+    '1. Producer warrants they have authority to license their master contribution.',
+    '2. Ownership percentages remain as stated on the SERGIK split sheet (master table and composition table kept separate).',
+    '3. Grant: exclusive license to distribute and promote the masters. Term: ______ years from release date. Territory: ____________________.',
+    '4. ISRCs stay with the owner. SERGIK may register the master for neighboring rights (including SoundExchange) during the term.',
+    '5. Moral rights stay with the author. Credit follows Catalog.',
+    '6. No model training, voice clone, or synthetic use is included.',
+    '7. Name and likeness may be used only to credit and promote these masters during the term.',
+    '8. If points are paid, the base is ____________________ (not an undefined “net”). Statements: semi-annual. Audit: once per year, two-year lookback.',
+    '9. Governing law: ____________________  Forum: ____________________',
+    '10. Fill every blank and have a lawyer admitted in that jurisdiction review this before anyone signs.',
     '',
     'Signatures',
     ...parties.map(
@@ -281,16 +306,20 @@ export function buildCollabAgreementPacket(input: RightsPacketInput): RightsPack
     `Generated: ${date}`,
     '',
     'First-party collab / featured artist agreement for masters on this release.',
-    'Each billed or featured collaborator confirms consent to appear on the release, use of their name/likeness in credits and artwork, and distribution of the master under the split sheet.',
+    'Each billed or featured collaborator confirms consent to appear on the release and to distribution of the master under the split sheet.',
     'SERGIK Studio package paperwork — not a DistroKid add-on.',
     '',
     body.join('\n\n'),
     '',
     'Terms (summary)',
-    '1. Collaborators grant SERGIK / album artist a non-exclusive license to distribute and promote the master worldwide.',
-    '2. Credit will appear as billed on Catalog (x for co-primary, feat. for featured).',
-    '3. Ownership and publishing shares follow the split sheet and songwriter legal names on file.',
-    '4. No party will enroll this master in a competing UGC/Content ID pack without written agreement.',
+    '1. Collaborators grant SERGIK / album artist a non-exclusive license to distribute and promote the MASTER. Composition shares stay on the split sheet.',
+    '2. Term: ______ years from release date. Territory: ____________________.',
+    '3. Credit will appear as billed on Catalog (x for co-primary, feat. for featured).',
+    '4. Name and likeness may be used only to credit and promote these masters during the term.',
+    '5. No model training or voice clone is included.',
+    '6. No party will enroll this master in a competing UGC/Content ID pack. SERGIK UGC partner is SERGIK.',
+    '7. Governing law: ____________________  Forum: ____________________',
+    '8. Fill every blank and have a lawyer admitted in that jurisdiction review this before anyone signs.',
     '',
     'Signatures',
     ...uniqueNames(parties).map((party) => `${party}: ______________________  Date: __________`),

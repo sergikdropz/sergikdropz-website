@@ -1,11 +1,18 @@
 import { COPY_TEMPLATES, type MarketingCopy } from '@/lib/studio/constants'
 import {
   buildLaunchCaption,
+  buildPlatformTags,
   buildStoreDescription,
+  buildYoutubeVisualizerDescription,
   catalogCopyPromptDigest,
   marketingCopyFromDna,
   type DnaCopyInput,
 } from '@/lib/studio/vault-import'
+import {
+  copyFieldContextLine,
+  formatCopyAdminDeskBrief,
+  formatCopyIntelligenceBrief,
+} from '@/lib/studio/copy-intelligence'
 
 export const MARKETING_COPY_FIELDS = Object.keys(COPY_TEMPLATES) as (keyof MarketingCopy)[]
 
@@ -32,8 +39,18 @@ export function structureProCopy(text: string, opts?: { maxSentencesPerPara?: nu
     .replace(/\n{3,}/g, '\n\n')
   if (!normalized) return ''
 
-  // Keep intentional tracklist / credits blocks intact.
-  if (/^Tracklist\b/im.test(normalized) || /^Credits\b/im.test(normalized) || /^Artwork\b/im.test(normalized)) {
+  // Keep intentional tracklist / credits / visualizer blocks intact.
+  if (
+    /^Tracklist\b/im.test(normalized) ||
+    /^TRACK BY TRACK\b/im.test(normalized) ||
+    /^CHAPTERS\b/im.test(normalized) ||
+    /^Credits\b/im.test(normalized) ||
+    /^CREDITS\b/im.test(normalized) ||
+    /^Artwork\b/im.test(normalized) ||
+    /^YOUTUBE TAGS\b/im.test(normalized) ||
+    /^YOUTUBE HASHTAGS\b/im.test(normalized) ||
+    /^INSTAGRAM\b/im.test(normalized)
+  ) {
     return normalized
   }
 
@@ -41,7 +58,13 @@ export function structureProCopy(text: string, opts?: { maxSentencesPerPara?: nu
   const out: string[] = []
 
   for (const part of parts) {
-    if (/^(Tracklist|Credits|Artwork|Label:)\b/i.test(part) || /^\d+\.\s/.test(part)) {
+    if (
+      /^(Tracklist|TRACK BY TRACK|CHAPTERS|Credits|CREDITS|Artwork|Label:|YOUTUBE TAGS|YOUTUBE HASHTAGS|INSTAGRAM|X|TIKTOK|SOUNDCLOUD|BANDCAMP)\b/i.test(
+        part,
+      ) ||
+      /^\d+\.\s/.test(part) ||
+      /^\d{1,2}:\d{2}/.test(part)
+    ) {
       out.push(part)
       continue
     }
@@ -164,6 +187,123 @@ function extractJsonTextField(raw: string): string | null {
   return null
 }
 
+const YOUTUBE_REQUIRED_BLOCKS = ['TRACKLIST', 'CHAPTERS', 'CREDITS'] as const
+const YOUTUBE_TAIL_RE = /\n(?=(?:TRACKLIST|CHAPTERS|CREDITS|#)\b)/
+const STORE_TRACKLIST_RE = /(?:^|\n)(Tracklist\b[\s\S]*?)(?=\n(?:Credits|Artwork|Tags:|Listen|Why press play)|$)/i
+
+function extractLabeledBlock(source: string, heading: string): string {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = source.match(
+    new RegExp(`(?:^|\\n)(${escaped}\\b[\\s\\S]*?)(?=\\n(?:TRACKLIST|CHAPTERS|CREDITS|#)|$)`, 'i'),
+  )
+  return match ? clean(match[1]) : ''
+}
+
+export function missingCatalogTitles(text: string, titles: string[]): string[] {
+  const hay = clean(text).toLowerCase()
+  return titles
+    .map((title) => clean(title))
+    .filter((title) => title.length > 0 && !hay.includes(title.toLowerCase()))
+}
+
+/** Only titles that appear inside TRACK BY TRACK count as described. */
+export function missingVisualizerWalkTitles(text: string, titles: string[]): string[] {
+  const walk = extractLabeledBlock(text, 'TRACK BY TRACK')
+  return missingCatalogTitles(walk, titles)
+}
+
+/** Only titles inside the store Tracklist count as listed. */
+export function missingStoreTracklistTitles(text: string, titles: string[]): string[] {
+  const list = clean(text.match(STORE_TRACKLIST_RE)?.[1] || '')
+  return missingCatalogTitles(list, titles)
+}
+
+/** Keep the track walk + required blocks when YouTube copy overflows the 5000-char cap. */
+export function clipYoutubeVisualizer(text: string, max?: number): string {
+  const value = clean(text)
+  if (!max || value.length <= max) return value
+  const match = value.match(/(?:^|\n)(TRACK BY TRACK\b[\s\S]*)$/i)
+  const tail = match ? clean(match[1]) : ''
+  if (!tail) return `${value.slice(0, max - 1).trimEnd()}…`
+  if (tail.length >= max - 80) {
+    return `${tail.slice(0, max - 1).trimEnd()}…`
+  }
+  const head = value.slice(0, value.length - tail.length).trimEnd()
+  const budget = max - tail.length - 2
+  return `${head.slice(0, budget).trimEnd()}\n\n${tail}`
+}
+
+function extractYoutubeWalkBlocks(seed: string): string[] {
+  const walk = extractLabeledBlock(seed, 'TRACK BY TRACK').replace(/^TRACK BY TRACK\b\s*/i, '')
+  return walk
+    .split(/\n\n+/)
+    .map((block) => clean(block))
+    .filter(Boolean)
+}
+
+function extractYoutubeWalkBlock(seed: string, title: string): string {
+  const needle = clean(title).toLowerCase()
+  if (!needle) return ''
+  return extractYoutubeWalkBlocks(seed).find((block) => block.toLowerCase().includes(needle)) || ''
+}
+
+function insertBeforeYoutubeTail(text: string, block: string): string {
+  const chunk = clean(block)
+  if (!chunk) return text
+  const match = text.match(YOUTUBE_TAIL_RE)
+  if (match && match.index != null) {
+    return `${text.slice(0, match.index)}\n\n${chunk}${text.slice(match.index)}`
+  }
+  return `${text}\n\n${chunk}`
+}
+
+/** Keep AI prose but restore required YouTube blocks and any skipped track walk from the catalog seed. */
+export function mergeYoutubeVisualizerStructure(
+  aiText: string,
+  seed?: string | null,
+  titles?: string[],
+): string {
+  let text = clean(aiText)
+  const source = clean(seed)
+  if (!text) return source
+  if (!source) return text
+
+  const missingTitles = titles?.length ? missingVisualizerWalkTitles(text, titles) : []
+  if (missingTitles.length) {
+    const extras = missingTitles.map((title) => extractYoutubeWalkBlock(source, title)).filter(Boolean)
+    if (extras.length) {
+      const chunk = extras.join('\n\n')
+      text = /^TRACK BY TRACK\b/im.test(text)
+        ? insertBeforeYoutubeTail(text, chunk)
+        : insertBeforeYoutubeTail(text, `TRACK BY TRACK\n\n${chunk}`)
+    }
+  }
+
+  const missing = YOUTUBE_REQUIRED_BLOCKS.filter((block) => !new RegExp(`^${block}\\b`, 'im').test(text))
+  if (!missing.length) return text
+  const extras = missing.map((block) => extractLabeledBlock(source, block)).filter(Boolean)
+  if (!extras.length) return text
+  return `${text}\n\n${extras.join('\n\n')}`.trim()
+}
+
+/** Restore a store Tracklist that names every catalog cut when the model stops after the first. */
+export function mergeStoreTrackCoverage(
+  aiText: string,
+  seed?: string | null,
+  titles?: string[],
+): string {
+  const text = clean(aiText)
+  const source = clean(seed)
+  if (!text) return source
+  if (!source || !titles?.length || !missingStoreTracklistTitles(text, titles).length) return text
+  const seedList = clean(source.match(STORE_TRACKLIST_RE)?.[1] || '')
+  if (!seedList) return text
+  if (/^Tracklist\b/im.test(text)) {
+    return text.replace(/(?:^|\n)Tracklist\b[\s\S]*?(?=\n(?:Credits|Artwork|Tags:|Listen|Why press play)|$)/i, `\n${seedList}`).trim()
+  }
+  return `${text}\n\n${seedList}`.trim()
+}
+
 export function parseRefinedCopyReply(reply: string): string {
   const raw = clean(reply)
   if (!raw) return ''
@@ -197,24 +337,29 @@ export function buildRefineMarketingCopyPrompt(input: {
   draft: string
   catalog: DnaCopyInput
   seed?: string
+  mode?: 'draft' | 'refine'
 }): string {
   const meta = COPY_TEMPLATES[input.field]
   const digest = catalogCopyPromptDigest(input.catalog)
   const metadataDescription = clean(input.catalog.description)
+  const catalogTitles = (input.catalog.tracks || [])
+    .map((track) => clean(track.title))
+    .filter(Boolean)
   const catalogNotes = (input.catalog.tracks || [])
     .map((track, index) => {
+      const title = clean(track.title) || 'Untitled'
       const note = clean(track.description)
       const intention = clean(track.intention)
-      if (!note && !intention) return ''
       return [
-        `${index + 1}. ${clean(track.title) || 'Untitled'}`,
-        note ? `Catalog press: ${note}` : '',
+        `${index + 1}. ${title}`,
+        note
+          ? `Catalog press: ${note}`
+          : `REQUIRED: write a unique listener-facing description for "${title}". Do not skip this cut.`,
         intention ? `Intention: ${intention}` : '',
       ]
         .filter(Boolean)
         .join('\n')
     })
-    .filter(Boolean)
     .join('\n\n')
 
   const limits = [
@@ -245,7 +390,7 @@ export function buildRefineMarketingCopyPrompt(input: {
           '- Facts line with track count, BPM range, keys, genre/subgenre, label, year',
           '- Two short engagement paragraphs from Metadata description + Catalog press notes (not one run-on block)',
           '- One "Why press play" line that sells a start-to-finish listen',
-          '- Tracklist section with numbered titles, BPM/key/genre, and a one-line press hook each',
+          '- Tracklist MUST include every catalog title with its own one-line press hook — do not stop after the first cut',
           '- Include artwork credits when present',
           '- Close with a clear listen/stream CTA',
           '- Final Tags line: artist · title · genre · subgenre · release type (natural SEO keywords, not hashtag spam)',
@@ -253,17 +398,75 @@ export function buildRefineMarketingCopyPrompt(input: {
         ].join('\n')
       : ''
 
+  const youtubeSeo =
+    input.field === 'youtube_visualizer'
+      ? [
+          'YouTube full-EP visualizer description requirements:',
+          '- Headline first: "{Title} — Full EP Visualizer | {Artist}" (or Full Album / Track for those kinds)',
+          '- This is ONE continuous video of the whole release in catalog order. No gaps / no space between tracks.',
+          '- Open with a start-to-finish description of the EP as a single listen, grounded in Metadata + Catalog press notes',
+          '- TRACK BY TRACK MUST include EVERY catalog track by exact title — no skipping, no merging two cuts into one paragraph, no "and the rest"',
+          '- If the catalog lists N tracks, TRACK BY TRACK must have N headed entries, each with start–finish timestamps (00:00–03:24), BPM/key, press note, ISRC when known',
+          '- TRACKLIST (continuous · no space between tracks) must list every track in EP order with start AND finish video times',
+          '- The finish time of track N must equal the start time of track N+1',
+          '- CHAPTERS section uses start stamps only, first line MUST be 00:00, chronological',
+          '- CREDITS from Catalog contributors + artwork + label + year. Do not invent guests or durations',
+          '- If a Catalog duration is missing, write "pending" — never guess a time',
+          '- End with visualizer hashtags (#Visualizer #OfficialAudio #FullEP). Stay under 5000 characters.',
+        ].join('\n')
+      : ''
+
+  const tagsSeo =
+    input.field === 'platform_tags'
+      ? [
+          'Platform tags + hashtags requirements:',
+          '- Keep labeled blocks: YOUTUBE TAGS, YOUTUBE HASHTAGS, INSTAGRAM / THREADS, X, TIKTOK, SOUNDCLOUD, BANDCAMP / STORE',
+          '- YOUTUBE TAGS = comma-separated keywords with NO #. Stay under 500 characters. Include artist, title, genre, Official Audio, Visualizer, Full EP, and catalog track titles when they fit',
+          '- YOUTUBE HASHTAGS = hashed discovery tags for the description (#Visualizer #OfficialAudio #FullEP plus brand/genre)',
+          '- INSTAGRAM / THREADS = 10–14 hashtags (brand + title + genre + NewMusic/OutNow)',
+          '- X = 4–6 short hashtags only',
+          '- TIKTOK = 8–10 music-discovery hashtags. No fake viral/chart claims',
+          '- SOUNDCLOUD = lowercase comma keywords',
+          '- BANDCAMP / STORE = Tags: artist · title · genre line',
+          '- Ground tags in Catalog genre/subgenre/artist. Do not invent playlist or chart names.',
+        ].join('\n')
+      : ''
+
+  const mode = input.mode === 'draft' ? 'draft' : 'refine'
+  const intelligence = formatCopyIntelligenceBrief({
+    field: input.field,
+    tracks: input.catalog.tracks || [],
+  })
+  const desk =
+    mode === 'draft'
+      ? `Write a fresh ${meta.label} from the sources. The catalog seed is structure only — prefer unified Sonic DNA + Catalog over a stub draft.`
+      : `Polish ONLY the ${meta.label}. Prefer Metadata + Catalog + unified intelligence when they conflict with a sloppy draft.`
+
+  const adminDesk = formatCopyAdminDeskBrief(input.field)
+
   return [
-    `You are a music marketing editor for SERGIK Release Studio.`,
-    `Refine ONLY the ${meta.label} (${input.field}) for "${clean(input.catalog.title) || 'Untitled'}".`,
+    `You are SergikAI on the SERGIK copy desk — a polymath marketing editor working with Admin AI agents (strategy, growth, smartlink, ops intel).`,
+    `${desk}`,
+    `Field: ${meta.label} (${input.field}) for "${clean(input.catalog.title) || 'Untitled'}".`,
     `Channel: ${meta.channel}.`,
+    `Context: ${copyFieldContextLine(input.field)}.`,
     `Structure: ${meta.tip}`,
     limits,
     socialSeo,
     storeSeo,
+    youtubeSeo,
+    tagsSeo,
     `Write professional, organized copy — short paragraphs, clear sentences, no run-on walls of text.`,
-    `Ground every claim in the sources below. Do not invent guests, cities, chart facts, or awards.`,
-    `Prefer the Metadata description and Catalog press notes when they conflict with a sloppy draft.`,
+    catalogTitles.length > 1
+      ? `This release has ${catalogTitles.length} catalog tracks. Name and describe ALL of them: ${catalogTitles.join(', ')}.`
+      : '',
+    `Ground every claim in the sources below. Do not invent guests, cities, chart facts, awards, analytics, or durations.`,
+    '',
+    '## Unified Sonic DNA + polymath brief (authoritative feel / groove / culture)',
+    intelligence,
+    '',
+    '## Admin AI desk — strategy + expansion',
+    adminDesk || '(credits / catalog only)',
     '',
     '## Release metadata description',
     metadataDescription || '(empty)',
@@ -277,12 +480,70 @@ export function buildRefineMarketingCopyPrompt(input: {
     '## Seed from catalog/DNA (optional structure)',
     clean(input.seed) || '(none)',
     '',
-    '## Current draft to polish',
+    mode === 'draft' ? '## Current draft (replace unless it already holds verified facts)' : '## Current draft to polish',
     clean(input.draft) || '(empty — write fresh from sources)',
     '',
     `Return ONLY valid JSON: {"text":"<copy here>"}.`,
     `Put real line breaks inside the JSON string — never write the characters \\n.`,
     `No markdown fences, no commentary, no keys other than text.`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+/** Metadata panel DSP description — same intelligence desk as store copy, without marketing-only tags. */
+export function buildListeningJourneyRefinePrompt(input: {
+  catalog: DnaCopyInput
+  draft?: string | null
+  seed?: string | null
+  mode?: 'draft' | 'refine'
+}): string {
+  const mode = input.mode === 'draft' ? 'draft' : 'refine'
+  const intelligence = formatCopyIntelligenceBrief({
+    field: 'store_description',
+    tracks: input.catalog.tracks || [],
+  })
+  const adminDesk = formatCopyAdminDeskBrief('store_description')
+  const digest = catalogCopyPromptDigest(input.catalog)
+  const catalogTitles = (input.catalog.tracks || []).map((track) => clean(track.title)).filter(Boolean)
+
+  const desk =
+    mode === 'draft'
+      ? 'Write a fresh Metadata listening journey from Catalog + unified Sonic DNA.'
+      : 'Polish the Metadata listening journey. Prefer Catalog press notes + unified intelligence over a thin draft.'
+
+  return [
+    'You are SergikAI on the SERGIK copy desk — polymath editor with Admin AI strategy + smartlink agents.',
+    desk,
+    `Release: "${clean(input.catalog.title) || 'Untitled'}" (${clean(input.catalog.artist) || 'SERGIK'}).`,
+    `Context: ${copyFieldContextLine('store_description')}.`,
+    'Metadata description requirements:',
+    '- Opening: start-to-finish listening journey across the full catalog order (one room, play in order)',
+    '- Include ordered Tracklist with every catalog title',
+    '- Include Credits from contributors when present',
+    '- Include artwork designer / photographer / illustrator lines when present',
+    '- Journalist tone — sensory, specific, no lab voice, no fake charts or playlist claims',
+    '- Do NOT add a separate marketing Tags line or hashtag block (that lives in Copywriting Studio)',
+    catalogTitles.length > 1
+      ? `This release has ${catalogTitles.length} catalog tracks. Name ALL of them in the journey and tracklist: ${catalogTitles.join(', ')}.`
+      : '',
+    '',
+    '## Unified Sonic DNA + polymath brief',
+    intelligence,
+    '',
+    '## Admin AI desk',
+    adminDesk || '(catalog only)',
+    '',
+    '## Metadata + Sonic DNA digest',
+    digest,
+    '',
+    '## Seed from catalog (structure reference)',
+    clean(input.seed) || '(none)',
+    '',
+    mode === 'draft' ? '## Current draft' : '## Current draft to polish',
+    clean(input.draft) || '(empty — write fresh from sources)',
+    '',
+    'Return ONLY valid JSON: {"text":"<copy here>"}. Real newlines inside the string. No markdown fences.',
   ]
     .filter(Boolean)
     .join('\n')
@@ -308,6 +569,8 @@ export function polishMarketingCopyFieldLocally(input: {
     text = lead || seed
   } else if (input.field === 'store_description') {
     text = buildStoreDescription(input.catalog)
+  } else if (input.field === 'youtube_visualizer') {
+    text = buildYoutubeVisualizerDescription(input.catalog)
   } else if (input.field === 'elevator_pitch') {
     text =
       structureProCopy(draftIsRunOn ? seed || draft : draft || seed, {
@@ -315,6 +578,8 @@ export function polishMarketingCopyFieldLocally(input: {
       }).split(/\n\n/)[0] || seed
   } else if (input.field === 'social_caption') {
     text = buildLaunchCaption(input.catalog)
+  } else if (input.field === 'platform_tags') {
+    text = buildPlatformTags(input.catalog)
   } else if (input.field === 'spotify_pitch') {
     text = structureProCopy(draftIsRunOn ? seed || draft : draft || seed, {
       maxSentencesPerPara: 2,
@@ -324,7 +589,14 @@ export function polishMarketingCopyFieldLocally(input: {
   }
 
   const max = meta.hardMax || meta.softMax
-  if (input.field === 'store_description' || input.field === 'social_caption') {
+  if (input.field === 'youtube_visualizer') {
+    return clipYoutubeVisualizer(text, meta.hardMax)
+  }
+  if (
+    input.field === 'store_description' ||
+    input.field === 'social_caption' ||
+    input.field === 'platform_tags'
+  ) {
     return clip(text, max)
   }
   return clip(

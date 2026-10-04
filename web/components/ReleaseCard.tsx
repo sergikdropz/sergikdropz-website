@@ -287,12 +287,12 @@ function ReleaseCard({
       </div>
       <div className="p-2.5 sm:p-6">
         <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-1.5 sm:gap-2">
-          <h3 className="text-sm sm:text-xl font-semibold flex-1 min-w-0 line-clamp-2">
-            <Link href={`/music/${release.id}`} className="hover:text-white transition-colors">
+          <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug sm:text-xl">
+            <Link href={`/music/${release.id}`} className="break-words hover:text-white transition-colors">
               {release.title}
             </Link>
           </h3>
-          <span className="text-[10px] sm:text-xs text-gray-400 bg-gray-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
+          <span className="flex-shrink-0 rounded bg-gray-800 px-2 py-1 text-xs text-gray-300">
             {release.type}
           </span>
         </div>
@@ -316,7 +316,7 @@ function ReleaseCard({
                   <button
                     key={platformName}
                     onClick={() => setShowSoundCloud(!showSoundCloud)}
-                    className={`p-2 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor} ${showSoundCloud ? 'bg-orange-500/20 border-orange-500/50' : ''}`}
+                    className={`flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-700 p-2 transition-all touch-manipulation sm:p-3 ${config.color} ${config.bgColor} ${showSoundCloud ? 'bg-orange-500/20 border-orange-500/50' : ''}`}
                     title={`${showSoundCloud ? 'Hide' : 'Play on'} ${config.name} - ${config.description}`}
                     aria-label={`${showSoundCloud ? 'Hide' : 'Play on'} ${config.name} - ${config.description}`}
                   >
@@ -331,7 +331,7 @@ function ReleaseCard({
                   href={platformUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`p-2 sm:p-3 rounded-lg transition-all touch-manipulation min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center border border-gray-700 ${config.color} ${config.bgColor}`}
+                  className={`flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-700 p-2 transition-all touch-manipulation sm:p-3 ${config.color} ${config.bgColor}`}
                   title={`${config.name} - ${config.description}`}
                   aria-label={`${config.name} - ${config.description}`}
                 >

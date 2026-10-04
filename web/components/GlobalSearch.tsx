@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { FaSearch } from 'react-icons/fa'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 
 export default function GlobalSearch() {
   const router = useRouter()
@@ -60,6 +61,7 @@ export default function GlobalSearch() {
   if (!isOpen) return null
 
   return (
+    <FloatingMenuPortal>
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-start justify-center pt-32">
       <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-2xl shadow-2xl">
         <div className="flex items-center gap-3 p-4 border-b border-gray-800">
@@ -103,5 +105,6 @@ export default function GlobalSearch() {
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   )
 }

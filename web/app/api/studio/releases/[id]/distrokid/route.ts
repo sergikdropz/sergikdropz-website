@@ -29,7 +29,10 @@ export async function GET(
   if (!session?.isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = createSupabaseServerClient()
-  const loaded = await loadDistroKidRelease(supabase, params.id)
+  const ensureDspAssets =
+    request.nextUrl.searchParams.get('ensureDsp') === '1' ||
+    request.nextUrl.searchParams.get('ensureDsp') === 'true'
+  const loaded = await loadDistroKidRelease(supabase, params.id, { ensureDspAssets })
   if (!loaded.release) {
     return NextResponse.json({ error: loaded.error || 'Release not found' }, { status: loaded.error === 'Release not found' ? 404 : 500 })
   }
@@ -53,6 +56,19 @@ export async function GET(
     record: loaded.record,
     distributorStatus: loaded.release.distributor_status,
     distributionMode: loaded.release.distribution_mode,
+    dspEnsure: ensureDspAssets
+      ? {
+          artwork_dsp_url: loaded.packet?.release?.artwork_url || null,
+          masters: loaded.dspEnsure?.masters
+            ? {
+                linked: loaded.dspEnsure.masters.linked,
+                ingested: loaded.dspEnsure.masters.ingested,
+                already: loaded.dspEnsure.masters.already,
+                missing: loaded.dspEnsure.masters.missing,
+              }
+            : null,
+        }
+      : undefined,
   })
 }
 

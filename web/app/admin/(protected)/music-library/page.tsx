@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 import { FaFolder, FaMusic, FaPlus, FaEdit, FaTrash, FaSync, FaSave, FaTimes, FaEye, FaEyeSlash, FaChevronRight, FaChevronDown, FaGripVertical, FaSearch, FaSort, FaSortAlphaDown, FaSortAlphaUp, FaSortNumericDown, FaSortNumericUp, FaColumns, FaCheckSquare, FaSquare, FaUpload, FaSpinner, FaList, FaInfoCircle, FaLink } from 'react-icons/fa'
 import {
   fetchMusicLibrary,
@@ -2446,6 +2447,7 @@ export default function AdminMusicLibrary() {
         </div>
 
         {contextMenu && (
+          <FloatingMenuPortal>
           <div
             className="fixed z-[1000] bg-gray-900 border border-gray-700 rounded shadow-xl py-1 text-sm"
             style={{ top: contextMenu.y, left: contextMenu.x }}
@@ -2499,6 +2501,7 @@ export default function AdminMusicLibrary() {
               </button>
             )}
           </div>
+          </FloatingMenuPortal>
         )}
 
         {drawerOpen && drawerTrack && (

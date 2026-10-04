@@ -136,10 +136,7 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
         <div className="mb-8 sm:mb-12">
           <div className="mb-4 flex flex-col items-center gap-4">
             <div className="flex w-full justify-center">
-              <h1
-                className="text-4xl sm:text-5xl md:text-6xl font-bold text-center font-six-caps"
-                style={{ display: 'flex', flexDirection: 'column', fontSize: '114px', letterSpacing: '14.4px', lineHeight: '122px' }}
-              >
+              <h1 className="text-center font-six-caps font-bold leading-none tracking-[0.12em] text-6xl sm:text-7xl md:text-8xl lg:text-[114px] lg:leading-[1.07] lg:tracking-[0.126em]">
                 Music
               </h1>
             </div>
@@ -164,14 +161,7 @@ export default function MusicPageClient({ initialLiveReleases }: MusicPageClient
             aria-expanded={releasesExpanded}
             className="relative mb-4 sm:mb-6 flex w-full items-center justify-center rounded-lg border border-gray-800/80 bg-gray-900/40 px-10 py-3 text-center transition-colors hover:border-gray-700 hover:bg-gray-900/70 touch-manipulation sm:px-12"
           >
-            <h2
-              className="origin-center font-six-caps text-3xl font-bold sm:text-4xl md:text-5xl"
-              style={{
-                letterSpacing: '0.22em',
-                transform: 'scaleX(1.12)',
-                textShadow: '0.4px 0 0 currentColor, -0.4px 0 0 currentColor',
-              }}
-            >
+            <h2 className="consumer-section-title origin-center font-six-caps text-3xl font-bold sm:text-4xl md:text-5xl">
               Releases
             </h2>
             <span

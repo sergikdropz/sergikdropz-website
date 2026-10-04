@@ -4,7 +4,9 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import {
   collabStatusFromResendEvent,
   isMissingCollabTableError,
+  isResendInboundReceivedEvent,
 } from '@/lib/studio/release-collab'
+import { ingestCollabInboundEmail } from '@/lib/studio/release-collab-inbound-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +60,11 @@ type ResendWebhookBody = {
   data?: {
     email_id?: string
     created_at?: string
+    from?: string
+    to?: string | string[]
+    subject?: string
+    text?: string | null
+    html?: string | null
     [key: string]: unknown
   }
 }
@@ -89,6 +96,20 @@ export async function POST(request: NextRequest) {
   }
 
   const eventType = String(body.type || '')
+
+  if (isResendInboundReceivedEvent(eventType)) {
+    const inbound = await ingestCollabInboundEmail(body.data || {})
+    if (inbound.ok) {
+      return NextResponse.json({
+        ok: true,
+        inbound: true,
+        releaseId: inbound.releaseId,
+        messageId: inbound.messageId,
+      })
+    }
+    return NextResponse.json({ ok: true, inbound: false, reason: inbound.reason })
+  }
+
   const mapped = collabStatusFromResendEvent(eventType)
   const resendId = body.data?.email_id ? String(body.data.email_id) : ''
 

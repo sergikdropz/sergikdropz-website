@@ -13,10 +13,10 @@ export type TrackDisplaySource = {
   metadata?: Record<string, unknown> | null
 }
 
-const UNKNOWN = new Set(['', 'unknown', 'n/a', 'none', 'null', 'unclassified'])
+const UNKNOWN = new Set(['', 'unknown', 'n/a', 'none', 'null', 'unclassified', '[object object]'])
 
 function clean(value: unknown): string {
-  if (value == null) return ''
+  if (value == null || typeof value === 'object') return ''
   const text = String(value).trim()
   if (!text || UNKNOWN.has(text.toLowerCase())) return ''
   return text

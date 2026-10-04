@@ -47,14 +47,7 @@ export default function Contact() {
     <div className="pt-20 min-h-screen relative">
       <div className="container mx-auto px-4 py-16 relative z-10">
         <div className="max-w-5xl mx-auto">
-          <h1 
-            className="text-5xl md:text-6xl font-bold mb-4 font-six-caps text-center border border-white"
-            style={{
-              fontSize: '80px',
-              letterSpacing: '8px',
-              lineHeight: '133px'
-            }}
-          >
+          <h1 className="consumer-display mb-4 border border-white px-3 py-2 text-center font-six-caps font-bold">
             Contact
           </h1>
           <p className="text-gray-400 text-lg mb-12">
@@ -335,15 +328,14 @@ export default function Contact() {
             </div>
           </section>
 
-          {/* Sticky Email Button */}
-          <div className="sticky bottom-4 bg-white text-black p-4 rounded-lg shadow-lg text-center">
+          <div className="mt-8 rounded-lg bg-white p-4 text-center text-black">
             <a
               href={`mailto:${artistData.contact.email}?subject=Booking Inquiry`}
-              className="text-lg font-semibold hover:underline"
+              className="break-words text-base font-semibold hover:underline sm:text-lg"
             >
               Email Booking: {artistData.contact.email}
             </a>
-            <p className="text-sm text-gray-600 mt-1">Response time: 24-48 hours</p>
+            <p className="mt-1 text-sm text-gray-600">Response time: 24-48 hours</p>
           </div>
         </div>
       </div>

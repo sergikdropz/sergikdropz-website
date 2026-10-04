@@ -1,4 +1,5 @@
 import { getSkillById, getSkillByTool, inferSkillFromIntent, validateAgainstSkillSchema } from '@/lib/ai/skills/registry'
+import { inferMetaPromoAction, isMetaPromoIntent } from '@/lib/meta/promo-workflow'
 import { AdminAiTool, isAdminAiToolExecutionEnabled, isAllowedTool } from '@/lib/admin-ai'
 
 export type OrchestratorStep = {
@@ -126,6 +127,23 @@ function defaultPayloadForTool(tool: AdminAiTool, message: string): Record<strin
     return { focus }
   }
 
+  if (tool === 'query_platform_growth_snapshot') {
+    return {}
+  }
+
+  if (tool === 'admin_browser') {
+    const m = message.toLowerCase()
+    const urlMatch = message.match(/https?:\/\/[^\s<>"')]+/)
+    if (m.includes('navigate') || urlMatch) {
+      return {
+        action: 'navigate',
+        url: urlMatch?.[0] || 'https://artists.spotify.com/c/artist/7MnvMhWoSe4wYXuiI6iQ8H/home',
+      }
+    }
+    if (m.includes('status')) return { action: 'status' }
+    return { action: 'read' }
+  }
+
   if (tool === 'query_release_studio_snapshot') {
     const idMatch = message.match(/release[-_a-z0-9]+/i)
     return {
@@ -140,12 +158,60 @@ function defaultPayloadForTool(tool: AdminAiTool, message: string): Record<strin
     }
   }
 
+  if (tool === 'query_sergikai_chat') {
+    const content = message.replace(/^\/exec\s+\S+\s*/i, '').trim() || message.trim()
+    return { content: content.slice(0, 4000) }
+  }
+
+  if (tool === 'query_crowe_creative') {
+    const m = message.toLowerCase()
+    let action = 'models'
+    if (m.includes('credit')) action = 'credits'
+    else if (m.includes('quote')) action = 'quote'
+    else if (m.includes('video')) action = 'generate_video'
+    else if (m.includes('image')) action = 'generate_image'
+    return {
+      action,
+      prompt: message.slice(0, 2000),
+    }
+  }
+
+  if (tool === 'query_intelligence_harness') {
+    const idMatch = message.match(/release[-_a-z0-9]+/i)
+    const q = message.replace(/^\/exec\s+\S+\s*/i, '').trim()
+    return {
+      mode: 'stack',
+      query: q.length > 12 ? q.slice(0, 400) : undefined,
+      releaseId: idMatch?.[0],
+    }
+  }
+
   if (tool === 'patch_release_marketing_copy') {
     const idMatch = message.match(/release[-_a-z0-9]+/i)
     return {
       releaseId: idMatch?.[0] ?? '',
       marketingCopy: {},
       merge: true,
+    }
+  }
+
+  if (tool === 'run_meta_promo_pipeline') {
+    const idMatch = message.match(/release[-_a-z0-9]+/i)
+    return {
+      releaseId: idMatch?.[0] ?? '',
+      action: inferMetaPromoAction(message),
+      primaryGoal: 'Run the Meta promo pipeline for this release',
+      brandName: 'SERGIK',
+    }
+  }
+
+  if (tool === 'audit_music_contract') {
+    const idMatch = message.match(/release[-_a-z0-9]+/i)
+    const body = message.replace(/^\/exec\s+\S+\s*/i, '').trim()
+    return {
+      releaseId: idMatch?.[0],
+      text: body.slice(0, 8000),
+      question: body.slice(0, 500),
     }
   }
 
@@ -215,7 +281,17 @@ export function buildPlanGraphForIntent(
   if (options?.skillId) {
     const forced = getSkillById(options.skillId)
     if (forced) {
-      const tool = forced.allowedTools[0]
+      const tool =
+        forced.id === 'product_strategy' && isMetaPromoIntent(message)
+          ? 'run_meta_promo_pipeline'
+          : forced.id === 'growth_marketing' &&
+              /growth board|weekly growth|platform growth|how do we grow|grow spotify|monthly listeners/i.test(
+                message
+              )
+            ? 'query_platform_growth_snapshot'
+            : forced.id === 'growth_marketing' && /campaign draft|create campaign/i.test(message)
+              ? 'generate_campaign_draft'
+              : forced.allowedTools[0]
       if (tool && isAllowedTool(tool)) {
         if (isAdminAiToolExecutionEnabled(tool)) {
           steps.push(buildStep(tool, defaultPayloadForTool(tool, message)))
@@ -269,6 +345,31 @@ export function buildPlanGraphForIntent(
       steps.push(
         buildStep('create_release_checklist', defaultPayloadForTool('create_release_checklist', message)),
         buildStep('generate_campaign_draft', defaultPayloadForTool('generate_campaign_draft', message))
+      )
+    } else if (
+      lowered.includes('growth board') ||
+      lowered.includes('weekly growth') ||
+      (lowered.includes('platform growth') && (lowered.includes('ingest') || lowered.includes('board')))
+    ) {
+      steps.push(
+        buildStep('query_platform_growth_snapshot', {}),
+        buildStep('admin_browser', {
+          action: 'navigate',
+          url: 'https://artists.spotify.com/c/artist/7MnvMhWoSe4wYXuiI6iQ8H/home',
+        }),
+        buildStep('admin_browser', { action: 'read' }),
+        buildStep('generate_campaign_draft', {
+          ...defaultPayloadForTool('generate_campaign_draft', message),
+          campaignGoal: 'Weekly growth: IG→MusicBank/smartlink + Spotify follows (cite snapshot baselines)',
+          channels: ['instagram', 'spotify', 'youtube', 'soundcloud'],
+        })
+      )
+    } else if (isMetaPromoIntent(lowered)) {
+      steps.push(
+        buildStep(
+          'run_meta_promo_pipeline',
+          defaultPayloadForTool('run_meta_promo_pipeline', message)
+        )
       )
     } else {
       const inferred = inferSkillFromIntent(message)

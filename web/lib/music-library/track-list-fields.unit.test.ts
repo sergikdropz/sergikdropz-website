@@ -48,6 +48,46 @@ describe('mapLibraryTrackToListItem', () => {
     expect(phase.grid_manual).toBeUndefined()
   })
 
+  it('fills empty catalog columns from Sonic DNA cache scalars and ignores a stored 0 BPM', () => {
+    const row = mapLibraryTrackToListItem(
+      {
+        id: 'break-one',
+        title: 'Break One',
+        bpm: null,
+        key_signature: '[object Object]',
+        genre: null,
+        subgenre: null,
+        duration: null,
+        energy_level: null,
+      },
+      {
+        audio: {
+          bpm: 120,
+          key_signature: 'Unknown',
+          genre: 'House',
+          subgenre: 'Detroit Techno',
+          energy_level: 5,
+          danceability: 9,
+          duration_seconds: 210,
+        },
+      },
+    )
+    expect(row.bpm).toBe(120)
+    expect(row.key_signature).toBeUndefined()
+    expect(row.genre).toBe('House')
+    expect(row.subgenre).toBe('Detroit Techno')
+    expect(row.energy_level).toBe(5)
+    expect(row.danceability).toBe(9)
+    expect(row.duration).toBe(210)
+
+    const zeroBlocks = mapLibraryTrackToListItem(
+      { id: 'sonic', title: 'Sonic Movement', bpm: 0, genre: null },
+      { audio: { bpm: 120, genre: 'House' } },
+    )
+    expect(zeroBlocks.bpm).toBe(120)
+    expect(zeroBlocks.genre).toBe('House')
+  })
+
   it('fills duration from audio_files when track.duration is null', () => {
     const row = mapLibraryTrackToListItem(
       { id: 't1', title: 'No Length', duration: null, audio_file_id: 'a1' },

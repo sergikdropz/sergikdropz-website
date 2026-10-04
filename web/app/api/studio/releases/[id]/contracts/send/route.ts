@@ -15,9 +15,13 @@ import {
 import {
   RELEASE_COLLAB_FROM_EMAIL,
   RELEASE_COLLAB_FROM_NAME,
-  RELEASE_COLLAB_REPLY_TO,
+  collabOutboundReplyTo,
 } from '@/lib/studio/release-collab'
+import { recordCollabEmailSend, postCollabSystemMessage } from '@/lib/studio/collab-email-log'
+import { contractKindToEmailKind } from '@/lib/studio/collab-review-writeback'
 import { logActivity } from '@/lib/activity-log'
+import { counselAuditRecord, counselGateForPacket } from '@/lib/studio/music-law/release-gate'
+import { parseTrackClearance } from '@/lib/studio/rights-ops'
 import { checkRateLimitAsync } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -81,7 +85,7 @@ export async function POST(
     const { data: trackRows } = await supabase
       .from('distribution_tracks')
       .select(
-        'id, title, contributors, splits, isrc_full, iswc, writer_legal_names, origin, publisher_name',
+        'id, title, contributors, splits, isrc_full, iswc, writer_legal_names, origin, publisher_name, mechanical_licensed, contains_samples, sonic_snapshot',
       )
       .eq('release_id', params.id)
       .order('track_number', { ascending: true })
@@ -96,6 +100,9 @@ export async function POST(
       writer_legal_names?: string | null
       origin?: string | null
       publisher_name?: string | null
+      mechanical_licensed?: boolean | null
+      contains_samples?: boolean | null
+      sonic_snapshot?: { clearance?: unknown } | null
     }>
 
     const readiness = await getSingleReleaseCopyrightReadiness(supabase, params.id)
@@ -127,6 +134,35 @@ export async function POST(
       )
     }
 
+    const counselTracks = tracks.map((track) => ({
+      ...track,
+      clearance: parseTrackClearance(track.sonic_snapshot?.clearance),
+    }))
+    const gate = counselGateForPacket({ text: packet.text, kind, tracks: counselTracks })
+    const audit = counselAuditRecord(gate.report)
+    await supabase
+      .from('release_copyright_checklists')
+      .upsert({ release_id: params.id, counsel_audit: audit }, { onConflict: 'release_id' })
+      .then(({ error }) => {
+        if (error && !/counsel_audit/i.test(error.message || '')) {
+          console.error('counsel audit save failed', error.message)
+        }
+      })
+    if (gate.blockers.length) {
+      return NextResponse.json(
+        {
+          error: `Music Business Counsel blocked send: ${gate.blockers[0]?.title || 'open blockers'}.`,
+          blockers: gate.blockers.map((finding) => ({
+            id: finding.id,
+            title: finding.title,
+            address: finding.address,
+          })),
+          memo: gate.report.memo,
+        },
+        { status: 409 },
+      )
+    }
+
     const signatories = contractSignatories(packet, tracks, partyContacts)
     const { ok, recipients, missing } = signatoriesReadyToSend(signatories)
     if (!ok) {
@@ -151,11 +187,13 @@ export async function POST(
       )
     }
 
+    const emailKind = contractKindToEmailKind(kind)
+    const contractSubject = contractEmailSubject(kind, release.title || 'SERGIK release')
     const sent: Array<{ stage: string; email: string; messageId?: string }> = []
     for (const recipient of recipients) {
       const result = await sendEmail({
         to: recipient.email,
-        subject: contractEmailSubject(kind, release.title || 'SERGIK release'),
+        subject: contractSubject,
         html: contractEmailHtml({
           kind,
           releaseTitle: release.title || 'Untitled',
@@ -165,14 +203,29 @@ export async function POST(
           packetLabel: packet.label,
         }),
         from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
-        replyTo: RELEASE_COLLAB_REPLY_TO,
+        replyTo: collabOutboundReplyTo(params.id),
         tags: [
           { name: 'type', value: 'rights_contract' },
           { name: 'kind', value: kind },
+          { name: 'release_id', value: params.id.slice(0, 200) },
         ],
       })
       sent.push({ stage: recipient.stage, email: recipient.email, messageId: result.messageId })
+      await recordCollabEmailSend({
+        releaseId: params.id,
+        resendId: result.messageId || null,
+        toEmail: recipient.email,
+        subject: contractSubject,
+        kind: emailKind,
+        status: 'sent',
+      })
     }
+
+    await postCollabSystemMessage({
+      releaseId: params.id,
+      body: `${packet.label} emailed to ${sent.map((row) => `${row.stage} <${row.email}>`).join(', ')}.`,
+      emailSubject: contractSubject,
+    })
 
     const pending = rightsPacketPendingPatch(packet)
     if (pending) {

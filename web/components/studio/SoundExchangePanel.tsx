@@ -217,9 +217,18 @@ export default function SoundExchangePanel() {
     <div className="space-y-6" data-testid="soundexchange-panel">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-sm text-zinc-500 max-w-2xl">
-          Local-first SoundExchange registry for{' '}
+          Local-first SX Direct registry for{' '}
           <span className="text-zinc-300 font-mono">{registry?.isrc.prefix || 'QTA53'}</span> codes.
-          Register here to update Studio data, then export the USISRC locker CSV for{' '}
+          Release Studio queues registrations when ISRCs are minted. Confirm repertoire on{' '}
+          <a
+            href="https://sxdirect.soundexchange.com/home/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-400 hover:text-violet-300"
+          >
+            sxdirect.soundexchange.com
+          </a>
+          . USISRC locker CSV is optional storage. Public lookup is{' '}
           <a
             href="https://isrc.soundexchange.com/"
             target="_blank"
@@ -561,8 +570,8 @@ export default function SoundExchangePanel() {
           <div>
             <h2 className="text-sm font-medium text-white">US ISRC Agency · SoundExchange</h2>
             <p className="text-xs text-zinc-500 mt-1 max-w-2xl leading-relaxed">
-              SoundExchange runs the US ISRC Agency. SERGIK mints codes under the allocated Rights
-              Owner prefix, registers them in Studio, then finishes the public locker at{' '}
+              SoundExchange runs the US ISRC Agency. SERGIK mints QTA53 in Catalog, queues SX Direct
+              repertoire in Studio, and uses{' '}
               <a
                 href="https://isrc.soundexchange.com/"
                 target="_blank"
@@ -570,8 +579,8 @@ export default function SoundExchangePanel() {
                 className="text-violet-400 hover:text-violet-300"
               >
                 isrc.soundexchange.com
-              </a>
-              .
+              </a>{' '}
+              only as public lookup — not as a second mint.
             </p>
           </div>
           <span
@@ -649,30 +658,28 @@ export default function SoundExchangePanel() {
         </dl>
 
         <ol className="list-decimal list-inside text-xs text-zinc-400 space-y-1.5 leading-relaxed">
-          <li>Mint ISRCs on a release (Assign ISRC) or Create → Track.</li>
-          <li>
-            Register selected rows here — writes <span className="font-mono text-zinc-300">soundexchange_submissions</span>.
-          </li>
-          <li>Export pending CSV and upload it in the USISRC / SoundExchange locker.</li>
-          <li>Mark accepted after the agency confirms the codes.</li>
+          <li>Mint ISRCs in Catalog — Studio queues SX Direct at the same time.</li>
+          <li>Confirm queued rows here or register any older codes that predate auto-queue.</li>
+          <li>Optional: export locker CSV for usisrc.org storage (not a second mint).</li>
+          <li>Mark accepted after SoundExchange confirms the repertoire.</li>
         </ol>
 
         <div className="flex flex-wrap gap-2 pt-1">
           <a
-            href="https://isrc.soundexchange.com/"
+            href="https://sxdirect.soundexchange.com/home/"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md border border-violet-500/40 text-violet-200 hover:border-violet-400"
           >
-            Open ISRC locker <FaExternalLinkAlt className="text-[9px] opacity-70" />
+            Open SX Direct <FaExternalLinkAlt className="text-[9px] opacity-70" />
           </a>
           <a
-            href="https://www.soundexchange.com/"
+            href="https://isrc.soundexchange.com/"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md border border-zinc-700 text-zinc-300 hover:border-zinc-500"
           >
-            SoundExchange Direct <FaExternalLinkAlt className="text-[9px] opacity-70" />
+            Public ISRC lookup <FaExternalLinkAlt className="text-[9px] opacity-70" />
           </a>
           <button
             type="button"
@@ -686,9 +693,8 @@ export default function SoundExchangePanel() {
         {!registry?.configured ? (
           <p className="text-[11px] text-zinc-500 leading-relaxed">
             Optional later: set <span className="font-mono text-zinc-400">SOUNDEXCHANGE_API_KEY</span>{' '}
-            / <span className="font-mono text-zinc-400">SOUNDEXCHANGE_ACCOUNT_ID</span> for a direct
-            API path. Until then, CSV + locker is the production finish line — Studio still keeps the
-            registry current.
+            for a live SX Direct API path. Until then, mint still queues the local registry; confirm
+            repertoire on SX Direct.
           </p>
         ) : (
           <p className="text-[11px] text-emerald-300/80 leading-relaxed">

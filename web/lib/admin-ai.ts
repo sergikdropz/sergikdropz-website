@@ -9,7 +9,26 @@ import type { AdminAiAutoRouterMode } from '@/lib/ai/admin-chat-router'
 import { getSkillByTool, validateAgainstSkillSchema } from '@/lib/ai/skills/registry'
 import { executeAppleScript, executePlaywrightE2E } from '@/lib/admin-ai-automation'
 import { fetchReleaseStudioSnapshot } from '@/lib/studio/release-snapshot'
+import { buildRightsPackets } from '@/lib/studio/rights-packets'
+import {
+  auditMusicCounsel,
+  mergeCounselReports,
+  tracksForCounsel,
+  type MusicCounselReport,
+} from '@/lib/studio/music-law/audit'
+import { counselAuditRecord } from '@/lib/studio/music-law/release-gate'
+import { buildReleaseSnapshotAdminAiBrief } from '@/lib/studio/release-snapshot-admin-ai'
+import { runIntelligenceHarness } from '@/lib/ai/intelligence-harness-server'
+import { runSergikaiChat } from '@/lib/ai/sergikai-chat-server'
+import { runCroweCreativeTool, type CroweCreativeAction } from '@/lib/ai/crowe-creative-server'
 import { fetchStudioCommandCenterSnapshot } from '@/lib/studio/command-center-snapshot'
+import { runAdminBrowserAction } from '@/lib/ai/admin-browser'
+import { runMetaPromoPipeline } from '@/lib/meta/promo-pipeline'
+import {
+  buildPlatformGrowthContextPrompt,
+  buildPlatformGrowthToolOutput,
+  isGrowthDeskIntent,
+} from '@/lib/ai/platform-growth-snapshot'
 import {
   applyAssignIsrcs,
   applyPatchReleaseMarketingCopy,
@@ -815,12 +834,15 @@ export async function runAdminTool(params: {
       throw new Error('releaseId is required for query_release_studio_snapshot')
     }
     const snapshot = await fetchReleaseStudioSnapshot(releaseId)
+    const adminAiBrief = buildReleaseSnapshotAdminAiBrief(snapshot)
     const copyright = snapshot.copyright as { readiness_score?: number; blockers?: string[]; next_best_action?: { label?: string } } | null
+    const emptyCopy = adminAiBrief.emptyMarketingFields.length
     const result: ToolResult = {
       title: 'Release Studio snapshot',
-      summary: `Loaded release "${String(snapshot.release.title ?? releaseId)}" with ${snapshot.tracks.length} track(s).`,
+      summary: `Loaded release "${String(snapshot.release.title ?? releaseId)}" with ${snapshot.tracks.length} track(s).${emptyCopy ? ` ${emptyCopy} marketing field(s) empty.` : ''}`,
       output: {
         ...snapshot,
+        adminAiBrief,
         readiness_score: copyright?.readiness_score ?? null,
         blockers: copyright?.blockers ?? [],
         next_best_action: copyright?.next_best_action?.label ?? null,
@@ -1072,6 +1094,314 @@ export async function runAdminTool(params: {
     return result
   }
 
+  if (tool === 'query_sergikai_chat') {
+    const content = String(payload.content || payload.message || '').trim()
+    const output = await runSergikaiChat({
+      content,
+      sessionId: payload.sessionId != null ? String(payload.sessionId) : undefined,
+      threadId: payload.threadId != null ? String(payload.threadId) : undefined,
+      waitForJob: payload.waitForJob !== false,
+      dryRun,
+    })
+    const result: ToolResult = {
+      title: dryRun ? 'SergikAI chat preview' : 'SergikAI chat',
+      summary: dryRun
+        ? 'Preview: would send message to OlliN Pro SergikAI session.'
+        : output.reply
+          ? `SergikAI replied (${String(output.reply).slice(0, 120)}…) `
+          : 'SergikAI message sent — check reply in output.',
+      output: { ...output, dryRun },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'query_crowe_creative') {
+    const actionRaw = String(payload.action || 'models').toLowerCase()
+    const allowed: CroweCreativeAction[] = [
+      'models',
+      'credits',
+      'quote',
+      'generate_image',
+      'generate_video',
+    ]
+    const action = (
+      allowed.includes(actionRaw as CroweCreativeAction) ? actionRaw : 'models'
+    ) as CroweCreativeAction
+    const isGenerate = action === 'generate_image' || action === 'generate_video'
+    const output = await runCroweCreativeTool({
+      action,
+      prompt: payload.prompt != null ? String(payload.prompt) : undefined,
+      model: payload.model != null ? String(payload.model) : undefined,
+      kind: payload.kind === 'image' ? 'image' : payload.kind === 'video' ? 'video' : undefined,
+      seconds: typeof payload.seconds === 'number' ? payload.seconds : undefined,
+      resolution: payload.resolution != null ? String(payload.resolution) : undefined,
+      aspect_ratio: payload.aspect_ratio != null ? String(payload.aspect_ratio) : undefined,
+      count: typeof payload.count === 'number' ? payload.count : undefined,
+      dryRun: isGenerate ? dryRun : false,
+    })
+    const result: ToolResult = {
+      title: dryRun ? `Crowe Creative preview (${action})` : `Crowe Creative (${action})`,
+      summary:
+        action === 'models'
+          ? 'Listed Crowe Creative media models.'
+          : action === 'credits'
+            ? 'Fetched Crowe Creative credit balance.'
+            : action === 'quote'
+              ? 'Quoted Crowe Creative generation cost.'
+              : dryRun
+                ? `Preview ${action} — approve to spend credits.`
+                : `Ran ${action}.`,
+      output: { ...output, dryRun },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'query_intelligence_harness') {
+    const modeRaw = payload.mode ?? payload.action ?? 'stack'
+    const output = await runIntelligenceHarness({
+      mode: String(modeRaw) as Parameters<typeof runIntelligenceHarness>[0]['mode'],
+      query: payload.query != null ? String(payload.query) : undefined,
+      limit: typeof payload.limit === 'number' ? payload.limit : undefined,
+      k: typeof payload.k === 'number' ? payload.k : undefined,
+      full: payload.full === true,
+      withKnowledge: payload.withKnowledge !== false,
+      releaseId: payload.releaseId != null ? String(payload.releaseId) : undefined,
+    })
+    const summary =
+      output.mode === 'stack' && 'connectivity' in output
+        ? String(output.connectivity.summary)
+        : `Intelligence harness mode=${output.mode}`
+    const result: ToolResult = {
+      title: 'Intelligence harness',
+      summary,
+      output: { ...output, dryRun },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'audit_music_contract') {
+    const releaseId = payload.releaseId != null ? String(payload.releaseId).trim() : ''
+    const pasted = payload.text != null ? String(payload.text) : ''
+    const dealKind = payload.dealKind != null ? String(payload.dealKind) : ''
+    const jurisdiction = payload.jurisdiction != null ? String(payload.jurisdiction) : ''
+    const question = payload.question != null ? String(payload.question) : ''
+    let tracks = tracksForCounsel([])
+    let releaseTitle = ''
+    const reports: MusicCounselReport[] = []
+    if (releaseId) {
+      const snapshot = await fetchReleaseStudioSnapshot(releaseId)
+      releaseTitle = String(snapshot.release.title || snapshot.release.name || releaseId)
+      tracks = tracksForCounsel(snapshot.tracks)
+      const publisher =
+        snapshot.copyright && typeof snapshot.copyright === 'object'
+          ? String((snapshot.copyright as { publisher_name?: string }).publisher_name || '')
+          : ''
+      const packets = buildRightsPackets({
+        releaseTitle,
+        albumArtist: snapshot.release.album_artist != null ? String(snapshot.release.album_artist) : null,
+        publisherName: publisher || null,
+        tracks,
+      })
+      const packetKind =
+        dealKind === 'split_sheet'
+          ? 'split_sheet'
+          : dealKind === 'producer'
+            ? 'producer_agreement'
+            : dealKind === 'collab'
+              ? 'collab_agreement'
+              : ''
+      const selected = packets.filter((packet) => packet.text.trim() && (!packetKind || packet.kind === packetKind))
+      reports.push(
+        auditMusicCounsel({
+          tracks,
+          dealKind: dealKind || 'split_sheet',
+          jurisdiction,
+          question,
+          documentLabel: releaseTitle,
+        }),
+      )
+      for (const packet of selected) {
+        const kind =
+          packet.kind === 'producer_agreement' ? 'producer' : packet.kind === 'collab_agreement' ? 'collab' : 'split_sheet'
+        reports.push(
+          auditMusicCounsel({
+            text: packet.text,
+            dealKind: dealKind || kind,
+            jurisdiction,
+            question,
+            documentLabel: `${releaseTitle} ${packet.label}`,
+          }),
+        )
+      }
+    }
+    if (pasted.trim()) {
+      reports.push(
+        auditMusicCounsel({
+          text: pasted,
+          dealKind: dealKind || undefined,
+          jurisdiction,
+          question,
+          tracks: releaseId ? undefined : tracks,
+          documentLabel: 'Pasted draft',
+        }),
+      )
+    }
+    if (!reports.length) {
+      reports.push(auditMusicCounsel({ text: pasted, dealKind, jurisdiction, question, tracks }))
+    }
+    const output = mergeCounselReports(reports)
+    if (releaseId) {
+      const supabase = createSupabaseServerClient()
+      const saved = await supabase.from('release_copyright_checklists').upsert(
+        { release_id: releaseId, counsel_audit: counselAuditRecord(output) },
+        { onConflict: 'release_id' },
+      )
+      if (saved.error && !/counsel_audit/i.test(saved.error.message || '')) {
+        console.error('counsel audit save failed', saved.error.message)
+      }
+    }
+    const blockerCount = output.severityCounts.blocker
+    const materialCount = output.severityCounts.material
+    const result: ToolResult = {
+      title: 'Music Business Counsel audit',
+      summary: releaseTitle
+        ? `${releaseTitle}: ${blockerCount} blocker(s), ${materialCount} material issue(s). Not legal advice.`
+        : `${blockerCount} blocker(s), ${materialCount} material issue(s). Not legal advice.`,
+      output: {
+        ...output,
+        releaseId: releaseId || null,
+        dryRun,
+      },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'run_meta_promo_pipeline') {
+    const releaseId = String(payload.releaseId || '').trim()
+    if (!releaseId) throw new Error('releaseId is required for run_meta_promo_pipeline')
+    const output = await runMetaPromoPipeline({
+      releaseId,
+      action: payload.action ? String(payload.action) : 'status',
+      dryRun,
+      primaryGoal: payload.primaryGoal ? String(payload.primaryGoal) : null,
+    })
+    const notes = Array.isArray(output.notes) ? output.notes.filter((note) => typeof note === 'string') : []
+    const result: ToolResult = {
+      title: dryRun ? 'Meta promo preview' : 'Meta promo pipeline',
+      summary: notes[0] || `Meta promo ${String(output.action)} for ${String(output.title)}.`,
+      output,
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'query_platform_growth_snapshot') {
+    const output = buildPlatformGrowthToolOutput({ dryRun })
+    const result: ToolResult = {
+      title: 'Platform growth snapshot',
+      summary: output.ok
+        ? `Loaded growth scorecard captured ${String(output.capturedAt)} (age ${String(output.ageDays)}d${output.stale ? ', stale' : ''}).`
+        : `Growth snapshot unavailable: ${String(output.error || 'unknown')}`,
+      output,
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'admin_browser') {
+    const actionRaw = String(payload.action || 'read')
+    const allowed = new Set([
+      'status',
+      'open',
+      'navigate',
+      'back',
+      'reload',
+      'click',
+      'type',
+      'press',
+      'read',
+      'drive',
+      'probe_fields',
+      'inspect',
+    ])
+    const action = allowed.has(actionRaw)
+      ? (actionRaw as
+          | 'status'
+          | 'open'
+          | 'navigate'
+          | 'back'
+          | 'reload'
+          | 'click'
+          | 'type'
+          | 'press'
+          | 'read'
+          | 'drive'
+          | 'probe_fields'
+          | 'inspect')
+      : 'read'
+    const out = await runAdminBrowserAction({
+      action,
+      url: payload.url ? String(payload.url) : undefined,
+      x: typeof payload.x === 'number' ? payload.x : undefined,
+      y: typeof payload.y === 'number' ? payload.y : undefined,
+      text: payload.text ? String(payload.text) : undefined,
+      key: payload.key ? String(payload.key) : undefined,
+      youDrive: typeof payload.youDrive === 'boolean' ? payload.youDrive : undefined,
+      actor: 'assistant',
+      dryRun,
+      chatSessionId: typeof payload.chatSessionId === 'string' ? payload.chatSessionId : undefined,
+    })
+    const output = { ...out }
+    delete output.imageBase64
+    const result: ToolResult = {
+      title: 'Admin browser',
+      summary: out.error || out.text || `${out.title || 'Browser'} ${out.url}`.trim(),
+      output,
+      ...TOOL_CONFIG[tool],
+    }
+    return result
+  }
+
   const exhaustive: never = tool
   throw new Error(`Unhandled admin tool: ${String(exhaustive)}`)
 }
@@ -1093,6 +1423,16 @@ export async function generateChatReply(
     energyPreset?: AdminChatEnergyPreset | null
   }
 ) {
+  const growthSlice =
+    options?.skillId === 'growth_marketing' ||
+    options?.stickySkillId === 'growth_marketing' ||
+    isGrowthDeskIntent(message)
+      ? buildPlatformGrowthContextPrompt()
+      : null
+  const siteKnowledgePrompt = [options?.siteKnowledgePrompt?.trim(), growthSlice]
+    .filter(Boolean)
+    .join('\n\n')
+
   return generateAdminChatReply(message, {
     provider: options?.provider,
     modelOverrides: options?.modelOverrides,
@@ -1101,7 +1441,7 @@ export async function generateChatReply(
     autoRouterMode: options?.autoRouterMode,
     skillId: options?.skillId,
     stickySkillId: options?.stickySkillId,
-    siteKnowledgePrompt: options?.siteKnowledgePrompt,
+    siteKnowledgePrompt: siteKnowledgePrompt || null,
     pageContextPrompt: options?.pageContextPrompt,
     honestyMode: options?.honestyMode,
     energyPreset: options?.energyPreset,

@@ -1,6 +1,8 @@
 /** Locked CSS height for the share dock waveform row (mobile / sm+). */
 export const SHARE_DOCK_WAVEFORM_HEIGHT_PX = 44
 export const SHARE_DOCK_WAVEFORM_HEIGHT_PX_SM = 48
+/** Story clip picker waveform (fits the 15s window chrome). */
+export const SHARE_CLIP_WAVEFORM_HEIGHT_PX = 48
 
 export function shareDockWaveformCssHeight(): number {
   if (typeof window === 'undefined') return SHARE_DOCK_WAVEFORM_HEIGHT_PX

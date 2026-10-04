@@ -41,6 +41,8 @@ deploy/migrate/.env
 # Local dumps / regenerable media (do not ship in git)
 db_cluster*.backup
 web/public/waveforms/
+web/.tmp-gcp/
+.tmp-verify-deploy/
 
 # TypeScript
 *.tsbuildinfo

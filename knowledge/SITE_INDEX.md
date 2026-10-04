@@ -41,6 +41,10 @@ grounding. The runtime treats the index as proof of static architecture only; li
 database state and writes still require registered Admin AI tools and the
 Preview → Approve flow.
 
+### CroweLM chat
+
+Admin chat providers are `anthropic` (native messages API), `openai`, `ollama`, and `crowelogic`. CroweLM is server-side OpenAI-compatible `POST /v1/chat/completions` (`web/lib/ai/crowelogic-env.ts`). It uses the existing Crowe ID and a deployment-only customer credential (`CROWELOGIC_API_KEY`). As of 2026-10-04 that credential has not been issued. Pro is verified on the $99/month subscription, with a one-time 3,000-credit allowance through 2026-10-22 and no automatic overage. Hosted calls stay off until Crowe sends the credential and `CROWELOGIC_PRO_LINKED` is set. `CROWE_API_KEY` is Crowe Creative only (`web/lib/ai/crowe-creative-client.ts`). Do not put passwords or live keys in the repo.
+
 ## Production vs local
 
 | Environment | Base URL | Checks |

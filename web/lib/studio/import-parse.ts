@@ -4,6 +4,8 @@ export type SplitRole = (typeof SPLIT_ROLES)[number]
 export const SPLIT_PROS = ['ASCAP', 'BMI', 'SESAC', 'GMR', 'SOCAN', 'PRS', 'GEMA', 'Other'] as const
 export type SplitPro = (typeof SPLIT_PROS)[number]
 
+export type SplitCopyright = 'master' | 'composition'
+
 export type SplitRow = {
   name: string
   percentage: number
@@ -12,6 +14,8 @@ export type SplitRow = {
   publisher?: string | null
   ipi?: string | null
   pro?: string | null
+  /** When set, master and composition are separate 100% tables. */
+  copyright?: SplitCopyright | null
 }
 
 export type ParsedIsrcRow = {
@@ -92,6 +96,9 @@ export function normalizeSplitRows(raw: unknown): SplitRow[] {
     if (!name && !Number.isFinite(percentage)) continue
     const roleRaw = String((item as SplitRow).role || '').trim().toLowerCase()
     const proRaw = String((item as SplitRow).pro || '').trim()
+    const copyrightRaw = String((item as SplitRow).copyright || '').trim().toLowerCase()
+    const copyright: SplitCopyright | null =
+      copyrightRaw === 'master' || copyrightRaw === 'composition' ? copyrightRaw : null
     out.push({
       name,
       percentage: Number.isFinite(percentage) ? percentage : 0,
@@ -100,6 +107,7 @@ export function normalizeSplitRows(raw: unknown): SplitRow[] {
       publisher: String((item as SplitRow).publisher || '').trim() || null,
       ipi: String((item as SplitRow).ipi || '').replace(/\D/g, '') || null,
       pro: proRaw || null,
+      copyright,
     })
   }
   return out
@@ -120,9 +128,68 @@ export function equalSplitPercentages(count: number): number[] {
   )
 }
 
+export function splitsAreSided(rows: SplitRow[]): boolean {
+  return rows.some((row) => row.copyright === 'master' || row.copyright === 'composition')
+}
+
+export function sumSplitPercentage(rows: SplitRow[]): number {
+  return rows.reduce((sum, row) => sum + (Number(row.percentage) || 0), 0)
+}
+
+function poolTotals100(rows: SplitRow[]): boolean {
+  return rows.length > 0 && rows.some((row) => row.name) && Math.abs(sumSplitPercentage(rows) - 100) < 0.01
+}
+
+/** Legacy sheets total 100% once. Sided sheets need a 100% master table and a 100% composition table. */
+export function splitsBalanceOk(raw: unknown): boolean {
+  const rows = normalizeSplitRows(raw)
+  if (!rows.length) return false
+  if (!splitsAreSided(rows)) return poolTotals100(rows)
+  const master = rows.filter((row) => row.copyright === 'master')
+  const composition = rows.filter((row) => row.copyright === 'composition')
+  return poolTotals100(master) && poolTotals100(composition)
+}
+
+export function separateSplitCopyrights(rows: SplitRow[]): SplitRow[] {
+  const tagged = rows
+    .filter((row) => row.name.trim())
+    .map((row) => {
+      if (row.copyright === 'master' || row.copyright === 'composition') return row
+      const composition = row.role === 'writer' || row.role === 'publisher'
+      return { ...row, copyright: composition ? ('composition' as const) : ('master' as const) }
+    })
+  let master = tagged.filter((row) => row.copyright === 'master')
+  let composition = tagged.filter((row) => row.copyright === 'composition')
+  if (!master.length && composition.length) {
+    master = composition.map((row) => ({ ...row, copyright: 'master' as const, role: 'performer' }))
+  }
+  if (!composition.length && master.length) {
+    composition = master.map((row) => ({
+      ...row,
+      copyright: 'composition' as const,
+      role: 'writer',
+      publisher: row.publisher || 'SERGIK Music',
+    }))
+  }
+  const equalize = (list: SplitRow[]) => {
+    const percents = equalSplitPercentages(list.length)
+    return list.map((row, index) => ({ ...row, percentage: percents[index] ?? 0 }))
+  }
+  return [...equalize(master), ...equalize(composition)]
+}
+
 export function validateSplitsTotal(splits: SplitRow[]): string | null {
   if (splits.length === 0) return null
-  const total = splits.reduce((s, r) => s + r.percentage, 0)
+  if (splitsAreSided(splits)) {
+    const master = sumSplitPercentage(splits.filter((row) => row.copyright === 'master'))
+    const composition = sumSplitPercentage(splits.filter((row) => row.copyright === 'composition'))
+    const masterOk = Math.abs(master - 100) < 0.01 && splits.some((row) => row.copyright === 'master' && row.name)
+    const compositionOk =
+      Math.abs(composition - 100) < 0.01 && splits.some((row) => row.copyright === 'composition' && row.name)
+    if (masterOk && compositionOk) return null
+    return `Master ${Math.round(master * 100) / 100}% and composition ${Math.round(composition * 100) / 100}% must each total 100%`
+  }
+  const total = sumSplitPercentage(splits)
   if (Math.abs(total - 100) > 0.01) {
     return `Splits total ${total}% (must be 100%)`
   }

@@ -60,6 +60,12 @@ export function AppShell({
             <div className="mx-auto flex min-w-0 flex-1 flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/"
+                    className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted transition-colors hover:border-ink-muted hover:text-ink"
+                  >
+                    Home
+                  </Link>
                   <Badge tone={surface === 'studio' ? 'brand' : 'neutral'}>
                     {surface === 'studio' ? 'Release Studio' : 'Admin'}
                   </Badge>

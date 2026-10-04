@@ -50,6 +50,11 @@ function baseCopyright(overrides: Partial<CopyrightReadiness> = {}): CopyrightRe
       released: false,
       monitoring_enabled: false,
     },
+    collection: {
+      neighboring_rights_registered: false,
+      neighboring_rights_society: null,
+    },
+    counsel_audit: null,
     ugc_pack: { ...DEFAULT_UGC_PACK },
     ugc: { eligible: true, warnings: [] },
     ingest: {

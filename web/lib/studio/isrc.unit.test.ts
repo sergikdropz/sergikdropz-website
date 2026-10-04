@@ -3,6 +3,7 @@ import {
   US_ISRC_REGISTRANT,
   buildUsisrcLockerCsv,
   formatDurationMmSs,
+  formatYoutubeTimestamp,
   formatISRC,
   formatISRCDisplay,
   parseISRC,
@@ -52,6 +53,9 @@ describe('US ISRC prefix', () => {
       { artist: 'SERGIK' }
     )
     expect(formatDurationMmSs(214)).toBe('03:34')
+    expect(formatYoutubeTimestamp(214)).toBe('03:34')
+    expect(formatYoutubeTimestamp(3725)).toBe('1:02:05')
+    expect(formatYoutubeTimestamp(0)).toBe('00:00')
     expect(csv).toContain('QT-A53-26-00001')
     expect(csv).toContain('Jordan Caboga')
     expect(csv).toContain('QTA53')

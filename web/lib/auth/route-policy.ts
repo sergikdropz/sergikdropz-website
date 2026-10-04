@@ -88,6 +88,13 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/shares/[token]', method: 'GET', access: 'public', reason: 'Resolve share listen/embed payload' },
   { path: '/api/shares/[token]', method: 'DELETE', access: 'admin_write', reason: 'Revoke share link' },
   { path: '/api/shares/artwork-proxy', method: 'GET', access: 'public', reason: 'Same-origin artwork proxy for accent sampling and story canvas' },
+  { path: '/api/shares/[token]/download/access', method: 'GET', access: 'admin_read', reason: 'List emails allowed to download a share' },
+  { path: '/api/shares/[token]/download/access', method: 'PUT', access: 'admin_write', reason: 'Set who can download a share and optionally email them' },
+  { path: '/api/shares/[token]/download', method: 'GET', access: 'public', reason: 'Download page payload; files only after an invited email is verified' },
+  { path: '/api/shares/[token]/download', method: 'POST', access: 'public', reason: 'Email a private open link when the address is on the allowlist' },
+  { path: '/api/shares/[token]/download/open', method: 'GET', access: 'public', reason: 'Verify an emailed download code and set the access cookie' },
+  { path: '/api/shares/[token]/file', method: 'GET', access: 'public', reason: 'Download one invited track (cookie or admin)' },
+  { path: '/api/shares/[token]/pack', method: 'GET', access: 'public', reason: 'Zip download of an invited EP (cookie or admin)' },
   { path: '/api/oembed', method: 'GET', access: 'public', reason: 'oEmbed for share listen URLs' },
 
   // Release Collab (studio thread + magic-link portal + Resend webhooks)
@@ -100,9 +107,10 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/studio/releases/[id]/collab/collaborators', method: 'DELETE', access: 'admin_write', reason: 'Remove release collaborator' },
   { path: '/api/studio/releases/[id]/collab/messages', method: 'POST', access: 'admin_write', reason: 'Post studio collab message (+ optional email notify)' },
   { path: '/api/studio/releases/[id]/collab/invites', method: 'POST', access: 'admin_write', reason: 'Send magic-link review invite' },
+  { path: '/api/studio/releases/[id]/collab/email', method: 'POST', access: 'admin_write', reason: 'Send collab hub email to collaborators' },
   { path: '/api/collab/[token]', method: 'GET', access: 'public', reason: 'Magic-link review portal payload' },
   { path: '/api/collab/[token]', method: 'POST', access: 'public', reason: 'Collaborator message or approve/request changes' },
-  { path: '/api/webhooks/resend', method: 'POST', access: 'public', reason: 'Resend delivery/open/bounce webhooks for collab sends' },
+  { path: '/api/webhooks/resend', method: 'POST', access: 'public', reason: 'Resend delivery/open/bounce + inbound email.received for Release Collab' },
 ] as const
 
 export function getPrivilegedAudioPolicies(): RoutePolicyEntry[] {

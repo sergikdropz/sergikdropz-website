@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { assignISRC, resolveIsrcPrefix } from '@/lib/studio/isrc'
 import type { MarketingCopy } from '@/lib/studio/constants'
 import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
+import { registerMintedIsrcsWithSxDirect } from '@/lib/studio/soundexchange-registry'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { mergeUgcPack, parseUgcPack } from '@/lib/studio/ugc-pack'
 
@@ -11,6 +12,8 @@ const MARKETING_COPY_KEYS = [
   'spotify_pitch',
   'social_caption',
   'store_description',
+  'youtube_visualizer',
+  'platform_tags',
   'credits_block',
 ] as const
 
@@ -20,6 +23,8 @@ const COPYRIGHT_CHECKLIST_FIELDS = [
   'composition_registered',
   'master_registered',
   'pro_registered',
+  'neighboring_rights_registered',
+  'neighboring_rights_society',
   'monitoring_enabled',
   'owner_name',
   'role_queue',
@@ -61,7 +66,8 @@ function pickCopyrightUpdates(raw: Record<string, unknown>) {
         field === 'due_date' ||
         field === 'publisher_name' ||
         field === 'publisher_ipi' ||
-        field === 'writer_ipi') &&
+        field === 'writer_ipi' ||
+        field === 'neighboring_rights_society') &&
       typeof raw[field] === 'string'
     ) {
       updates[field] = raw[field]
@@ -269,12 +275,15 @@ export async function applyAssignIsrcs(params: { releaseId?: string; trackIds?: 
     }
   }
 
+  const sxDirect = await registerMintedIsrcsWithSxDirect(okIds)
+
   return {
     releaseId: params.releaseId ?? null,
     total: results.length,
     successful: ok,
     failed: results.length - ok,
     results,
+    sxDirect,
     studioUrl: params.releaseId
       ? `/studio/releases/${encodeURIComponent(params.releaseId)}`
       : null,

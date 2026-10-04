@@ -9,7 +9,7 @@ import {
 } from '@/lib/studio/dsp-ingest'
 import { validateISRC } from '@/lib/studio/isrc-format'
 import { parseContributors } from '@/lib/studio/track-credits'
-import { hydrateRightsPacket, mergeRightsPacketSnapshot } from '@/lib/studio/rights-ops'
+import { hydrateRightsPacket, mergeRightsPacketSnapshot, parseTrackClearance } from '@/lib/studio/rights-ops'
 import { serializeWriterLegalNames } from '@/lib/studio/songwriter'
 import { normalizeSplitRows } from '@/lib/studio/import-parse'
 
@@ -169,9 +169,12 @@ export async function PUT(
       updates[key] = body[key]
     }
 
-    const packet: { mechanical_licensed?: boolean; contains_samples?: boolean } = {}
+    const packet: { mechanical_licensed?: boolean; contains_samples?: boolean; clearance?: ReturnType<typeof parseTrackClearance> } = {}
     if ('mechanical_licensed' in updates) packet.mechanical_licensed = Boolean(updates.mechanical_licensed)
     if ('contains_samples' in updates) packet.contains_samples = Boolean(updates.contains_samples)
+    if (body.clearance && typeof body.clearance === 'object') {
+      packet.clearance = parseTrackClearance(body.clearance)
+    }
 
     if ('lyrics' in body || 'lyrics_excerpt' in body || 'description' in body || 'intention' in body || Object.keys(packet).length) {
       const { data: current } = await supabase

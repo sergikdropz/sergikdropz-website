@@ -21,6 +21,7 @@ import {
 import type { DeckJumpCue } from '@/lib/audio/mix-engine/cues'
 import {
   EQ_DIAL_CLICK_SUPPRESS_DB,
+  eqDragDeltaY,
   eqGainFromDrag,
   isEqDialDrag,
   nudgeEqGain,
@@ -141,6 +142,10 @@ export function DeckEqDials({
   const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
+    // iPhone / iPad long-press fires contextmenu and cancels the EQ drag.
+    // The curve menu stays a mouse right-click (and ctrl-click).
+    const pointerType = (e.nativeEvent as PointerEvent).pointerType
+    if (pointerType === 'touch' || (e.button !== 2 && !e.ctrlKey)) return
     setCurveAnchor({ x: e.clientX, y: e.clientY })
   }
   return (
@@ -152,6 +157,7 @@ export function DeckEqDials({
       data-allow-scroll-when-locked=""
       title="Right-click for crossfader volume curve"
       onContextMenu={onContextMenu}
+      style={{ touchAction: 'none', WebkitTouchCallout: 'none' }}
     >
       {(['low', 'mid', 'high'] as const).map((band) => (
         <MiniEqDial
@@ -222,9 +228,20 @@ function MiniEqDial({
   gainRef.current = gain
   const draggable = Boolean(onSetGain)
   const finishPointerRef = useRef<(pointerId: number) => void>(() => {})
+  const onWindowPointerMoveRef = useRef<(e: PointerEvent) => void>(() => {})
+  const onWindowPointerEndRef = useRef<(e: PointerEvent) => void>(() => {})
 
-  const onWindowPointerEnd = useCallback((e: PointerEvent) => {
-    finishPointerRef.current(e.pointerId)
+  const detachWindowPointers = useCallback((pointerId: number) => {
+    window.removeEventListener('pointermove', onWindowPointerMoveRef.current)
+    window.removeEventListener('pointerup', onWindowPointerEndRef.current)
+    window.removeEventListener('pointercancel', onWindowPointerEndRef.current)
+    const el = btnRef.current
+    if (!el) return
+    try {
+      if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
+    } catch {
+      /* already released */
+    }
   }, [])
 
   const finishPointer = useCallback(
@@ -233,16 +250,7 @@ function MiniEqDial({
       if (!drag || drag.pointerId !== pointerId) return
       const wasMoved = drag.moved
       dragRef.current = null
-      const el = btnRef.current
-      if (el) {
-        try {
-          if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
-        } catch {
-          /* already released */
-        }
-      }
-      window.removeEventListener('pointerup', onWindowPointerEnd)
-      window.removeEventListener('pointercancel', onWindowPointerEnd)
+      detachWindowPointers(pointerId)
       if (wasMoved) {
         const meaningful =
           Math.abs(gainRef.current - drag.startGain) >= EQ_DIAL_CLICK_SUPPRESS_DB
@@ -259,9 +267,36 @@ function MiniEqDial({
         }
       }
     },
-    [onWindowPointerEnd],
+    [detachWindowPointers],
   )
   finishPointerRef.current = finishPointer
+
+  const onWindowPointerEnd = useCallback((e: PointerEvent) => {
+    finishPointerRef.current(e.pointerId)
+  }, [])
+  onWindowPointerEndRef.current = onWindowPointerEnd
+
+  const onWindowPointerMove = useCallback((e: PointerEvent) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
+    const deltaX = e.clientX - drag.startX
+    const deltaY = e.clientY - drag.startY
+    if (!drag.moved) {
+      if (!isEqDialDrag(deltaX, deltaY)) return
+      drag.moved = true
+      const el = btnRef.current
+      if (el) onDragStartRef.current?.(el)
+    }
+    if (e.cancelable) e.preventDefault()
+    onSetGainRef.current?.(
+      eqGainFromDrag({
+        startGain: drag.startGain,
+        deltaY: eqDragDeltaY(deltaX, deltaY),
+        fine: e.shiftKey,
+      }),
+    )
+  }, [])
+  onWindowPointerMoveRef.current = onWindowPointerMove
 
   // Unmount / remount safety — never leave a drag latched.
   useEffect(() => {
@@ -269,11 +304,24 @@ function MiniEqDial({
       const drag = dragRef.current
       if (!drag) return
       dragRef.current = null
-      window.removeEventListener('pointerup', onWindowPointerEnd)
-      window.removeEventListener('pointercancel', onWindowPointerEnd)
+      window.removeEventListener('pointermove', onWindowPointerMoveRef.current)
+      window.removeEventListener('pointerup', onWindowPointerEndRef.current)
+      window.removeEventListener('pointercancel', onWindowPointerEndRef.current)
       if (drag.moved) onDragEndRef.current?.()
     }
   }, [onWindowPointerEnd])
+
+  // iOS ignores preventDefault on React's passive touch listeners. A native
+  // listener keeps the player scroller from stealing the knob.
+  useEffect(() => {
+    const el = btnRef.current
+    if (!el || !draggable) return
+    const blockScroll = (e: TouchEvent) => {
+      if (dragRef.current && e.cancelable) e.preventDefault()
+    }
+    el.addEventListener('touchmove', blockScroll, { passive: false })
+    return () => el.removeEventListener('touchmove', blockScroll)
+  }, [draggable])
 
   return (
     <button
@@ -281,8 +329,7 @@ function MiniEqDial({
       type="button"
       onPointerDown={(e) => {
         if (!draggable || e.button !== 0) return
-        // Do not capture yet — capture-before-drag is what sticks the dial to the
-        // pointer when the release event is swallowed by a popup re-render.
+        if (dragRef.current) detachWindowPointers(dragRef.current.pointerId)
         dragRef.current = {
           pointerId: e.pointerId,
           startX: e.clientX,
@@ -291,32 +338,20 @@ function MiniEqDial({
           moved: false,
           captured: false,
         }
-        window.addEventListener('pointerup', onWindowPointerEnd)
-        window.addEventListener('pointercancel', onWindowPointerEnd)
-      }}
-      onPointerMove={(e) => {
-        const drag = dragRef.current
-        if (!drag || drag.pointerId !== e.pointerId) return
-        const deltaY = e.clientY - drag.startY
-        if (!drag.moved) {
-          if (!isEqDialDrag(e.clientX - drag.startX, deltaY)) return
-          drag.moved = true
-          try {
-            e.currentTarget.setPointerCapture?.(e.pointerId)
-            drag.captured = true
-          } catch {
-            /* ignore */
-          }
-          onDragStartRef.current?.(e.currentTarget)
+        // Capture immediately so iPhone / iPad deliver pointermove. Release is
+        // tracked on window, because opening the fader popup can drop capture.
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          dragRef.current.captured = true
+        } catch {
+          /* ignore */
         }
-        e.preventDefault()
-        onSetGainRef.current?.(
-          eqGainFromDrag({ startGain: drag.startGain, deltaY, fine: e.shiftKey }),
-        )
+        window.addEventListener('pointermove', onWindowPointerMoveRef.current)
+        window.addEventListener('pointerup', onWindowPointerEndRef.current)
+        window.addEventListener('pointercancel', onWindowPointerEndRef.current)
       }}
       onPointerUp={(e) => finishPointer(e.pointerId)}
       onPointerCancel={(e) => finishPointer(e.pointerId)}
-      onLostPointerCapture={(e) => finishPointer(e.pointerId)}
       onClick={(e) => {
         // A drag already changed the gain — do not also toggle the popup.
         if (suppressClickRef.current) {
@@ -339,8 +374,12 @@ function MiniEqDial({
         e.preventDefault()
         onSetGain(nudgeEqGain(gain, e.shiftKey ? step * 0.25 : step))
       }}
-      style={draggable ? { touchAction: 'none' } : undefined}
-      className={`flex flex-col items-center rounded-md transition touch-manipulation ${
+      style={
+        draggable
+          ? { touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }
+          : undefined
+      }
+      className={`flex flex-col items-center rounded-md transition touch-none select-none ${
         compact ? 'gap-0.5 px-0.5 py-0.5' : 'gap-0.5 px-0.5 py-0.5'
       } ${
         active
@@ -362,7 +401,7 @@ function MiniEqDial({
       data-eq-dial={band}
     >
       <div
-        className={`relative flex-shrink-0 select-none ${compact ? 'h-8 w-8' : 'h-9 w-9'}`}
+        className={`relative flex-shrink-0 select-none touch-none ${compact ? 'h-8 w-8' : 'h-9 w-9'}`}
       >
         <div
           className={`absolute inset-0 rounded-full border-gray-700 bg-gray-800 shadow-inner ${

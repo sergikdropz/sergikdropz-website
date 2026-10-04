@@ -39,6 +39,16 @@ export function isEqDialDrag(deltaX: number, deltaY: number): boolean {
   return Math.hypot(deltaX, deltaY) >= EQ_DIAL_DRAG_SLOP_PX
 }
 
+/**
+ * Up or clockwise (to the right) boosts. The larger axis wins so a sideways
+ * swipe on web, phone, or iPad still turns the knob instead of dying as a
+ * no-op drag.
+ */
+export function eqDragDeltaY(deltaX: number, deltaY: number): number {
+  if (Math.abs(deltaX) > Math.abs(deltaY)) return -deltaX
+  return deltaY
+}
+
 /** Drag up boosts, drag down cuts, relative to the gain captured at pointer-down. */
 export function eqGainFromDrag({
   startGain,

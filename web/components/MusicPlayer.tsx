@@ -93,6 +93,9 @@ import { profileFromSonicDna, withLivePlaybackGrid } from '@/lib/audio/waveform-
 import {
   buildMediaSessionArtworkFromRef,
   lockScreenPrefersTrackSkip,
+  readAudioSessionState,
+  setLongFormAudioSession,
+  shouldReclaimBackgroundPlayback,
 } from '@/lib/audio/lock-screen-media'
 import { measureBpmFromPeaks, nudgeBeatPhaseSec, reconcileTapeBpm, resolveTapeAlignedGrid, setDownbeatAt } from '@/lib/audio/beat-grid'
 import {
@@ -2149,6 +2152,11 @@ export default function MusicPlayer({
   const skipSrcReloadRef = useRef(false)
   /** Prevents ended/clock-poll from skip-looping the queue after a track change. */
   const endedTrackIdRef = useRef<string | null>(null)
+  /** iOS fires Media Session `pause` when a song ends. Ignore that during queue advance. */
+  const ignoreOsPauseUntilRef = useRef(0)
+  /** Lock-screen or in-player pause. Stall pauses must not set this, or Apple Music takes over. */
+  const userRequestedPauseRef = useRef(false)
+  const lastReclaimAtRef = useRef(0)
   /** True while we own a src swap — loadstart must not flip isLoading (that pauses playback). */
   const srcSwapRef = useRef(false)
   /** Last id+url bound on the live element so effect re-runs do not load() again. */
@@ -2275,6 +2283,34 @@ export default function MusicPlayer({
   const getIdleAudio = useCallback((): HTMLAudioElement | null => {
     return playbackDeckRef.current === 'next' ? audioRef.current : nextAudioRef.current
   }, [])
+
+  /** Call play() in the pause turn so iOS does not hand the session to Apple Music. */
+  const reclaimLivePlayback = useCallback((el: HTMLAudioElement | null) => {
+    if (!el || getPlaybackAudio() !== el) return
+    if (
+      !shouldReclaimBackgroundPlayback({
+        userRequestedPause: userRequestedPauseRef.current,
+        wantsPlayback: isPlayingRef.current,
+        ended: el.ended,
+        mixing: Boolean(mixEngineRef.current?.isMixing()),
+        bufferClock: Boolean(mixEngineRef.current?.hasBufferClock()),
+        withinHandoff: Date.now() < ignoreOsPauseUntilRef.current,
+        audioSessionState: readAudioSessionState(),
+      })
+    ) {
+      return
+    }
+    const now = Date.now()
+    if (now - lastReclaimAtRef.current < 700) return
+    lastReclaimAtRef.current = now
+    setLongFormAudioSession(true)
+    try {
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
+    } catch {
+      /* ignore */
+    }
+    void el.play().catch(() => {})
+  }, [getPlaybackAudio])
 
   /** Live playhead — buffer clock when MixEngine owns it, else the HTML element. */
   const readLiveNowSec = useCallback((): number => {
@@ -4175,11 +4211,21 @@ export default function MusicPlayer({
   // Batch resolve URLs for next tracks in queue (sync for media-proxy paths — no HEAD)
   useEffect(() => {
     if (!currentTrack || !queue.length) return
-    
+    const mobile = prefersCoarseMobilePlayback()
+    if (mobile && (!isPlaying || isDocumentHidden())) return
+
     const currentIndex = queue.findIndex(track => track.id === currentTrack.id)
     if (currentIndex === -1) return
-    
-    const nextTracks = queue.slice(currentIndex + 1, currentIndex + 3)
+
+    const lookahead = mobile
+      ? mobileQueuePreloadCount({
+          constrained: networkConstrained,
+          documentHidden: isDocumentHidden(),
+        })
+      : 2
+    if (lookahead <= 0) return
+
+    const nextTracks = queue.slice(currentIndex + 1, currentIndex + 1 + lookahead)
     const tracksToResolve = nextTracks
       .map(track => track.file)
       .filter(file => file && !resolvedUrlCacheRef.current.has(file))
@@ -4209,13 +4255,17 @@ export default function MusicPlayer({
       .catch(err => {
         console.debug('Failed to batch resolve URLs:', err)
       })
-  }, [currentTrack, queue])
+  }, [currentTrack, queue, isPlaying, networkConstrained, documentVisibleNonce])
 
-  // Preload next track onto the IDLE deck only (never clobber live after deck-swap)
+  // Preload the next track onto the idle deck so the ended handler can start it
+  // while the screen is locked (iOS will not allow play() from a later React effect).
+  // One deck only — the service-worker prefetch is skipped in listen mode so the
+  // phone does not decode the same file twice.
   useEffect(() => {
     if (!currentTrack || !queue.length) return
     if (phraseMixLockRef.current) return
     if (isIDJEnabledRef.current) return
+    if (prefersCoarseMobilePlayback() && !isPlaying && !autoDJConfigRef.current.enabled) return
     if (isLoading) return
     if (Date.now() - trackSwitchAtRef.current < 400) return
 
@@ -4269,7 +4319,7 @@ export default function MusicPlayer({
           console.debug('Failed to preload next track:', err)
         })
     }
-  }, [currentTrack, queue, getIdleAudio, getPlaybackAudio, isLoading, isPlaying])
+  }, [currentTrack, queue, getIdleAudio, getPlaybackAudio, isLoading, isPlaying, isAutoDJEnabled, isIDJEnabled])
 
   // Preload next tracks in queue using Service Worker (keep shallow — deep preload
   // was HEADing/GETting 5 R2 objects and starving the live play request).
@@ -4278,6 +4328,13 @@ export default function MusicPlayer({
     const mobile = prefersCoarseMobilePlayback()
     if (mobile && !isPlaying) return
     if (isDocumentHidden()) return
+    if (
+      mobile &&
+      !isIDJEnabledRef.current &&
+      !autoDJConfigRef.current.enabled
+    ) {
+      return
+    }
 
     let deferTimer: ReturnType<typeof setTimeout> | null = null
     let cancelled = false
@@ -4725,11 +4782,13 @@ export default function MusicPlayer({
 
     // Handle play action from lock screen/notification
     mediaSession.setActionHandler('play', () => {
+      userRequestedPauseRef.current = false
+      setLongFormAudioSession(true)
       const live = getPlaybackAudio()
-      if (!live || isPlaying) return
+      if (!live) return
       if (mixEngineRef.current?.hasBufferClock()) {
         mixEngineRef.current.resumeActiveClock()
-      } else {
+      } else if (live.paused) {
         live.play().catch(() => {})
       }
       setIsPlaying(true)
@@ -4737,12 +4796,17 @@ export default function MusicPlayer({
 
     // Handle pause action
     mediaSession.setActionHandler('pause', () => {
+      if (Date.now() < ignoreOsPauseUntilRef.current) return
       const live = getPlaybackAudio()
-      if (live && isPlaying) {
-        mixEngineRef.current?.pauseActiveClock()
-        live.pause()
-        setIsPlaying(false)
-      }
+      if (!live || !isPlayingRef.current) return
+      if (live.ended) return
+      const dur = live.duration
+      if (Number.isFinite(dur) && dur > 1 && live.currentTime >= dur - 0.75) return
+      userRequestedPauseRef.current = true
+      setLongFormAudioSession(false)
+      mixEngineRef.current?.pauseActiveClock()
+      live.pause()
+      setIsPlaying(false)
     })
 
     // Always register track skip — iOS only shows ◀︎◀︎ / ▶︎▶︎ when these are set
@@ -4852,9 +4916,8 @@ export default function MusicPlayer({
     return () => {
       clearInterval(positionInterval)
       document.removeEventListener('visibilitychange', onVis)
-      if (mediaSession.metadata) {
-        mediaSession.metadata = null
-      }
+      // Do not clear metadata here. iOS drops lock-screen audio when the session
+      // is nulled between this effect's re-runs (track change, play state).
       clearHandler('play')
       clearHandler('pause')
       clearHandler('nexttrack')
@@ -4869,10 +4932,10 @@ export default function MusicPlayer({
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
-      if (!isPlaying) return
+      if (!isPlayingRef.current || userRequestedPauseRef.current) return
       const engine = mixEngineRef.current
       const ctx = audioContextRef.current
-      if (ctx && ctx.state === 'suspended') {
+      if (ctx && (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted')) {
         ctx.resume().catch(() => {})
       }
       // Buffer clock owns the speakers — HTML is paused on purpose.
@@ -4881,13 +4944,35 @@ export default function MusicPlayer({
         return
       }
       const live = getPlaybackAudio()
-      if (live?.paused) {
+      if (live?.paused && !live.ended) {
+        setLongFormAudioSession(true)
         void live.play().catch(() => {})
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [isPlaying, getPlaybackAudio])
+  }, [getPlaybackAudio])
+
+  useEffect(() => {
+    setLongFormAudioSession(isPlaying && !userRequestedPauseRef.current)
+  }, [isPlaying])
+
+  useEffect(() => {
+    const session = (navigator as Navigator & {
+      audioSession?: {
+        state?: string
+        addEventListener?: (type: 'statechange', listener: () => void) => void
+        removeEventListener?: (type: 'statechange', listener: () => void) => void
+      }
+    }).audioSession
+    if (!session?.addEventListener || !session.removeEventListener) return
+    const onState = () => {
+      if (session.state !== 'active') return
+      reclaimLivePlayback(getPlaybackAudio())
+    }
+    session.addEventListener('statechange', onState)
+    return () => session.removeEventListener?.('statechange', onState)
+  }, [getPlaybackAudio, reclaimLivePlayback])
 
   // Audio element setup and event handlers - only when track changes
   useEffect(() => {
@@ -5115,19 +5200,23 @@ export default function MusicPlayer({
 
     let stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null
     const handleStalled = () => {
-      if (!isPlaying || liveEl.paused) return
+      if (!isPlayingRef.current) return
       if (stallRecoveryTimer) return
       // Never `load()` here — that dumps the buffer and restarts the track.
       const frozenAt = liveEl.currentTime
+      if (liveEl.paused) reclaimLivePlayback(liveEl)
       stallRecoveryTimer = setTimeout(() => {
         stallRecoveryTimer = null
-        if (isDocumentHidden()) return
-        if (liveEl.paused || !isPlaying) return
+        if (!isPlayingRef.current || userRequestedPauseRef.current) return
         if (Math.abs(liveEl.currentTime - frozenAt) > 0.2) return
-        recoverAudibleGraphRef.current()
+        if (!isDocumentHidden()) recoverAudibleGraphRef.current()
         if (mixEngineRef.current?.hasBufferClock()) return
-        liveEl.play().catch(() => {})
-      }, 4000)
+        if (liveEl.paused) reclaimLivePlayback(liveEl)
+      }, isDocumentHidden() ? 800 : 4000)
+    }
+
+    const handleUnexpectedPause = () => {
+      reclaimLivePlayback(liveEl)
     }
 
     // (Freeze watchdog lives in a separate effect — this one rebinds too often
@@ -5270,12 +5359,11 @@ export default function MusicPlayer({
     }
     
     const updateDuration = () => setDuration(liveEl.duration)
-    // `ended` is owned by advanceAfterLiveEndedRef (epoch listeners + clock poll).
     let endedFromClock = false
-    const clockPoll = window.setInterval(() => {
-      if (isDocumentHidden()) return
+    const tickClock = () => {
+      const hidden = isDocumentHidden()
       const engine = mixEngineRef.current
-      if (engine?.hasBufferClock()) onTimeUpdate()
+      if (!hidden && engine?.hasBufferClock()) onTimeUpdate()
       if (!isPlayingRef.current) return
       if (phraseMixLockRef.current || engine?.isMixing()) return
       const dur = liveEl.duration
@@ -5285,7 +5373,13 @@ export default function MusicPlayer({
         endedFromClock = true
         advanceAfterLiveEndedRef.current()
       }
-    }, 100)
+    }
+    let clockPoll = window.setInterval(tickClock, isDocumentHidden() ? 1000 : 250)
+    const armClock = () => {
+      window.clearInterval(clockPoll)
+      clockPoll = window.setInterval(tickClock, isDocumentHidden() ? 1000 : 250)
+    }
+    document.addEventListener('visibilitychange', armClock)
     liveEl.addEventListener('timeupdate', onTimeUpdate)
     liveEl.addEventListener('loadedmetadata', updateDuration)
     liveEl.addEventListener('error', handleError)
@@ -5293,12 +5387,14 @@ export default function MusicPlayer({
     liveEl.addEventListener('canplay', handleCanPlay)
     liveEl.addEventListener('waiting', handleWaiting)
     liveEl.addEventListener('stalled', handleStalled)
+    liveEl.addEventListener('pause', handleUnexpectedPause)
     liveEl.addEventListener('playing', handlePlaying)
 
     return () => {
       if (stallRecoveryTimer) clearTimeout(stallRecoveryTimer)
       clearBufferingUiTimer()
       window.clearInterval(clockPoll)
+      document.removeEventListener('visibilitychange', armClock)
       liveEl.removeEventListener('timeupdate', onTimeUpdate)
       liveEl.removeEventListener('loadedmetadata', updateDuration)
       liveEl.removeEventListener('error', handleError)
@@ -5306,6 +5402,7 @@ export default function MusicPlayer({
       liveEl.removeEventListener('canplay', handleCanPlay)
       liveEl.removeEventListener('waiting', handleWaiting)
       liveEl.removeEventListener('stalled', handleStalled)
+      liveEl.removeEventListener('pause', handleUnexpectedPause)
       liveEl.removeEventListener('playing', handlePlaying)
     }
   }, [currentTrack?.id, playbackUrl, retryCount, reportPlaybackPosition, pushTransportTime, getPlaybackAudio, audioElementEpoch])
@@ -5323,9 +5420,9 @@ export default function MusicPlayer({
       const liveEl = getPlaybackAudio()
       if (!liveEl) return
       if (isDocumentHidden()) {
+        if (liveEl.paused) reclaimLivePlayback(liveEl)
         freezeStuckTicks = 0
         freezeRecoverAttempts = 0
-        if (Number.isFinite(liveEl.currentTime)) freezeLastSec = liveEl.currentTime
         return
       }
       if (!isPlayingRef.current) {
@@ -5383,7 +5480,10 @@ export default function MusicPlayer({
         freezeStuckTicks += 1
         if (freezeStuckTicks >= 2) {
           freezeStuckTicks = 0
-          if (isDocumentHidden()) return
+          if (isDocumentHidden()) {
+            reclaimLivePlayback(liveEl)
+            return
+          }
           if (isIDJEnabledRef.current || autoDJConfigRef.current.enabled) {
             void ensureAudibleMixerRef.current().then(() => {
               if (isDocumentHidden()) return
@@ -5449,7 +5549,7 @@ export default function MusicPlayer({
         freezeRecoverAttempts = 0
       }
       freezeLastSec = liveEl.currentTime
-    }, 500)
+    }, 2000)
     return () => window.clearInterval(timer)
   }, [getPlaybackAudio])
 
@@ -6456,16 +6556,19 @@ export default function MusicPlayer({
         isPlayingRef.current = true
         setIsPlaying(true)
       }
+      ignoreOsPauseUntilRef.current = Date.now() + 2500
       skipToNextRef.current()
       return
     }
 
     if (isIDJEnabledRef.current) {
+      ignoreOsPauseUntilRef.current = Date.now() + 2500
       idjOnDeckEndedRef.current('live')
       return
     }
 
-    // Library / queue: never stop.
+    // Library / queue: never stop. play() has to happen in this ended turn —
+    // iOS rejects play() from a React effect after the screen is locked.
     if (!isPlayingRef.current) {
       isPlayingRef.current = true
       setIsPlaying(true)
@@ -6485,12 +6588,25 @@ export default function MusicPlayer({
       engine?.resumeActiveClock()
       return
     }
+    ignoreOsPauseUntilRef.current = Date.now() + 2500
     const nextIndex = q.findIndex((track) => track.id === next.id)
     if (tryHandoffToPreloadedIdle(next)) {
       if (nextIndex >= 0) setCurrentIndex(nextIndex)
       setCurrentTrack(next)
       patchMusicPlayerState({ currentTime: 0 })
       return
+    }
+    const nextUrl =
+      peekSyncPlaybackUrl(next.file, resolvedUrlCacheRef.current) ||
+      resolvedUrlCacheRef.current.get(next.file) ||
+      null
+    if (nextUrl) {
+      assignMediaSrcIfChanged(liveEl, nextUrl)
+      lastBoundPlaybackRef.current = { id: next.id, url: nextUrl }
+      srcSwapRef.current = true
+      endedTrackIdRef.current = null
+      setResolvedUrl((prev) => (prev === nextUrl ? prev : nextUrl))
+      void liveEl.play().catch(() => {})
     }
     if (nextIndex >= 0) setCurrentIndex(nextIndex)
     setCurrentTrack(next)
@@ -6509,6 +6625,7 @@ export default function MusicPlayer({
       if (
         audio.ended &&
         !endedTrackIdRef.current &&
+        Date.now() >= ignoreOsPauseUntilRef.current &&
         !phraseMixLockRef.current &&
         !mixEngineRef.current?.isMixing()
       ) {
@@ -6734,10 +6851,14 @@ export default function MusicPlayer({
     hapticTransportTap()
 
     if (isPlaying) {
+      userRequestedPauseRef.current = true
+      setLongFormAudioSession(false)
       mixEngineRef.current?.pauseActiveClock()
       audio.pause()
       setIsPlaying(false)
     } else {
+      userRequestedPauseRef.current = false
+      setLongFormAudioSession(true)
       if (audio.ended) {
         try {
           audio.currentTime = 0
@@ -12334,8 +12455,8 @@ export default function MusicPlayer({
           <div className="container mx-auto w-full max-w-full min-w-0 px-3 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:px-4 sm:py-2 sm:pb-2 sm:pt-2">
           {/* Mobile (< sm): artwork + artist | centered transport | expand */}
           <div className="flex w-full min-w-0 flex-col gap-1.5 sm:hidden">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5">
+              <div className="flex min-w-0 items-center gap-2 justify-self-start">
                 {hasPlayerCover && (
                   <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md">
                     <PlayerCoverArt
@@ -12395,11 +12516,11 @@ export default function MusicPlayer({
                     setIsMiniMode(false)
                     setIsExpanded(true)
                   }}
-                  className="flex h-11 w-[88px] shrink-0 items-center justify-center rounded-lg px-1 py-1 text-gray-400 transition-colors active:bg-white/10 hover:bg-gray-800 hover:text-white touch-manipulation"
+                  className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg px-1 text-gray-400 transition-colors active:bg-white/10 hover:bg-gray-800 hover:text-white touch-manipulation"
                   title="Expand player"
                   aria-label="Expand player"
                 >
-                  <DjIcon className="h-full w-full" preserveAspectRatio="none" />
+                  <DjIcon className="h-6 w-14" />
                 </button>
               </div>
             </div>

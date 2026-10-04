@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -703,6 +704,7 @@ export default function AdminDatabase() {
 
       {/* ============ Right-Click Context Menu ============ */}
       {contextMenu && (
+        <FloatingMenuPortal>
         <div
           ref={contextMenuRef}
           className="fixed z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-1.5 min-w-[200px] animate-fade-in"
@@ -752,6 +754,7 @@ export default function AdminDatabase() {
             onClick={() => { setConfirmDelete(contextMenu.row); setContextMenu(null) }}
           />
         </div>
+        </FloatingMenuPortal>
       )}
 
       {/* ============ Edit / Insert Modal ============ */}

@@ -8,9 +8,13 @@ import { Resend } from 'resend'
 // Lazy initialization to avoid build-time errors when API key is not set
 let resend: Resend | null = null
 function getResend(): Resend {
-  if (!resend) {
-    resend = new Resend(process.env.RESEND_API_KEY || '')
+  const key = process.env.RESEND_API_KEY?.trim()
+  if (!key) {
+    throw new Error(
+      'Email is not configured. Add RESEND_API_KEY to web/.env.local and restart the dev server.',
+    )
   }
+  if (!resend) resend = new Resend(key)
   return resend
 }
 

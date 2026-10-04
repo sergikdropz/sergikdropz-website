@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  GOOGLE_VAULT_SOURCE,
+  SITE_SUBSCRIBER_TAG,
   VAULT_UNLOCK_SOURCE,
   VAULT_UNLOCK_TAG,
   adminFanFromLead,
@@ -24,6 +26,27 @@ describe('fan CRM vault unlock mapping', () => {
     expect(row.name).toBe('DJ Fan')
     expect(row.last_engaged_at).toBe(now)
     expect(row.metadata).toEqual({ vault_unlocked: true, campaign: 'drop-1' })
+  })
+
+  it('tags a Google vault sign-in as a site subscriber', () => {
+    const row = fanInsertFromVaultUnlock(
+      { email: 'fan@gmail.com', displayName: 'Google Fan', source: GOOGLE_VAULT_SOURCE, campaign: null },
+      now,
+    )
+    expect(row.source).toBe(GOOGLE_VAULT_SOURCE)
+    expect(row.tags).toEqual([VAULT_UNLOCK_TAG, SITE_SUBSCRIBER_TAG])
+    expect(row.consent_email).toBe(true)
+  })
+
+  it('adds the subscriber tag when an existing fan signs in with Google', () => {
+    const patch = fanPatchFromVaultUnlock(
+      { name: 'Ada', source: 'contact_form', tags: ['booking'], metadata: {} },
+      { email: 'ada@gmail.com', displayName: null, source: GOOGLE_VAULT_SOURCE, campaign: null },
+      now,
+    )
+    expect(patch.tags).toEqual(['booking', VAULT_UNLOCK_TAG, SITE_SUBSCRIBER_TAG])
+    expect(patch.consent_email).toBe(true)
+    expect(patch.source).toBe('contact_form')
   })
 
   it('keeps utm source on first unlock', () => {
@@ -67,6 +90,9 @@ describe('fan CRM vault unlock mapping', () => {
     expect(isSyntheticFanEmail('e2e-vault-1@example.com')).toBe(true)
     expect(isSyntheticFanEmail('vault-probe-test@example.com')).toBe(true)
     expect(isSyntheticFanEmail('verify-sidebar-mosaic-1788640821070@example.com')).toBe(true)
+    expect(isSyntheticFanEmail('agent-1789106358783@example.com')).toBe(true)
+    expect(isSyntheticFanEmail('audit-1789097210@example.com')).toBe(true)
+    expect(isSyntheticFanEmail('fan@example.com')).toBe(false)
     expect(isSyntheticFanEmail('carrascojanis1@gmail.com')).toBe(false)
   })
 

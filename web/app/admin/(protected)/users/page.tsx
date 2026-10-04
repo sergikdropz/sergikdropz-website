@@ -25,6 +25,7 @@ export default function AdminUsers() {
   const router = useRouter()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [newUser, setNewUser] = useState({ email: '', password: '' })
   const [adding, setAdding] = useState(false)
@@ -38,11 +39,17 @@ useEffect(() => {
   async function fetchUsers() {
     try {
       setLoadingUsers(true)
+      setLoadError(null)
       const response = await fetch('/api/admin/users')
       const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load admin users')
+      }
       setUsers(data.users || [])
     } catch (error) {
       console.error('Error fetching users:', error)
+      setUsers([])
+      setLoadError(error instanceof Error ? error.message : 'Failed to load admin users')
     } finally {
       setLoadingUsers(false)
     }
@@ -159,7 +166,9 @@ useEffect(() => {
         <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
           <h2 className="text-2xl font-semibold mb-4">Admin Users ({users.length})</h2>
 
-          {users.length === 0 ? (
+          {loadError ? (
+            <div className="text-center py-12 text-red-400">{loadError}</div>
+          ) : users.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               No admin users found. Add your first admin user to get started.
             </div>

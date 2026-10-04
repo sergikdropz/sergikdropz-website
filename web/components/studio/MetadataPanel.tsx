@@ -21,6 +21,13 @@ import {
 } from '@/lib/studio/vault-import'
 import VaultImportPanel from './VaultImportPanel'
 import type { RightsActionFocus } from '@/lib/studio/rights-action-target'
+import { useCopyStepIntelligenceStack } from '@/hooks/useCopyStepIntelligenceStack'
+import { dispatchAdminAiPrompt, openAdminAiAssistant } from '@/lib/admin-ai-client'
+import {
+  buildListeningJourneyAdminAiPrompt,
+  studioIntelligenceContextLine,
+  studioIntelligenceHarnessQuery,
+} from '@/lib/studio/studio-intelligence-actions'
 
 export type MetadataForm = {
   title: string
@@ -100,8 +107,15 @@ export default function MetadataPanel({
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [qaNote, setQaNote] = useState<string | null>(null)
+  const [journeyBusy, setJourneyBusy] = useState(false)
+  const [journeyError, setJourneyError] = useState<string | null>(null)
   const autoJourney = useRef(false)
   const dspGenreMap = mapSonicGenreToDsp(form.genre, form.subgenre)
+  const intelStack = useCopyStepIntelligenceStack(
+    releaseId,
+    Boolean(releaseId),
+    studioIntelligenceHarnessQuery('metadata_listening_journey'),
+  )
 
   useEffect(() => {
     if (!focusRequest || focusRequest.step !== 'metadata') return
@@ -126,7 +140,7 @@ export default function MetadataPanel({
     onFormChange({ ...form, [key]: value })
   }
 
-  function writeListeningJourney() {
+  function localListeningJourney() {
     return releaseDescriptionFromCatalog(
       dnaCopyInputFromCatalog({
         title: form.title,
@@ -142,9 +156,59 @@ export default function MetadataPanel({
     )
   }
 
+  function openListeningJourneyInAdminAi() {
+    dispatchAdminAiPrompt(
+      buildListeningJourneyAdminAiPrompt({
+        releaseId,
+        releaseTitle: form.title || 'Untitled',
+        currentDraft: form.description,
+      }),
+    )
+    openAdminAiAssistant()
+  }
+
+  async function writeListeningJourney(opts?: { mode?: 'draft' | 'refine' }) {
+    setJourneyError(null)
+    if (!tracks.length) {
+      setJourneyError('Add tracks in Catalog first.')
+      return
+    }
+    const local = localListeningJourney()
+    if (!local) {
+      setJourneyError('No catalog draft yet.')
+      return
+    }
+    setJourneyBusy(true)
+    try {
+      const res = await fetch(
+        `/api/studio/releases/${encodeURIComponent(releaseId)}/refine-description`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            draft: form.description.trim() ? form.description : '',
+            mode: opts?.mode ?? (form.description.trim() ? 'refine' : 'draft'),
+          }),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Listening journey failed')
+      const text = typeof data.text === 'string' ? data.text.trim() : ''
+      if (!text) throw new Error('No description returned')
+      setField('description', text)
+    } catch (e: unknown) {
+      setField('description', local)
+      if (!local) {
+        setJourneyError(e instanceof Error ? e.message : 'Listening journey failed')
+      }
+    } finally {
+      setJourneyBusy(false)
+    }
+  }
+
   useEffect(() => {
     if (autoJourney.current || form.description.trim() || tracks.length < 2) return
-    const journey = writeListeningJourney()
+    const journey = localListeningJourney()
     if (!journey) return
     autoJourney.current = true
     onFormChange({ ...form, description: journey })
@@ -552,15 +616,49 @@ export default function MetadataPanel({
               <div className="flex items-center justify-between gap-2 mb-1">
                 <label className="text-xs text-zinc-500">Description</label>
                 {tracks.length ? (
-                  <button
-                    type="button"
-                    onClick={() => setField('description', writeListeningJourney())}
-                    className="text-[11px] text-violet-300 hover:text-violet-200"
-                  >
-                    Write listening journey
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={journeyBusy}
+                      title={`${studioIntelligenceContextLine('metadata_listening_journey')} · ⌘/Alt-click to expand in Admin AI`}
+                      onClick={(e) => {
+                        if (e.metaKey || e.altKey) {
+                          openListeningJourneyInAdminAi()
+                          return
+                        }
+                        void writeListeningJourney()
+                      }}
+                      className="text-[11px] text-violet-300 hover:text-violet-200 disabled:opacity-50"
+                    >
+                      {journeyBusy ? 'Writing…' : 'Write listening journey'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={intelStack.openInAdminAi}
+                      className="text-[11px] text-cyan-300/80 hover:text-cyan-200"
+                    >
+                      Open harness
+                    </button>
+                  </div>
                 ) : null}
               </div>
+              {journeyError ? <p className="text-[11px] text-amber-400 mb-1">{journeyError}</p> : null}
+              {tracks.length && releaseId ? (
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                  {intelStack.loading ? (
+                    <span className="text-cyan-400/80">Probing intelligence stack…</span>
+                  ) : intelStack.sonicUnified ? (
+                    <span className="rounded-full border border-emerald-500/30 bg-emerald-950/30 px-2 py-0.5 text-emerald-200/90">
+                      {intelStack.sonicUnified}
+                    </span>
+                  ) : null}
+                  {intelStack.summary ? (
+                    <span className="line-clamp-1" title={intelStack.summary}>
+                      {intelStack.summary}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
               <AiField
                 as="textarea"
                 fieldKey="description"

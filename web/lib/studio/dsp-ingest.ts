@@ -1,6 +1,6 @@
 import { ensureProducerCredits, namesForRole, parseContributors, storeTitleFromArtistPrefix } from '@/lib/studio/track-credits'
 import { writerLegalNameIssues } from '@/lib/studio/songwriter'
-import { normalizeSplitRows } from '@/lib/studio/import-parse'
+import { normalizeSplitRows, splitsBalanceOk } from '@/lib/studio/import-parse'
 import { validateISRC } from '@/lib/studio/isrc-format'
 
 export const DSP_PRIMARY_GENRES = [
@@ -480,9 +480,8 @@ export function evaluateTrackIngest(
   const billed = namesForRole(credits, 'primary')
   const owners = billed.length ? billed : ['SERGIK']
   const splitRows = normalizeSplitRows(track.splits)
-  const splitTotal = splitRows.reduce((sum, row) => sum + row.percentage, 0)
   const splitNames = new Set(splitRows.map((row) => row.name.toLowerCase()).filter(Boolean))
-  const splitOk = splitRows.length > 0 && Math.abs(splitTotal - 100) < 0.01
+  const splitOk = splitsBalanceOk(track.splits)
   if (owners.length > 1) {
     const missing = owners.filter((name) => !splitNames.has(name.toLowerCase()))
     if (!splitOk) {

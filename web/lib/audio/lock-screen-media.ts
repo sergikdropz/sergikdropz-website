@@ -110,6 +110,54 @@ export function buildMediaSessionArtworkFromRef(
   return buildLockScreenArtworkEntries(src, origin)
 }
 
+type WebAudioSession = {
+  type: string
+  state?: string
+  addEventListener?: (type: 'statechange', listener: () => void) => void
+  removeEventListener?: (type: 'statechange', listener: () => void) => void
+}
+
+function webAudioSession(): WebAudioSession | null {
+  if (typeof navigator === 'undefined') return null
+  const session = (navigator as Navigator & { audioSession?: WebAudioSession }).audioSession
+  return session ?? null
+}
+
+/** iOS 16.4+: tell the OS this page is the music app so a stall does not resume Apple Music. */
+export function setLongFormAudioSession(active: boolean): void {
+  const session = webAudioSession()
+  if (!session) return
+  try {
+    session.type = active ? 'playback' : 'auto'
+  } catch {
+    /* older browsers */
+  }
+}
+
+export function readAudioSessionState(): string | null {
+  return webAudioSession()?.state ?? null
+}
+
+/**
+ * A paused element while the listener still wants audio is a stall or route blip,
+ * not a lock-screen pause. Reclaim immediately or iOS hands the session to Apple Music.
+ * Skip while a phone call interrupted the session, or while we are swapping decks.
+ */
+export function shouldReclaimBackgroundPlayback(input: {
+  userRequestedPause: boolean
+  wantsPlayback: boolean
+  ended: boolean
+  mixing: boolean
+  bufferClock: boolean
+  withinHandoff: boolean
+  audioSessionState?: string | null
+}): boolean {
+  if (input.withinHandoff || input.userRequestedPause || !input.wantsPlayback) return false
+  if (input.ended || input.mixing || input.bufferClock) return false
+  if (input.audioSessionState === 'interrupted') return false
+  return true
+}
+
 /**
  * Phones/tablets: only register next/previous so the OS shows skip buttons.
  * Desktop notifications can keep seek ±N.

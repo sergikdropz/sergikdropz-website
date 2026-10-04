@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 
 interface InstagramMedia {
   url: string
@@ -93,6 +94,7 @@ export default function InstagramMediaModal({ media, isOpen, onClose }: Instagra
   if (!isOpen || !media) return null
 
   return (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
       onClick={onClose}
@@ -192,6 +194,7 @@ export default function InstagramMediaModal({ media, isOpen, onClose }: Instagra
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   )
 }
 

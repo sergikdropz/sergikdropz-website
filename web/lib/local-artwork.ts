@@ -40,6 +40,11 @@ async function removeSiblingArtworkFiles(dir: string, artworkId: string, keepFil
 export type SaveLocalArtworkOptions = {
   /** When false, write the buffer as-is (batch tooling / tests). Default true. */
   normalize?: boolean
+  /**
+   * New URL for this save (`folder-{id}.v{version}.jpg`).
+   * Required for overwrites — `/images` is cached immutable, so the old path never updates.
+   */
+  version?: string
 }
 
 /**
@@ -68,7 +73,8 @@ export async function saveLocalArtworkFile(
     ext = artworkExt(fileName, mimeType)
   }
 
-  const filename = `${id}.${ext}`
+  const version = (options?.version || '').replace(/[^\d]/g, '')
+  const filename = version ? `${id}.v${version}.${ext}` : `${id}.${ext}`
   const dir = join(process.cwd(), 'public', 'images', 'audio', 'artwork')
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, filename), outBuffer)

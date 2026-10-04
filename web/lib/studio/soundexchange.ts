@@ -7,6 +7,7 @@
  * so Pipeline → ISRCs stays an actionable registry.
  *
  * Public lookup UI: https://isrc.soundexchange.com/
+ * Neighboring-rights repertoire desk: https://sxdirect.soundexchange.com/home/
  */
 
 import {
@@ -16,6 +17,9 @@ import {
   resolveSoundExchangeAccountId,
   validateISRC,
 } from '@/lib/studio/isrc-format'
+
+export const SX_DIRECT_HOME = 'https://sxdirect.soundexchange.com/home/'
+export const SX_DIRECT_CATALOG = 'https://sxdirect.soundexchange.com/catalog'
 
 export type SoundExchangeMode = 'local' | 'remote'
 
@@ -34,6 +38,15 @@ export interface SoundExchangeConfig {
   mode?: SoundExchangeMode
 }
 
+export type SxDirectAccount = {
+  desk: 'SX Direct'
+  homeUrl: string
+  catalogUrl: string
+  registrantId: string
+  rightsOwnerSxid: string
+  performerSxid: string
+}
+
 export interface ISRCSubmissionData {
   isrc: string
   title: string
@@ -47,6 +60,71 @@ export interface ISRCSubmissionData {
     name: string
     role: string
   }>
+  sxDirect?: SxDirectAccount
+}
+
+export function sxDirectAccount(): SxDirectAccount {
+  return {
+    desk: 'SX Direct',
+    homeUrl: SX_DIRECT_HOME,
+    catalogUrl: SX_DIRECT_CATALOG,
+    registrantId: US_ISRC_REGISTRANT.soundExchangeRegistrantId,
+    rightsOwnerSxid: US_ISRC_REGISTRANT.membership.rightsOwner.sxid,
+    performerSxid: US_ISRC_REGISTRANT.membership.performer.sxid,
+  }
+}
+
+export function isSergikMintedIsrc(isrc: string | null | undefined): boolean {
+  const compact = normalizeIsrcInput(isrc)
+  return Boolean(compact && compact.startsWith(US_ISRC_REGISTRANT.prefix))
+}
+
+export function contributorsForSx(
+  contributors: unknown,
+): Array<{ name: string; role: string }> {
+  if (!Array.isArray(contributors)) return []
+  return contributors.map((c) =>
+    typeof c === 'string'
+      ? { name: c, role: 'artist' }
+      : {
+          name: String((c as { name?: string })?.name || 'Unknown'),
+          role: String((c as { role?: string })?.role || 'artist'),
+        },
+  )
+}
+
+export function trackToSxDirectSubmission(
+  track: {
+    isrc_full?: string | null
+    title?: string | null
+    duration?: number | null
+    explicit?: boolean | null
+    contributors?: unknown
+  },
+  release?: {
+    album_artist?: string | null
+    title?: string | null
+    release_date?: string | null
+    genre?: string | null
+  } | null,
+): ISRCSubmissionData | null {
+  const isrc = normalizeIsrcInput(track.isrc_full)
+  if (!isrc) return null
+  const contributors = contributorsForSx(track.contributors)
+  return {
+    isrc,
+    title: String(track.title || '').trim() || 'Untitled',
+    artist:
+      release?.album_artist?.trim() ||
+      artistFromContributors(track.contributors, US_ISRC_REGISTRANT.recordingArtist),
+    duration: track.duration || undefined,
+    releaseTitle: release?.title || undefined,
+    releaseDate: release?.release_date || undefined,
+    genre: release?.genre || undefined,
+    explicit: Boolean(track.explicit),
+    contributors,
+    sxDirect: sxDirectAccount(),
+  }
 }
 
 export interface SoundExchangeSubmitResult {
@@ -186,7 +264,7 @@ export class SoundExchangeClient {
         success: true,
         submissionId: `sx-local-${normalizeIsrcInput(data.isrc) || Date.now()}`,
         message:
-          'Recorded in SERGIK SoundExchange registry (local). Remote API credentials not configured — export USISRC locker CSV to finish at isrc.soundexchange.com.',
+          'Queued in SERGIK SX Direct registry (local). Remote API credentials not configured — confirm repertoire at sxdirect.soundexchange.com.',
         mode: 'local',
       }
     }
@@ -194,7 +272,7 @@ export class SoundExchangeClient {
     return {
       success: true,
       submissionId: `sx-${Date.now()}`,
-      message: 'ISRC queued for SoundExchange (credentials present; remote endpoint stub).',
+      message: 'ISRC queued for SX Direct (credentials present; remote endpoint stub).',
       mode: 'remote',
     }
   }
@@ -207,7 +285,7 @@ export class SoundExchangeClient {
         found: false,
         mode: 'local',
         message:
-          'Remote SoundExchange lookup not configured — use catalog match from Studio registry.',
+          'Remote SX Direct lookup not configured — use catalog match from Studio registry.',
       }
     }
     return {

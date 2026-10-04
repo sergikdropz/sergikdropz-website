@@ -1,4 +1,4 @@
-import type { WorkflowStepId } from '@/lib/studio/constants'
+import { WORKFLOW_STEPS, type WorkflowStepId } from '@/lib/studio/constants'
 import { workflowStepForActionKind } from '@/lib/studio/studio-ia'
 
 export type RightsActionSection =
@@ -80,7 +80,11 @@ export function resolveIngestIssueTarget(issue: {
     case 'radio':
     case 'radio-isrc':
     case 'preview':
+    case 'preview-clip':
       return { step: 'catalog', section: 'credits', trackId }
+    case 'switch-overlap':
+    case 'switch-takedown':
+      return { step: 'metadata', section: 'previously_released' }
     case 'genre':
       return { step: 'metadata', section: 'genre' }
     case 'date':
@@ -159,4 +163,83 @@ export function resolveCopyrightActionTarget(action: {
     step: workflowStepForActionKind(action.kind),
     section: 'attestations',
   }
+}
+
+const SECTION_LABELS: Record<RightsActionSection, string> = {
+  writer_legal: 'Writer legal names',
+  credits: 'Credits',
+  splits: 'Splits',
+  title: 'Title',
+  ai: 'AI declaration',
+  cover: 'Cover packet',
+  attestations: 'Attestations',
+  contracts: 'Contracts',
+  pro: 'PRO registration',
+  publisher: 'Publisher',
+  genre: 'Genre',
+  street_date: 'Street date',
+  previously_released: 'Previously released',
+  upc: 'UPC',
+  artwork: 'Artwork',
+  artist_profiles: 'Artist profiles',
+  wav: 'WAV masters',
+  isrc: 'ISRCs',
+}
+
+const PIPELINE_BLOCKER_PHRASES: Array<{ test: RegExp; focus: RightsActionFocus }> = [
+  { test: /at least one track/i, focus: { step: 'catalog', section: 'credits' } },
+  { test: /wav file/i, focus: { step: 'catalog', section: 'wav' } },
+  { test: /assign isrc/i, focus: { step: 'rights', section: 'isrc' } },
+  { test: /splits must total 100/i, focus: { step: 'catalog', section: 'splits' } },
+  { test: /rights intake/i, focus: { step: 'rights', section: 'attestations' } },
+  { test: /legal lock/i, focus: { step: 'rights', section: 'contracts' } },
+  { test: /contract status/i, focus: { step: 'rights', section: 'contracts' } },
+  { test: /composition copyright/i, focus: { step: 'rights', section: 'pro' } },
+  { test: /master copyright/i, focus: { step: 'rights', section: 'pro' } },
+  { test: /pro registration/i, focus: { step: 'rights', section: 'pro' } },
+  { test: /\bupc\b/i, focus: { step: 'metadata', section: 'upc' } },
+]
+
+/** Map a mission-control blocker sentence onto the Studio step and field it is about. */
+export function studioTargetForBlocker(
+  label: string,
+  issues: Array<{ id?: string | null; label?: string | null }> = [],
+): RightsActionFocus {
+  const text = label.trim()
+  const issue = issues.find((item) => String(item.label || '').trim() === text && String(item.id || '').trim())
+  if (issue?.id) {
+    return resolveIngestIssueTarget({ id: String(issue.id), label: text })
+  }
+
+  for (const phrase of PIPELINE_BLOCKER_PHRASES) {
+    if (phrase.test.test(text)) return phrase.focus
+  }
+
+  if (/legal name/i.test(text)) {
+    return {
+      step: 'catalog',
+      section: 'writer_legal',
+      party: partyFromWriterLegalLabel(text),
+    }
+  }
+  if (/split/i.test(text)) return { step: 'catalog', section: 'splits' }
+  if (/genre/i.test(text)) return { step: 'metadata', section: 'genre' }
+  if (/previously released/i.test(text)) return { step: 'metadata', section: 'previously_released' }
+  if (/street date|release date/i.test(text)) return { step: 'metadata', section: 'street_date' }
+  if (/artwork/i.test(text)) return { step: 'metadata', section: 'artwork' }
+  if (/attestation/i.test(text)) return { step: 'rights', section: 'attestations' }
+  if (/youtube|instagram|facebook/i.test(text)) return { step: 'delivery', section: 'artist_profiles' }
+  if (/cover|mechanical/i.test(text)) return { step: 'rights', section: 'cover' }
+  if (/\bai\b|artificial/i.test(text)) return { step: 'catalog', section: 'ai' }
+  if (/apple music|producer credit|performer/i.test(text)) return { step: 'catalog', section: 'credits' }
+  if (/\bwav\b|master/i.test(text)) return { step: 'catalog', section: 'wav' }
+  if (/isrc/i.test(text)) return { step: 'rights', section: 'isrc' }
+
+  return { step: 'rights', section: 'attestations' }
+}
+
+export function studioTargetLabel(focus: Pick<RightsActionFocus, 'step' | 'section'>): string {
+  const step = WORKFLOW_STEPS.find((row) => row.id === focus.step)?.label || focus.step
+  const section = SECTION_LABELS[focus.section] || focus.section
+  return `${step} · ${section}`
 }

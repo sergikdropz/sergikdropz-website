@@ -109,13 +109,59 @@
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 0 7px rgba(250, 204, 21, 0.28));
+  /* Drop-shadow and scale on this node stop WebKit from repainting the clipped
+     gradient, so the sunlight never moves on iPhone and iPad. */
+  filter: none;
+  transform: none;
   animation: exclusive-musicbank-sun 32s ease-in-out infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
+/* Desktop stretch stays on a wrapper. Touch layouts (phone and iPad) leave it
+   unscaled so the gold animation can paint. */
+@media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
+  .exclusive-musicbank-stretch {
+    transform: scaleX(1.12);
+    transform-origin: center;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .exclusive-musicbank-chevron {
+    animation: exclusive-musicbank-chevron 2.8s ease-in-out infinite;
+  }
+
+  .exclusive-musicbank-chevron-right {
+    animation-direction: reverse;
+  }
+}
+
+/* Phone and iPad: an inline scale or filter on the gold letters stops WebKit
+   from repainting the clipped gradient, so the sunlight looks removed. */
+@media (hover: none), (max-width: 1180px) {
   .exclusive-musicbank-glow {
-    animation: none;
+    animation-name: exclusive-musicbank-sun !important;
+    animation-duration: 32s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+@keyframes exclusive-musicbank-chevron {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exclusive-musicbank-glow,
+  .exclusive-musicbank-chevron {
+    animation: none !important;
     --sun-angle: 112deg;
     background-position: 40% 40%;
   }
@@ -510,26 +556,25 @@ textarea,
   -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Mobile-specific typography improvements */
+/* Mobile-specific typography improvements.
+   Root font size stays at the browser default so system text-size settings still apply. */
 @media (max-width: 640px) {
   html {
-    font-size: 16px;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%; /* Chrome 54+, Edge 79+ */
   }
   
   body {
-    font-size: 16px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   
-  /* Prevent zoom on input focus on iOS */
+  /* At least 16px so iOS does not zoom on focus; grow when the user sets larger text. */
   input,
   select,
   textarea {
-    font-size: 16px !important;
+    font-size: max(16px, 1rem) !important;
     -webkit-appearance: none;
     border-radius: 0;
   }
@@ -549,12 +594,10 @@ textarea,
     padding-right: 1rem;
   }
   
-  /* Optimize images for mobile */
-  img {
+  /* Content images scale down. Fill/cover art keeps its own height. */
+  img:not(.object-cover):not(.object-contain) {
     max-width: 100%;
     height: auto;
-    image-rendering: -webkit-optimize-contrast; /* Edge 79+ */
-    image-rendering: crisp-edges;
   }
   
   /* Improve form inputs */
@@ -562,15 +605,9 @@ textarea,
   input[type="email"],
   input[type="search"],
   textarea {
-    font-size: 16px !important;
+    font-size: max(16px, 1rem) !important;
     padding: 0.75rem;
     border-radius: 0.5rem;
-  }
-  
-  /* Better link spacing */
-  a {
-    padding: 0.25rem 0.5rem;
-    margin: -0.25rem -0.5rem;
   }
   
   /* Enhanced mobile range slider (seek bar) - smoother and easier to use */
@@ -743,27 +780,20 @@ textarea,
     .animate-float-gradient-reverse,
     .animate-twinkle,
     .animate-float-bg,
-    .animate-float-hero,
-    .animate-fade-in {
+    .animate-float-hero {
       animation: none !important;
     }
     
-    /* Reduce transition durations — keep intentional slow brand / cover motion at full speed */
+    /* Reduce transition durations — keep intentional slow brand / cover motion at full speed.
+       Stretched section titles (scaleX) must stay; a hover transform reset was flattening them on touch. */
     *:not([class*='mosaic-tile-motion']):not([class*='ep-release-cover-drift']):not(
         .exclusive-musicbank-glow
-      ):not([class*='mosaic-tile-crossfade']) {
+      ):not(.exclusive-musicbank-chevron):not(.font-six-caps):not([class*='mosaic-tile-crossfade']) {
       transition-duration: 0.2s !important;
       animation-duration: 0.3s !important;
     }
   }
 
-  /* Disable hover transform resets on layout-positioned elements (e.g. -translate-x centering) */
-  *:hover:not([class*='mosaic-tile-motion']):not([class*='ep-release-cover-drift']):not(
-      [class*='-translate-']
-    ) {
-    transform: none !important;
-  }
-  
   /* Optimize image rendering on mobile; keep background mosaic photos sharp */
   img {
     image-rendering: -webkit-optimize-contrast; /* Edge 79+ */
@@ -799,19 +829,6 @@ textarea,
   * {
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
-  }
-  
-  /* Optimize image loading — never defer the fixed background mosaic or site header */
-  img {
-    content-visibility: auto;
-  }
-
-  header img {
-    content-visibility: visible;
-  }
-
-  .site-background-mosaic img {
-    content-visibility: visible;
   }
   
   /* Reduce font rendering complexity */
@@ -907,6 +924,123 @@ textarea,
   text-shadow: 
     0 2px 4px rgba(0, 0, 0, 0.3),
     0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+/* Visible-viewport fit for listeners and other public visitors.
+   --vvw / data-device come from ConsumerViewportFit (visual viewport, zoom, text size). */
+.consumer-display {
+  font-size: clamp(2.25rem, calc(var(--vvw, 100vw) * 0.16), 5rem);
+  line-height: 0.95;
+  letter-spacing: clamp(0.04em, 0.6vw, 0.12em);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.consumer-display-long {
+  font-size: clamp(1.75rem, calc(var(--vvw, 100vw) * 0.09), 4.25rem);
+  letter-spacing: clamp(0.03em, 0.4vw, 0.1em);
+  line-height: 1.05;
+}
+
+.consumer-section-title {
+  max-width: calc(100% - 2.5rem);
+  letter-spacing: 0.1em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
+  .consumer-section-title {
+    letter-spacing: 0.2em;
+    transform: scaleX(1.08);
+    transform-origin: center;
+  }
+}
+
+main#main-content {
+  /* Pages already pad ~5rem. Add only the extra when a notch or zoom makes the header taller. */
+  padding-top: max(0px, calc(var(--site-header-offset, 5rem) - 5rem));
+}
+
+@media (max-width: 900px) {
+  body {
+    overflow-x: clip;
+  }
+}
+
+@media (max-width: 720px) {
+  h1.font-six-caps,
+  h1.font-six-caps-hero,
+  h2.font-six-caps {
+    max-width: 100%;
+    height: auto !important;
+    transform: none !important;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+    text-wrap: balance;
+    letter-spacing: 0.06em !important;
+    line-height: 0.95 !important;
+  }
+
+  h1.font-six-caps,
+  h1.font-six-caps-hero {
+    font-size: clamp(1.85rem, calc(var(--vvw, 100vw) * 0.14), 3.75rem) !important;
+  }
+
+  h2.font-six-caps {
+    font-size: clamp(1.15rem, calc(var(--vvw, 100vw) * 0.065), 2.25rem) !important;
+    max-width: calc(100% - 2.25rem);
+  }
+
+  .header-logo {
+    font-size: clamp(1.65rem, 10vw, 2.15rem);
+    letter-spacing: 0.08em;
+    line-height: 1;
+  }
+}
+
+html[data-device='phone'] h1.font-six-caps,
+html[data-device='phone'] h1.font-six-caps-hero,
+html[data-device='tablet'] h1.font-six-caps,
+html[data-text='large'] h1.font-six-caps,
+html[data-text='large'] h1.font-six-caps-hero,
+html[data-device='phone'] h2.font-six-caps,
+html[data-text='large'] h2.font-six-caps {
+  max-width: 100%;
+  height: auto !important;
+  transform: none !important;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-wrap: balance;
+  letter-spacing: 0.06em !important;
+  line-height: 0.95 !important;
+}
+
+html[data-device='phone'] h1.font-six-caps,
+html[data-device='phone'] h1.font-six-caps-hero,
+html[data-text='large'] h1.font-six-caps,
+html[data-text='large'] h1.font-six-caps-hero {
+  font-size: clamp(1.85rem, calc(var(--vvw, 100vw) * 0.14), 3.75rem) !important;
+}
+
+html[data-device='phone'] h2.font-six-caps,
+html[data-text='large'] h2.font-six-caps {
+  font-size: clamp(1.15rem, calc(var(--vvw, 100vw) * 0.065), 2.25rem) !important;
+  max-width: calc(100% - 2.25rem);
+}
+
+html[data-zoomed='true'] [data-site-header] {
+  top: var(--vv-offset-top, 0px);
+}
+
+html[data-pointer='coarse'] a,
+html[data-pointer='coarse'] button {
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Instagram embed styling - prevent redirects and hide comments */

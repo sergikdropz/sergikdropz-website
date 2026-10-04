@@ -31,10 +31,22 @@ Internal per-release collaborators, in-app thread, magic-link review portal, and
 
    Or create manually in Resend → Webhooks:
    - Endpoint: `https://sergikdropz.com/api/webhooks/resend`
-   - Events: `email.sent`, `email.delivered`, `email.opened`, `email.bounced`, `email.complained`
+   - Events: `email.sent`, `email.delivered`, `email.opened`, `email.bounced`, `email.complained`, **`email.received`**
    - Copy signing secret → `RESEND_WEBHOOK_SECRET=whsec_...` in `.env.local` **and** Vercel env
 
 4. Restart local: `npm run dev:restart`
+
+5. **Extended tables** (inbound thread + contract email kinds):
+
+   ```bash
+   node scripts/apply-release-collab-extended-migration.mjs
+   ```
+
+6. **Inbound replies** (optional until DNS is ready):
+   - Set `RELEASE_COLLAB_INBOUND_DOMAIN=collab.sergikdropz.com` (or your receiving subdomain)
+   - Resend → enable **Receiving** on that subdomain + MX records
+   - Outbound collab/contract mail uses per-release Reply-To: `r.{encodedReleaseId}@that-domain`
+   - Replies appear in the Collab thread with an **Email in** badge
 
 ## Smoke test
 

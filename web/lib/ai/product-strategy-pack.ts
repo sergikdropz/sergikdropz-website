@@ -176,6 +176,7 @@ export function buildProductStrategyPack(params: ProductStrategyPackParams): Rec
         timingNotes: [
           `Horizon: ${timelineWeeks} weeks — compress pre-launch into final 10 days if timeline short.`,
           'Reserve budget for retargeting warm clicks (smart link visitors).',
+          'Release Studio Launch owns the real Meta cadence: Connect Meta, then Admin AI run_meta_promo_pipeline (status → generate → arm → publish). Image slots only. No follower DMs.',
         ],
       }
     : null

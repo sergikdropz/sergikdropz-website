@@ -21,8 +21,23 @@ export type ScheduleRelease = {
 
 const SCHEDULE_PATH = path.join(process.cwd(), 'data', 'release-schedule.json')
 
+export type ScheduleWriteResult = {
+  persisted: boolean
+  /** Set when the deploy filesystem cannot be changed (Vercel `/var/task`). */
+  reason?: 'readonly'
+}
+
 export function getSchedulePath(): string {
   return SCHEDULE_PATH
+}
+
+function isReadonlyFilesystemError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'EROFS'
+  )
 }
 
 export function readReleaseSchedule(): { schedule: ScheduleRelease[] } {
@@ -31,8 +46,26 @@ export function readReleaseSchedule(): { schedule: ScheduleRelease[] } {
   return { schedule: Array.isArray(parsed.schedule) ? parsed.schedule : [] }
 }
 
-export function writeReleaseSchedule(data: { schedule: ScheduleRelease[] }): void {
-  fs.writeFileSync(SCHEDULE_PATH, `${JSON.stringify(data, null, 2)}\n`)
+/**
+ * Mirror the calendar into the checked-in JSON seed.
+ * On Vercel the bundle is read-only (`EROFS` on `/var/task/...`). Distribution
+ * rows in Supabase are the live record; skipping this write must not fail the request.
+ */
+export function writeReleaseSchedule(data: { schedule: ScheduleRelease[] }): ScheduleWriteResult {
+  if (process.env.VERCEL) {
+    console.warn('[schedule] skipped release-schedule.json write on Vercel (read-only filesystem)')
+    return { persisted: false, reason: 'readonly' }
+  }
+  try {
+    fs.writeFileSync(SCHEDULE_PATH, `${JSON.stringify(data, null, 2)}\n`)
+    return { persisted: true }
+  } catch (error) {
+    if (isReadonlyFilesystemError(error)) {
+      console.warn('[schedule] skipped release-schedule.json write (read-only filesystem)')
+      return { persisted: false, reason: 'readonly' }
+    }
+    throw error
+  }
 }
 
 export function mapDistributorStatusToSchedule(status: string | null | undefined): string {

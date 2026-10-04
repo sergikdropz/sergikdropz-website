@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
+import { getSessionFromRequest } from '@/lib/auth/request-session'
+import { getFanVaultUnlockEmailFromRequest } from '@/lib/fan-vault-unlock-cookie'
 import { resolveShareByToken, revokeShareLink } from '@/lib/shares/share-service'
 import { resolvePublicOrigin } from '@/lib/shares/types'
+
+async function visitorMayListen(request: NextRequest): Promise<boolean> {
+  if (getFanVaultUnlockEmailFromRequest(request)) return true
+  try {
+    const session = await getSessionFromRequest(request)
+    return Boolean(session?.isAdmin || session?.user?.id)
+  } catch {
+    return false
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +35,7 @@ export async function GET(request: NextRequest, context: Ctx) {
     const payload = await resolveShareByToken(token, {
       includePlaybackUrls: true,
       bumpPlayCount: bump,
+      playbackAllowed: await visitorMayListen(request),
       origin: resolvePublicOrigin(request.headers),
     })
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { FaSearch, FaMusic, FaCompactDisc, FaSync, FaBolt, FaRocket, FaUpload } from 'react-icons/fa'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 import { invalidateMusicLibraryCache } from '@/utils/musicLibraryApi'
 
 interface Command {
@@ -137,6 +138,7 @@ export default function CommandPalette({ onClose, onAction }: CommandPaletteProp
   }, [search])
 
   return (
+    <FloatingMenuPortal>
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 pt-32 backdrop-blur-sm"
       role="dialog"
@@ -186,5 +188,6 @@ export default function CommandPalette({ onClose, onAction }: CommandPaletteProp
         </div>
       </div>
     </div>
+    </FloatingMenuPortal>
   )
 }

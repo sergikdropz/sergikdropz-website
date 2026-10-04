@@ -17,6 +17,7 @@ import {
 } from '@/lib/audio/sonic-dna-v2'
 import { ensureMeasuredOnDna } from '@/lib/audio/normalize-agent-to-measured'
 import { loadSonicDnaFromKnowledge } from '@/lib/audio/load-local-measured'
+import { imprintCatalogTags } from '@/lib/audio/imprint-catalog-tags'
 import { mergePreferredSonicDna } from '@/lib/audio/sonic-dna-quality'
 import { mergeSonicDNAIntoMetadata } from '@/utils/mergeSonicDNAIntoMetadata'
 import { updateSonicDNACache } from '@/utils/sonicDNACache'
@@ -314,6 +315,12 @@ export async function runSonicDnaJob(jobId: string): Promise<BackgroundJob | nul
       })
     } catch {
       // non-fatal
+    }
+
+    try {
+      await imprintCatalogTags(trackId)
+    } catch (err) {
+      console.warn('[sonic-dna-job] catalog tag imprint failed:', err instanceof Error ? err.message : err)
     }
 
     await setJobStage(jobId, 'done', { dspPercent, dspStatus: status, completed: 1 })

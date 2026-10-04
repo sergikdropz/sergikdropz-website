@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
+import { deleteFanContact } from '@/lib/fan-crm'
 import { requireSupabaseService } from '../../supabase-service'
 
 // GET /api/nurturing/fans/:id
@@ -113,20 +114,15 @@ export async function DELETE(
 
     const { id } = params
 
-    const { error } = await supabase
-      .from('fans')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      console.error('Error deleting fan:', error)
-      return NextResponse.json(
-        { error: 'Failed to delete fan' },
-        { status: 500 }
-      )
+    try {
+      const { email } = await deleteFanContact(supabase, id)
+      return NextResponse.json({ success: true, email })
+    } catch (deleteError) {
+      const status = (deleteError as { status?: number }).status || 500
+      const message = deleteError instanceof Error ? deleteError.message : 'Failed to delete fan'
+      console.error('Error deleting fan:', deleteError)
+      return NextResponse.json({ error: message }, { status })
     }
-
-    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error:', error)
     return NextResponse.json(

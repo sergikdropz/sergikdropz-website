@@ -1,6 +1,15 @@
 'use client'
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react'
+import { createPortal } from 'react-dom'
 import {
   FaChevronDown,
   FaChevronLeft,
@@ -25,8 +34,19 @@ import {
   youtubeEmbedUrl,
   youtubeThumbnailUrls,
 } from '@/lib/videos/youtube'
-import { getPromoContactConsent } from '@/lib/analytics'
-import { pickSavedBrowserEmail, requestGoogleAccessToken } from '@/lib/auth/browser-account'
+import {
+  YT_SUB_GATE_POPUP_NAME,
+  YT_SUB_GATE_RETURN_FOLDER_PARAM,
+  clearYtWatchSoftUnlock,
+  markYtWatchSoftUnlock,
+  readYtWatchSoftUnlock,
+  subscribeYtWatchUnlock,
+  youtubeSubscribeButtonPopupFeatures,
+  ytWatchUnlockGeneration,
+  YT_SUBSCRIBE_SMART_LINK_PATH,
+} from '@/lib/youtube/subscribe-gate-public'
+import ReleaseAdminShareMenu from '@/components/music/ReleaseAdminShareMenu'
+import type { ReleaseShareTrack } from '@/lib/shares/release-share-tracks'
 import { updateFolder } from '@/utils/musicLibraryApi'
 
 type VideoSizeMode = 'compact' | 'theater'
@@ -124,6 +144,7 @@ type ReleaseMusicVideosRowProps = {
   folderId: string
   folderName: string
   videos: FolderMusicVideo[]
+  releaseTracks?: ReleaseShareTrack[]
   isAdmin: boolean
   onVideosChange?: (videos: FolderMusicVideo[]) => void
 }
@@ -483,8 +504,9 @@ function TheaterVideoStrip({
 
 export default function ReleaseMusicVideosRow({
   folderId,
-  folderName: _folderName,
+  folderName,
   videos,
+  releaseTracks = [],
   isAdmin,
   onVideosChange,
 }: ReleaseMusicVideosRowProps) {
@@ -504,6 +526,7 @@ export default function ReleaseMusicVideosRow({
   const [gateOpen, setGateOpen] = useState(false)
   const [gateNote, setGateNote] = useState<string | null>(null)
   const [gateChannel, setGateChannel] = useState('sergikdropz')
+  const [channelSubscribers, setChannelSubscribers] = useState<number | null>(null)
 
   useEffect(() => {
     setDraftUrl('')
@@ -528,36 +551,62 @@ export default function ReleaseMusicVideosRow({
   }
 
   useEffect(() => {
+    if (isAdmin) return
+    return subscribeYtWatchUnlock(() => {
+      setSubUnlocked(true)
+      setGateOpen(false)
+      setGateNote(null)
+    })
+  }, [isAdmin])
+
+  useEffect(() => {
     if (isAdmin) {
       setSubUnlocked(true)
       return
     }
-    setSubUnlocked(false)
+    if (readYtWatchSoftUnlock()) setSubUnlocked(true)
     let cancelled = false
+    const unlockGeneration = ytWatchUnlockGeneration()
     const params = new URLSearchParams(window.location.search)
     const flag = params.get('ytgate')
-    if (flag) {
+    const returnFolder = params.get(YT_SUB_GATE_RETURN_FOLDER_PARAM)
+    if (flag || returnFolder) {
       params.delete('ytgate')
+      params.delete(YT_SUB_GATE_RETURN_FOLDER_PARAM)
       const qs = params.toString()
       window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`)
     }
     void fetch('/api/youtube/subscribe-gate/status', { credentials: 'same-origin', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { unlocked?: boolean; configured?: boolean; channel?: string } | null) => {
+      .then(
+        (data: {
+          unlocked?: boolean
+          channel?: string
+          subscriberCount?: number | null
+        } | null) => {
         if (cancelled || !data) return
         const ok = Boolean(data.unlocked)
         const channel = (data.channel || 'sergikdropz').replace(/^@/, '')
-        setSubUnlocked(ok)
         setGateChannel(channel)
+        setChannelSubscribers(
+          typeof data.subscriberCount === 'number' && Number.isFinite(data.subscriberCount)
+            ? data.subscriberCount
+            : null,
+        )
         if (ok) {
+          markYtWatchSoftUnlock()
+          setSubUnlocked(true)
           setGateOpen(false)
           setGateNote(null)
-          if (flag === 'ok') {
+          if (flag === 'ok' && (!returnFolder || returnFolder === folderId)) {
             setSizeMode('compact')
             setExpanded(true)
           }
           return
         }
+        if (ytWatchUnlockGeneration() !== unlockGeneration) return
+        clearYtWatchSoftUnlock()
+        setSubUnlocked(false)
         if (flag) {
           setGateOpen(true)
           setGateNote(subscribeGateNote(flag))
@@ -727,7 +776,9 @@ export default function ReleaseMusicVideosRow({
           panelId={panelId}
           channel={gateChannel}
           note={gateNote}
+          subscriberCount={channelSubscribers}
           onUnlocked={() => {
+            markYtWatchSoftUnlock()
             setSubUnlocked(true)
             setGateOpen(false)
             setGateNote(null)
@@ -877,35 +928,44 @@ export default function ReleaseMusicVideosRow({
             Add video
           </button>
           {sizeToggle}
+          <ReleaseAdminShareMenu
+            folderId={folderId}
+            releaseTitle={folderName}
+            videos={videos}
+            tracks={releaseTracks}
+            disabled={busy}
+          />
         </div>
       ) : (
-        <div className="relative flex items-center justify-center px-3 py-1.5 sm:px-5">
-          <button
-            type="button"
-            onClick={() => {
-              if (canWatch) {
-                setGateOpen(false)
-                toggleVideosExpanded()
-                return
-              }
-              setGateOpen((v) => !v)
-            }}
-            className={`inline-flex min-h-[32px] items-center justify-center gap-2 rounded-md px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white ${
-              sizeToggle ? 'max-w-[calc(100%-7.5rem)]' : 'max-w-full'
-            }`}
-            aria-expanded={canWatch ? expanded : gateOpen}
-            aria-controls={panelId}
-          >
-            {expanded ? <FaChevronUp className="h-3 w-3 shrink-0" aria-hidden /> : <FaChevronDown className="h-3 w-3 shrink-0" aria-hidden />}
-            <FaYoutube className="h-3.5 w-3.5 shrink-0 text-red-500" aria-hidden />
-            <span className="min-w-0 truncate text-center">
-              <span className="font-medium text-gray-200">{watchLabel}</span>
-              {watchVideoName ? <span className="text-gray-400"> — {watchVideoName}</span> : null}
-            </span>
-          </button>
-          {sizeToggle ? (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 sm:right-5">{sizeToggle}</div>
-          ) : null}
+        <div className="flex flex-col items-center gap-2 px-3 py-1.5 sm:px-5">
+          <div className="relative flex w-full items-center justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                if (canWatch) {
+                  setGateOpen(false)
+                  toggleVideosExpanded()
+                  return
+                }
+                setGateOpen((v) => !v)
+              }}
+              className={`inline-flex min-h-[32px] items-center justify-center gap-2 rounded-md px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white ${
+                sizeToggle ? 'max-w-[calc(100%-7.5rem)]' : 'max-w-full'
+              }`}
+              aria-expanded={canWatch ? expanded : gateOpen}
+              aria-controls={panelId}
+            >
+              {expanded ? <FaChevronUp className="h-3 w-3 shrink-0" aria-hidden /> : <FaChevronDown className="h-3 w-3 shrink-0" aria-hidden />}
+              <FaYoutube className="h-3.5 w-3.5 shrink-0 text-red-500" aria-hidden />
+              <span className="min-w-0 truncate text-center">
+                <span className="font-medium text-gray-200">{watchLabel}</span>
+                {watchVideoName ? <span className="text-gray-400"> — {watchVideoName}</span> : null}
+              </span>
+            </button>
+            {sizeToggle ? (
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 sm:right-0">{sizeToggle}</div>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -915,12 +975,12 @@ export default function ReleaseMusicVideosRow({
 }
 
 const SUBSCRIBE_GATE_NOTES: Record<string, string> = {
-  denied: 'Sign-in was cancelled. Use the Google account on your YouTube profile.',
-  unsubscribed: 'YouTube did not confirm the subscription. Try the link again.',
-  unconfigured: 'Subscribe on YouTube, then return here to watch.',
+  denied: 'The video stays locked until this email is confirmed as a subscriber.',
+  unsubscribed: 'YouTube did not show this email as a subscriber yet. The video stays locked.',
+  unconfigured: 'Subscribe on YouTube, then check again with the same email.',
   channel: 'The SERGIK channel could not be confirmed.',
-  state: 'That sign-in expired. Use the link again.',
-  error: 'YouTube could not confirm the subscription. Try again.',
+  state: 'That check expired. Subscribe on YouTube, then try again.',
+  error: 'The subscription could not be confirmed. The video stays locked.',
 }
 
 function subscribeGateNote(flag: string): string {
@@ -929,129 +989,266 @@ function subscribeGateNote(flag: string): string {
 
 function YouTubeSubscribeGate({
   panelId,
-  channel: _channel,
+  channel,
   note,
+  subscriberCount,
   onUnlocked,
 }: {
   panelId: string
   channel: string
   note: string | null
+  subscriberCount: number | null
   onUnlocked: () => void
 }) {
-  const [email, setEmail] = useState('')
+  const dialogTitleId = useId()
+  const emailId = useId()
+  const [modalOpen, setModalOpen] = useState(false)
   const [pending, setPending] = useState(false)
-  const [askEmail, setAskEmail] = useState(false)
+  const [email, setEmail] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
-  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<Window | null>(null)
+  const stopWatchingRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    let cancelled = false
-    void fetch('/api/youtube/subscribe-gate/status', { credentials: 'same-origin', cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { googleClientId?: string | null } | null) => {
-        if (!cancelled && data?.googleClientId) setGoogleClientId(data.googleClientId)
-      })
-      .catch(() => {
-        /* the button still tries contacts already on this browser */
-      })
-    return () => {
-      cancelled = true
-    }
+    return () => stopWatchingRef.current?.()
   }, [])
 
-  const unlockWith = async (body: { email?: string; accessToken?: string }) => {
-    const res = await fetch('/api/youtube/subscribe-gate/ack', {
+  useEffect(() => {
+    if (!modalOpen) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !pending) setModalOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [modalOpen, pending])
+
+  const saveSubscriber = async (trimmed: string) => {
+    const intent = await fetch('/api/youtube/subscribe-gate/intent', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, promoConsent: getPromoContactConsent() }),
+      body: JSON.stringify({ email: trimmed }),
     })
-    const data = (await res.json().catch(() => null)) as { unlocked?: boolean; needsAccount?: boolean; error?: string } | null
-    if (res.ok && data?.unlocked) {
-      onUnlocked()
-      return 'unlocked' as const
+    if (!intent.ok) {
+      const intentData = (await intent.json().catch(() => null)) as { error?: string } | null
+      throw new Error(intentData?.error || 'The video stays locked until you subscribe on YouTube.')
     }
-    if (data?.needsAccount) return 'needs' as const
-    setFormError(data?.error || 'Could not confirm the subscription. Try again.')
-    return 'error' as const
+    const confirmed = await fetch('/api/youtube/subscribe-gate/confirm', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    const confirmedData = (await confirmed.json().catch(() => null)) as {
+      unlocked?: boolean
+      error?: string
+    } | null
+    if (!confirmedData?.unlocked) {
+      throw new Error(confirmedData?.error || 'Press Subscribe on the YouTube window, then return here.')
+    }
   }
 
-  const unlockHere = async (typedEmail?: string) => {
-    if (pending) return
+  const subscribeOnYoutube = async () => {
+    if (pending) {
+      try {
+        popupRef.current?.focus()
+      } catch {
+        /* the YouTube window may already be closed */
+      }
+      return
+    }
+    const trimmed = email.trim()
+    if (!trimmed.includes('@')) {
+      setFormError('Enter the email on the Google account you use for YouTube.')
+      return
+    }
     setFormError(null)
     setPending(true)
     try {
-      const manual = typedEmail?.trim()
-      if (manual) {
-        if (!manual.includes('@')) {
-          setFormError('Enter the email on your Google account.')
-          return
-        }
-        await unlockWith({ email: manual })
+      const existing = await fetch('/api/youtube/subscribe-gate/check', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      })
+      const existingData = (await existing.json().catch(() => null)) as { unlocked?: boolean } | null
+      if (existingData?.unlocked) {
+        setPending(false)
+        onUnlocked()
+        setModalOpen(false)
         return
       }
-
-      const known = await unlockWith({})
-      if (known !== 'needs') return
-
-      const saved = await pickSavedBrowserEmail('silent')
-      if (saved) {
-        const fromBrowser = await unlockWith({ email: saved })
-        if (fromBrowser !== 'needs') return
-      }
-
-      if (googleClientId) {
-        const accessToken = await requestGoogleAccessToken(googleClientId)
-        if (accessToken) {
-          const fromGoogle = await unlockWith({ accessToken })
-          if (fromGoogle !== 'needs') return
-        }
-      }
-
-      setAskEmail(true)
     } catch {
-      setFormError('Could not confirm the subscription. Try again.')
-    } finally {
+      /* still open YouTube's subscribe confirmation */
+    }
+
+    const popup = window.open(
+      YT_SUBSCRIBE_SMART_LINK_PATH,
+      YT_SUB_GATE_POPUP_NAME,
+      youtubeSubscribeButtonPopupFeatures({
+        screenX: window.screenX,
+        screenY: window.screenY,
+        outerWidth: window.outerWidth,
+        outerHeight: window.outerHeight,
+      }),
+    )
+    if (!popup) {
       setPending(false)
+      setFormError('Allow pop-up windows for this site, then press Subscribe again.')
+      return
+    }
+    popupRef.current = popup
+    let settled = false
+    let sawOpen = false
+    const started = Date.now()
+    const finish = (unlocked: boolean, message?: string) => {
+      if (settled) return
+      settled = true
+      stopWatchingRef.current?.()
+      stopWatchingRef.current = null
+      setPending(false)
+      if (unlocked) {
+        setFormError(null)
+        onUnlocked()
+        setModalOpen(false)
+        return
+      }
+      setFormError(message || 'Subscribe on the YouTube window. The video stays locked until then.')
+    }
+    const watch = window.setInterval(() => {
+      if (Date.now() - started > 3 * 60 * 1000) {
+        finish(false)
+        return
+      }
+      let closed = false
+      try {
+        closed = popup.closed
+      } catch {
+        closed = false
+      }
+      if (!closed) {
+        sawOpen = true
+        return
+      }
+      if (!sawOpen) return
+      void saveSubscriber(trimmed)
+        .then(() => finish(true))
+        .catch((error: unknown) => {
+          finish(false, error instanceof Error ? error.message : undefined)
+        })
+    }, 400)
+    stopWatchingRef.current = () => window.clearInterval(watch)
+    try {
+      popup.focus()
+    } catch {
+      /* focus is optional */
     }
   }
 
+  const subLabel =
+    subscriberCount != null
+      ? `${subscriberCount.toLocaleString()} subscribers on @${channel}`
+      : `Subscribe to @${channel} on YouTube. The video stays locked until that email is confirmed.`
+
+  const modal =
+    modalOpen && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[210] flex items-end justify-center bg-black/75 px-4 pb-28 pt-10 sm:items-center sm:pb-10"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget && !pending) setModalOpen(false)
+            }}
+          >
+            <div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={dialogTitleId}
+              className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-900 p-5 text-left shadow-2xl sm:p-6"
+            >
+              <h2 id={dialogTitleId} className="text-center text-base font-semibold text-white">
+                Subscribe to watch
+              </h2>
+              <p className="mt-2 text-center text-[12px] leading-relaxed text-gray-400">
+                A small window opens with YouTube’s Subscribe button for @{channel}. This page stays here. Subscribe
+                there, then the video opens.
+              </p>
+              <label htmlFor={emailId} className="mt-4 block text-[11px] text-gray-400">
+                Email on the Google account you use for YouTube
+              </label>
+              <input
+                id={emailId}
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  if (formError) setFormError(null)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void subscribeOnYoutube()
+                  }
+                }}
+                placeholder="you@gmail.com"
+                className="mt-1 w-full rounded-md border border-gray-600 bg-gray-950 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-500 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              />
+              <button
+                type="button"
+                disabled={pending || !email.trim()}
+                onClick={() => void subscribeOnYoutube()}
+                className="mt-4 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-base font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-60"
+              >
+                <FaYoutube className="h-4 w-4" aria-hidden />
+                {pending ? 'Waiting for YouTube…' : `Subscribe to @${channel}`}
+              </button>
+              <p className="mt-3 text-center text-[10px] leading-relaxed text-gray-600">
+                <a href="/privacy" className="underline-offset-2 hover:text-gray-300 hover:underline">
+                  Privacy Policy
+                </a>
+                <span className="mx-1.5">·</span>
+                <a href="/terms" className="underline-offset-2 hover:text-gray-300 hover:underline">
+                  Terms of Service
+                </a>
+              </p>
+              {formError ? <p className="mt-3 text-center text-[11px] text-amber-200">{formError}</p> : null}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setModalOpen(false)}
+                className="mt-3 w-full text-center text-[11px] text-gray-600 hover:text-gray-400 disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
-    <div id={panelId} className="border-b border-gray-700/80 px-3 py-3 sm:px-5">
-      <form
-        className="mx-auto flex max-w-lg flex-col items-center gap-2 text-center"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void unlockHere(askEmail ? email : undefined)
-        }}
-      >
-        {askEmail ? (
-          <>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Email"
-              autoComplete="email"
-              aria-label="Email"
-              disabled={pending}
-              className="w-full max-w-xs rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-500 focus:border-red-500"
-            />
-            <p className="text-[11px] text-gray-500">Use the email on your Google account.</p>
-          </>
-        ) : null}
-        <button
-          type="submit"
-          disabled={pending}
-          className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-60"
-        >
-          <FaYoutube className="h-3.5 w-3.5" aria-hidden />
-          Subscribe & unlock
-        </button>
-        {formError ? <p className="text-[11px] text-amber-200">{formError}</p> : null}
-        {note ? <p className="text-[11px] text-amber-200">{note}</p> : null}
-      </form>
-    </div>
+    <>
+      <div id={panelId} className="border-b border-gray-700/80 px-3 py-3 sm:px-5">
+        <div className="mx-auto flex max-w-lg flex-col items-center gap-2 text-center">
+          <p className="text-[11px] text-gray-400">{subLabel}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setFormError(null)
+              setModalOpen(true)
+            }}
+            className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500"
+          >
+            <FaYoutube className="h-3.5 w-3.5" aria-hidden />
+            Subscribe to watch
+          </button>
+          {note ? <p className="text-[11px] text-amber-200">{note}</p> : null}
+        </div>
+      </div>
+      {modal}
+    </>
   )
 }

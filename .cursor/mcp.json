@@ -22,6 +22,9 @@
       "headers": {
         "Authorization": "Bearer __GITHUB_PAT__"
       }
+    },
+    "Runway": {
+      "url": "https://mcp.runwayml.com/mcp"
     }
   }
 }

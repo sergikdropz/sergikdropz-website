@@ -20,12 +20,18 @@ import {
 import { seedWriterLegalRows } from '@/lib/studio/songwriter'
 import { dispatchAdminAiPrompt, openAdminAiAssistant } from '@/lib/admin-ai-client'
 import {
+  buildRightsPacketAuditAdminAiPrompt,
+  studioIntelligenceContextLine,
+} from '@/lib/studio/studio-intelligence-actions'
+import {
   DEFAULT_INGEST_ATTESTATIONS,
   INGEST_ATTESTATION_FIELDS,
   attestationsComplete,
   type IngestAttestations,
 } from '@/lib/studio/dsp-ingest'
 import type { WorkflowStepId } from '@/lib/studio/constants'
+import { applySergikStandardTerms } from '@/lib/studio/music-law/standard-terms'
+import { counselGateForPacket } from '@/lib/studio/music-law/release-gate'
 import {
   resolveCopyrightActionTarget,
   type RightsActionFocus,
@@ -39,6 +45,7 @@ import {
   resolveNextRightsMove,
   suggestedNoSamplesClearance,
   suggestedSergikPaperwork,
+  parseTrackClearance,
   summarizeSplits,
   tracksNeedingSplitSeed,
 } from '@/lib/studio/rights-ops'
@@ -90,9 +97,11 @@ type RightsTrack = {
   writer_legal_names?: string | null
   mechanical_licensed?: boolean | null
   contains_samples?: boolean | null
+  sonic_snapshot?: { clearance?: unknown } | null
+  clearance?: ReturnType<typeof parseTrackClearance> | null
 }
 
-type TrackRightsPatch = Record<string, string | boolean | null>
+type TrackRightsPatch = Record<string, string | boolean | null | object>
 
 type Props = {
   readiness: CopyrightReadiness | null
@@ -312,6 +321,11 @@ export default function CopyrightPanel({
     }
     if (focus.section === 'attestations') {
       attestationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (focus.section === 'isrc') {
+      if (focus.trackId) setExpandedTrack(focus.trackId)
+      coverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
   }
 
@@ -361,10 +375,38 @@ export default function CopyrightPanel({
     }
   }
 
+  function counselTracks() {
+    return tracks.map((track) => ({
+      ...track,
+      clearance: track.clearance || parseTrackClearance(track.sonic_snapshot?.clearance),
+    }))
+  }
+
   function approveContractPacket(packet: RightsPacket) {
+    const text = packet.kind === selectedPacket?.kind ? packetDraftText : packet.text
+    const gate = counselGateForPacket({ text, kind: packet.kind, tracks: counselTracks() })
+    if (gate.blockers.length) {
+      setSendNote(`Cannot approve: ${gate.blockers.map((finding) => finding.title).join('; ')}`)
+      return
+    }
     const patch = rightsPacketApprovePatch(packet)
     if (!patch) return
     applyPatch(patch)
+  }
+
+  function applyStandardTerms(packet: RightsPacket) {
+    const source = (packet.kind === selectedPacket?.kind ? packetDraftText : packet.text) || packet.text
+    const filled = applySergikStandardTerms(source)
+    setPacketDraftText(filled.text)
+    const drafts = setRightsPacketDraft(readiness?.rights_packets, packet.kind, filled.text)
+    applyPatch({ rights_packets: drafts })
+    setPacketDirty(false)
+    setSendNote(
+      filled.filled.length
+        ? `Applied SERGIK house terms (${filled.filled.join(', ')}). A lawyer still reviews before signature.`
+        : 'No blank house-term fields were found in this draft.',
+    )
+    window.setTimeout(() => setSendNote(null), 3200)
   }
 
   function savePacketDraft(packet: RightsPacket) {
@@ -400,23 +442,15 @@ export default function CopyrightPanel({
   function auditEnhancePacket(packet: RightsPacket) {
     if (!releaseId) return
     const text = packetDraftText || packet.text
-    dispatchAdminAiPrompt({
-      agentMode: 'studio_release',
-      message: [
-        `Audit and enhance the ${packet.label} for "${releaseTitle}" (${releaseId}).`,
-        'This is first-party SERGIK Release Studio paperwork — not DistroKid.',
-        '1) Audit findings: missing parties, incomplete legal names, ownership %, unclear terms, DistroKid-style gaps.',
-        '2) Produce a tightened full contract packet ready to send.',
-        'Keep the same parties and ownership numbers unless Catalog data clearly contradicts them — call those out in the audit.',
-        `Focus the Rights packet field \`rights-packet-${packet.kind}\` and when the enhanced text is ready, end with an \`\`\`ai-apply {"value":"...full revised packet..."}\`\`\` block.`,
-        `/exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
-        '',
-        'Current packet:',
-        '```',
-        text,
-        '```',
-      ].join('\n'),
-    })
+    dispatchAdminAiPrompt(
+      buildRightsPacketAuditAdminAiPrompt({
+        releaseId,
+        releaseTitle: releaseTitle || releaseId,
+        packetLabel: packet.label,
+        packetKind: packet.kind,
+        packetText: text,
+      }),
+    )
     openAdminAiAssistant()
   }
 
@@ -815,8 +849,25 @@ export default function CopyrightPanel({
                             />
                             Mechanical license on file
                           </label>
+                          <input
+                            type="text"
+                            defaultValue={track.clearance?.mechanical?.reference || ''}
+                            placeholder="Mechanical license reference or file URL"
+                            onBlur={(e) =>
+                              onTrackRightsChange(track.id as string, {
+                                clearance: {
+                                  mechanical: {
+                                    status: e.target.value.trim() ? 'on_file' : 'missing',
+                                    reference: e.target.value.trim(),
+                                  },
+                                },
+                              })
+                            }
+                            className="sm:col-span-2 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-white"
+                          />
                         </>
                       ) : (
+                        <>
                         <label className="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2">
                           <input
                             type="checkbox"
@@ -830,6 +881,43 @@ export default function CopyrightPanel({
                           />
                           Contains samples that need clearance
                         </label>
+                        {track.contains_samples ? (
+                          <>
+                            <input
+                              type="text"
+                              defaultValue={track.clearance?.sample_master?.reference || ''}
+                              placeholder="Sample master license reference or file URL"
+                              onBlur={(e) =>
+                                onTrackRightsChange?.(track.id as string, {
+                                  clearance: {
+                                    sample_master: {
+                                      status: e.target.value.trim() ? 'on_file' : 'missing',
+                                      reference: e.target.value.trim(),
+                                    },
+                                  },
+                                })
+                              }
+                              className="sm:col-span-2 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-white"
+                            />
+                            <input
+                              type="text"
+                              defaultValue={track.clearance?.sample_composition?.reference || ''}
+                              placeholder="Sample composition license reference or file URL"
+                              onBlur={(e) =>
+                                onTrackRightsChange?.(track.id as string, {
+                                  clearance: {
+                                    sample_composition: {
+                                      status: e.target.value.trim() ? 'on_file' : 'missing',
+                                      reference: e.target.value.trim(),
+                                    },
+                                  },
+                                })
+                              }
+                              className="sm:col-span-2 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-white"
+                            />
+                          </>
+                        ) : null}
+                        </>
                       )}
                     </div>
                   ) : null}
@@ -1011,9 +1099,16 @@ export default function CopyrightPanel({
                     <>
                       <button
                         type="button"
+                        onClick={() => applyStandardTerms(selectedPacket)}
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-100 hover:bg-amber-950/40"
+                      >
+                        Apply SERGIK terms
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => auditEnhancePacket(selectedPacket)}
                         className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-violet-500/40 text-violet-100 hover:bg-violet-950/40"
-                        title="AI audit findings + enhanced packet draft"
+                        title={studioIntelligenceContextLine('rights_packet_audit')}
                       >
                         <FaBrain className="text-[10px]" />
                         AI audit & enhance
@@ -1217,6 +1312,18 @@ export default function CopyrightPanel({
           </div>
 
           <div className="grid sm:grid-cols-2 gap-1">
+            {readiness.counsel_audit ? (
+              <div className="sm:col-span-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 mb-2">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Last counsel memo · {readiness.counsel_audit.audited_at.slice(0, 16).replace('T', ' ')}
+                </p>
+                <p className="text-xs text-zinc-300 mt-1">
+                  {readiness.counsel_audit.blockers.length
+                    ? `Open blockers: ${readiness.counsel_audit.blockers.join('; ')}`
+                    : 'No blockers on the last audit.'}
+                </p>
+              </div>
+            ) : null}
             {BOOL_FIELDS.map(({ key, label }) => {
               const next = move?.patch && key in move.patch
               const lockedOut = key === 'legal_locked' && lockDisabled
@@ -1243,6 +1350,26 @@ export default function CopyrightPanel({
                 </label>
               )
             })}
+            <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800/50 cursor-pointer">
+              <input
+                type="checkbox"
+                disabled={saving}
+                checked={readiness.collection?.neighboring_rights_registered === true}
+                onChange={(e) => onToggle('neighboring_rights_registered', e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-violet-600"
+              />
+              <span className="text-sm text-zinc-300">Neighboring rights registered</span>
+            </label>
+            <label className="flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-500">
+              Society
+              <input
+                type="text"
+                defaultValue={readiness.collection?.neighboring_rights_society || ''}
+                placeholder="SoundExchange, PPL, GVL…"
+                onBlur={(e) => onOpsChange('neighboring_rights_society', e.target.value)}
+                className="flex-1 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-white"
+              />
+            </label>
           </div>
         </div>
 

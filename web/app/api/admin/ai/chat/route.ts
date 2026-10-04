@@ -12,8 +12,9 @@ import {
   type AdminChatRoutingEcho,
 } from '@/lib/ai/admin-chat-guards'
 import { getAllowedAdminSkillIds } from '@/lib/ai/skills/registry'
+import { runAdminAiAgentTurn, type AdminAiAgentEvent } from '@/lib/ai/admin-ai-agent-loop'
 import { formatAdminAiPageContextForPrompt, type AdminAiPageContext } from '@/lib/ai/admin-ai-page-context'
-import { createAiRun, generateChatReply, updateAiRun } from '@/lib/admin-ai'
+import { createAiRun, updateAiRun } from '@/lib/admin-ai'
 import { addAdminAiChatRoutingBreadcrumb } from '@/lib/observability/admin-ai-chat-sentry'
 import { computeAdminChatRunFingerprint } from '@/lib/ai/admin-chat-run-fingerprint'
 import {
@@ -23,6 +24,7 @@ import {
 import { buildSiteKnowledgeContext } from '@/lib/ai/site-knowledge-context'
 import { startAiTelemetry } from '@/lib/observability/ai-telemetry'
 import { checkRateLimitAsync } from '@/lib/rate-limit'
+import { buildPlatformGrowthContextPrompt, isGrowthDeskIntent } from '@/lib/ai/platform-growth-snapshot'
 
 export const dynamic = 'force-dynamic'
 /** Allow long provider round-trips on Vercel (override in platform if needed). */
@@ -56,11 +58,16 @@ export async function POST(request: NextRequest) {
       provider?: string | null
       skillId?: string | null
       stickySkillId?: string | null
-      /** Epoch ms or ISO time when the client last set active skill (server drops stale sticky). */
       stickySkillInferredAt?: number | string | null
       honestyMode?: string | null
       energyPreset?: string | null
       pageContext?: AdminAiPageContext | null
+      /** When false, skip mid-turn /tool loop (pure chat). Default true. */
+      agent?: boolean | null
+      /** NDJSON event stream of tool cards + final result. */
+      stream?: boolean | null
+      threadMemory?: unknown
+      chatSessionId?: string
     }
     const trimmed = body.message?.trim() ?? ''
     const { message, truncated: promptTruncated } = clampAdminAiChatPrompt(trimmed)
@@ -77,6 +84,8 @@ export async function POST(request: NextRequest) {
     })
     const honestyMode = parseAdminChatHonestyMode(body.honestyMode)
     const energyPreset = parseAdminChatEnergyPreset(body.energyPreset)
+    const agentEnabled = body.agent !== false
+    const wantStream = body.stream === true
     if (!message) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 })
     }
@@ -98,6 +107,13 @@ export async function POST(request: NextRequest) {
       message,
       pathname: body.pageContext?.pathname,
     })
+    const growthSlice =
+      skillId === 'growth_marketing' ||
+      effectiveStickySkillId === 'growth_marketing' ||
+      isGrowthDeskIntent(message)
+        ? buildPlatformGrowthContextPrompt()
+        : null
+    const siteKnowledgePrompt = [siteKnowledgeContext.prompt, growthSlice].filter(Boolean).join('\n\n')
 
     const telemetry = startAiTelemetry({
       actorId: session.user.id,
@@ -107,7 +123,10 @@ export async function POST(request: NextRequest) {
       provider: provider ?? null,
     })
 
-    const chatResult = await generateChatReply(message, {
+    const turnInput = {
+      message,
+      adminId: session.user.id,
+      agentEnabled,
       provider,
       modelOverrides: prefs.modelOverrides,
       resolvedModelIds,
@@ -115,100 +134,154 @@ export async function POST(request: NextRequest) {
       autoRouterMode: prefs.autoRouterMode,
       skillId,
       stickySkillId: effectiveStickySkillId,
-      siteKnowledgePrompt: siteKnowledgeContext.prompt,
+      siteKnowledgePrompt: siteKnowledgePrompt || null,
       pageContextPrompt: pageContextPrompt || null,
       honestyMode: honestyMode ?? undefined,
       energyPreset: energyPreset ?? undefined,
-    })
-
-    telemetry.complete({
-      provider: chatResult.provider ?? null,
-      model: chatResult.modelId ?? null,
-      promptChars: message.length,
-      completionChars: chatResult.reply.length,
-      meta: {
-        skillId: chatResult.skill.id,
-        freshnessHours: siteKnowledgeContext.metadata.freshnessHours,
-      },
-    })
-
-    const { continuationOnly, stickyPersonaApplied } = computeAdminChatStickyRouting({
-      message,
-      skillId,
-      stickySkillId: effectiveStickySkillId,
-      inferredSkillId: chatResult.skill.id,
-    })
-
-    const routingEcho: AdminChatRoutingEcho = {
-      continuationOnly,
-      stickySkillId: effectiveStickySkillId,
-      stickySkillRequested: stickyRequested,
-      stickyDroppedStale,
-      stickyInferredAtMs,
-      stickyPersonaApplied,
-      promptTruncated,
+      releaseId: body.pageContext?.studio?.releaseId ?? null,
+      releaseTitle: body.pageContext?.studio?.title ?? null,
+      threadMemory: body.threadMemory,
+      chatSessionId: typeof body.chatSessionId === 'string' ? body.chatSessionId : undefined,
     }
 
-    const runFingerprint = computeAdminChatRunFingerprint({
-      messageLen: message.length,
-      continuationOnly,
-      stickyPersonaApplied,
-      stickyDroppedStale,
-      inferredSkillId: chatResult.skill.id,
-      modelId: chatResult.modelId ?? '',
-      provider: chatResult.provider ?? '',
-      promptTruncated,
-      honestyMode: honestyMode ?? '',
-      energyPreset: energyPreset ?? '',
-    })
+    const finish = async (chatResult: Awaited<ReturnType<typeof runAdminAiAgentTurn>>) => {
+      telemetry.complete({
+        provider: chatResult.provider ?? null,
+        model: chatResult.modelId ?? null,
+        promptChars: message.length,
+        completionChars: chatResult.reply.length,
+        meta: {
+          skillId: chatResult.skill.id,
+          freshnessHours: siteKnowledgeContext.metadata.freshnessHours,
+          toolSteps: chatResult.toolSteps.length,
+        },
+      })
 
-    addAdminAiChatRoutingBreadcrumb({
-      continuationOnly,
-      stickyPersonaApplied,
-      promptTruncated,
-      stickyDroppedStale,
-      stickyInferredAtPresent: stickyInferredAtMs !== null,
-      inferredSkillId: chatResult.skill.id,
-      skillLocked: Boolean(skillId),
-    })
+      const { continuationOnly, stickyPersonaApplied } = computeAdminChatStickyRouting({
+        message,
+        skillId,
+        stickySkillId: effectiveStickySkillId,
+        inferredSkillId: chatResult.skill.id,
+      })
 
-    await updateAiRun({
-      runId,
-      status: 'completed',
-      response: {
+      const routingEcho: AdminChatRoutingEcho = {
+        continuationOnly,
+        stickySkillId: effectiveStickySkillId,
+        stickySkillRequested: stickyRequested,
+        stickyDroppedStale,
+        stickyInferredAtMs,
+        stickyPersonaApplied,
+        promptTruncated,
+      }
+
+      const runFingerprint = computeAdminChatRunFingerprint({
+        messageLen: message.length,
+        continuationOnly,
+        stickyPersonaApplied,
+        stickyDroppedStale,
+        inferredSkillId: chatResult.skill.id,
+        modelId: chatResult.modelId ?? '',
+        provider: chatResult.provider ?? '',
+        promptTruncated,
+        honestyMode: honestyMode ?? '',
+        energyPreset: energyPreset ?? '',
+      })
+
+      addAdminAiChatRoutingBreadcrumb({
+        continuationOnly,
+        stickyPersonaApplied,
+        promptTruncated,
+        stickyDroppedStale,
+        stickyInferredAtPresent: stickyInferredAtMs !== null,
+        inferredSkillId: chatResult.skill.id,
+        skillLocked: Boolean(skillId),
+      })
+
+      await updateAiRun({
+        runId: runId!,
+        status: 'completed',
+        response: {
+          reply: chatResult.reply,
+          chatProvider: chatResult.provider ?? null,
+          modelId: chatResult.modelId ?? null,
+          providerRequested: provider,
+          strictProvider: Boolean(provider),
+          inferredSkill: {
+            id: chatResult.skill.id,
+            name: chatResult.skill.name,
+          },
+          routing: routingEcho,
+          runFingerprint,
+          honestyMode: honestyMode ?? null,
+          energyPreset: energyPreset ?? null,
+          siteKnowledge: siteKnowledgeContext.metadata,
+          toolSteps: chatResult.toolSteps,
+          applyDiffs: chatResult.applyDiffs,
+          memory: chatResult.memory,
+        },
+      })
+
+      return {
+        runId,
         reply: chatResult.reply,
-        chatProvider: chatResult.provider ?? null,
+        provider: chatResult.provider ?? null,
         modelId: chatResult.modelId ?? null,
-        providerRequested: provider,
-        strictProvider: Boolean(provider),
         inferredSkill: {
           id: chatResult.skill.id,
           name: chatResult.skill.name,
+          description: chatResult.skill.description,
         },
         routing: routingEcho,
         runFingerprint,
         honestyMode: honestyMode ?? null,
         energyPreset: energyPreset ?? null,
         siteKnowledge: siteKnowledgeContext.metadata,
-      },
-    })
+        toolSteps: chatResult.toolSteps,
+        applyDiffs: chatResult.applyDiffs,
+        memory: chatResult.memory,
+        memoryPatch: chatResult.memoryPatch,
+        agent: agentEnabled,
+      }
+    }
 
-    return NextResponse.json({
-      runId,
-      reply: chatResult.reply,
-      provider: chatResult.provider ?? null,
-      modelId: chatResult.modelId ?? null,
-      inferredSkill: {
-        id: chatResult.skill.id,
-        name: chatResult.skill.name,
-        description: chatResult.skill.description,
-      },
-      routing: routingEcho,
-      runFingerprint,
-      honestyMode: honestyMode ?? null,
-      energyPreset: energyPreset ?? null,
-      siteKnowledge: siteKnowledgeContext.metadata,
-    })
+    if (wantStream) {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          const send = (obj: unknown) => {
+            controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+          }
+          try {
+            const chatResult = await runAdminAiAgentTurn({
+              ...turnInput,
+              onEvent: (event: AdminAiAgentEvent) => send({ type: 'event', event }),
+            })
+            const payload = await finish(chatResult)
+            send({ type: 'done', ...payload })
+          } catch (error: unknown) {
+            if (runId) {
+              await updateAiRun({
+                runId,
+                status: 'failed',
+                errorMessage: getErrorMessage(error),
+              }).catch(() => undefined)
+            }
+            send({ type: 'error', error: getErrorMessage(error) })
+          } finally {
+            controller.close()
+          }
+        },
+      })
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'application/x-ndjson; charset=utf-8',
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    const chatResult = await runAdminAiAgentTurn(turnInput)
+    return NextResponse.json(await finish(chatResult))
   } catch (error: unknown) {
     if (runId) {
       await updateAiRun({

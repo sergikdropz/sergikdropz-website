@@ -32,6 +32,7 @@ export default function DeferredAdminAiAssistant({
     window.addEventListener('admin-ai:open', onOpen)
     window.addEventListener('admin-ai:toggle', onOpen)
     window.addEventListener('admin-ai:prompt', onOpen)
+    window.addEventListener('admin-ai:browser-hydrate', onOpen as EventListener)
 
     const idleId =
       typeof window !== 'undefined' && 'requestIdleCallback' in window
@@ -44,6 +45,7 @@ export default function DeferredAdminAiAssistant({
       window.removeEventListener('admin-ai:open', onOpen)
       window.removeEventListener('admin-ai:toggle', onOpen)
       window.removeEventListener('admin-ai:prompt', onOpen)
+      window.removeEventListener('admin-ai:browser-hydrate', onOpen as EventListener)
       window.clearTimeout(timeoutId)
       if (idleId != null && 'cancelIdleCallback' in window) {
         window.cancelIdleCallback(idleId)

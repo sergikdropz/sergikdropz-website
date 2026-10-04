@@ -112,14 +112,12 @@ export default function AdminLogin() {
       return
     }
 
+    // Prefill only. A password grant on every visit burns Supabase's sign-in limit
+    // and leaves this page showing "rate limit reached" before you can click Sign In.
     if (remembered) {
       setEmail(remembered.email)
       setPassword(remembered.password)
       setRememberMe(true)
-      setTimeout(() => {
-        setAutoLoggingIn(true)
-        void handleAutoLogin(remembered.email, remembered.password)
-      }, 500)
     }
   }, [])
 
@@ -159,7 +157,9 @@ export default function AdminLogin() {
       return
     }
 
-    clearRememberedCredentials()
+    if (!/rate limit/i.test(data.error || '')) {
+      clearRememberedCredentials()
+    }
     setAutoLoggingIn(false)
     setError(data.error || 'Auto-login failed. Please sign in manually.')
   }

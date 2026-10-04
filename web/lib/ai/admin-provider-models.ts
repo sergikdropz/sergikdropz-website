@@ -1,5 +1,11 @@
 import type { AdminAiChatProvider } from '@/lib/ai/admin-chat-types'
-import { CROWELOGIC_DEFAULT_MODEL, CROWELOGIC_STATIC_MODELS, resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
+import {
+  CROWELOGIC_DEFAULT_MODEL,
+  CROWELOGIC_STATIC_MODELS,
+  crowelogicChatBlockReason,
+  resolveCrowelogicEnv,
+  crowelogicOpenAiUrl,
+} from '@/lib/ai/crowelogic-env'
 import { DEFAULT_OLLAMA_MODEL, STATIC_OLLAMA_MODEL_HINTS } from '@/lib/ai/ollama-defaults'
 import { getOllamaApiTagsState, ollamaTagMatchesPreference } from '@/lib/ai/ollama-model-resolve'
 
@@ -130,8 +136,7 @@ export async function listModelsForAdminProvider(provider: AdminAiChatProvider):
           modelIds: fallback,
           source: 'static',
           status: 'degraded',
-          message:
-            'Set CROWELOGIC_API_KEY or CROWE_API_KEY — static CroweLM defaults. Start local bridge at 127.0.0.1:8011 or set CROWELOGIC_BASE_URL.',
+          message: crowelogicChatBlockReason(crowe) ?? 'CroweLM chat is not available.',
         }
       }
       const ids = await listOpenAiCompatibleModelIds(

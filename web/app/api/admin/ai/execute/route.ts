@@ -23,6 +23,17 @@ type ExecuteBody = {
   approve?: boolean
   planSteps?: OrchestratorStep[]
   idempotencyKey?: string
+  chatSessionId?: string
+}
+
+function stampBrowserChat(steps: OrchestratorStep[], chatSessionId: string | undefined): OrchestratorStep[] {
+  const id = chatSessionId?.trim()
+  if (!id) return steps
+  return steps.map((step) =>
+    step.tool === 'admin_browser'
+      ? { ...step, payload: { ...step.payload, chatSessionId: id } }
+      : step,
+  )
 }
 
 function getErrorMessage(error: unknown): string {
@@ -117,6 +128,11 @@ export async function POST(request: NextRequest) {
         },
       ]
     }
+
+    stepsToRun = stampBrowserChat(
+      stepsToRun,
+      typeof body.chatSessionId === 'string' ? body.chatSessionId : undefined,
+    )
 
     if (!stepsToRun.length) {
       return NextResponse.json({ error: 'No executable steps provided' }, { status: 400 })

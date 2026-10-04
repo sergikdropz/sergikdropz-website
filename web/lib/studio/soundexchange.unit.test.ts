@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLocalLookupResult,
   createSoundExchangeClient,
+  isSergikMintedIsrc,
   latestSubmissionByIsrc,
   mergeRegistryStats,
   normalizeIsrcInput,
+  sxDirectAccount,
+  trackToSxDirectSubmission,
 } from '@/lib/studio/soundexchange'
 
 describe('soundexchange helpers', () => {
@@ -62,5 +65,26 @@ describe('soundexchange helpers', () => {
     expect(result.success).toBe(true)
     expect(result.mode).toBe('local')
     expect(result.submissionId).toContain('sx-local-')
+  })
+
+  it('builds an SX Direct repertoire payload from a minted Catalog track', () => {
+    expect(isSergikMintedIsrc('QT-A53-26-00001')).toBe(true)
+    expect(isSergikMintedIsrc('QZES72569811')).toBe(false)
+    const account = sxDirectAccount()
+    expect(account.homeUrl).toContain('sxdirect.soundexchange.com')
+    expect(account.registrantId).toBe('2181363681')
+    const payload = trackToSxDirectSubmission(
+      {
+        isrc_full: 'QT-A53-26-00001',
+        title: 'Elevator Musik',
+        duration: 214,
+        explicit: false,
+        contributors: [{ name: 'SERGIK', role: 'primary' }],
+      },
+      { album_artist: 'SERGIK', title: 'UTOPIA', release_date: '2026-10-30', genre: 'House' },
+    )
+    expect(payload?.isrc).toBe('QTA532600001')
+    expect(payload?.releaseTitle).toBe('UTOPIA')
+    expect(payload?.sxDirect?.rightsOwnerSxid).toBe('SX1102Q6ZJ')
   })
 })

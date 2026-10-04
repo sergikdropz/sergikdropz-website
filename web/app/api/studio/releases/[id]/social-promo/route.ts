@@ -1,12 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { artworkSrcForCanvas } from '@/lib/media/canvas-artwork-load'
 import {
   generateSocialPromoPlan,
   mergeSocialPromoPlan,
   parseSocialPromoPlan,
   summarizeSocialPromo,
 } from '@/lib/studio/social-promo'
+
+function releaseArtworkResolved(release: Record<string, unknown>): {
+  artwork_url: string | null
+  artwork_resolved: string | null
+} {
+  const marketing =
+    release.marketing_copy && typeof release.marketing_copy === 'object'
+      ? (release.marketing_copy as Record<string, unknown>)
+      : {}
+  const revelator =
+    marketing.revelator_delivery && typeof marketing.revelator_delivery === 'object'
+      ? (marketing.revelator_delivery as Record<string, unknown>)
+      : {}
+  const raw =
+    String(release.artwork_url || release.artwork_dsp_url || marketing.artwork_dsp_url || revelator.artwork_dsp_url || '').trim() ||
+    null
+  const artwork_resolved = raw ? artworkSrcForCanvas(raw) || null : null
+  return { artwork_url: raw, artwork_resolved }
+}
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -22,7 +42,7 @@ async function loadReleaseBundle(releaseId: string) {
   const { data, error } = await supabase
     .from('distribution_releases')
     .select(
-      'id, title, album_artist, release_date, artwork_url, marketing_copy, social_promo, distributor_status'
+      'id, title, album_artist, release_date, artwork_url, artwork_dsp_url, marketing_copy, social_promo, distributor_status'
     )
     .eq('id', releaseId)
     .maybeSingle()
@@ -98,13 +118,16 @@ export async function GET(_request: NextRequest, context: Ctx) {
         ? (release.marketing_copy as { social_caption?: string })
         : {}
 
+    const artwork = releaseArtworkResolved(release)
+
     return NextResponse.json({
       release: {
         id: release.id,
         title: release.title,
         album_artist: release.album_artist,
         release_date: release.release_date,
-        artwork_url: release.artwork_url,
+        artwork_url: artwork.artwork_url,
+        artwork_resolved: artwork.artwork_resolved,
         distributor_status: release.distributor_status,
         social_caption: marketingCopy.social_caption || null,
       },

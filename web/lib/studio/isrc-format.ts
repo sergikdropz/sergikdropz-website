@@ -97,6 +97,17 @@ export function formatDurationMmSs(seconds: number | null | undefined): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+/** YouTube description / chapter stamp. Hours only when the video passes 60:00. */
+export function formatYoutubeTimestamp(seconds: number | null | undefined): string {
+  const total = durationToSeconds(seconds)
+  if (total == null) return ''
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 export type UsisrcLockerRow = {
   isrc: string
   title: string

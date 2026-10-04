@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
 import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
+import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
 
 interface Track {
   id: string
@@ -1982,6 +1983,7 @@ export default function DJMixerMode({
 
       {/* Context Menu */}
       {contextMenu?.visible && contextMenu.track && (
+        <FloatingMenuPortal>
         <div
           ref={contextMenuClamp.ref}
           {...contextMenuClamp.rootProps}
@@ -2007,10 +2009,12 @@ export default function DJMixerMode({
           </button>
           </div>
         </div>
+        </FloatingMenuPortal>
       )}
 
       {/* Track Load Confirmation Modal */}
       {pendingTrackLoad && (
+        <FloatingMenuPortal>
         <div
           className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4"
           onClick={cancelLoadTrack}
@@ -2054,6 +2058,7 @@ export default function DJMixerMode({
             </div>
           </div>
         </div>
+        </FloatingMenuPortal>
       )}
 
       <div className="container mx-auto px-2 pb-20 pt-2 bg-black/90">
@@ -3486,6 +3491,7 @@ export default function DJMixerMode({
 
       {/* Hot Cues Modal */}
       {showHotCuesModal && (
+        <FloatingMenuPortal>
         <div
           className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4"
           onClick={() => setShowHotCuesModal(null)}
@@ -3564,10 +3570,12 @@ export default function DJMixerMode({
             </div>
           </div>
         </div>
+        </FloatingMenuPortal>
       )}
 
       {/* Menu Panel */}
       {showMenu && (
+        <FloatingMenuPortal>
         <div className="fixed bottom-24 left-4 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 z-[150] min-w-[200px]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-white font-semibold">DJ Menu</h3>
@@ -3614,6 +3622,7 @@ export default function DJMixerMode({
             </button>
           </div>
         </div>
+        </FloatingMenuPortal>
       )}
 
       {/* Hidden audio elements */}

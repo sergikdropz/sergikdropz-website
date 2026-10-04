@@ -5,6 +5,7 @@
  * `layout: 'vinyl'` renders a spinning 33⅓ RPM disc + CTA for IG Link stickers.
  */
 
+import { loadArtworkForCanvas } from '@/lib/media/canvas-artwork-load'
 import { ensureStoryMp4 } from '@/lib/shares/ensure-mp4'
 import { VINYL_DEG_PER_SEC } from '@/lib/shares/vinyl-spin-clock'
 
@@ -132,17 +133,6 @@ export function proxiedArtworkUrl(artworkUrl: string, pageOrigin?: string): stri
     /* ignore */
   }
   return `/api/shares/artwork-proxy?src=${encodeURIComponent(raw)}`
-}
-
-function loadImage(url: string): Promise<HTMLImageElement | null> {
-  if (!url || typeof Image === 'undefined') return Promise.resolve(null)
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = url
-  })
 }
 
 function drawCoverFit(
@@ -547,8 +537,7 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not create canvas context')
 
-  const artUrl = input.artworkUrl ? proxiedArtworkUrl(input.artworkUrl) : ''
-  const artwork = artUrl ? await loadImage(artUrl) : null
+  const artwork = input.artworkUrl ? await loadArtworkForCanvas(input.artworkUrl) : null
 
   const audio = new Audio()
   audio.crossOrigin = 'anonymous'

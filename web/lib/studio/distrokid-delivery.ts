@@ -6,9 +6,10 @@
 
 import { DEFAULT_LABEL_NAME, dspStoreLabel, isDspStoreId } from '@/lib/studio/constants'
 import type { AggregatorHealth } from '@/lib/studio/distributor'
-import { validateISRC } from '@/lib/studio/isrc-format'
+import { US_ISRC_REGISTRANT, validateISRC } from '@/lib/studio/isrc-format'
 import { TRACK_LANGUAGES } from '@/lib/studio/dsp-package'
 import { namesForRole, parseContributors } from '@/lib/studio/track-credits'
+import { buildAppleMusicCreditLine } from '@/lib/studio/distrokid-apple-credits'
 import { seedWriterLegalRows, writerLegalNameIssues } from '@/lib/studio/songwriter'
 
 export const DISTROKID_UPLOAD_LEAD_DAYS = 28
@@ -48,6 +49,8 @@ export type DistroKidPacketTrackInput = {
   isrc?: string | null
   wav_url?: string | null
   explicit?: boolean | null
+  instrumental?: boolean | null
+  ai_generated?: boolean | null
   contributors?: unknown
   writer_legal_names?: string | null
   preview_start_seconds?: number | null
@@ -80,9 +83,14 @@ export type DistroKidPacketTrack = {
   featuring: string
   songwriters: string
   explicit: boolean
+  instrumental: boolean
+  ai_generated: boolean
   isrc: string
   wav_url: string
   preview_start_seconds: number | null
+  apple_performer_name: string
+  apple_performer_instrument: string
+  apple_producer_name: string
 }
 
 export type DistroKidPacket = {
@@ -187,6 +195,33 @@ export function resolveDeliveryPipe(health: Pick<AggregatorHealth, 'label' | 'dr
 export function mapDistroKidGenre(value: string | null | undefined): string {
   const text = clean(value)
   if (!text) return ''
+  return GENRE_MAP[text.toLowerCase()] || text
+}
+
+/** DistroKid secondary dropdown options are narrower than Studio subgenres. */
+const SECONDARY_GENRE_MAP: Record<string, string> = {
+  // DistroKid Dance secondaries vary by account; Boogie maps to House (Disco often absent).
+  boogie: 'House',
+  disco: 'Disco',
+  funk: 'Funk',
+  funky: 'Funk',
+  house: 'House',
+  'soulful house': 'House',
+  'deep house': 'House',
+  'deep n funky': 'House',
+  techno: 'Techno',
+  trance: 'Trance',
+  electro: 'Electro',
+  'drum and bass': 'Drum & Bass',
+  jungle: 'Drum & Bass',
+}
+
+export function mapDistroKidSecondaryGenre(value: string | null | undefined): string {
+  const text = clean(value)
+  if (!text) return ''
+  const mapped = SECONDARY_GENRE_MAP[text.toLowerCase()]
+  if (mapped) return mapped
+  // Fall back to primary genre map, then raw text for DistroKid option match.
   return GENRE_MAP[text.toLowerCase()] || text
 }
 
@@ -335,7 +370,7 @@ export function buildDistroKidPacket(input: DistroKidPacketReleaseInput): Distro
   const date = isoDate(clean(input.release_date))
   const artwork = clean(input.artwork_dsp_url) || clean(input.artwork_url)
   const primaryGenre = mapDistroKidGenre(input.genre)
-  const secondaryGenre = mapDistroKidGenre(input.subgenre)
+  const secondaryGenre = mapDistroKidSecondaryGenre(input.subgenre)
   const upc = clean(input.upc)
 
   if (!title) blockers.push('Release title is required.')
@@ -371,7 +406,12 @@ export function buildDistroKidPacket(input: DistroKidPacketReleaseInput): Distro
     const trackTitle = clean(track.title) || `Track ${index + 1}`
     const contributors = parseContributors(track.contributors)
     const primaries = namesForRole(contributors, 'primary')
-    const featuring = namesForRole(contributors, 'featured').join(', ')
+    // DistroKid featuring is one billing line per slot; join with " and " when Catalog has "X" + "the Y".
+    const featuringNames = namesForRole(contributors, 'featured')
+    const featuring =
+      featuringNames.length === 2 && /^the\s+/i.test(featuringNames[1] || '')
+        ? `${featuringNames[0]} and ${featuringNames[1]}`
+        : featuringNames.join(', ')
     const legalRows = seedWriterLegalRows(track.contributors, track.writer_legal_names)
     const songwriters = legalRows.map((row) => clean(row.legal)).filter(Boolean).join(', ')
     const legalIssues = writerLegalNameIssues(track.writer_legal_names, [], track.contributors)
@@ -381,10 +421,17 @@ export function buildDistroKidPacket(input: DistroKidPacketReleaseInput): Distro
     const preview = Number.isFinite(previewRaw) && previewRaw >= 0 ? Math.round(previewRaw) : null
 
     if (!clean(track.title)) blockers.push(`Track ${index + 1} needs a title.`)
-    if (!isrc) blockers.push(`${trackTitle}: ISRC is required. Use your own codes — do not let DistroKid mint new ones.`)
+    if (!isrc) blockers.push(`${trackTitle}: ISRC is required. Mint QTA53 in Release Studio — do not let DistroKid mint.`)
     else if (!validateISRC(isrc)) blockers.push(`${trackTitle}: ISRC “${isrc}” is not valid.`)
+    else if (!isrc.startsWith(US_ISRC_REGISTRANT.prefix)) {
+      blockers.push(
+        `${trackTitle}: ISRC must be a SERGIK ${US_ISRC_REGISTRANT.prefix} code from Release Studio — DistroKid must not mint.`,
+      )
+    }
     if (!wav) blockers.push(`${trackTitle}: WAV master is missing.`)
     for (const issue of legalIssues) blockers.push(`${trackTitle}: ${issue}`)
+
+    const apple = buildAppleMusicCreditLine(track)
 
     return {
       track_number: Number(track.track_number) || index + 1,
@@ -393,9 +440,14 @@ export function buildDistroKidPacket(input: DistroKidPacketReleaseInput): Distro
       featuring,
       songwriters,
       explicit: Boolean(track.explicit),
+      instrumental: Boolean(track.instrumental),
+      ai_generated: Boolean(track.ai_generated),
       isrc,
       wav_url: wav,
       preview_start_seconds: preview,
+      apple_performer_name: apple.performer_name,
+      apple_performer_instrument: apple.performer_instrument,
+      apple_producer_name: apple.producer_name,
     }
   })
 
@@ -434,8 +486,11 @@ export function buildDistroKidPacket(input: DistroKidPacketReleaseInput): Distro
     'Tracks',
     ...packetTracks.map(
       (track) =>
-        `${track.track_number}. ${track.title} | artist ${track.artist}${track.featuring ? ` feat. ${track.featuring}` : ''} | songwriters ${track.songwriters || '—'} | ISRC ${track.isrc || '—'} | explicit ${track.explicit ? 'yes' : 'no'}${track.preview_start_seconds != null ? ` | preview ${track.preview_start_seconds}s` : ''}`,
+        `${track.track_number}. ${track.title} | artist ${track.artist}${track.featuring ? ` feat. ${track.featuring}` : ''} | songwriters ${track.songwriters || '—'} | ISRC ${track.isrc || '—'} | explicit ${track.explicit ? 'yes' : 'no'} | instrumental ${track.instrumental ? 'yes' : 'no'} | AI ${track.ai_generated ? 'yes' : 'no'}${track.preview_start_seconds != null ? ` | preview ${track.preview_start_seconds}s` : ''} | WAV ${track.wav_url || '—'}`,
     ),
+    '',
+    'Do not enable DistroKid Social Media Pack — SERGIK UGC is first-party.',
+    'Enter SERGIK-minted ISRCs from Release Studio (QTA53). DistroKid must not mint.',
   ]
   if (blockers.length) {
     lines.push('', 'Fix before upload', ...blockers.map((item) => `- ${item}`))

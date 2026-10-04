@@ -39,6 +39,7 @@ export async function GET(
     messages: result.messages,
     review: result.review,
     tracks: result.tracks,
+    context: result.context,
     expiresAt: result.invite.expires_at,
   })
 }

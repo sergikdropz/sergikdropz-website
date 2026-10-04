@@ -17,6 +17,13 @@ export type AdminAiTool =
   | 'update_copyright_checklist'
   | 'assign_isrcs'
   | 'create_distribution_release_draft'
+  | 'query_intelligence_harness'
+  | 'query_sergikai_chat'
+  | 'query_crowe_creative'
+  | 'audit_music_contract'
+  | 'run_meta_promo_pipeline'
+  | 'admin_browser'
+  | 'query_platform_growth_snapshot'
 
 export type ToolRiskTier = 'tier_1_draft' | 'tier_2_operational'
 
@@ -41,6 +48,13 @@ export const TOOL_POLICY: Record<AdminAiTool, ToolPolicy> = {
   update_copyright_checklist: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   assign_isrcs: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   create_distribution_release_draft: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  query_intelligence_harness: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
+  query_sergikai_chat: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  query_crowe_creative: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  audit_music_contract: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
+  run_meta_promo_pipeline: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  admin_browser: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  query_platform_growth_snapshot: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
 }
 
 export function isAllowedTool(value: string): value is AdminAiTool {

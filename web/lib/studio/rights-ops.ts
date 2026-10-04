@@ -2,6 +2,8 @@ import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import {
   equalSplitPercentages,
   normalizeSplitRows,
+  splitsAreSided,
+  sumSplitPercentage,
   type SplitRow,
 } from '@/lib/studio/import-parse'
 import { namesForRole, parseContributors } from '@/lib/studio/track-credits'
@@ -31,6 +33,39 @@ export type RightsTrackLike = {
   writer_legal_names?: string | null
   mechanical_licensed?: boolean | null
   contains_samples?: boolean | null
+  clearance?: TrackClearance | null
+}
+
+export type ClearanceSlotStatus = 'missing' | 'on_file'
+
+export type TrackClearance = {
+  sample_master?: { status?: ClearanceSlotStatus | null; reference?: string | null }
+  sample_composition?: { status?: ClearanceSlotStatus | null; reference?: string | null }
+  mechanical?: { status?: ClearanceSlotStatus | null; reference?: string | null }
+}
+
+export function parseTrackClearance(raw: unknown): TrackClearance {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const source = raw as Record<string, unknown>
+  const slot = (key: keyof TrackClearance) => {
+    const value = source[key]
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const row = value as { status?: unknown; reference?: unknown }
+    const status: ClearanceSlotStatus | null =
+      row.status === 'on_file' ? 'on_file' : row.status === 'missing' ? 'missing' : null
+    const reference = String(row.reference || '').trim()
+    if (!status && !reference) return undefined
+    return { status: status || (reference ? 'on_file' : 'missing'), reference }
+  }
+  return {
+    sample_master: slot('sample_master'),
+    sample_composition: slot('sample_composition'),
+    mechanical: slot('mechanical'),
+  }
+}
+
+export function clearanceOnFile(slot: TrackClearance[keyof TrackClearance]): boolean {
+  return slot?.status === 'on_file' && Boolean(String(slot.reference || '').trim())
 }
 
 export type SplitSummary = {
@@ -66,29 +101,51 @@ export function publisherFromAlbumArtist(albumArtist?: string | null): string {
   return `${head} Music`
 }
 
+function splitLabel(rows: SplitRow[]): string {
+  const parts = rows
+    .filter((row) => row.name)
+    .map((row) => {
+      const legal = row.legal_name ? ` (${row.legal_name})` : ''
+      const pro = row.pro ? ` ${row.pro}` : ''
+      return `${row.name}${legal}${pro} ${Math.round(row.percentage * 100) / 100}%`
+    })
+  const total = Math.round(sumSplitPercentage(rows) * 100) / 100
+  return parts.length ? `${parts.join(' / ')} · ${total}%` : `${total}%`
+}
+
 export function summarizeSplits(raw: unknown): SplitSummary {
   const rows = normalizeSplitRows(raw)
   if (!rows.length) {
     return { total: null, ok: false, names: [], label: 'No splits' }
   }
-  let total = 0
   const names: string[] = []
   for (const row of rows) {
     if (row.name) names.push(row.name)
-    total += row.percentage
   }
+  if (splitsAreSided(rows)) {
+    const master = rows.filter((row) => row.copyright === 'master')
+    const composition = rows.filter((row) => row.copyright === 'composition')
+    const masterTotal = sumSplitPercentage(master)
+    const compositionTotal = sumSplitPercentage(composition)
+    const ok =
+      master.some((row) => row.name) &&
+      composition.some((row) => row.name) &&
+      Math.abs(masterTotal - 100) < 0.01 &&
+      Math.abs(compositionTotal - 100) < 0.01
+    return {
+      total: masterTotal,
+      ok,
+      names,
+      label: `Master ${splitLabel(master)} · Composition ${splitLabel(composition)}`,
+    }
+  }
+  const total = sumSplitPercentage(rows)
   const ok = Math.abs(total - 100) < 0.01 && names.length > 0
-  const parts = rows
-    .filter((row) => row.name)
-    .map((row) => {
-      const legal = row.legal_name ? ` (${row.legal_name})` : ''
-      return `${row.name}${legal} ${Math.round(row.percentage * 100) / 100}%`
-    })
   return {
     total,
     ok,
     names,
-    label: parts.length ? `${parts.join(' / ')} · ${Math.round(total)}%` : `${Math.round(total)}%`,
+    label: splitLabel(rows),
   }
 }
 
@@ -344,17 +401,28 @@ function snapshotObject(raw: unknown): Record<string, unknown> {
 
 export function mergeRightsPacketSnapshot(
   currentSnapshot: unknown,
-  packet: { mechanical_licensed?: boolean | null; contains_samples?: boolean | null },
+  packet: {
+    mechanical_licensed?: boolean | null
+    contains_samples?: boolean | null
+    clearance?: TrackClearance | null
+  },
 ): Record<string, unknown> {
   const snap = snapshotObject(currentSnapshot)
   if (typeof packet.mechanical_licensed === 'boolean') snap.mechanical_licensed = packet.mechanical_licensed
   if (typeof packet.contains_samples === 'boolean') snap.contains_samples = packet.contains_samples
+  if (packet.clearance && typeof packet.clearance === 'object') {
+    snap.clearance = parseTrackClearance({
+      ...(snapshotObject(snap.clearance) as TrackClearance),
+      ...packet.clearance,
+    })
+  }
   return snap
 }
 
 export function hydrateRightsPacket<T extends Record<string, unknown>>(track: T): T & {
   mechanical_licensed: boolean | null
   contains_samples: boolean | null
+  clearance: TrackClearance
 } {
   const snap = snapshotObject(track.sonic_snapshot)
   const mechanical =
@@ -369,7 +437,8 @@ export function hydrateRightsPacket<T extends Record<string, unknown>>(track: T)
       : typeof snap.contains_samples === 'boolean'
         ? snap.contains_samples
         : false
-  return { ...track, mechanical_licensed: mechanical, contains_samples: samples }
+  const clearance = parseTrackClearance(track.clearance ?? snap.clearance)
+  return { ...track, mechanical_licensed: mechanical, contains_samples: samples, clearance }
 }
 
 export function buildProPacketText(opts: {

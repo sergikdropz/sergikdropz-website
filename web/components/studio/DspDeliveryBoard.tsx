@@ -29,6 +29,13 @@ import type { RightsActionFocus } from '@/lib/studio/rights-action-target'
 import Link from 'next/link'
 import { FaCheckCircle, FaExternalLinkAlt, FaLink, FaMagic, FaPlus, FaRocket, FaTrash, FaSync } from 'react-icons/fa'
 import StreamContinuityPanel from './StreamContinuityPanel'
+import { useCopyStepIntelligenceStack } from '@/hooks/useCopyStepIntelligenceStack'
+import { dispatchAdminAiPrompt, openAdminAiAssistant } from '@/lib/admin-ai-client'
+import {
+  buildDspDeliveryAdminAiPrompt,
+  studioIntelligenceContextLine,
+  studioIntelligenceHarnessQuery,
+} from '@/lib/studio/studio-intelligence-actions'
 
 export type StoreLinkRow = {
   id: string
@@ -113,6 +120,12 @@ export default function DspDeliveryBoard({
     input?.focus?.({ preventScroll: true })
     onFocusHandled?.()
   }, [focusRequest, onFocusHandled])
+
+  const intelStack = useCopyStepIntelligenceStack(
+    releaseId,
+    Boolean(releaseId),
+    studioIntelligenceHarnessQuery('dsp_connect_stores'),
+  )
 
   const [newStore, setNewStore] = useState<DspStoreId>(DSP_STORES[0].id)
   const [newUrl, setNewUrl] = useState('')
@@ -327,6 +340,21 @@ export default function DspDeliveryBoard({
   })
   const [hint, setHint] = useState<string | null>(null)
   const [coverage, setCoverage] = useState<DspCoverage | null>(null)
+
+  function openDspDeliveryInAdminAi(
+    surface: 'dsp_connect_stores' | 'dsp_fill_missing' | 'dsp_check_delivery',
+  ) {
+    dispatchAdminAiPrompt(
+      buildDspDeliveryAdminAiPrompt({
+        releaseId,
+        releaseTitle: title,
+        surface,
+        hint: hint || undefined,
+      }),
+    )
+    openAdminAiAssistant()
+  }
+
   const matchCards = useMemo(() => artistAlreadyOnStoreCards(), [])
   const currentArtistIds: Record<ArtistMatchField, string> = {
     spotify_artist_id: spotifyArtistId || '',
@@ -428,8 +456,8 @@ export default function DspDeliveryBoard({
     setNewUrl('')
   }
 
-  async function connectStores(e: React.FormEvent) {
-    e.preventDefault()
+  async function connectStores(e?: React.FormEvent) {
+    e?.preventDefault()
     setConnecting(true)
     setError(null)
     setMessage(null)
@@ -1016,7 +1044,14 @@ export default function DspDeliveryBoard({
             type="button"
             data-testid="dsp-check-delivery-status"
             disabled={checkingStatus}
-            onClick={() => void checkDeliveryStatus()}
+            title={`${studioIntelligenceContextLine('dsp_check_delivery')} · ⌘/Alt-click to expand in Admin AI`}
+            onClick={(e) => {
+              if (e.metaKey || e.altKey) {
+                openDspDeliveryInAdminAi('dsp_check_delivery')
+                return
+              }
+              void checkDeliveryStatus()
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-200 text-sm font-medium disabled:opacity-50"
           >
             <FaSync className={checkingStatus ? 'animate-spin text-xs' : 'text-xs'} />
@@ -1223,6 +1258,29 @@ export default function DspDeliveryBoard({
               (Spotify, Apple, YouTube, song.link, MusicBrainz). Looks up existing store pages —
               does not upload audio to an external distributor.
             </p>
+            {releaseId ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                {intelStack.loading ? (
+                  <span className="text-cyan-400/80">Probing intelligence stack…</span>
+                ) : intelStack.sonicUnified ? (
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-950/30 px-2 py-0.5 text-emerald-200/90">
+                    {intelStack.sonicUnified}
+                  </span>
+                ) : null}
+                {intelStack.summary ? (
+                  <span className="line-clamp-1 max-w-xl" title={intelStack.summary}>
+                    {intelStack.summary}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={intelStack.openInAdminAi}
+                  className="text-cyan-300/80 hover:text-cyan-200"
+                >
+                  Open harness
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-1.5">
             <ProviderPill label="Apple Music" ready={providers.apple !== false} />
@@ -1234,7 +1292,13 @@ export default function DspDeliveryBoard({
           </div>
         </div>
 
-        <form onSubmit={connectStores} className="flex flex-wrap gap-2">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void connectStores(e)
+          }}
+          className="flex flex-wrap gap-2"
+        >
           <input
             type="url"
             value={seedUrl}
@@ -1243,8 +1307,16 @@ export default function DspDeliveryBoard({
             className="flex-1 min-w-[240px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white"
           />
           <button
-            type="submit"
+            type="button"
             disabled={connecting}
+            title={`${studioIntelligenceContextLine('dsp_connect_stores')} · ⌘/Alt-click to expand in Admin AI`}
+            onClick={(e) => {
+              if (e.metaKey || e.altKey) {
+                openDspDeliveryInAdminAi('dsp_connect_stores')
+                return
+              }
+              void connectStores()
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50"
           >
             <FaSync className={connecting ? 'animate-spin text-xs' : 'text-xs'} />
@@ -1253,8 +1325,15 @@ export default function DspDeliveryBoard({
           <button
             type="button"
             disabled={connecting}
-            onClick={() => void fillMissingStores()}
             data-testid="dsp-fill-missing"
+            title={`${studioIntelligenceContextLine('dsp_fill_missing')} · ⌘/Alt-click to expand in Admin AI`}
+            onClick={(e) => {
+              if (e.metaKey || e.altKey) {
+                openDspDeliveryInAdminAi('dsp_fill_missing')
+                return
+              }
+              void fillMissingStores()
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-500/50 bg-violet-950/30 hover:bg-violet-900/40 text-violet-100 text-sm font-medium disabled:opacity-50"
           >
             <FaPlus className="text-xs" />
