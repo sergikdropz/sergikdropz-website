@@ -3488,7 +3488,7 @@ function MusicLibraryMain({
         </div>
 
         <div className="mt-8 mb-2 sm:mt-10 sm:mb-4 text-center">
-          <SocialLinks />
+          <SocialLinks replaceLinktreeWithInstall />
         </div>
 
       </div>

@@ -1,3 +1,4 @@
+import { applyKnownPrimaryGoal, type KnownGoalContext } from '@/lib/ai/known-primary-goal'
 import { getSkillById, getSkillByTool, inferSkillFromIntent } from '@/lib/ai/skills/registry'
 import { isMetaPromoIntent } from '@/lib/meta/promo-workflow'
 
@@ -44,10 +45,15 @@ function placeholderForType(type: 'string' | 'number' | 'boolean' | 'object' | '
   return 'TBD'
 }
 
-export function buildExecutionPlan(tool: PlannerTool, payload: Record<string, unknown>): ExecutionPlan {
+export function buildExecutionPlan(
+  tool: PlannerTool,
+  payload: Record<string, unknown>,
+  ctx?: KnownGoalContext | null
+): ExecutionPlan {
   const skill = getSkillByTool(tool)
   const schema = skill?.inputSchema ?? {}
-  const suggestedPayload: Record<string, unknown> = { ...payload }
+  const hydrated = applyKnownPrimaryGoal(tool, payload, ctx)
+  const suggestedPayload: Record<string, unknown> = { ...hydrated }
 
   for (const [field, config] of Object.entries(schema)) {
     if (suggestedPayload[field] === undefined || suggestedPayload[field] === null) {
@@ -58,7 +64,7 @@ export function buildExecutionPlan(tool: PlannerTool, payload: Record<string, un
   const missingRequiredFields = Object.entries(schema)
     .filter(([, config]) => Boolean(config.required))
     .map(([field]) => field)
-    .filter((field) => payload[field] === undefined || payload[field] === null || payload[field] === '')
+    .filter((field) => hydrated[field] === undefined || hydrated[field] === null || hydrated[field] === '')
 
   return {
     skill: skill

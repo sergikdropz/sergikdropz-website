@@ -1634,9 +1634,9 @@ export default function ExpandedPlayerControls({
             </div>
           ) : null}
           {/* Mobile: one deck's transport+EQ via A/B toggle; XF full width above. */}
-          <div className="flex flex-col gap-1.5 md:hidden" data-mixer-mobile="">
+          <div className="flex flex-col gap-1.5 lg:hidden" data-mixer-mobile="">
             <div className="w-full min-w-0">{renderMixCrossfader()}</div>
-            <div className="flex w-full items-center gap-2">
+            <div className="flex w-full flex-wrap items-center justify-center gap-2">
               {renderDeckTempo(mobileMixerDeck)}
               <div
                 className="flex shrink-0 overflow-hidden rounded-lg border border-gray-700 bg-gray-900/80"
@@ -1676,7 +1676,7 @@ export default function ExpandedPlayerControls({
 
           {/* Desktop / tablet: same 2-col grid as waveforms — SET/CUE centered under each deck. */}
           <div
-            className="relative hidden w-full items-center gap-3 md:grid md:grid-cols-2"
+            className="relative hidden w-full items-center gap-3 lg:grid lg:grid-cols-2"
             data-mixer-desktop-strip=""
           >
             {/* Deck A — ORIG left edge, SET/CUE column-centered, EQ toward XF */}

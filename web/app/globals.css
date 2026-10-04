@@ -759,6 +759,31 @@ textarea,
   }
 }
 
+/*
+ * Mini-player layout.
+ * Phones, and short landscape handhelds (AYN Thor top 1920×1080 and bottom
+ * 1240×1080), are wide enough for the sm/md row but too short for it.
+ * A fixed 4rem bar plus a 60% scrubber clips prev / play / next off the screen.
+ * Stack the touch controls unless the window is both wide and tall.
+ */
+.player-mini-touch {
+  display: flex;
+}
+
+.player-mini-inline {
+  display: none;
+}
+
+@media (min-width: 1024px) and (min-height: 561px) {
+  .player-mini-touch {
+    display: none;
+  }
+
+  .player-mini-inline {
+    display: flex;
+  }
+}
+
 /* Tablet optimizations */
 @media (min-width: 641px) and (max-width: 1024px) {
   .container {

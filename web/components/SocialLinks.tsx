@@ -1,7 +1,13 @@
 import artistData from '@/data/artist.json'
 import { FaInstagram, FaYoutube, FaSpotify, FaSoundcloud, FaLink } from 'react-icons/fa'
+import AddToHomeScreenButton from '@/components/pwa/AddToHomeScreenButton'
 
-export default function SocialLinks() {
+type SocialLinksProps = {
+  /** Replace the Linktree icon with Add to Home Screen. */
+  replaceLinktreeWithInstall?: boolean
+}
+
+export default function SocialLinks({ replaceLinktreeWithInstall = false }: SocialLinksProps) {
   const platforms = [
     { 
       name: 'Instagram', 
@@ -35,9 +41,13 @@ export default function SocialLinks() {
     },
   ]
 
+  const visible = replaceLinktreeWithInstall
+    ? platforms.filter((platform) => platform.name !== 'Linktree')
+    : platforms
+
   return (
     <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-      {platforms.map((platform) => {
+      {visible.map((platform) => {
         const Icon = platform.icon
         return (
           <a
@@ -52,6 +62,7 @@ export default function SocialLinks() {
           </a>
         )
       })}
+      {replaceLinktreeWithInstall ? <AddToHomeScreenButton /> : null}
     </div>
   )
 }

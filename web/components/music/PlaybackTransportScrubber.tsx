@@ -105,7 +105,7 @@ const PlaybackTransportScrubberInner = forwardRef<PlaybackTransportScrubberHandl
       variant === 'mini-mobile'
         ? 'flex h-8 min-w-0 items-center gap-2'
         : variant === 'mini-desktop'
-          ? 'flex min-w-0 flex-1 basis-0 items-center gap-1.5 px-1 sm:min-w-[60%] sm:px-2'
+          ? 'flex min-w-0 flex-1 basis-0 items-center gap-1.5 px-1 sm:px-2'
           : 'flex w-full min-w-0 flex-1 items-center gap-2'
 
     return (

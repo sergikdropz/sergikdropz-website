@@ -157,6 +157,8 @@ export default function AdminAiBrowserDock({
   onExitWorkspace,
   persistExpanded = true,
   chatSessionId,
+  assistantActing = false,
+  taskNotice = null,
 }: {
   /** `side` = fill a right-hand column (standalone window). `stack` = strip under chat header. */
   layout?: AdminAiBrowserDockLayout
@@ -179,6 +181,10 @@ export default function AdminAiBrowserDock({
   persistExpanded?: boolean
   /** Chat tab id. Each id keeps its own page. Omit only for a shared fallback. */
   chatSessionId?: string
+  /** True while this chat's assistant turn is running. */
+  assistantActing?: boolean
+  /** In-progress or unfinished browser work, shown under the page title. */
+  taskNotice?: string | null
 } = {}) {
   const chatId = chatSessionId?.trim() || 'default'
   const chatIdRef = useRef(chatId)
@@ -241,6 +247,7 @@ export default function AdminAiBrowserDock({
   const wheelFlying = useRef(false)
   const resizeRef = useRef<{ startY: number; startH: number } | null>(null)
   const lastViewport = useRef('')
+  const assistantLockedRef = useRef(false)
   const zoomByChat = useRef<Record<string, number>>({})
   const [frameChatId, setFrameChatId] = useState(chatId)
   if (frameChatId !== chatId) {
@@ -556,6 +563,10 @@ export default function AdminAiBrowserDock({
       }
     }
     const onWheel = (event: WheelEvent) => {
+      if (assistantLockedRef.current) {
+        event.preventDefault()
+        return
+      }
       if (!frameRef.current?.running) return
       event.preventDefault()
       event.stopPropagation()
@@ -582,6 +593,7 @@ export default function AdminAiBrowserDock({
   const lastMove = useRef(0)
 
   function onPointer(event: PointerEvent<HTMLDivElement>, phase: 'move' | 'down' | 'up') {
+    if (assistantLockedRef.current) return
     if (!frame?.running) return
     if (phase === 'move' && event.buttons === 0) return
     if (phase === 'move' && Date.now() - lastMove.current < 40) return
@@ -595,6 +607,7 @@ export default function AdminAiBrowserDock({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (assistantLockedRef.current) return
     if (!frame?.running) return
     if (event.metaKey || event.ctrlKey) {
       if (event.key === '=' || event.key === '+' || event.key === '-' || event.key === '0') {
@@ -654,6 +667,8 @@ export default function AdminAiBrowserDock({
   }
 
   const youDrive = frame?.youDrive !== false
+  const assistantLocked = assistantActing && !youDrive
+  assistantLockedRef.current = assistantLocked
 
   const chromeBorder = studio ? 'border-zinc-800' : 'border-gray-800'
   const chromeMuted = studio ? 'text-zinc-400 hover:bg-zinc-800' : 'text-gray-300 hover:bg-gray-800'
@@ -698,7 +713,7 @@ export default function AdminAiBrowserDock({
           <>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || assistantLocked}
             onClick={() => void run({ action: 'back' })}
             className={`rounded px-1.5 py-0.5 text-[11px] disabled:opacity-40 ${chromeBtn}`}
           >
@@ -706,7 +721,7 @@ export default function AdminAiBrowserDock({
           </button>
           <button
             type="button"
-            disabled={busy || (!frame?.running && !address.trim())}
+            disabled={busy || assistantLocked || (!frame?.running && !address.trim())}
             onClick={() => {
               if (frame?.running) {
                 void run({ action: 'reload' })
@@ -727,13 +742,14 @@ export default function AdminAiBrowserDock({
               onChange={(event) => setAddress(event.target.value)}
               placeholder="https://"
               aria-label="Browser address"
+              readOnly={assistantLocked}
               className={`min-w-0 flex-1 rounded border px-2 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-600 ${
                 studio ? 'border-zinc-700 bg-zinc-950' : 'border-gray-700 bg-gray-950'
               }`}
             />
             <button
               type="submit"
-              disabled={busy || !address.trim()}
+              disabled={busy || assistantLocked || !address.trim()}
               className={`rounded px-2 py-1 text-[11px] font-medium disabled:opacity-40 ${
                 studio ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700' : 'bg-gray-800 text-gray-100 hover:bg-gray-700'
               }`}
@@ -745,7 +761,7 @@ export default function AdminAiBrowserDock({
             <button
               type="button"
               aria-label="Zoom out"
-              disabled={busy || zoom <= 0.5}
+              disabled={busy || assistantLocked || zoom <= 0.5}
               onClick={() => changeZoom(-1)}
               className={`rounded px-1.5 py-0.5 text-[12px] disabled:opacity-40 ${chromeBtn}`}
             >
@@ -754,7 +770,7 @@ export default function AdminAiBrowserDock({
             <button
               type="button"
               aria-label="Reset zoom"
-              disabled={busy}
+              disabled={busy || assistantLocked}
               onClick={() => changeZoom(0)}
               className={`rounded px-1 py-0.5 text-[10px] tabular-nums disabled:opacity-40 ${
                 studio ? 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
@@ -765,7 +781,7 @@ export default function AdminAiBrowserDock({
             <button
               type="button"
               aria-label="Zoom in"
-              disabled={busy || zoom >= 2}
+              disabled={busy || assistantLocked || zoom >= 2}
               onClick={() => changeZoom(1)}
               className={`rounded px-1.5 py-0.5 text-[12px] disabled:opacity-40 ${chromeBtn}`}
             >
@@ -812,6 +828,24 @@ export default function AdminAiBrowserDock({
         </div>
   )
 
+  const takeControlOverlay = assistantLocked ? (
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/55 px-6 text-center"
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+    >
+      <p className="max-w-xs text-[11px] text-gray-200">Assistant has the mouse</p>
+      <button
+        type="button"
+        onClick={() => void run({ action: 'drive', youDrive: true })}
+        className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black shadow-lg hover:bg-gray-100"
+      >
+        Take control
+      </button>
+    </div>
+  ) : null
+
   const pageBody = expanded ? (
           <div className={`space-y-1 p-2 ${side ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : ''}`}>
             <div className="flex min-w-0 shrink-0 gap-1 overflow-x-auto">
@@ -819,7 +853,7 @@ export default function AdminAiBrowserDock({
                 <button
                   key={home.label}
                   type="button"
-                  disabled={busy}
+                  disabled={busy || assistantLocked}
                   onClick={() => void run({ action: frame?.running ? 'navigate' : 'open', url: home.url })}
                   className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] disabled:opacity-40 ${
                     hydrate && hydrateDeskLabel(hydrate) === home.label
@@ -948,7 +982,7 @@ export default function AdminAiBrowserDock({
                 onPointerMove={(event) => onPointer(event, 'move')}
                 onPointerUp={(event) => onPointer(event, 'up')}
                 onKeyDown={onKeyDown}
-                className={`w-full cursor-default overflow-hidden rounded border bg-black outline-none focus:ring-1 focus:ring-amber-500/70 ${
+                className={`relative w-full cursor-default overflow-hidden rounded border bg-black outline-none focus:ring-1 focus:ring-amber-500/70 ${
                   studio ? 'border-zinc-800' : 'border-gray-800'
                 } ${side ? 'min-h-0 flex-1' : ''}`}
                 style={side ? undefined : { height: pageHeight }}
@@ -961,16 +995,21 @@ export default function AdminAiBrowserDock({
                   draggable={false}
                   className="pointer-events-none h-full w-full object-contain object-top"
                 />
+                {takeControlOverlay}
               </div>
             ) : (
               <div
                 ref={surfaceRef}
-                className={`px-1 py-6 text-center text-[11px] text-gray-500 ${side ? 'flex min-h-0 flex-1 items-center justify-center' : ''}`}
+                className={`relative px-1 py-6 text-center text-[11px] text-gray-500 ${side ? 'flex min-h-0 flex-1 items-center justify-center' : ''}`}
               >
                 {busy ? 'Starting Chromium…' : 'Blank until you pick a shortcut or enter an address. Sign-in stays in the Chromium profile on this Mac.'}
+                {takeControlOverlay}
               </div>
             )}
             {frame?.title ? <p className="shrink-0 truncate text-[10px] text-gray-500">{frame.title}</p> : null}
+            {taskNotice ? (
+              <p className="shrink-0 text-[10px] leading-snug text-amber-200/95">{taskNotice}</p>
+            ) : null}
           </div>
         ) : null
 

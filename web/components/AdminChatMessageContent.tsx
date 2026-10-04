@@ -1,6 +1,11 @@
 'use client'
 
 import { Fragment } from 'react'
+import {
+  parseAdminChatActionChoices,
+  stripAdminChatActionChoiceMarkup,
+  type AdminChatActionChoice,
+} from '@/lib/ai/admin-chat-action-choices'
 
 type LineParsed =
   | { kind: 'h'; level: 1 | 2 | 3; text: string }
@@ -133,7 +138,7 @@ function SectionBlocks({
  * Double newlines create a new “subject” block with extra vertical space.
  */
 export function AdminAssistantRichText({ content, compact = false }: { content: string; compact?: boolean }) {
-  const normalized = content.replace(/\r\n/g, '\n').trim()
+  const normalized = stripAdminChatActionChoiceMarkup(content).replace(/\r\n/g, '\n').trim()
   if (!normalized) return null
 
   const sections = normalized.split(/\n{2,}/).filter((s) => s.trim())
@@ -158,6 +163,46 @@ export function AdminAssistantRichText({ content, compact = false }: { content: 
           <SectionBlocks text={section} headingColor={headingColor} mutedClass="text-gray-200/95" />
         </section>
       ))}
+    </div>
+  )
+}
+
+export function AdminChatActionChoices({
+  content,
+  disabled,
+  onPick,
+}: {
+  content: string
+  disabled?: boolean
+  onPick: (message: string) => void
+}) {
+  const parsed = parseAdminChatActionChoices(content)
+  if (!parsed) return null
+
+  const buttonClass =
+    'rounded-md border border-cyan-800/80 bg-cyan-950/60 px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug text-cyan-50 hover:bg-cyan-900/80 disabled:cursor-not-allowed disabled:opacity-50'
+
+  const renderChoice = (choice: AdminChatActionChoice, emphasize = false) => (
+    <button
+      key={choice.id}
+      type="button"
+      disabled={disabled}
+      title={choice.message}
+      onClick={() => onPick(choice.message)}
+      className={
+        emphasize
+          ? 'rounded-md bg-cyan-700 px-2.5 py-1.5 text-left text-[12px] font-semibold leading-snug text-white hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-50'
+          : buttonClass
+      }
+    >
+      {choice.label}
+    </button>
+  )
+
+  return (
+    <div className="mt-3 flex flex-col gap-1.5 border-t border-gray-700/80 pt-3">
+      <div className="flex flex-wrap gap-1.5">{parsed.options.map((choice) => renderChoice(choice))}</div>
+      {parsed.proceedAll ? renderChoice(parsed.proceedAll, true) : null}
     </div>
   )
 }

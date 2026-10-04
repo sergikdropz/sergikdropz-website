@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect } from 'react'
+import { bindPwaInstallCapture } from '@/lib/pwa/install-prompt'
 import { registerServiceWorker } from '@/utils/serviceWorker'
+
+bindPwaInstallCapture()
 
 export default function ServiceWorkerRegistration() {
   useEffect(() => {

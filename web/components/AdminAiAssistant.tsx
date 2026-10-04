@@ -23,6 +23,11 @@ import { isContinuationOnlyUserMessage } from '@/lib/ai/chat-skill-context'
 import { suggestAnchorSnippetsFromUserText } from '@/lib/admin-ai-anchor-suggestions'
 import { shallowPayloadDiffLines } from '@/lib/admin-ai-exec-preview-diff'
 import { buildApprovalRows, payloadWithoutDryRun, type ApprovalRow } from '@/lib/ai/approval-rows'
+import { applyKnownPrimaryGoal, goalFromKnownRelease, type KnownGoalContext } from '@/lib/ai/known-primary-goal'
+import {
+  missingRequiredSkillFields,
+  resolveSkillForTool,
+} from '@/lib/ai/skills/resolve-skill-for-tool'
 import { formatReleaseCountdownLabel } from '@/lib/admin-ai-release-countdown'
 import { useClampedFixedMenuPosition } from '@/hooks/useClampedFixedMenuPosition'
 import PopupMenuDragHeader from '@/components/ui/PopupMenuDragHeader'
@@ -117,7 +122,11 @@ import {
 import { consumePendingAdminAiPrompt } from '@/lib/admin-ai-client'
 import { getStudioStepAiPrompt } from '@/lib/studio/admin-ai-step-prompts'
 import { sameOriginApiUrl } from '@/lib/same-origin-api'
-import { AdminAssistantRichText, AdminChatPlainText } from '@/components/AdminChatMessageContent'
+import {
+  AdminAssistantRichText,
+  AdminChatActionChoices,
+  AdminChatPlainText,
+} from '@/components/AdminChatMessageContent'
 
 /** Same-origin fetch with clearer errors when the dev server is down or the connection is refused. */
 function adminAiFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -253,6 +262,7 @@ type ChatResponse = {
   applyDiffs?: AdminAiApplyDiff[]
   memory?: AdminAiThreadMemory
   memoryPatch?: Record<string, unknown>
+  browserHold?: string | null
 }
 
 type ChatProvidersApi = {
@@ -835,6 +845,9 @@ export default function AdminAiAssistant({
   const [missionBlockerCount, setMissionBlockerCount] = useState(0)
 
   const [sending, setSending] = useState(false)
+  const sendLockRef = useRef(false)
+  const [browserLiveNote, setBrowserLiveNote] = useState<string | null>(null)
+  const [browserHolds, setBrowserHolds] = useState<Record<string, string>>({})
   const [approvalEditId, setApprovalEditId] = useState<string | null>(null)
   const [approvalEditDraft, setApprovalEditDraft] = useState('')
   const [approvalEditError, setApprovalEditError] = useState<string | null>(null)
@@ -948,6 +961,15 @@ export default function AdminAiAssistant({
   linksLiveRef.current = linkChips
 
   const visibleMessages = useMemo(() => sanitizeAdminChatMessagesForDisplay(messages), [messages])
+  const actionChoiceHostId = useMemo(() => {
+    for (let i = visibleMessages.length - 1; i >= 0; i -= 1) {
+      const message = visibleMessages[i]
+      if (!message || message.role === 'system') continue
+      if (message.role !== 'assistant') return null
+      return message.id
+    }
+    return null
+  }, [visibleMessages])
   const showQuickStart = useMemo(() => isFreshAdminChat(messages), [messages])
   const prioritySuggestionPool = useMemo(
     () => buildPrioritySuggestionPool(pageCtx?.pageContext ?? null),
@@ -1007,6 +1029,8 @@ export default function AdminAiAssistant({
   }, [playbookQuickStart, pageCtx?.pageContext])
 
   const studioMissionReleaseId = pageCtx?.pageContext?.studio?.releaseId
+  const studioReleaseTitle = pageCtx?.pageContext?.studio?.title
+  const studioActiveStep = pageCtx?.pageContext?.studio?.activeStep
 
   const mergeIntoActive = useCallback(
     (patch: Partial<AdminChatSession> | ((s: AdminChatSession) => Partial<AdminChatSession>)) => {
@@ -1023,6 +1047,17 @@ export default function AdminAiAssistant({
     },
     [activeSessionId]
   )
+
+  useEffect(() => {
+    if (threadMemory?.goal || !studioReleaseTitle) return
+    mergeIntoActive({
+      threadMemory: mergeThreadMemory(threadMemory ?? emptyThreadMemory(), {
+        goal: goalFromKnownRelease(studioReleaseTitle, studioActiveStep),
+        releaseId: studioMissionReleaseId,
+        releaseTitle: studioReleaseTitle,
+      }),
+    })
+  }, [threadMemory, studioReleaseTitle, studioActiveStep, studioMissionReleaseId, mergeIntoActive])
 
   useEffect(() => {
     const patch: Partial<AdminChatSession> = {}
@@ -2596,18 +2631,23 @@ export default function AdminAiAssistant({
     }
   }
 
+  function knownGoalContext(): KnownGoalContext {
+    return {
+      goal: threadMemory?.goal,
+      releaseTitle: threadMemory?.releaseTitle || studioReleaseTitle,
+      activeStep: studioActiveStep,
+    }
+  }
+
   function getSkillByTool(tool: ExecuteTool) {
-    return skills.find((skill) => skill.allowedTools.includes(tool)) ?? null
+    return resolveSkillForTool(skills, tool)
   }
 
   function getMissingRequiredFields(tool: ExecuteTool, payload: Record<string, unknown>) {
-    const skill = getSkillByTool(tool)
-    const schema = skill?.inputSchema
-    if (!schema) return []
-    return Object.entries(schema)
-      .filter(([, config]) => Boolean(config.required))
-      .map(([field]) => field)
-      .filter((field) => payload[field] === undefined || payload[field] === null || payload[field] === '')
+    return missingRequiredSkillFields(
+      getSkillByTool(tool),
+      applyKnownPrimaryGoal(tool, payload, knownGoalContext())
+    )
   }
 
   /** Plan + dry-run execute preview (shared by `/exec` submit and Studio quick actions). */
@@ -2615,7 +2655,7 @@ export default function AdminAiAssistant({
     tool: ExecuteTool,
     basePayload: Record<string, unknown>,
   ): Promise<AssistantActionResponse | undefined> {
-    let execPayload = basePayload
+    let execPayload = applyKnownPrimaryGoal(tool, basePayload, knownGoalContext())
     if (preferStrategyPackRefine && tool === 'draft_product_strategy_pack') {
       execPayload = { ...execPayload, refineWithLlm: true }
     }
@@ -2695,13 +2735,19 @@ export default function AdminAiAssistant({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canSend) return
+    await sendComposerTurn(input, true)
+  }
+
+  async function sendComposerTurn(rawText: string, fromComposer: boolean) {
+    if (sendLockRef.current || !enabled || sending) return
+    if (fromComposer && !canSend) return
 
     const turnSessionId = activeSessionId
-    const userText = input.trim()
-    const attachmentSnapshot = [...attachments]
-    const pickSnapshot = [...picks]
-    const linkSnapshot = [...linkChips]
+    const userText = rawText.trim()
+    if (!userText) return
+    const attachmentSnapshot = fromComposer ? [...attachments] : []
+    const pickSnapshot = fromComposer ? [...picks] : []
+    const linkSnapshot = fromComposer ? [...linkChips] : []
     const plain = composerPlainText(userText)
     const userLabel = composerDisplayText(userText, [
       ...pickSnapshot.map((pick) => ({ kind: 'element' as const, id: pick.id, label: pick.label })),
@@ -2709,10 +2755,13 @@ export default function AdminAiAssistant({
       ...linkSnapshot.map((link) => ({ kind: 'link' as const, id: link.id, label: link.label })),
     ])
 
-    setInput('')
-    setAttachments([])
-    setElementPicks([])
-    setLinks([])
+    sendLockRef.current = true
+    if (fromComposer) {
+      setInput('')
+      setAttachments([])
+      setElementPicks([])
+      setLinks([])
+    }
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: userLabel }])
     setSending(true)
 
@@ -2782,6 +2831,7 @@ export default function AdminAiAssistant({
       mergeIntoActive({ anchorSuggestions: suggestAnchorSnippetsFromUserText(plain) })
       const liveSteps: AdminAiAgentToolStep[] = []
       const streamingId = nextId()
+      setBrowserLiveNote('In progress: Assistant is working on this chat.')
       setMessages((prev) => [
         ...prev,
         {
@@ -2796,6 +2846,10 @@ export default function AdminAiAssistant({
           const idx = liveSteps.findIndex((s) => s.id === step.id)
           if (idx >= 0) liveSteps[idx] = step
           else liveSteps.push(step)
+          const line = step.summary.replace(/\s+/g, ' ').trim().slice(0, 160)
+          if (line) {
+            setBrowserLiveNote(step.status === 'error' ? `Unfinished: ${line}` : `In progress: ${line}`)
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === streamingId
@@ -2850,7 +2904,12 @@ export default function AdminAiAssistant({
         copy[i] = { ...s, title: short, updatedAt: Date.now() }
         return copy
       })
+      settleBrowserHold(turnSessionId, result.browserHold ?? null)
     } catch (error: unknown) {
+      settleBrowserHold(
+        turnSessionId,
+        `Unfinished: ${getErrorMessage(error).replace(/\s+/g, ' ').trim().slice(0, 160)}. Turn off You drive to hand this page back.`,
+      )
       setMessages((prev) => {
         const errText = `Error: ${getErrorMessage(error)}`
         const workingIdx = [...prev]
@@ -2863,8 +2922,19 @@ export default function AdminAiAssistant({
         return [...prev, { id: nextId(), role: 'assistant', content: errText }]
       })
     } finally {
+      sendLockRef.current = false
+      setBrowserLiveNote(null)
       setSending(false)
     }
+  }
+
+  function settleBrowserHold(sessionId: string, hold: string | null) {
+    setBrowserHolds((prev) => {
+      const next = { ...prev }
+      if (hold) next[sessionId] = hold
+      else delete next[sessionId]
+      return next
+    })
   }
 
   function applyStudioNav(nav: AdminAiStudioNavTarget) {
@@ -3001,7 +3071,15 @@ export default function AdminAiAssistant({
 
       const chatSkillId = agentSkillId ?? undefined
       mergeIntoActive({ anchorSuggestions: suggestAnchorSnippetsFromUserText(userText) })
-      const result = await sendChatMessage(userText, chatSkillId)
+      setBrowserLiveNote('In progress: Assistant is working on this chat.')
+      const result = await sendChatMessage(userText, chatSkillId, {
+        onToolStep: (step) => {
+          const line = step.summary.replace(/\s+/g, ' ').trim().slice(0, 160)
+          if (line) {
+            setBrowserLiveNote(step.status === 'error' ? `Unfinished: ${line}` : `In progress: ${line}`)
+          }
+        },
+      })
       setActiveSkill(result.inferredSkill ?? null)
       mergeIntoActive({
         lastRoutingEcho: result.routing ?? null,
@@ -3021,6 +3099,7 @@ export default function AdminAiAssistant({
             : null,
       })
       setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: result.reply }])
+      settleBrowserHold(turnSessionId, result.browserHold ?? null)
       setSessions((prev) => {
         const i = prev.findIndex((s) => s.id === turnSessionId)
         if (i < 0) return prev
@@ -3033,11 +3112,16 @@ export default function AdminAiAssistant({
         return copy
       })
     } catch (error: unknown) {
+      settleBrowserHold(
+        turnSessionId,
+        `Unfinished: ${getErrorMessage(error).replace(/\s+/g, ' ').trim().slice(0, 160)}. Turn off You drive to hand this page back.`,
+      )
       setMessages((prev) => [
         ...prev,
         { id: nextId(), role: 'assistant', content: `Error: ${getErrorMessage(error)}` },
       ])
     } finally {
+      setBrowserLiveNote(null)
       setSending(false)
     }
   }
@@ -3068,19 +3152,26 @@ export default function AdminAiAssistant({
   }
 
   function heldApprovalSteps(): PlanStep[] {
-    if (pendingPlanSteps.length) return pendingPlanSteps
-    const preview = pendingAction?.toolPreview
-    if (!preview) return []
-    return [
-      {
-        id: 'single-step',
-        tool: preview.tool,
-        payload: preview.payload ?? {},
-        requiresApproval: true,
-        riskTier: preview.riskTier,
-        skillId: null,
-      },
-    ]
+    const ctx = knownGoalContext()
+    const raw = (() => {
+      if (pendingPlanSteps.length) return pendingPlanSteps
+      const preview = pendingAction?.toolPreview
+      if (!preview) return []
+      return [
+        {
+          id: 'single-step',
+          tool: preview.tool,
+          payload: preview.payload ?? {},
+          requiresApproval: true,
+          riskTier: preview.riskTier,
+          skillId: null,
+        },
+      ]
+    })()
+    return raw.map((step) => {
+      const payload = applyKnownPrimaryGoal(step.tool, step.payload, ctx)
+      return payload === step.payload ? step : { ...step, payload }
+    })
   }
 
   function replaceHeldSteps(next: PlanStep[]) {
@@ -3643,6 +3734,8 @@ export default function AdminAiAssistant({
           <AdminAiBrowserDock
             layout="side"
             chatSessionId={activeSessionId}
+            assistantActing={sending}
+            taskNotice={sending ? browserLiveNote || 'In progress: Assistant is working on this chat.' : browserHolds[activeSessionId] ?? null}
             expanded={isStandalone ? browserPaneOpen : true}
             onExpandedChange={isStandalone ? setBrowserPaneOpen : undefined}
             onExitWorkspace={isStandalone ? undefined : () => setDockBrowserWorkspace(false)}
@@ -3913,6 +4006,8 @@ export default function AdminAiAssistant({
               <AdminAiBrowserDock
                 layout="stack"
                 chatSessionId={activeSessionId}
+                assistantActing={sending}
+                taskNotice={sending ? browserLiveNote || 'In progress: Assistant is working on this chat.' : browserHolds[activeSessionId] ?? null}
                 onWorkspaceExpand={() => setDockBrowserWorkspace(true)}
               />
             ) : null}
@@ -4027,6 +4122,13 @@ export default function AdminAiAssistant({
                     {message.role === 'assistant' ? (
                       <>
                         <AdminAssistantRichText content={message.content} />
+                        {message.id === actionChoiceHostId ? (
+                          <AdminChatActionChoices
+                            content={message.content}
+                            disabled={!enabled || sending}
+                            onPick={(text) => void sendComposerTurn(text, false)}
+                          />
+                        ) : null}
                         {message.toolSteps?.length ? (
                           <AdminAiToolStepCards steps={message.toolSteps} />
                         ) : null}

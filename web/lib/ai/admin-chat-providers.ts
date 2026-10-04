@@ -23,6 +23,7 @@ import { agentToolCatalogPrompt } from '@/lib/ai/admin-ai-agent-tools'
 import { applyDiffPromptHint } from '@/lib/ai/admin-ai-apply-diff'
 import { mentionCatalogPrompt } from '@/lib/ai/admin-ai-mentions'
 import { adminAiToolLiteracyPrompt } from '@/lib/ai/admin-ai-tool-literacy'
+import { adminChatActionChoicesPrompt } from '@/lib/ai/admin-chat-action-choices'
 import type { AdminSkill } from '@/lib/ai/skills/types'
 
 const CHAT_MAX_TOKENS = 900
@@ -82,6 +83,7 @@ function buildSystemPrompt(
 
   return [
     'You are an admin copilot for a music brand.',
+    adminChatActionChoicesPrompt(),
     adminAiToolLiteracyPrompt(),
     mentionCatalogPrompt(),
     applyDiffPromptHint(),

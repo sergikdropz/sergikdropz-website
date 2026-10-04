@@ -12394,7 +12394,7 @@ export default function MusicPlayer({
   const scrollRootClassName = isMiniMode
     ? ''
     : [
-        'max-h-[90vh]',
+        'max-h-[min(85dvh,85vh)]',
         'overscroll-none',
         playerNeedsInternalScroll
           ? lockBackgroundScroll
@@ -12412,7 +12412,7 @@ export default function MusicPlayer({
       ref={playerRef}
       style={{ bottom: visualBottomOffset }}
       className={`fixed left-0 right-0 bg-black border-t border-gray-800 z-[9999] transition-[max-height] duration-300 touch-manipulation ${
-        isMiniMode ? 'max-sm:h-auto sm:h-16' : 'max-h-[90vh]'
+        isMiniMode ? 'h-auto overflow-x-hidden' : 'max-h-[min(85dvh,85vh)] overflow-hidden'
       }`}
     >
       <div data-scroll-lock-root="" className={scrollRootClassName}>
@@ -12436,11 +12436,12 @@ export default function MusicPlayer({
         onEnded={handleLiveAudioEnded}
       />
       
-      {/* Mini Mode Bar — mobile: two rows, larger touch targets + safe area; sm+: single row */}
+      {/* Mini bar — stacked touch controls on short/narrow screens (AYN Thor);
+          single row only when the window is both wide and tall. */}
       {isMiniMode && (
         <>
           {/* Mobile: seek above title; then artwork/transport chrome */}
-          <div className="container mx-auto w-full max-w-full min-w-0 px-3 pt-2 sm:hidden">
+          <div className="player-mini-touch container mx-auto w-full max-w-full min-w-0 flex-col pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pt-2">
             <PlaybackTransportScrubber
               ref={transportMiniMobileRef}
               variant="mini-mobile"
@@ -12452,9 +12453,9 @@ export default function MusicPlayer({
               {currentTrack.title}
             </p>
           </div>
-          <div className="container mx-auto w-full max-w-full min-w-0 px-3 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:px-4 sm:py-2 sm:pb-2 sm:pt-2">
-          {/* Mobile (< sm): artwork + artist | centered transport | expand */}
-          <div className="flex w-full min-w-0 flex-col gap-1.5 sm:hidden">
+          <div className="container mx-auto w-full max-w-full min-w-0 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:pl-[max(1rem,env(safe-area-inset-left,0px))] sm:pr-[max(1rem,env(safe-area-inset-right,0px))] sm:pt-2">
+          {/* Touch / short landscape: artwork + artist | centered transport | expand */}
+          <div className="player-mini-touch w-full min-w-0 flex-col gap-1.5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5">
               <div className="flex min-w-0 items-center gap-2 justify-self-start">
                 {hasPlayerCover && (
@@ -12527,7 +12528,7 @@ export default function MusicPlayer({
           </div>
 
           {/* Desktop / tablet: single row */}
-          <div className="hidden w-full min-w-0 items-center gap-2 sm:flex sm:gap-3">
+          <div className="player-mini-inline w-full min-w-0 items-center gap-2 lg:gap-3">
             {/* Playback controls — left of artwork */}
             <div className="flex shrink-0 items-center gap-1">
               <button
@@ -12597,7 +12598,7 @@ export default function MusicPlayer({
                 />
               </div>
             )}
-            <div className="min-w-0 max-w-[200px] shrink-0 overflow-hidden md:max-w-[240px]">
+            <div className="min-w-0 max-w-[9rem] shrink overflow-hidden xl:max-w-[200px] 2xl:max-w-[240px]">
               <p className="truncate text-xs font-medium text-white">{currentTrack.title}</p>
               <p className="truncate text-xs text-gray-400">
                 {isIDJEnabled
@@ -12957,12 +12958,12 @@ export default function MusicPlayer({
 
           {/* Main Controls */}
           <div
-            className={`w-full max-w-none px-3 sm:px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:py-3 ${
+            className={`w-full max-w-none pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-[max(1rem,env(safe-area-inset-left,0px))] sm:pr-[max(1rem,env(safe-area-inset-right,0px))] pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:pt-3 ${
               isExpanded ? 'sticky bottom-0 z-20 border-t border-gray-800 bg-black' : ''
             }`}
           >
             {/* Mobile: art + title | centered transport (seek via waveform unless it is collapsed) */}
-            <div className="md:hidden">
+            <div className="lg:hidden">
               {!isExpanded && isWaveformCollapsed && (
                 <div className="mb-1.5">
                   <PlaybackTransportScrubber
@@ -12974,9 +12975,17 @@ export default function MusicPlayer({
                   />
                 </div>
               )}
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
-                  {/* Cover art omitted on mobile — deck strips / waveform already show artwork. */}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-1 justify-self-start">
+                  {isExpanded ? (
+                    <>
+                      <AutoDJHeaderButton size="compact" />
+                      <IDJHeaderButton size="compact" />
+                      {mobileDjModeActive && (isIDJEnabled || isAutoDJEnabled) ? (
+                        <MobileDjModeBadge />
+                      ) : null}
+                    </>
+                  ) : null}
                   {(isLoading || error) && (
                   <div className="min-w-0 flex-1 overflow-hidden">
                     {isLoading && (
@@ -12989,45 +12998,33 @@ export default function MusicPlayer({
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 justify-self-center">
-                  {isExpanded ? (
-                    <div className="flex max-w-[min(100%,20rem)] flex-wrap items-center justify-center gap-1">
-                      <AutoDJHeaderButton size="compact" />
-                      <IDJHeaderButton size="compact" />
-                      {mobileDjModeActive && (isIDJEnabled || isAutoDJEnabled) ? (
-                        <MobileDjModeBadge />
-                      ) : null}
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleSkipToPrevious}
-                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
-                        disabled={queue.length <= 1}
-                        aria-label="Previous track"
-                      >
-                        <FaStepBackward className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={togglePlay}
-                        className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors active:bg-gray-200 disabled:opacity-50 touch-manipulation"
-                        aria-label={isPlaying ? 'Pause' : 'Play'}
-                        disabled={isLoading || !!error}
-                      >
-                        {isPlaying ? <FaPause className="h-4 w-4" /> : <FaPlay className="ml-0.5 h-4 w-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSkipToNext}
-                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
-                        disabled={queue.length <= 1}
-                        aria-label="Next track"
-                      >
-                        <FaStepForward className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleSkipToPrevious}
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                    disabled={queue.length <= 1}
+                    aria-label="Previous track"
+                  >
+                    <FaStepBackward className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={togglePlay}
+                    className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors active:bg-gray-200 disabled:opacity-50 touch-manipulation"
+                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                    disabled={isLoading || !!error}
+                  >
+                    {isPlaying ? <FaPause className="h-4 w-4" /> : <FaPlay className="ml-0.5 h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSkipToNext}
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white transition-colors active:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                    disabled={queue.length <= 1}
+                    aria-label="Next track"
+                  >
+                    <FaStepForward className="h-4 w-4" />
+                  </button>
                 </div>
                 <div className="flex items-center justify-self-end">
                   <button
@@ -13055,15 +13052,15 @@ export default function MusicPlayer({
 
             {/* Desktop / tablet: collapsed = flex row with fluid scrubber; expanded = 3-col grid */}
             <div
-              className={`relative hidden w-full md:items-center ${
+              className={`relative hidden w-full lg:items-center ${
                 isExpanded
-                  ? 'md:grid md:grid-cols-[1fr_auto_1fr] md:gap-4'
-                  : 'md:flex md:gap-3'
+                  ? 'lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4'
+                  : 'lg:flex lg:gap-3'
               }`}
             >
               <div
                 className={`flex min-w-0 items-center gap-3 ${
-                  isExpanded ? 'md:col-start-1' : 'shrink-0'
+                  isExpanded ? 'lg:col-start-1' : 'min-w-0'
                 }`}
               >
               {isExpanded && (
@@ -13113,7 +13110,7 @@ export default function MusicPlayer({
               )}
 
               {!isExpanded && (
-              <div className="min-w-0 max-w-[220px] shrink-0 lg:max-w-[280px]">
+              <div className="min-w-0 max-w-[11rem] shrink overflow-hidden xl:max-w-[220px] 2xl:max-w-[280px]">
                 <p className="truncate text-sm font-medium text-white">{currentTrack.title}</p>
                 <p className="truncate text-xs text-gray-400">{currentTrack.artist}</p>
                 {(currentTrack.album || currentTrack.folder) && (
@@ -13138,7 +13135,7 @@ export default function MusicPlayer({
               )}
 
               {!isExpanded && (
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={toggleShuffle}
                   className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors touch-manipulation ${
@@ -13216,7 +13213,7 @@ export default function MusicPlayer({
               )}
 
               {isExpanded && (
-              <div className="hidden items-center gap-2 justify-self-center md:col-start-2 lg:flex">
+              <div className="hidden items-center gap-2 justify-self-center lg:col-start-2 lg:flex">
                 <IDJHeaderButton size="header" />
                 <button
                   onClick={toggleShuffle}
@@ -13266,8 +13263,8 @@ export default function MusicPlayer({
               )}
 
               <div
-                className={`flex items-center justify-end gap-3 ${
-                  isExpanded ? 'md:col-start-3 md:justify-self-end' : 'shrink-0'
+                className={`flex shrink-0 items-center justify-end gap-3 ${
+                  isExpanded ? 'lg:col-start-3 lg:justify-self-end' : ''
                 }`}
               >
                 <div className="flex shrink-0 items-center gap-1.5">

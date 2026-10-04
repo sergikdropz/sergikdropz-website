@@ -1,3 +1,4 @@
+import { TOOL_SKILL_ID } from './tool-skill-map'
 import { AdminSkill, SkillSchema, SkillValidationResult } from './types'
 
 const releaseOpsSkill: AdminSkill = {
@@ -396,28 +397,7 @@ const skills: AdminSkill[] = [
   musicBusinessCounselSkill,
 ]
 
-const toolToSkillId: Record<string, string> = {
-  create_release_checklist: 'release_ops',
-  draft_product_strategy_pack: 'product_strategy',
-  generate_campaign_draft: 'growth_marketing',
-  generate_smartlink_utm_plan: 'smartlink_seo',
-  query_platform_growth_snapshot: 'growth_marketing',
-  admin_browser: 'growth_marketing',
-  run_playwright_e2e: 'e2e_qa',
-  run_applescript: 'mac_automation',
-  query_ops_snapshot: 'admin_intel',
-  query_intelligence_harness: 'sergik_intelligence',
-  query_sergikai_chat: 'sergik_intelligence',
-  query_crowe_creative: 'sergik_intelligence',
-  query_release_studio_snapshot: 'studio_release',
-  query_studio_command_center: 'studio_release',
-  patch_release_marketing_copy: 'studio_release',
-  update_copyright_checklist: 'studio_release',
-  assign_isrcs: 'studio_release',
-  create_distribution_release_draft: 'studio_release',
-  audit_music_contract: 'music_business_counsel',
-  run_meta_promo_pipeline: 'product_strategy',
-}
+const toolToSkillId: Record<string, string> = TOOL_SKILL_ID
 
 export function getAllSkills() {
   return skills

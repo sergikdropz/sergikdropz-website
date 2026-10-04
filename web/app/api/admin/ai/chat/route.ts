@@ -240,6 +240,7 @@ export async function POST(request: NextRequest) {
         applyDiffs: chatResult.applyDiffs,
         memory: chatResult.memory,
         memoryPatch: chatResult.memoryPatch,
+        browserHold: chatResult.browserHold,
         agent: agentEnabled,
       }
     }

@@ -31,6 +31,7 @@ import type { AdminAiChatProvider } from '@/lib/ai/admin-chat-types'
 import type { AdminChatEnergyPreset, AdminChatHonestyMode } from '@/lib/ai/admin-chat-session-tuning'
 import { deskCardForUrl } from '@/lib/ai/admin-ai-desks'
 import { buildAdminAiLiveContextPrompt, messageWantsLiveContext } from '@/lib/ai/admin-ai-chat-live-context'
+import { goalFromKnownRelease } from '@/lib/ai/known-primary-goal'
 
 const MAX_ROUNDS = 5
 const MAX_BOOTSTRAP_TOOLS = 2
@@ -59,6 +60,8 @@ export type AdminAiAgentTurnResult = AdminChatReply & {
   memoryPatch: ThreadMemoryPatch
   /** Reply with /tool lines removed; ai-diff fences kept for client parse or stripped. */
   reply: string
+  /** Set when this turn stopped before the browser task was finished. */
+  browserHold: string | null
 }
 
 function slimToolOutput(output: Record<string, unknown>): string {
@@ -286,7 +289,7 @@ export async function runAdminAiAgentTurn(input: {
             '---',
             ...toolTranscript,
             '---',
-            'Your previous /tool line was invalid. Use the TOOL RESULT above and answer the user now. Do not emit another /tool unless data is still missing.',
+            'Your previous /tool line was invalid. Use the TOOL RESULT above and answer the user now. Do not emit another /tool unless data is still missing. If you need the user to choose a next step, end with a ```choices fence.',
           ].join('\n'),
           {
             provider: input.provider ?? last.provider,
@@ -317,7 +320,7 @@ export async function runAdminAiAgentTurn(input: {
         '---',
         ...toolTranscript,
         '---',
-        'Use the tool results above. Answer the user now. Do not repeat /tool lines unless you still lack data.',
+        'Use the tool results above. Answer the user now. Do not repeat /tool lines unless you still lack data. If you need the user to choose a next step, end with a ```choices fence.',
       ].join('\n')
       last = await generateAdminChatReply(followUp, {
         provider: input.provider ?? last.provider,
@@ -338,6 +341,9 @@ export async function runAdminAiAgentTurn(input: {
   }
 
   const applyDiffs = parseAdminAiApplyDiffs(last.reply)
+  const leftoverTools =
+    input.agentEnabled !== false ? parseAgentToolCalls(last.reply).map((call) => call.tool) : []
+  const browserHold = formatBrowserHold(toolSteps, leftoverTools)
   const cleaned = stripAdminAiApplyDiffFences(stripAgentToolCalls(last.reply))
 
   const deskFromTools = toolSteps
@@ -360,6 +366,10 @@ export async function runAdminAiAgentTurn(input: {
     deskLabel: desk?.label || memory.deskLabel || null,
     skillId: last.skill.id,
   })
+  const knownTitle = input.releaseTitle || memory.releaseTitle
+  if (!memory.goal && !memoryPatch.goal && knownTitle) {
+    memoryPatch.goal = goalFromKnownRelease(knownTitle)
+  }
   if (toolSteps.some((s) => s.tool === 'admin_browser' && s.status === 'done')) {
     memoryPatch.addNote = memoryPatch.addNote || 'Probed open browser desk this turn.'
   }
@@ -374,5 +384,27 @@ export async function runAdminAiAgentTurn(input: {
     applyDiffs,
     memory: nextMemory,
     memoryPatch,
+    browserHold,
   }
+}
+
+function formatBrowserHold(steps: AdminAiAgentToolStep[], leftover: string[]): string | null {
+  const failed = steps.filter((step) => step.status === 'error' && step.summary.trim())
+  const parts: string[] = []
+  if (failed.length) {
+    parts.push(
+      failed
+        .slice(0, 2)
+        .map((step) => step.summary.replace(/\s+/g, ' ').trim())
+        .join(' · '),
+    )
+  }
+  if (leftover.length) {
+    const names = [...new Set(leftover)].slice(0, 3).join(', ')
+    parts.push(`still needs ${names}`)
+  }
+  if (!parts.length) return null
+  const body = parts.join('. ')
+  const clipped = body.length > 160 ? `${body.slice(0, 157)}…` : body
+  return `Unfinished: ${clipped}. Turn off You drive to hand this page back.`
 }
