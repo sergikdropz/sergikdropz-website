@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import OrderDownloadStage from '@/components/shop/OrderDownloadStage'
 
 type FileRow = {
   id: string
@@ -9,6 +10,7 @@ type FileRow = {
   filename: string
   available: boolean
   href: string | null
+  playback?: string
 }
 
 type Manifest = {
@@ -79,30 +81,55 @@ export default function ShareDownloadClient({
     }
   }
 
+  if (!data && !error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-sm text-zinc-400">
+        Checking access…
+      </main>
+    )
+  }
+
+  if (!data) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-center text-sm text-rose-300">
+        {error}
+      </main>
+    )
+  }
+
+  const kindLabel = data.scope === 'release' ? 'EP' : 'TRACK'
+  const formatLabel = data.format.toUpperCase()
+  const tracks = (data.files || [])
+    .filter((file) => file.available && file.href)
+    .map((file) => ({
+      id: file.id,
+      title: file.title,
+      artist: file.artist,
+      href: file.href || '',
+      filename: file.filename,
+      playback: file.playback || '',
+    }))
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-4 py-10 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-5 shadow-2xl">
-        {data?.artwork ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={data.artwork} alt="" className="mb-4 h-40 w-40 rounded-xl object-cover" />
-        ) : null}
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">SERGIK download</p>
-        <h1 className="mt-1 text-xl font-semibold">{data?.title || 'Private download'}</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          {data ? `${data.artist} · ${data.format.toUpperCase()} · ${data.scope === 'release' ? 'Whole EP' : 'Single track'}` : 'Restricted link'}
-        </p>
-
-        {!data && !error ? <p className="mt-6 text-sm text-zinc-500">Checking access…</p> : null}
-        {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
-
-        {data?.access === 'restricted' ? (
+    <OrderDownloadStage
+      title={data.title}
+      artist={data.artist}
+      artwork={data.artwork || null}
+      kindLabel={kindLabel}
+      formatLabel={formatLabel}
+      tracks={data.access === 'granted' ? tracks : []}
+      packHref={data.access === 'granted' ? data.packHref : null}
+      packLabel={`Download all (${formatLabel} zip)`}
+      aside={
+        data.access === 'restricted' ? (
           <form
-            className="mt-6 space-y-3"
+            className="space-y-3 rounded-2xl border border-white/10 bg-black/75 p-4 shadow-2xl backdrop-blur-md"
             onSubmit={(event) => {
               event.preventDefault()
               void requestLink()
             }}
           >
+            {error ? <p className="text-sm text-rose-300">{error}</p> : null}
             <label className="block text-sm text-zinc-300" htmlFor="download-email">
               Enter the email this was shared with
             </label>
@@ -118,41 +145,15 @@ export default function ShareDownloadClient({
             <button
               type="submit"
               disabled={sending}
-              className="w-full rounded-lg bg-white py-2 text-sm font-medium text-black disabled:opacity-50"
+              className="w-full rounded-lg bg-white py-2.5 text-sm font-medium text-black disabled:opacity-50"
             >
               {sending ? 'Opening…' : 'Open download'}
             </button>
           </form>
-        ) : null}
-
-        {data?.access === 'granted' ? (
-          <div className="mt-6 space-y-3">
-            {data.email ? <p className="text-xs text-zinc-500">Signed in as {data.email}</p> : null}
-            {data.packHref ? (
-              <a
-                href={data.packHref}
-                className="flex w-full items-center justify-center rounded-lg bg-rose-600 py-2.5 text-sm font-medium text-white"
-              >
-                Download all ({data.format.toUpperCase()} zip)
-              </a>
-            ) : null}
-            <ul className="space-y-2">
-              {(data.files || []).map((file) => (
-                <li key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 px-3 py-2">
-                  <span className="min-w-0 truncate text-sm">{file.title}</span>
-                  {file.available && file.href ? (
-                    <a href={file.href} className="shrink-0 text-xs font-medium text-white underline">
-                      {file.filename.endsWith('.wav') ? 'WAV' : 'MP3'}
-                    </a>
-                  ) : (
-                    <span className="shrink-0 text-xs text-zinc-500">Not in vault</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
-    </main>
+        ) : error ? (
+          <p className="text-center text-sm text-rose-300">{error}</p>
+        ) : null
+      }
+    />
   )
 }

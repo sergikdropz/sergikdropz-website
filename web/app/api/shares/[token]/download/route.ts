@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
+import { toSameOriginMediaUrl } from '@/utils/normalizeVaultAudioUrl'
 import { pickShareArtwork, resolvePublicOrigin, shareDisplayArtworkUrl } from '@/lib/shares/types'
 import {
   applyShareDownloadCookie,
@@ -96,14 +97,22 @@ function downloadCard(
     email,
     ...(assets
       ? {
-          files: assets.map((asset) => ({
-            id: asset.trackId,
-            title: asset.title,
-            artist: asset.artist,
-            filename: asset.filename,
-            available: Boolean(asset.relativePath),
-            href: asset.relativePath ? fileQuery(asset.trackId) : null,
-          })),
+          files: assets.map((asset) => {
+            const stream = tracks.find((track) => track.id === asset.trackId)
+            const playback =
+              (stream?.file ? toSameOriginMediaUrl(stream.file) : null) ||
+              (asset.relativePath ? toSameOriginMediaUrl(asset.relativePath) : null) ||
+              ''
+            return {
+              id: asset.trackId,
+              title: asset.title,
+              artist: asset.artist,
+              filename: asset.filename,
+              available: Boolean(asset.relativePath),
+              href: asset.relativePath ? fileQuery(asset.trackId) : null,
+              playback,
+            }
+          }),
           packHref:
             selection.scope === 'release' && available.length > 1
               ? `/api/shares/${encodeURIComponent(token)}/pack?format=${selection.format}&scope=release`

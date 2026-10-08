@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-02T16:24:43.291Z",
+    "generatedAt": "2026-10-08T18:06:54.692Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -17,7 +17,7 @@
     "counts": {
       "appRouterPages": 91,
       "appRouterRouteHandlers": 298,
-      "componentsTsx": 196,
+      "componentsTsx": 197,
       "libTs": 723
     },
     "pagesByCategory": {
