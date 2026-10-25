@@ -1,6 +1,8 @@
 import type {
+  AmountBasis,
   ParseStatementResult,
   RoyaltySource,
+  StatementCategory,
   StatementLineInput,
 } from '@/lib/studio/royalties/types'
 import { DEFAULT_ROYALTY_CURRENCY } from '@/lib/studio/royalties/constants'
@@ -80,6 +82,17 @@ function pick(row: Record<string, string>, keys: string[]): string {
 
 function detectSource(headers: string[]): RoyaltySource {
   const set = new Set(headers.map(normHeader))
+  if (set.has('amountspent') || set.has('adspend') || set.has('adsetname') || set.has('campaignname')) {
+    return 'meta_ads'
+  }
+  if (
+    set.has('contentmonetization') ||
+    set.has('approximateearnings') ||
+    set.has('monetizationstatus') ||
+    (set.has('pageid') && (set.has('earnings') || set.has('earningsusd')))
+  ) {
+    return 'meta_creator'
+  }
   if (set.has('reportingdate') || set.has('salemonth') || set.has('earningsusd')) {
     return 'distrokid'
   }
@@ -96,9 +109,28 @@ function detectSource(headers: string[]): RoyaltySource {
   return 'manual'
 }
 
+function categoryFor(source: RoyaltySource): StatementCategory {
+  if (source === 'meta_ads') return 'meta_ad_spend'
+  if (source === 'meta_creator') return 'meta_creator'
+  return 'recording_royalty'
+}
+
+function basisFor(headers: string[]): AmountBasis {
+  const set = new Set(headers.map(normHeader))
+  if ([...set].some((key) => key.startsWith('net'))) return 'net'
+  if ([...set].some((key) => key.startsWith('gross'))) return 'gross'
+  return 'unknown'
+}
+
+/** Spreadsheet formulas must not become live formulas if a row is exported again. */
+function neutralizeCell(value: string): string {
+  const trimmed = value.trimStart()
+  return /^[=+\-@]/.test(trimmed) ? `'${value}` : value
+}
+
 const ISRC_KEYS = ['isrc', 'isrccode', 'trackisrc']
 const UPC_KEYS = ['upc', 'ean', 'barcode', 'upcean']
-const TITLE_KEYS = ['songtitle', 'tracktitle', 'title', 'producttitle', 'song']
+const TITLE_KEYS = ['songtitle', 'tracktitle', 'title', 'producttitle', 'song', 'campaignname']
 const ALBUM_KEYS = ['albumname', 'albumtitle', 'release', 'releasetitle', 'productname']
 const ARTIST_KEYS = ['artistname', 'artist', 'recordingartist', 'primaryartist']
 const STORE_KEYS = ['store', 'retailer', 'dsp', 'platform', 'service']
@@ -106,9 +138,12 @@ const TERRITORY_KEYS = ['territory', 'country', 'countrycode', 'region']
 const QTY_KEYS = ['quantity', 'units', 'qty', 'streams', 'plays']
 const AMOUNT_KEYS = [
   'earningsusd',
+  'approximateearnings',
   'earnings',
   'revenue',
   'netamount',
+  'amountspent',
+  'adspend',
   'amount',
   'netrevenue',
   'payable',
@@ -138,7 +173,7 @@ function rowToLine(row: Record<string, string>, defaultCurrency: string): Statem
     amountCents,
     currency,
     saleDate: pick(row, DATE_KEYS) || null,
-    raw: row,
+    raw: Object.fromEntries(Object.entries(row).map(([key, value]) => [key, neutralizeCell(value)])),
   }
 }
 
@@ -152,6 +187,8 @@ export function parseRoyaltyStatementCsv(csvText: string): ParseStatementResult 
   if (rows.length < 2) {
     return {
       source: 'manual',
+      category: 'recording_royalty',
+      amountBasis: 'unknown',
       currency: DEFAULT_ROYALTY_CURRENCY,
       periodLabel: null,
       lines: [],
@@ -161,6 +198,8 @@ export function parseRoyaltyStatementCsv(csvText: string): ParseStatementResult 
 
   const headerCells = rows[0].map(normHeader)
   const source = detectSource(headerCells)
+  const category = categoryFor(source)
+  const amountBasis = basisFor(headerCells)
   const lines: StatementLineInput[] = []
   let currency = DEFAULT_ROYALTY_CURRENCY
   const saleDates: string[] = []
@@ -193,8 +232,17 @@ export function parseRoyaltyStatementCsv(csvText: string): ParseStatementResult 
   }
 
   if (!lines.length) {
-    warnings.push('No statement lines parsed — check column headers (need Earnings / Amount / Revenue)')
+    warnings.push('No statement lines parsed — check column headers (need Earnings / Amount / Revenue / Amount spent)')
+  }
+  if (category === 'meta_ad_spend') {
+    warnings.push('Ad spend is a cost. It is not royalty income and is not allocated to collaborators.')
+  }
+  if (category === 'meta_creator') {
+    warnings.push('Meta creator payouts stay with the LLC. They are not split like master royalties.')
+  }
+  if (amountBasis === 'unknown' && lines.length) {
+    warnings.push('Fee treatment is unknown. The reported amount is stored as-is, with no 20% deduction.')
   }
 
-  return { source, currency, periodLabel, lines, warnings }
+  return { source, category, amountBasis, currency, periodLabel, lines, warnings }
 }

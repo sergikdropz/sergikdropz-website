@@ -102,20 +102,15 @@ export function CroweLogicSetupPanel() {
           Add to web/.env.local
         </p>
         <pre className="overflow-x-auto text-[11px] leading-relaxed text-gray-400">
-{`# Customer credential for the existing Crowe ID (server only)
+{`# Replacement deployment credential only. Do not paste a revoked key.
 CROWELOGIC_API_KEY=
-CROWELOGIC_MODEL=auto
-
-# Local bridge (not the Pro bill)
-CROWELOGIC_BASE_URL=http://127.0.0.1:8011
-
-# Hosted gateway — set only after Crowe confirms Pro linkage and the usage cap
-# CROWELOGIC_BASE_URL=https://gateway.example/v1
-# CROWELOGIC_PRO_LINKED=1`}
+CROWELOGIC_BASE_URL=https://gpt61.crowelogic.com/v1
+CROWELOGIC_MODEL=gpt-6.1-sol`}
         </pre>
         <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-gray-500">
-          <li>No second Crowe account. Do not put a password in env.</li>
-          <li>Hosted chat stays off until Crowe confirms the Pro link. Then set CROWELOGIC_PRO_LINKED=1.</li>
+          <li>No second Crowe account. Do not put a password or a revoked key in env.</li>
+          <li>GPT-6.1 Sol is live at gpt61.crowelogic.com. Chat stays off until a replacement key is set.</li>
+          <li>3,000 credits per period, 5 per request, through October 22. No overage.</li>
           <li>CROWE_API_KEY is Crowe Creative only. It does not enable this chat.</li>
           <li>Restart the dev server after editing env, then test the connection.</li>
         </ul>

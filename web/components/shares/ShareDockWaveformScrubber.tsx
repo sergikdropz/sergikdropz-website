@@ -6,7 +6,8 @@ import {
   shareWaveformLayoutChanged,
   targetBarCount,
 } from '@/lib/shares/share-dock-waveform-layout'
-import { coercePeaks, downsamplePeaks, normalizePeaks } from '@/lib/shares/share-waveform-peaks'
+import { downsamplePeaks, normalizePeaks } from '@/lib/shares/share-waveform-peaks'
+import { loadWaveformPeaks } from '@/lib/audio/load-waveform-peaks'
 
 type ShareDockWaveformScrubberProps = {
   file?: string
@@ -141,10 +142,11 @@ export default function ShareDockWaveformScrubber({
 
     ;(async () => {
       try {
-        const res = await fetch(`/api/audio/waveform?${params.toString()}`)
-        const json = await res.json().catch(() => ({}))
+        const next = await loadWaveformPeaks({
+          path: params.get('path'),
+          trackId: params.get('trackId'),
+        })
         if (cancelled) return
-        const next = coercePeaks(json?.waveform_data)
         peaksRef.current = next
         setReady(!!next?.length)
         const wrap = wrapRef.current

@@ -5,6 +5,7 @@ import {
   creditFieldsFromContributors,
   creditsBlockFromContributors,
   displayArtistLine,
+  billedArtistLine,
   mergeContributors,
   parseBilledArtists,
   parseContributors,
@@ -123,6 +124,41 @@ describe('parse and merge contributors', () => {
     ])
     expect(displayArtistLine(rows)).toBe('SERGIK x OG Coconut')
     expect(rows.filter((row) => row.role === 'featured')).toEqual([])
+  })
+})
+
+describe('billedArtistLine', () => {
+  it('keeps a stored collab line', () => {
+    expect(
+      billedArtistLine({
+        contributors: [
+          { role: 'primary', name: 'SERGIK' },
+          { role: 'primary', name: 'Breauxx' },
+        ],
+        libraryArtist: 'SERGIK',
+        fallback: 'SERGIK',
+      }),
+    ).toBe('SERGIK x Breauxx')
+  })
+
+  it('uses the catalog artist when the release credit is only SERGIK', () => {
+    expect(
+      billedArtistLine({
+        contributors: [{ role: 'primary', name: 'SERGIK' }],
+        libraryArtist: 'SERGIK x Breauxx',
+        title: 'Walk Dat Walk',
+        fallback: 'SERGIK',
+      }),
+    ).toBe('SERGIK x Breauxx')
+  })
+
+  it('reads a collaborator prefix on the track title', () => {
+    expect(
+      billedArtistLine({
+        title: 'Breauxx - Walk Dat Walk',
+        fallback: 'SERGIK',
+      }),
+    ).toBe('SERGIK feat. Breauxx')
   })
 })
 

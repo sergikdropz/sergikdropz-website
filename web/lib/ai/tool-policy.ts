@@ -16,14 +16,18 @@ export type AdminAiTool =
   | 'patch_release_marketing_copy'
   | 'update_copyright_checklist'
   | 'assign_isrcs'
+  | 'pull_distrokid_isrcs'
   | 'create_distribution_release_draft'
   | 'query_intelligence_harness'
   | 'query_sergikai_chat'
   | 'query_crowe_creative'
+  | 'query_meta_business_agent'
   | 'audit_music_contract'
+  | 'audit_music_books'
   | 'run_meta_promo_pipeline'
   | 'admin_browser'
   | 'query_platform_growth_snapshot'
+  | 'read_workspace'
 
 export type ToolRiskTier = 'tier_1_draft' | 'tier_2_operational'
 
@@ -47,14 +51,18 @@ export const TOOL_POLICY: Record<AdminAiTool, ToolPolicy> = {
   patch_release_marketing_copy: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   update_copyright_checklist: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   assign_isrcs: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  pull_distrokid_isrcs: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   create_distribution_release_draft: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   query_intelligence_harness: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
   query_sergikai_chat: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   query_crowe_creative: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
+  query_meta_business_agent: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
   audit_music_contract: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
+  audit_music_books: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
   run_meta_promo_pipeline: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   admin_browser: { riskTier: 'tier_2_operational', requiresApproval: true, writeSideEffect: true },
   query_platform_growth_snapshot: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
+  read_workspace: { riskTier: 'tier_1_draft', requiresApproval: true, writeSideEffect: false },
 }
 
 export function isAllowedTool(value: string): value is AdminAiTool {

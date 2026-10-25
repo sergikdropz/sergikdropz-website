@@ -10,6 +10,7 @@ interface Product {
   slug?: string
   description: string
   price: number
+  formatPrices?: { MP3: number; WAV: number }
   artwork?: string
   category?: string
   productType?: string

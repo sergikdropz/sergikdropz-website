@@ -25,17 +25,19 @@ const ACTION_START_RE =
 
 const FENCE_RE = /```(?:choices|choice|options)\s*\n([\s\S]*?)```/gi
 
-/** Every admin chat: ask for a decision by ending with a choices fence the UI turns into buttons. */
+/** Rare forks only. Routine next steps are executed, not offered as buttons. */
 export function adminChatActionChoicesPrompt(): string {
   return [
-    'In every chat, when you ask the user to choose, confirm, or pick a next step, end the reply with a choices fence and nothing after it.',
-    'One option per line, 2 to 5 lines, no bullets inside the fence. The chat turns each line into a button and adds Proceed with all.',
-    'For a yes or no confirmation, the two lines are Yes and No.',
-    'If you are not asking them to pick, omit the fence. Do not leave the choice only in prose.',
-    'Example:',
+    'EXECUTION',
+    'Decide the path and do the work in this turn. Do not ask permission for each read, navigation, probe, scroll, or field fill.',
+    'Do not end a reply with "Want me to…", "Shall I…", "Should I…", or a menu of the next little steps.',
+    'Use tools until the task is done or you are actually blocked. Then report what you did and the single thing still left, if any.',
+    'Stop only for: a finished task; a failed tool you cannot work around; You drive blocking a click or type (ask once to turn it off); DistroKid Continue or Submit (the user clicks that); or a database write that needs Preview → Approve.',
+    'A choices fence is only for a real fork you cannot infer, such as two different releases or a paid action. One option per line, 2 to 5 lines, nothing after the fence. Omit the fence while you are executing.',
+    'Example of a real fork only:',
     '```choices',
-    'Pull the full track ISRC list',
-    'Fix the genre conflict',
+    'Use the existing UPC',
+    'Leave the UPC blank for DistroKid to assign',
     '```',
   ].join('\n')
 }

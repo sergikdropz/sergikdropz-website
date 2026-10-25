@@ -22,8 +22,12 @@ export type AdminBrowserActionName =
   | 'drive'
   | 'distrokid_prefill'
   | 'distrokid_upload_assets'
+  | 'distrokid_bank_import'
+  | 'meta_earnings_pull'
+  | 'soundcloud_prefill'
   | 'probe_fields'
   | 'inspect'
+  | 'snapshot'
   | 'release'
 
 export type AdminBrowserRequest = {
@@ -40,6 +44,8 @@ export type AdminBrowserRequest = {
   viewportHeight?: number
   zoom?: number
   text?: string
+  /** Visible label, button name, or field name to click or focus. */
+  target?: string
   key?: string
   youDrive?: boolean
   actor: AdminBrowserActor
@@ -49,6 +55,10 @@ export type AdminBrowserRequest = {
   distrokidPacket?: Record<string, unknown>
   /** When true, distrokid_prefill skips WAV/artwork uploads (use distrokid_upload_assets next). */
   skipDistrokidAssets?: boolean
+  /** SoundCloud packet. When omitted, soundcloud_prefill loads file URLs from the database for releaseId. */
+  soundcloudPacket?: Record<string, unknown>
+  /** Release whose database audio and artwork should be attached. */
+  releaseId?: string
   /** Admin AI chat id. Each chat gets its own page; cookies stay in one Chrome profile. */
   chatSessionId?: string
 }
@@ -79,6 +89,11 @@ export type AdminBrowserSnapshot = {
     skipped: string[]
     errors: string[]
   }
+  soundcloudPrefill?: {
+    filled: string[]
+    skipped: string[]
+    errors: string[]
+  }
   fieldProbe?: Array<{
     tag: string
     type: string
@@ -91,6 +106,29 @@ export type AdminBrowserSnapshot = {
     required?: boolean
     invalid?: boolean
   }>
+  /** Visible controls: stable id, role, accessible name, and current value. */
+  pageOutline?: Array<{ id: string; role: string; name: string; value: string }>
+  /** ISRCs parsed from DistroKid album HTML. Visible page text truncates before these. */
+  distrokidBank?: {
+    status: string
+    lineCount: number
+    duplicate: boolean
+    note: string
+  }
+  metaEarnings?: {
+    ok: boolean
+    adsLineCount: number
+    creatorLineCount: number
+    note: string
+    connectPath: string
+  }
+  distrokidCodes?: {
+    page: 'album' | 'mymusic' | 'isrc'
+    album: string | null
+    upc: string | null
+    tracks: Array<{ n: number; title: string; isrc: string | null }>
+    note: string
+  }
   /** Element under a point in the live browser page (not the mirror div). */
   elementPick?: {
     text: string
@@ -161,12 +199,25 @@ export const ADMIN_BROWSER_READ_ONLY_ACTIONS = new Set<AdminBrowserActionName>([
   'read',
   'probe_fields',
   'inspect',
+  'snapshot',
+])
+
+/** Move the open page without taking the mouse. Clicks and typing still wait for You drive off. */
+export const ADMIN_BROWSER_NAV_WHILE_DRIVE = new Set<AdminBrowserActionName>([
+  'open',
+  'navigate',
+  'back',
+  'reload',
+  'wheel',
 ])
 
 /** Fill DistroKid fields/files while You drive stays on — never DistroKid Continue/Submit. */
 export const ADMIN_BROWSER_FILL_WHILE_DRIVE = new Set<AdminBrowserActionName>([
   'distrokid_prefill',
   'distrokid_upload_assets',
+  'distrokid_bank_import',
+  'meta_earnings_pull',
+  'soundcloud_prefill',
 ])
 
 export function assistantMayAct(youDrive: boolean, actor: AdminBrowserActor) {
@@ -181,6 +232,7 @@ export function assistantMayRunBrowserAction(
 ) {
   if (action === 'drive') return true
   if (ADMIN_BROWSER_READ_ONLY_ACTIONS.has(action)) return true
+  if (ADMIN_BROWSER_NAV_WHILE_DRIVE.has(action)) return true
   if (ADMIN_BROWSER_FILL_WHILE_DRIVE.has(action)) return true
   return assistantMayAct(youDrive, actor)
 }

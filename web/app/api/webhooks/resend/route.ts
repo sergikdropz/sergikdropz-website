@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { verifyResendSignature } from '@/lib/email/resend-webhook-signature'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import {
   collabStatusFromResendEvent,
@@ -7,53 +7,11 @@ import {
   isResendInboundReceivedEvent,
 } from '@/lib/studio/release-collab'
 import { ingestCollabInboundEmail } from '@/lib/studio/release-collab-inbound-server'
+import { recordBroadcastInteraction } from '@/lib/email/broadcast-activity'
+import { recordDepartmentInbound, stampDepartmentMailDelivery } from '@/lib/email/department-mailbox-store'
+import { fileReleaseReplyInStudioMailbox } from '@/lib/studio/contract-mailbox'
 
 export const dynamic = 'force-dynamic'
-
-/**
- * Verify Resend/Svix-style signature when RESEND_WEBHOOK_SECRET is set.
- * Accepts either `whsec_…` (base64 after prefix) or raw HMAC secret.
- */
-function verifyResendSignature(
-  payload: string,
-  headers: Headers,
-  secret: string,
-): boolean {
-  const msgId = headers.get('svix-id') || headers.get('webhook-id')
-  const timestamp = headers.get('svix-timestamp') || headers.get('webhook-timestamp')
-  const signatureHeader =
-    headers.get('svix-signature') || headers.get('webhook-signature') || ''
-  if (!msgId || !timestamp || !signatureHeader) return false
-
-  const ageSec = Math.abs(Date.now() / 1000 - Number(timestamp))
-  if (!Number.isFinite(ageSec) || ageSec > 60 * 5) return false
-
-  let key = secret
-  if (secret.startsWith('whsec_')) {
-    key = Buffer.from(secret.slice(6), 'base64').toString('binary')
-  }
-
-  const signed = `${msgId}.${timestamp}.${payload}`
-  const expected = createHmac('sha256', key).update(signed).digest('base64')
-  const candidates = signatureHeader
-    .split(' ')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => (part.includes(',') ? part.split(',')[1] : part.replace(/^v1,/, '')))
-
-  const expectedBuf = Buffer.from(expected)
-  for (const candidate of candidates) {
-    try {
-      const got = Buffer.from(candidate)
-      if (got.length === expectedBuf.length && timingSafeEqual(got, expectedBuf)) {
-        return true
-      }
-    } catch {
-      /* continue */
-    }
-  }
-  return false
-}
 
 type ResendWebhookBody = {
   type?: string
@@ -97,15 +55,35 @@ export async function POST(request: NextRequest) {
 
   const eventType = String(body.type || '')
 
+  try {
+    await recordBroadcastInteraction(eventType, body.data || {})
+  } catch (error) {
+    console.error('broadcast interaction:', error)
+  }
+
   if (isResendInboundReceivedEvent(eventType)) {
     const inbound = await ingestCollabInboundEmail(body.data || {})
     if (inbound.ok) {
+      try {
+        await fileReleaseReplyInStudioMailbox(body.data || {}, inbound.releaseId)
+      } catch (error) {
+        console.error('studio contract inbox:', error)
+      }
       return NextResponse.json({
         ok: true,
         inbound: true,
+        department: true,
         releaseId: inbound.releaseId,
         messageId: inbound.messageId,
       })
+    }
+    if (inbound.reason === 'unmatched_recipient' || inbound.reason === 'release_not_found') {
+      try {
+        const stored = await recordDepartmentInbound(body.data || {})
+        if (stored) return NextResponse.json({ ok: true, inbound: true, department: true })
+      } catch (error) {
+        console.error('department inbound mail:', error)
+      }
     }
     return NextResponse.json({ ok: true, inbound: false, reason: inbound.reason })
   }
@@ -126,12 +104,22 @@ export async function POST(request: NextRequest) {
 
   if (findError) {
     if (isMissingCollabTableError(findError)) {
+      try {
+        await stampDepartmentMailDelivery(resendId, mapped.status)
+      } catch (error) {
+        console.error('department mail status:', error)
+      }
       return NextResponse.json({ ok: true, skipped: 'table_missing' })
     }
     return NextResponse.json({ error: findError.message }, { status: 500 })
   }
 
   if (!existing) {
+    try {
+      await stampDepartmentMailDelivery(resendId, mapped.status)
+    } catch (error) {
+      console.error('department mail status:', error)
+    }
     return NextResponse.json({ ok: true, unmatched: true })
   }
 

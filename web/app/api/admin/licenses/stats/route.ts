@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('licenses')
-      .select('id, tier, amount_paid, status, created_at')
+      .select('id, license_tier, amount_paid, status, created_at')
 
     if (error) {
       console.error('Error fetching license stats:', error)
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     // Revenue by tier
     const revenueByTier: Record<string, { count: number; revenue: number }> = {}
     licenses.forEach((l) => {
-      const tier = l.tier || 'unknown'
+      const tier = l.license_tier || 'unknown'
       if (!revenueByTier[tier]) {
         revenueByTier[tier] = { count: 0, revenue: 0 }
       }

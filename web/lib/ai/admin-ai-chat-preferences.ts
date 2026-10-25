@@ -9,6 +9,7 @@ const PREF_KEYS = {
   modelOpenai: 'admin_ai_model_openai',
   modelOllama: 'admin_ai_model_ollama',
   modelCrowelogic: 'admin_ai_model_crowelogic',
+  modelCursor: 'admin_ai_model_cursor',
   assistantDefaultLlm: 'admin_ai_assistant_default_llm',
   sonicDnaLlm: 'admin_ai_sonic_dna_llm',
 } as const
@@ -74,10 +75,12 @@ export async function loadAdminAiChatPreferences(supabase: SupabaseClient): Prom
     const mo = jsonbToTrimmedString(byKey.get(PREF_KEYS.modelOpenai))
     const mol = jsonbToTrimmedString(byKey.get(PREF_KEYS.modelOllama))
     const mc = jsonbToTrimmedString(byKey.get(PREF_KEYS.modelCrowelogic))
+    const mcu = jsonbToTrimmedString(byKey.get(PREF_KEYS.modelCursor))
     if (ma) modelOverrides.anthropic = ma
     if (mo) modelOverrides.openai = mo
     if (mol) modelOverrides.ollama = mol
     if (mc) modelOverrides.crowelogic = mc
+    if (mcu) modelOverrides.cursor = mcu
 
     const assistantDefaultLlm = normalizeAssistantDefaultLlm(byKey.get(PREF_KEYS.assistantDefaultLlm))
     const sonicDnaLlm = normalizeAssistantDefaultLlm(byKey.get(PREF_KEYS.sonicDnaLlm))
@@ -103,6 +106,7 @@ export function mergeResolvedModels(
     openai: pick('openai'),
     ollama: pick('ollama'),
     crowelogic: pick('crowelogic'),
+    cursor: pick('cursor'),
   }
 }
 

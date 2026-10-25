@@ -8,7 +8,7 @@ const objectExists = vi.fn()
 vi.mock('@/lib/audio/r2Media', () => ({
   getR2MediaConfig: () => getCfg(),
   publicR2MediaUrl: (rel: string) => publicUrl(rel),
-  presignR2ObjectUrl: (rel: string) => presign(rel),
+  presignR2ObjectUrl: (rel: string, expiresIn?: number) => presign(rel, expiresIn),
   r2ObjectExists: (rel: string) => objectExists(rel),
 }))
 
@@ -48,28 +48,41 @@ describe('resolveVaultPlaybackUrl', () => {
     else process.env.NEXT_PUBLIC_R2_BROWSER_PLAY = prev.publicFlag
   })
 
-  it('flag off returns same-origin proxy and does not presign', async () => {
-    const out = await resolveVaultPlaybackUrl(FTP)
-    expect(out).toEqual({ url: PROXY, fallbackUrl: PROXY, source: 'proxy' })
-    expect(presign).not.toHaveBeenCalled()
-  })
-
-  it('flag on presigns when R2 is configured', async () => {
-    process.env.R2_BROWSER_PLAY = '1'
+  it('presigns a vault track for 2 hours when R2 is configured', async () => {
     const out = await resolveVaultPlaybackUrl(FTP)
     expect(out).toEqual({
       url: SIGNED,
       fallbackUrl: PROXY,
       source: 'presigned',
-      expiresIn: 3600,
+      expiresIn: 2 * 60 * 60,
     })
-    expect(presign).toHaveBeenCalled()
+    expect(presign).toHaveBeenCalledWith(FTP, 2 * 60 * 60)
   })
 
-  it('falls back to proxy if presign fails while flag is on', async () => {
-    process.env.R2_BROWSER_PLAY = '1'
+  it('presigns a sold track for 6 hours', async () => {
+    const sold = 'shop/SERGIK - FTP.mp3'
+    objectExists.mockResolvedValue(true)
+    const out = await resolveVaultPlaybackUrl(sold)
+    expect(out?.source).toBe('presigned')
+    expect(out?.expiresIn).toBe(6 * 60 * 60)
+    expect(presign).toHaveBeenCalledWith(sold, 6 * 60 * 60)
+  })
+
+  it('falls back to the proxy in dev if presign fails', async () => {
     presign.mockResolvedValue(null)
     const out = await resolveVaultPlaybackUrl(FTP)
     expect(out).toEqual({ url: PROXY, fallbackUrl: PROXY, source: 'proxy' })
+  })
+
+  it('returns null in production when R2 has no object', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const prevEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+    objectExists.mockResolvedValue(false)
+    presign.mockClear()
+    const out = await resolveVaultPlaybackUrl(FTP)
+    expect(out).toBeNull()
+    expect(presign).not.toHaveBeenCalled()
+    env.NODE_ENV = prevEnv
   })
 })

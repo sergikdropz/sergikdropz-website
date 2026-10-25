@@ -175,6 +175,25 @@ describe('dsp-masters', () => {
     expect(matchTrackToDspMaster(sources, { trackTitle: 'Hydrate' })?.fileName).toContain('Hydrate')
   })
 
+  it('does not hand a release-folder neighbor to a different song', () => {
+    const keys = [
+      'dsp-masters/walk-that-walk/SERGIK-x-Breauxxx-All-Around.wav',
+      'dsp-masters/walk-that-walk/SERGIK-x-Breauxxx-Pumpin.wav',
+    ]
+    expect(
+      pickDspMasterR2Key(keys, { trackTitle: 'Walk Dat Walk', releaseTitle: 'Walk That Walk' }),
+    ).toBeNull()
+    expect(
+      pickDspMasterR2Key(keys, { trackTitle: 'Come Correct', releaseTitle: 'Walk That Walk' }),
+    ).toBeNull()
+    expect(
+      pickDspMasterR2Key(keys, { trackTitle: 'All Around', releaseTitle: 'Walk That Walk' }),
+    ).toContain('All-Around')
+    expect(
+      pickDspMasterR2Key(keys, { trackTitle: 'Pumpin', releaseTitle: 'Walk That Walk' }),
+    ).toContain('Pumpin')
+  })
+
   it('picks R2 keys by ISRC then title slug', () => {
     const keys = [
       'dsp-masters/soul-candy/QZES72569812-everyday-gratitude.wav',

@@ -3,6 +3,11 @@ import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { mergeUgcPack, parseUgcPack } from '@/lib/studio/ugc-pack'
+import {
+  mergeMonetizationEnrollment,
+  socialMediaPackAttempted,
+  type MonetizationEnrollment,
+} from '@/lib/studio/monetization-enrollment'
 import { mergePartyContacts, parsePartyContacts } from '@/lib/studio/rights-contract-send'
 import { mergeRightsPacketDrafts, parseRightsPacketDrafts } from '@/lib/studio/rights-packet-drafts'
 import { applyRightsPacketDrafts, buildRightsPackets } from '@/lib/studio/rights-packets'
@@ -35,6 +40,7 @@ type AllowedField = (typeof ALLOWED_FIELDS)[number]
 function pickAllowedFields(body: Record<string, unknown>) {
   const updates: Partial<Record<AllowedField, boolean | string>> & {
     ugc_pack?: ReturnType<typeof parseUgcPack>
+    monetization_enrollment?: MonetizationEnrollment
     party_contacts?: ReturnType<typeof parsePartyContacts>
     rights_packets?: ReturnType<typeof parseRightsPacketDrafts>
   } = {}
@@ -65,6 +71,9 @@ function pickAllowedFields(body: Record<string, unknown>) {
   }
   if (body.ugc_pack && typeof body.ugc_pack === 'object') {
     updates.ugc_pack = parseUgcPack(body.ugc_pack)
+  }
+  if (body.monetization_enrollment && typeof body.monetization_enrollment === 'object') {
+    updates.monetization_enrollment = mergeMonetizationEnrollment(null, body.monetization_enrollment)
   }
   if (body.party_contacts !== undefined) {
     updates.party_contacts = parsePartyContacts(body.party_contacts)
@@ -109,6 +118,12 @@ export async function PUT(
     }
 
     const body = await request.json()
+    if (socialMediaPackAttempted(body?.monetization_enrollment)) {
+      return NextResponse.json(
+        { error: 'DistroKid Social Media Pack is not enrolled from Rights. SERGIK UGC is the claim partner.' },
+        { status: 400 },
+      )
+    }
     const updates = pickAllowedFields(body || {})
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -133,6 +148,12 @@ export async function PUT(
     }
     if (updates.ugc_pack) {
       updates.ugc_pack = mergeUgcPack(current?.ugc_pack, body.ugc_pack)
+    }
+    if (updates.monetization_enrollment) {
+      updates.monetization_enrollment = mergeMonetizationEnrollment(
+        current?.monetization_enrollment,
+        body.monetization_enrollment,
+      )
     }
     if (updates.party_contacts) {
       updates.party_contacts = mergePartyContacts(current?.party_contacts, body.party_contacts)
@@ -203,6 +224,16 @@ export async function PUT(
     )
 
     if (error) {
+      const missingEnrollment = /monetization_enrollment/i.test(error.message || '')
+      if (missingEnrollment && updates.monetization_enrollment) {
+        return NextResponse.json(
+          {
+            error:
+              'Run web/supabase/migrations/add_monetization_enrollment.sql so program evidence can save.',
+          },
+          { status: 500 },
+        )
+      }
       const missingPack = /ugc_pack/i.test(error.message || '')
       if (missingPack && updates.ugc_pack) {
         return NextResponse.json(

@@ -20,6 +20,18 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 
 # ============================================
+# PRINTFUL (SERGWEAR merch fulfillment)
+# ============================================
+# Catalog browse/sync uses Printful's public GET /products (no key required).
+# Put it out, mockups, and order submission require both values from:
+# https://www.printful.com/dashboard/settings → API
+# Setup guide: web/docs/admin/PRINTFUL_API_SETUP.md (Manual orders / API store)
+PRINTFUL_API_KEY=
+PRINTFUL_STORE_ID=
+# PRINTFUL_WEBHOOK_SECRET=whsec_...  # optional: /api/printful/webhook
+# Refresh catalog cache: cd web && npm run merch:sync-printful-catalog
+
+# ============================================
 # SITE CONFIGURATION
 # ============================================
 # Your site URL (for production, use your actual domain)
@@ -122,9 +134,34 @@ FTP_ROOT_PATH=/
 RESEND_API_KEY=re_...
 # Default sender email for campaigns / fan mail
 NEXT_PUBLIC_FROM_EMAIL=noreply@sergikdropz.com
+# Department mail (studio, drops, fans, promo, bookings, press, shop, licensing, support).
+# Domain must be verified in Resend. Defaults to sergikdropz.com.
+# licensing@sergikdropz.com sends sync-license inquiry and quote mail.
+# Admin copies of new licensing inquiries. Defaults to the owner reminder inbox when unset.
+LICENSING_NOTIFY_EMAIL=sergikdrops@gmail.com
+# Leave unset until a lawyer approves the sync draft. true unlocks attorney review and activation.
+# LICENSING_ATTORNEY_REVIEW_ENABLED=true
+# SERGIK_MAIL_DOMAIN=sergikdropz.com
 # Resend webhook signing secret (Svix) for /api/webhooks/resend — opens/bounces on Release Collab
+# and inbound replies to department mailboxes. Enable Receiving on sergikdropz.com in Resend
+# and point the webhook at /api/webhooks/resend. The send-only API key cannot toggle receiving.
 # RESEND_WEBHOOK_SECRET=whsec_...
+# Scheduled department mail: GET/POST /api/cron/department-mail every 15 minutes
+# Authorization: Bearer $CRON_SECRET
 # Release Collab outbound From is hardcoded to release.studio@sergikdropz.com (verify in Resend)
+
+# DocuSign (optional — Rights contract e-signature)
+# Apps and keys: https://apps-d.docusign.com (demo) or https://apps.docusign.com (production)
+# Grant JWT consent once, then Studio can send the contract PDF as an envelope.
+# Webhook (JSON SIM): {SITE}/api/webhooks/docusign
+# DOCUSIGN_INTEGRATION_KEY=
+# DOCUSIGN_USER_ID=
+# DOCUSIGN_ACCOUNT_ID=
+# DOCUSIGN_RSA_PRIVATE_KEY=   # PEM; use \n for line breaks in Vercel
+# DOCUSIGN_SERGIK_EMAIL=      # include SERGIK as a signer. Leave unset to send collaborators only.
+# DOCUSIGN_SERGIK_NAME=SERGIK
+# DOCUSIGN_ENV=demo           # production uses account.docusign.com
+# DOCUSIGN_CONNECT_HMAC=      # Connect HMAC secret. Status is still confirmed with a live envelope fetch.
 
 # ============================================
 # AI — Admin assistant + Sonic DNA review/challenge (Optional)
@@ -132,25 +169,34 @@ NEXT_PUBLIC_FROM_EMAIL=noreply@sergikdropz.com
 ANTHROPIC_API_KEY=
 # Optional model override (default: claude-sonnet-4-6)
 # ANTHROPIC_CHAT_MODEL=claude-sonnet-4-6
+# SergikAI local turns call this model once to write the intelligence brief (default claude-opus-5-5).
+# ANTHROPIC_HARNESS_MODEL=claude-opus-5-5
+# Cursor plan is the reasoning brain when this key is set. It does not use ANTHROPIC_API_KEY.
+# Create the key at https://cursor.com/dashboard/integrations
+# CURSOR_API_KEY=
+# SERGIK_CURSOR_MODEL=auto
 # Force one provider: anthropic | openai | ollama | crowelogic
+# Local dev with an empty Anthropic balance: ADMIN_AI_CHAT_PROVIDER=ollama
 ADMIN_AI_CHAT_PROVIDER=anthropic
 # Local Ollama fallback (default http://127.0.0.1:11434). Use a fast model for reviews.
+# Same model as the sergik-chat MCP (`chat`). `cursor_chat` is separate and uses CURSOR_API_KEY.
 # OLLAMA_BASE_URL=http://127.0.0.1:11434
 # OLLAMA_MODEL=sergikai:latest
+# Admin chat uses qwen2.5vl:7b (same weights, no Ableton card) unless this is set.
+# OLLAMA_ADMIN_MODEL=qwen2.5vl:7b
 # ADMIN_AI_OLLAMA_TIMEOUT_MS=120000
 
 # OpenAI alternative
 # OPENAI_API_KEY=
 # OPENAI_CHAT_MODEL=gpt-4o-mini
 
-# CroweLM admin chat — existing Crowe ID, customer credential, server-side /v1/chat/completions.
-# Hosted usage is metered by Crowe against the existing Pro allowance. Not a second account.
-# Chat stays off for a hosted base URL until Pro linkage and the usage cap are confirmed.
+# GPT-6.1 Sol admin chat — https://gpt61.crowelogic.com/v1 model gpt-6.1-sol.
+# OpenAI-compatible, non-streaming. 5 credits per request. 3,000 per period through 2026-10-22. No overage.
+# The first issued key was revoked. Leave CROWELOGIC_API_KEY empty until a replacement arrives.
 # CROWELOGIC_API_KEY=
-# CROWELOGIC_BASE_URL=http://127.0.0.1:8011
-# CROWELOGIC_MODEL=auto
-# CROWELOGIC_PRO_LINKED=1
-# Local/terminal aliases for the chat credential only: CROWE_LOGIC_KEY, FOUNDRY_API_KEY, CROWE_LOGIC_URL, FOUNDRY_BASE_URL
+# CROWELOGIC_BASE_URL=https://gpt61.crowelogic.com/v1
+# CROWELOGIC_MODEL=gpt-6.1-sol
+# Local bridge only: CROWELOGIC_BASE_URL=http://127.0.0.1:8011
 # CROWE_API_KEY is Crowe Creative (below) and does not enable chat.
 
 # OlliN Pro / SergikAI harness (Admin AI `/exec query_intelligence_harness`)
@@ -192,7 +238,7 @@ ADMIN_AI_CHAT_PROVIDER=anthropic
 **Optional:**
 
 - `NEXT_PUBLIC_PLAYBACK_TIMING=1` — dev-only console marks (`loadstart` → `canplay` → `playing`) for latency tuning
-- `NEXT_PUBLIC_R2_BROWSER_PLAY=1` — **staging only**: allow presigned/CDN URLs in `<audio>` (default off; production stays on `/api/audio/media/`)
+- `NEXT_PUBLIC_R2_BROWSER_PLAY=1` — optional. Signed R2 URLs are already playable. Set this only to allow an unsigned public CDN host in `<audio>`.
 - Spotify API (only if using Spotify integration)
 - YouTube API (only if using YouTube integration)
 - Instagram API (only if auto-fetching Instagram posts - otherwise use manual post URLs)

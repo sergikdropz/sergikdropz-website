@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { closeSync, openSync, readSync, statSync } from 'fs'
 import { readFile } from 'fs/promises'
+import { fileStem, mayAssignTrackFile } from '@/lib/audio/catalog-playback-file'
 import {
   cacheBustMediaUrl,
 } from '@/lib/audio/replace-audio-file'
@@ -377,10 +378,29 @@ export async function ingestDspMaster(
     // Keep existing vault row + DNA. Only refresh the master URL pointer.
     const { data: vault } = await supabase
       .from('music_library_tracks')
-      .select('id, audio_file_id, metadata')
+      .select('id, title, file_url, audio_file_id, metadata')
       .eq('id', libraryTrackId)
       .maybeSingle()
     audioFileId = typeof vault?.audio_file_id === 'string' ? vault.audio_file_id : null
+    const vaultTitle = String(vault?.title || trackTitle)
+    if (
+      !mayAssignTrackFile({
+        trackTitle: vaultTitle,
+        nextUrl: streamUrl,
+        currentUrl: typeof vault?.file_url === 'string' ? vault.file_url : null,
+      })
+    ) {
+      return {
+        status: 'error',
+        isrc,
+        title: trackTitle,
+        relativePath,
+        wav_url: fileUrl,
+        distribution_track_id: distId,
+        music_library_track_id: libraryTrackId,
+        message: 'refusing to replace this song with a different audio file',
+      }
+    }
 
     const prevMeta =
       vault?.metadata && typeof vault.metadata === 'object' && !Array.isArray(vault.metadata)
@@ -405,13 +425,24 @@ export async function ingestDspMaster(
       .eq('id', libraryTrackId)
 
     // Point the existing audio_files row at the DSP master without clearing sonic_dna.
+    // Keep file_path when it already names a different file — that catalog path is
+    // how playback recovers if a release master was copied onto the wrong song.
     if (audioFileId) {
+      const nextPath = streamUrl === fileUrl ? relativePath : planned.streamRelativePath
+      const { data: audioRow } = await supabase
+        .from('audio_files')
+        .select('file_path')
+        .eq('id', audioFileId)
+        .maybeSingle()
+      const existingPath = typeof audioRow?.file_path === 'string' ? audioRow.file_path : ''
+      const keepCatalogPath = Boolean(existingPath) && fileStem(existingPath) !== fileStem(nextPath)
       await supabase
         .from('audio_files')
         .update({
           file_url: streamUrl,
-          file_path: streamUrl === fileUrl ? relativePath : planned.streamRelativePath,
-          file_name: relativePath.split('/').pop(),
+          ...(keepCatalogPath
+            ? {}
+            : { file_path: nextPath, file_name: relativePath.split('/').pop() }),
           format: streamUrl === fileUrl ? 'WAV' : 'MP3',
           size_bytes: sizeBytes,
           size_mb: parseFloat((sizeBytes / (1024 * 1024)).toFixed(2)),

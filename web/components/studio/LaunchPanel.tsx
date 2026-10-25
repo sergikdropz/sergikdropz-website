@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { CopyrightReadiness } from '@/lib/studio/copyright-pipeline'
-import type { LaunchHandoffStatus } from '@/lib/studio/launch-handoff'
+import {
+  isFallbackMusicDestination,
+  type LaunchHandoffStatus,
+} from '@/lib/studio/launch-handoff'
 import { vaultSoftReadiness } from '@/lib/studio/vault-import'
 import { STUDIO_PATHS, studioPipelineHref } from '@/lib/studio/studio-ia'
 import {
@@ -36,6 +39,23 @@ type PreflightItem = {
   ok: boolean
   hint?: string
   soft?: boolean
+}
+
+function streetDayLabel(iso?: string | null): string | null {
+  const raw = String(iso || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+  const [year, month, day] = raw.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function destinationLabel(url?: string | null): string {
+  const raw = String(url || '').trim()
+  if (!raw) return 'No destination'
+  try {
+    return new URL(raw).hostname.replace(/^www\./, '')
+  } catch {
+    return 'Destination set'
+  }
 }
 
 type Props = {
@@ -95,6 +115,7 @@ export default function LaunchPanel({
   distributorMeta = null,
 }: Props) {
   const [royaltyOps, setRoyaltyOps] = useState<RoyaltyOpsSignals | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -264,6 +285,35 @@ export default function LaunchPanel({
     ? window.location.origin
     : process.env.NEXT_PUBLIC_SITE_URL || 'https://sergikdropz.com'
   ).replace(/\/$/, '')
+
+  async function copySmartLink() {
+    const slug = handoff?.smartLink?.slug
+    if (!slug) return
+    const url = `${siteBase}/l/${slug}`
+    try {
+      const write = navigator.clipboard?.writeText(url)
+      await Promise.race([
+        write ?? Promise.reject(new Error('clipboard')),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('clipboard')), 800)),
+      ])
+    } catch {
+      try {
+        const input = document.createElement('textarea')
+        input.value = url
+        input.setAttribute('readonly', '')
+        input.style.position = 'fixed'
+        input.style.left = '-9999px'
+        document.body.appendChild(input)
+        input.select()
+        document.execCommand('copy')
+        input.remove()
+      } catch {
+        /* The URL stays visible on the card. */
+      }
+    }
+    setLinkCopied(true)
+    window.setTimeout(() => setLinkCopied(false), 1600)
+  }
 
   return (
     <div className="space-y-6">
@@ -473,22 +523,35 @@ export default function LaunchPanel({
         </ul>
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6" data-testid="marketing-handoff">
         <h3 className="text-lg font-semibold text-white mb-1">Marketing handoff</h3>
         <p className="text-sm text-zinc-500 mb-5">
-          Campaign draft + smart link for fans. Created automatically on go-live; you can also
-          ensure them here.
+          Fan smart link and a draft email campaign. Ensure fills anything missing and keeps the
+          existing link. A draft does not send until you schedule it.
         </p>
 
         <div className="grid sm:grid-cols-2 gap-4 mb-5">
           <div className="rounded-lg border border-zinc-800 p-4">
-            <div className="flex items-center gap-2 text-zinc-400 text-xs uppercase tracking-wider mb-2">
-              <FaEnvelope /> Campaign
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 text-zinc-400 text-xs uppercase tracking-wider">
+                <FaEnvelope /> Campaign
+              </div>
+              {handoff?.campaign ? (
+                <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-300">
+                  {handoff.campaign.status}
+                </span>
+              ) : null}
             </div>
             {handoff?.campaign ? (
               <div>
                 <p className="text-white text-sm font-medium">{handoff.campaign.name}</p>
-                <p className="text-xs text-zinc-500 mt-1 capitalize">{handoff.campaign.status}</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {handoff.campaign.status === 'draft' ? 'Draft — not sending' : 'Ready to send when scheduled'}
+                  {streetDayLabel(handoff.campaign.scheduled_send_at)
+                    ? ` · street day ${streetDayLabel(handoff.campaign.scheduled_send_at)}`
+                    : ''}
+                </p>
+                <p className="text-xs text-zinc-500 mt-2">T-3 · Street day · T+2 · T+7</p>
                 <Link
                   href="/admin/nurturing/campaigns"
                   className="text-xs text-violet-400 hover:text-violet-300 mt-2 inline-block"
@@ -506,18 +569,39 @@ export default function LaunchPanel({
             </div>
             {handoff?.smartLink ? (
               <div>
-                <p className="text-white text-sm font-medium font-mono">/{handoff.smartLink.slug}</p>
+                <p className="text-white text-sm font-medium font-mono break-all">
+                  /l/{handoff.smartLink.slug}
+                </p>
                 <p className="text-xs text-zinc-500 mt-1">
+                  {destinationLabel(handoff.smartLink.destination_url)}
+                  {' · '}
                   {handoff.smartLink.total_clicks} clicks
                 </p>
-                <a
-                  href={`${siteBase}/l/${handoff.smartLink.slug}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-violet-400 hover:text-violet-300 mt-2 inline-flex items-center gap-1"
-                >
-                  Open link <FaExternalLinkAlt className="text-[10px]" />
-                </a>
+                {isFallbackMusicDestination(handoff.smartLink.destination_url, releaseId) ? (
+                  <p className="text-xs text-amber-400/90 mt-2">
+                    Still points at the SERGIK music page. Ensure again after a Spotify or store URL exists.
+                  </p>
+                ) : null}
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    data-testid="marketing-handoff-copy"
+                    onClick={() => {
+                      void copySmartLink()
+                    }}
+                    className="text-xs text-violet-400 hover:text-violet-300"
+                  >
+                    {linkCopied ? 'Link copied' : 'Copy link'}
+                  </button>
+                  <a
+                    href={`${siteBase}/l/${handoff.smartLink.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-violet-400 hover:text-violet-300 inline-flex items-center gap-1"
+                  >
+                    Open link <FaExternalLinkAlt className="text-[10px]" />
+                  </a>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-zinc-500">Not created yet</p>
@@ -528,6 +612,7 @@ export default function LaunchPanel({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            data-testid="marketing-handoff-ensure"
             disabled={handoffLoading}
             onClick={onEnsureHandoff}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-zinc-600 text-sm text-zinc-200 hover:border-violet-500 disabled:opacity-50"

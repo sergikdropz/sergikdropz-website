@@ -15,6 +15,7 @@ export default function MerchGrid({ products, compact = false }: MerchGridProps)
     { id: 'tees', label: 'T-Shirts' },
     { id: 'hoodies', label: 'Hoodies' },
     { id: 'hats', label: 'Hats' },
+    { id: 'pants', label: 'Pants' },
     { id: 'accessories', label: 'Accessories' },
   ]
 

@@ -64,8 +64,31 @@ export type ResolvedSharePayload = {
     embed: string
     embedHtml: string
   }
+  /** Store icons for this release. Spotify, YouTube Music, and Apple Music can play in the page. */
+  platforms?: SharePlatformEmbed[]
   /** Unreleased or unlisted audio is omitted until the listener unlocks with email or Google. */
   listenLocked?: boolean
+}
+
+/** Listener stores on the share page, in DistroKid’s main-row order. */
+export type SharePlatformId =
+  | 'spotify'
+  | 'apple_music'
+  | 'youtube_music'
+  | 'amazon'
+  | 'deezer'
+  | 'tidal'
+  | 'pandora'
+  | 'iheart'
+
+export type SharePlatformEmbed = {
+  id: SharePlatformId
+  label: string
+  /** Release page on that service. Never an artist or search page. */
+  url: string
+  /** Iframe src when the store can play inside the page. */
+  embedUrl?: string
+  height?: number
 }
 
 /** Canonical live domain — used when SITE_URL is missing or still points at localhost. */
@@ -120,6 +143,20 @@ export function siteOrigin(): string {
   if (isVercelOrProductionRuntime()) return DEFAULT_PUBLIC_SITE_ORIGIN
 
   return fromEnv || 'http://localhost:3001'
+}
+
+/**
+ * Origin for links that leave this machine (Facebook posts, iframe embeds).
+ * Local admin still resolves shares against the live site, so never emit localhost.
+ */
+export function publicShareOrigin(): string {
+  const fromEnv = normalizeOriginCandidate(process.env.NEXT_PUBLIC_SITE_URL)
+  if (fromEnv && !isLocalDevOrigin(fromEnv)) return fromEnv
+
+  const fromVercel = vercelDeployOrigin()
+  if (fromVercel) return fromVercel
+
+  return DEFAULT_PUBLIC_SITE_ORIGIN
 }
 
 export function isLocalDevOrigin(origin: string): boolean {

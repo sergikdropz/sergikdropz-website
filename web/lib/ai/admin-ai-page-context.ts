@@ -20,6 +20,14 @@ export type AdminAiStudioReleaseContext = {
   hasGenre?: boolean
 }
 
+export type AdminAiFormFieldSnapshot = {
+  label: string
+  name: string
+  value: string
+  required: boolean
+  invalid: boolean
+}
+
 export type AdminAiPageContext = {
   surface: 'admin' | 'studio'
   pathname: string
@@ -27,6 +35,8 @@ export type AdminAiPageContext = {
   /** When false, focus tracking and field copilot prompts are disabled. */
   focusCopilotEnabled?: boolean
   focus?: AdminAiFocusContext | null
+  /** Visible controls on the signed-in page. The side browser cannot see these. */
+  formFields?: AdminAiFormFieldSnapshot[]
 }
 
 export function formatAdminAiPageContextForPrompt(ctx: AdminAiPageContext | null | undefined): string {
@@ -89,5 +99,63 @@ export function formatAdminAiPageContextForPrompt(ctx: AdminAiPageContext | null
     lines.push('', 'Field copilot is OFF — do not assume a focused form field unless the user names one.')
   }
 
+  if (ctx.formFields?.length) {
+    const rows = ctx.formFields.slice(0, 40).map((field) => {
+      const flags = [field.required ? 'required' : '', field.invalid ? 'invalid' : ''].filter(Boolean).join(' ')
+      const value = field.value ? JSON.stringify(field.value) : '(empty)'
+      return `- ${field.label || field.name || 'field'}: ${value}${flags ? ` ${flags}` : ''}`
+    })
+    lines.push(
+      '',
+      'Open form on the signed-in page (live values, not the side browser):',
+      ...rows,
+      'Answer field questions from this list. Do not invent a value that is not here.',
+    )
+  }
+
   return lines.filter(Boolean).join('\n')
+}
+
+const SECRET_FIELD = /password|secret|token|api[_-]?key|credential/i
+
+/** Visible inputs on the signed-in admin or studio page. Skips the chat panel and secrets. */
+export function collectSignedInFormFields(
+  doc: Pick<Document, 'querySelectorAll'> | null | undefined = typeof document === 'undefined' ? null : document,
+): AdminAiFormFieldSnapshot[] {
+  if (!doc) return []
+  const nodes = Array.from(doc.querySelectorAll('input, textarea, select')) as Array<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >
+  const out: AdminAiFormFieldSnapshot[] = []
+  for (const el of nodes) {
+    if (out.length >= 40) break
+    if (el.closest('[data-admin-ai-panel]')) continue
+    const input = el as HTMLInputElement
+    const type = (input.type || el.tagName).toLowerCase()
+    if (type === 'hidden' || type === 'password' || type === 'file' || type === 'submit' || type === 'button') continue
+    const name = input.name || el.id || ''
+    const style = typeof window !== 'undefined' ? window.getComputedStyle(el) : null
+    const rect = el.getBoundingClientRect?.()
+    if (style && (style.display === 'none' || style.visibility === 'hidden')) continue
+    if (rect && (rect.width < 1 || rect.height < 1)) continue
+    let label = ''
+    const escapeId =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(el.id) : el.id.replace(/"/g, '')
+    if (el.id && 'querySelector' in el.ownerDocument) {
+      const byFor = el.ownerDocument.querySelector(`label[for="${escapeId}"]`)
+      if (byFor?.textContent) label = byFor.textContent
+    }
+    if (!label) label = el.getAttribute('aria-label') || el.getAttribute('placeholder') || name
+    label = label.replace(/\s+/g, ' ').trim().slice(0, 80)
+    if (SECRET_FIELD.test(`${name} ${label}`)) continue
+    const value = String(input.value || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+    out.push({
+      label,
+      name: name.slice(0, 80),
+      value,
+      required: Boolean(input.required || el.getAttribute('aria-required') === 'true'),
+      invalid: el.getAttribute('aria-invalid') === 'true',
+    })
+  }
+  return out
 }

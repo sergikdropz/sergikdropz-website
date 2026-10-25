@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import GlobalSearch from './GlobalSearch'
@@ -22,9 +22,47 @@ const ADMIN_NAV_COLLAPSED_KEY = 'admin-nav-collapsed-v1'
 const SHELL_NAV_EXPANDED = '14rem'
 const SHELL_NAV_COLLAPSED = '3.25rem'
 
+function navPath(href: string) {
+  return href.split('?')[0] || href
+}
+
+function groupContainsPath(pathname: string, href: string) {
+  const path = navPath(href)
+  return pathname === path || pathname.startsWith(`${path}/`)
+}
+
+function hrefIsActive(
+  pathname: string,
+  searchParams: { get: (key: string) => string | null },
+  href: string,
+  siblingHrefs: string[],
+) {
+  const path = navPath(href)
+  const pathMatches =
+    path === '/admin' || path === '/studio'
+      ? pathname === path
+      : pathname === path || pathname.startsWith(`${path}/`)
+  if (!pathMatches) return false
+
+  const query = href.includes('?') ? href.slice(href.indexOf('?') + 1) : ''
+  const expected = new URLSearchParams(query)
+  if ([...expected.keys()].length === 0) {
+    for (const sibling of siblingHrefs) {
+      if (sibling === href || navPath(sibling) !== path || !sibling.includes('?')) continue
+      const siblingQuery = new URLSearchParams(sibling.slice(sibling.indexOf('?') + 1))
+      const matchesSibling = [...siblingQuery.keys()].every((key) => searchParams.get(key) === siblingQuery.get(key))
+      if (matchesSibling) return false
+    }
+    return true
+  }
+
+  return [...expected.keys()].every((key) => searchParams.get(key) === expected.get(key))
+}
+
 export default function AdminNav() {
   const { user, logout } = useAdminAuth()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -32,12 +70,28 @@ export default function AdminNav() {
     const initial: Record<string, boolean> = {}
     adminNavItems.forEach((item) => {
       if (item.type === 'group') {
-        const isActive = item.items.some((child) => pathname.startsWith(child.href))
+        const isActive = item.items.some((child) => groupContainsPath(pathname, child.href))
         if (isActive) initial[item.label] = true
       }
     })
     return initial
   })
+
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = { ...prev }
+      let changed = false
+      adminNavItems.forEach((item) => {
+        if (item.type !== 'group') return
+        const active = item.items.some((child) => groupContainsPath(pathname, child.href))
+        if (active && !next[item.label]) {
+          next[item.label] = true
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [pathname])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -74,14 +128,14 @@ export default function AdminNav() {
     setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
   }
 
-  function isActive(href: string) {
-    if (href === '/admin' || href === '/studio') return pathname === href
-    return pathname.startsWith(href)
+  function isActive(href: string, siblingHrefs: string[] = [href]) {
+    return hrefIsActive(pathname, searchParams, href, siblingHrefs)
   }
 
   function renderNavItem(item: AdminNavItem) {
     if (item.type === 'group') {
-      const groupActive = item.items.some((child) => isActive(child.href))
+      const siblingHrefs = item.items.map((child) => child.href)
+      const groupActive = item.items.some((child) => groupContainsPath(pathname, child.href))
       const expanded = expandedGroups[item.label] ?? false
 
       return (
@@ -114,7 +168,7 @@ export default function AdminNav() {
                   onMouseEnter={() => prefetchAdminRoute(router, child.href)}
                   onFocus={() => prefetchAdminRoute(router, child.href)}
                   className={`block px-3 py-1.5 rounded-md text-sm transition ${
-                    isActive(child.href)
+                    isActive(child.href, siblingHrefs)
                       ? 'text-white bg-purple-600/20 font-medium'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
                   }`}

@@ -5,9 +5,6 @@ import { supabaseIsReachable, supabaseUnavailableResponse } from '@/lib/supabase
 
 export const dynamic = 'force-dynamic'
 
-// Cache gallery images for 10 minutes to reduce database load
-export const revalidate = 600
-
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -80,7 +77,10 @@ export async function GET(request: NextRequest) {
       updated_at: img.updated_at,
     }))
 
-    return NextResponse.json({ images })
+    return NextResponse.json(
+      { images },
+      { headers: { 'Cache-Control': 'no-store' } },
+    )
   } catch (error: any) {
     console.error('API error:', error)
     return NextResponse.json(

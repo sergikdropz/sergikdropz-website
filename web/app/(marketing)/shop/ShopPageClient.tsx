@@ -53,8 +53,8 @@ export default function ShopPageClient({
             Shop
           </h1>
           <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-400 sm:text-lg">
-            EP downloads, beats, and tools—direct from SERGIK. Secure Stripe checkout; fan account required for
-            purchases and downloads.
+            EP downloads, beats, and tools—direct from SERGIK. MP3 is $1.29 per track. Lossless WAV is $1.99
+            per track. Secure Stripe checkout; fan account required for purchases and downloads.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
             <Link
@@ -92,7 +92,8 @@ export default function ShopPageClient({
             <div>
               <h2 className="text-2xl font-bold text-white">Catalog</h2>
               <p className="mt-1 text-sm text-gray-400">
-                {allProducts.length} {allProducts.length === 1 ? 'item' : 'items'} — WAV &amp; MP3 where noted
+                {allProducts.length} {allProducts.length === 1 ? 'item' : 'items'} — MP3 $1.29/track, lossless WAV
+                $1.99/track
               </p>
             </div>
           </div>

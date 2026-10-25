@@ -5,8 +5,12 @@ import { persistPromoContact } from '@/lib/fan-crm'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { parseSupabaseUserIdFromStripeMeta } from '@/lib/stripe/user-metadata'
 import { calculateSplitsForProduct, calculateSplitsForBundle } from '@/lib/revenue-splits'
+import { deliverShopSaleNotice } from '@/lib/email/deliver-shop-sale'
+import { shopSaleTitle } from '@/lib/email/shop-sale-notice'
+import { applyLicensingStripePayment } from '@/lib/licensing/store'
+import { isStripeWebhookEventDuplicate, recordStripeWebhookEventProcessed } from '@/lib/stripe/webhook-idempotency'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
   apiVersion: '2023-10-16',
 })
 
@@ -34,6 +38,13 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseServerClient()
+
+  try {
+    const duplicate = await isStripeWebhookEventDuplicate(supabase, event.id)
+    if (duplicate === 'duplicate') return NextResponse.json({ received: true, duplicate: true })
+  } catch (idempotencyError) {
+    console.warn('[stripe webhook] idempotency check skipped:', idempotencyError)
+  }
 
   // Handle checkout.session.completed
   if (event.type === 'checkout.session.completed') {
@@ -101,6 +112,20 @@ export async function POST(request: Request) {
         })
 
         console.log('License purchase saved:', session.id)
+      }
+
+      else if (productType === 'sync_license') {
+        const inquiryId = session.metadata?.inquiryId || ''
+        if (inquiryId) {
+          await applyLicensingStripePayment({
+            inquiryId,
+            sessionId: session.id,
+            eventId: event.id,
+            paymentStatus: session.payment_status,
+            amountTotal: session.amount_total,
+            currency: session.currency,
+          })
+        }
       }
 
       // --- Tip purchase ---
@@ -238,17 +263,34 @@ export async function POST(request: Request) {
         if (merchError) {
           console.error('Error saving merch order:', merchError)
         } else {
-          // Submit order to Printful
+          // Submit order to Printful and keep the printer's id so tracking can land.
           try {
             const { submitPrintfulOrder } = await import('@/lib/printful')
-            await submitPrintfulOrder({
+            const printfulOrder = await submitPrintfulOrder({
               orderId: merchOrder.id,
               items,
               shippingAddress,
               customerEmail: customerEmail || '',
             })
+            if (printfulOrder?.id) {
+              await supabase
+                .from('merch_orders')
+                .update({
+                  printful_order_id: String(printfulOrder.id),
+                  status: 'processing',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', merchOrder.id)
+            }
           } catch (printfulError) {
             console.error('Error submitting to Printful:', printfulError)
+            await supabase
+              .from('merch_orders')
+              .update({
+                status: 'failed',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', merchOrder.id)
           }
         }
 
@@ -277,7 +319,7 @@ export async function POST(request: Request) {
           stripe_session_id: session.id,
           track_id: session.metadata?.productId || session.metadata?.trackId,
           track_title: session.metadata?.productId || 'EP Bundle',
-          format: 'BUNDLE',
+          format: session.metadata?.format || 'BUNDLE',
           file_url: '',
           customer_email: customerEmail,
           customer_name: customerName,
@@ -355,6 +397,19 @@ export async function POST(request: Request) {
           console.log('Purchase saved to database:', session.id)
         }
       }
+
+      await deliverShopSaleNotice({
+        sessionId: session.id,
+        amountCents: session.amount_total || 0,
+        currency: session.currency || 'usd',
+        productType,
+        title: shopSaleTitle({ productType, metadata: session.metadata }),
+        format: session.metadata?.format || null,
+        customerEmail,
+        customerName,
+      }).catch((mailError) => {
+        console.error('Shop sale notice skipped:', mailError)
+      })
     } catch (error: any) {
       console.error('Error processing checkout:', error.message)
     }
@@ -441,6 +496,12 @@ export async function POST(request: Request) {
         console.error('Error updating failed payment:', error.message)
       }
     }
+  }
+
+  try {
+    await recordStripeWebhookEventProcessed(supabase, event.id, event.type)
+  } catch (idempotencyError) {
+    console.warn('[stripe webhook] idempotency record skipped:', idempotencyError)
   }
 
   return NextResponse.json({ received: true })

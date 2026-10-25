@@ -100,10 +100,7 @@ export default function StudioDashboard() {
   ]
 
   return (
-    <StudioPageShell
-      title="Your distribution stack"
-      subtitle="Run SERGIK like a label: own the catalog, copyright checklist, marketing copy, DSP links, and publish to your site — no DistroKid required."
-    >
+    <StudioPageShell>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10">
         {[
           { label: 'Tracks', value: stats.totalTracks },

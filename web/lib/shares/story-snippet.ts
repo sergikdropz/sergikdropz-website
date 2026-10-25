@@ -6,10 +6,48 @@
  */
 
 import { loadArtworkForCanvas } from '@/lib/media/canvas-artwork-load'
+import { clipFileShareFields, type ReadyClipFile } from '@/lib/shares/clip-share'
 import { ensureStoryMp4 } from '@/lib/shares/ensure-mp4'
 import { VINYL_DEG_PER_SEC } from '@/lib/shares/vinyl-spin-clock'
+import { paintStoryLookStill } from '@/lib/studio/story-look-paint'
+import { loadServiceIcons } from '@/lib/studio/promo-card-render'
+import { normalizeStoryLook, storyLookSlug, type StoryLook } from '@/lib/studio/story-look'
 
 export const STORY_SNIPPET_DURATION_SEC = 15
+
+/** Clip lengths in 15s steps, plus the whole track. */
+export const STORY_CLIP_LENGTHS = [15, 30, 45, 60] as const
+export type StoryClipLengthChoice = (typeof STORY_CLIP_LENGTHS)[number] | 'full'
+
+/** Steps that fit in the track, then the full song. Unknown length keeps every step. */
+export function storyClipLengthChoices(trackDurationSec?: number | null): StoryClipLengthChoice[] {
+  const dur =
+    typeof trackDurationSec === 'number' && Number.isFinite(trackDurationSec) && trackDurationSec > 0
+      ? trackDurationSec
+      : null
+  const steps = STORY_CLIP_LENGTHS.filter((sec) => dur == null || sec < dur - 0.5)
+  return [...steps, 'full']
+}
+
+export function storyClipLengthLabel(choice: StoryClipLengthChoice): string {
+  if (choice === 'full') return 'Full'
+  if (choice === 60) return '1:00'
+  return `${choice}s`
+}
+
+/** Seconds to play. Full uses the track; until the duration is known it stays 15s. */
+export function resolveStoryClipDuration(
+  choice: StoryClipLengthChoice,
+  trackDurationSec?: number | null,
+): number {
+  const dur =
+    typeof trackDurationSec === 'number' && Number.isFinite(trackDurationSec) && trackDurationSec > 0.5
+      ? trackDurationSec
+      : null
+  if (choice === 'full') return dur ?? STORY_SNIPPET_DURATION_SEC
+  if (dur != null && choice > dur) return dur
+  return choice
+}
 export const STORY_WIDTH = 1080
 export const STORY_HEIGHT = 1920
 export const STORY_FPS = 30
@@ -41,8 +79,15 @@ export type StorySnippetInput = {
   brand?: string
   /** Default `vinyl` — spinning disc trailer for Instagram Stories/Reels. */
   layout?: StorySnippetLayout
+  /** Format, aesthetic, background, and accent. When set, this replaces `layout`. */
+  look?: StoryLook
   /** Overlay under the disc (vinyl layout). */
   cta?: string
+  badge?: string
+  /** Full-track peaks for the 8-bar traveling tape. */
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
   onProgress?: (phase: string, ratio?: number) => void
 }
 
@@ -93,9 +138,15 @@ export function sanitizeStoryFilenamePart(value: string, maxLen = 40): string {
   return cleaned || 'track'
 }
 
-export function storySnippetFilename(title: string, artist: string, mimeType?: string): string {
+export function storySnippetFilename(
+  title: string,
+  artist: string,
+  mimeType?: string,
+  style?: string
+): string {
   const ext = mimeType?.includes('mp4') ? 'mp4' : 'webm'
-  const base = `${sanitizeStoryFilenamePart(artist)}-${sanitizeStoryFilenamePart(title)}-story`
+  const stylePart = style ? `-${sanitizeStoryFilenamePart(style, 64)}` : ''
+  const base = `${sanitizeStoryFilenamePart(artist)}-${sanitizeStoryFilenamePart(title)}-story${stylePart}`
   return `${base}.${ext}`
 }
 
@@ -521,6 +572,7 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   const height = input.height || STORY_HEIGHT
   const fps = input.fps || STORY_FPS
   const brand = input.brand || 'SERGIK'
+  const look = input.look ? normalizeStoryLook(input.look) : null
   const layout: StorySnippetLayout = input.layout === 'cover' ? 'cover' : 'vinyl'
   const cta =
     input.cta?.trim() ||
@@ -538,6 +590,9 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   if (!ctx) throw new Error('Could not create canvas context')
 
   const artwork = input.artworkUrl ? await loadArtworkForCanvas(input.artworkUrl) : null
+  if (look?.storesOn) {
+    await Promise.all([loadServiceIcons('#fafafa'), loadServiceIcons('#18181b')])
+  }
 
   const audio = new Audio()
   audio.crossOrigin = 'anonymous'
@@ -553,7 +608,12 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   })
 
   const mimeType = pickRecorderMimeType() || 'video/webm'
-  const filename = storySnippetFilename(input.title, input.artist, mimeType)
+  const filename = storySnippetFilename(
+    input.title,
+    input.artist,
+    mimeType,
+    look ? storyLookSlug(look) : undefined
+  )
 
   const AudioCtx =
     window.AudioContext ||
@@ -612,6 +672,27 @@ export async function renderStorySnippet(input: StorySnippetInput): Promise<Stor
   })
 
   const paint = (progress: number, elapsedSec: number) => {
+    if (look) {
+      paintStoryLookStill(ctx, {
+        width,
+        height,
+        artwork,
+        title: input.title,
+        artist: input.artist,
+        brand,
+        cta,
+        badge: input.badge,
+        look,
+        progress,
+        elapsedSec,
+        peaks: input.peaks,
+        trackDurationSec: input.trackDurationSec,
+        bpm: input.bpm,
+        timeOriginSec: input.startSec,
+        motionDurationSec: durationSec,
+      })
+      return
+    }
     paintFrame(ctx, {
       width,
       height,
@@ -704,6 +785,74 @@ export function downloadBlob(blob: Blob, filename: string): void {
   a.click()
   a.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 2_000)
+}
+
+function shareErrorName(err: unknown): string {
+  if (err && typeof err === 'object' && 'name' in err) return String((err as { name?: string }).name || '')
+  return ''
+}
+
+/**
+ * Hand a rendered clip to the device share sheet so Instagram, TikTok, or
+ * YouTube can take the file. Never saves it to the device.
+ * Instagram must be files-only — a caption URL opens the feed instead of a Story.
+ */
+export async function handoffClipFile(opts: {
+  blob: Blob
+  filename: string
+  title: string
+  text?: string
+  filesOnly?: boolean
+}): Promise<'shared' | 'cancelled' | 'needs_gesture' | 'unsupported'> {
+  const file = new File([opts.blob], opts.filename, {
+    type: opts.blob.type || 'video/mp4',
+  })
+  const nav = typeof navigator !== 'undefined' ? navigator : null
+  const canShareFiles =
+    !!nav &&
+    typeof nav.share === 'function' &&
+    (typeof nav.canShare !== 'function' || nav.canShare({ files: [file] }))
+  if (!canShareFiles || !nav) return 'unsupported'
+  try {
+    await nav.share({
+      files: [file],
+      ...clipFileShareFields({
+        filesOnly: opts.filesOnly,
+        title: opts.title,
+        text: opts.text,
+      }),
+    })
+    return 'shared'
+  } catch (err: unknown) {
+    const name = shareErrorName(err)
+    if (name === 'AbortError') return 'cancelled'
+    if (name === 'NotAllowedError') return 'needs_gesture'
+    return 'unsupported'
+  }
+}
+
+/**
+ * Send a clip that was rendered on an earlier tap.
+ * Call this from the follow-up button so the browser still has a user gesture.
+ */
+export async function presentReadyClip(clip: ReadyClipFile): Promise<'shared' | 'cancelled' | 'saved' | 'needs_gesture'> {
+  if (clip.mode === 'sheet') {
+    const handoff = await handoffClipFile({
+      blob: clip.blob,
+      filename: clip.filename,
+      title: clip.title,
+      text: clip.text,
+      filesOnly: clip.platform === 'instagram',
+    })
+    if (handoff === 'shared') return 'shared'
+    if (handoff === 'cancelled') return 'cancelled'
+    if (handoff === 'needs_gesture') return 'needs_gesture'
+  }
+  downloadBlob(clip.blob, clip.filename)
+  if (clip.moment && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    void navigator.clipboard.writeText(clip.moment).catch(() => undefined)
+  }
+  return 'saved'
 }
 
 export async function shareOrDownloadBlob(opts: {

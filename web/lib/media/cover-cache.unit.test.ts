@@ -43,5 +43,6 @@ describe('cover-cache', () => {
     )
     expect(urls.length).toBeGreaterThanOrEqual(2)
     expect(urls.every((u) => isCacheableCoverUrl(u))).toBe(true)
+    expect(urls.some((u) => u.includes('/_next/image'))).toBe(false)
   })
 })

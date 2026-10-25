@@ -13,27 +13,27 @@ export const SERGIK_STANDARD_TERMS = {
 
 const FILLS: Array<{ pattern: RegExp; value: string; label: string }> = [
   {
-    pattern: /Term:\s*_{3,}\s*years/gi,
-    value: `Term: ${SERGIK_STANDARD_TERMS.termYears} years`,
+    pattern: /Term:\s*\S*_{3,}\S*(?=\s+years)/gi,
+    value: `Term: ${SERGIK_STANDARD_TERMS.termYears}`,
     label: 'term',
   },
   {
-    pattern: /Territory:\s*_{3,}/gi,
+    pattern: /Territory:\s*[^.\n]*_{3,}[^.\n]*/gi,
     value: `Territory: ${SERGIK_STANDARD_TERMS.territory}`,
     label: 'territory',
   },
   {
-    pattern: /Governing law:\s*_{3,}/gi,
-    value: `Governing law: ${SERGIK_STANDARD_TERMS.governingLaw}`,
-    label: 'governing law',
-  },
-  {
-    pattern: /Forum:\s*_{3,}/gi,
+    pattern: /Forum:\s*[^.\n]*_{3,}[^.\n]*/gi,
     value: `Forum: ${SERGIK_STANDARD_TERMS.forum}`,
     label: 'forum',
   },
   {
-    pattern: /the base is\s*_{3,}/gi,
+    pattern: /Governing law:\s*[^.\n]*_{3,}[^.\n]*?(?=\s+Forum:|$)/gi,
+    value: `Governing law: ${SERGIK_STANDARD_TERMS.governingLaw}`,
+    label: 'governing law',
+  },
+  {
+    pattern: /the base is\s*[^(\n]*_{3,}[^(\n]*/gi,
     value: `the base is ${SERGIK_STANDARD_TERMS.royaltyBase}`,
     label: 'royalty base',
   },

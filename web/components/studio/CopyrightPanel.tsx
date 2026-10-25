@@ -13,6 +13,9 @@ import {
   ugcPackStatusSteps,
   type UgcPack,
 } from '@/lib/studio/ugc-pack'
+import { defaultMonetizationEnrollment, rightsManagerFromUgc } from '@/lib/studio/monetization-enrollment'
+import MonetizationEnrollmentSection from '@/components/studio/MonetizationEnrollmentSection'
+import ContractMailboxStrip from '@/components/studio/ContractMailboxStrip'
 import {
   displayArtistLine,
   parseContributors,
@@ -68,17 +71,24 @@ import {
   signatoriesReadyToSend,
 } from '@/lib/studio/rights-contract-send'
 import {
+  envelopeIsOpen,
+  latestEnvelope,
+  type DocuSignEnvelopeRecord,
+} from '@/lib/studio/docusign-records'
+import {
   FaArrowRight,
   FaBrain,
   FaCheck,
   FaCopy,
   FaFileContract,
+  FaFilePdf,
   FaMagic,
   FaPaperPlane,
   FaRedo,
   FaSave,
   FaShareAlt,
   FaShieldAlt,
+  FaSignature,
 } from 'react-icons/fa'
 import ReleaseReadinessRing from './ReleaseReadinessRing'
 
@@ -167,11 +177,19 @@ export default function CopyrightPanel({
   const [activePacket, setActivePacket] = useState<RightsPacketKind | null>('split_sheet')
   const [copiedContract, setCopiedContract] = useState<RightsPacketKind | null>(null)
   const [partyEmailDraft, setPartyEmailDraft] = useState<Record<string, string>>({})
-  const [sendingContract, setSendingContract] = useState(false)
+  const [draftingAction, setDraftingAction] = useState<'pdf' | 'mail' | 'docusign' | null>(null)
+  const [sendingDocuSign, setSendingDocuSign] = useState(false)
+  const [envelopeRows, setEnvelopeRows] = useState<DocuSignEnvelopeRecord[] | null>(null)
+  const [docuSignConsentUrl, setDocuSignConsentUrl] = useState<string | null>(null)
   const [sendNote, setSendNote] = useState<string | null>(null)
   const [packetDraftText, setPacketDraftText] = useState('')
   const [packetDirty, setPacketDirty] = useState(false)
   const [savingPacket, setSavingPacket] = useState(false)
+
+  useEffect(() => {
+    setEnvelopeRows(null)
+    setDocuSignConsentUrl(null)
+  }, [releaseId])
 
   const move = useMemo(
     () => (readiness ? resolveNextRightsMove(readiness, tracks) : null),
@@ -244,6 +262,9 @@ export default function CopyrightPanel({
     return contractSignatories(selectedPacket, tracks, contacts)
   }, [selectedPacket, tracks, readiness?.party_contacts, partyEmailDraft])
   const sendReady = useMemo(() => signatoriesReadyToSend(signatories), [signatories])
+  const docuSignRows = envelopeRows ?? readiness?.docusign_envelopes ?? []
+  const docuSignEnvelope = selectedPacket ? latestEnvelope(docuSignRows, selectedPacket.kind) : null
+  const docuSignOpen = envelopeIsOpen(docuSignEnvelope?.status)
 
   useEffect(() => {
     setPartyEmailDraft((prev) => {
@@ -466,14 +487,12 @@ export default function CopyrightPanel({
     window.setTimeout(() => setSendNote(null), 2000)
   }
 
-  async function sendContractForSigning(packet: RightsPacket) {
-    if (!releaseId || !packet.needed) return
+  async function draftContractForReview(packet: RightsPacket, action: 'pdf' | 'mail' | 'docusign') {
+    if (!releaseId || !packet.needed || draftingAction) return
     const text = packet.kind === selectedPacket?.kind ? packetDraftText : packet.text
     if (!text.trim()) return
-    if (packetDirty) {
-      savePacketDraft(packet)
-    }
-    setSendingContract(true)
+    if (packetDirty) savePacketDraft(packet)
+    setDraftingAction(action)
     setSendNote(null)
     try {
       const res = await fetch(
@@ -483,24 +502,53 @@ export default function CopyrightPanel({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             kind: packet.kind,
+            text,
             party_contacts: partyContactsFromDraft(),
+            draft: true,
           }),
         },
       )
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Send failed')
-      setSendNote(`Sent to ${data.count || 0} collaborator${data.count === 1 ? '' : 's'}`)
-      if (data.readiness && onUpdate) {
-        applyPatch({
-          ...(rightsPacketPendingPatch(packet) || {}),
-          party_contacts: partyContactsFromDraft(),
-        })
+      if (!res.ok) {
+        if (typeof data.consentUrl === 'string') setDocuSignConsentUrl(data.consentUrl)
+        throw new Error(data.error || 'Could not open the draft')
       }
-      window.setTimeout(() => setSendNote(null), 3200)
+      if (typeof data.href !== 'string' || !data.href.startsWith('/admin/email')) {
+        throw new Error('Could not open the draft')
+      }
+      window.location.assign(data.href)
     } catch (e: unknown) {
-      setSendNote(e instanceof Error ? e.message : 'Send failed')
+      setSendNote(e instanceof Error ? e.message : 'Could not open the draft')
+      setDraftingAction(null)
+    }
+  }
+
+  async function refreshDocuSign(packet: RightsPacket) {
+    if (!releaseId) return
+    setSendingDocuSign(true)
+    setSendNote(null)
+    try {
+      const res = await fetch(
+        `/api/studio/releases/${encodeURIComponent(releaseId)}/contracts/docusign?kind=${packet.kind}`,
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not check DocuSign')
+      if (Array.isArray(data.envelopes)) setEnvelopeRows(data.envelopes)
+      const status = String(data.envelope?.status || '')
+      if (status === 'completed') {
+        const approved = rightsPacketApprovePatch(packet)
+        if (approved) applyPatch(approved)
+        setSendNote('Everyone signed in DocuSign. The packet is marked approved.')
+      } else if (status) {
+        setSendNote(`DocuSign status: ${status}.`)
+      } else if (data.configured === false) {
+        setSendNote(data.hint || 'DocuSign is not configured.')
+      }
+      window.setTimeout(() => setSendNote(null), 4200)
+    } catch (e: unknown) {
+      setSendNote(e instanceof Error ? e.message : 'Could not check DocuSign')
     } finally {
-      setSendingContract(false)
+      setSendingDocuSign(false)
     }
   }
 
@@ -1123,12 +1171,7 @@ export default function CopyrightPanel({
                       </button>
                       <button
                         type="button"
-                        disabled={
-                          saving ||
-                          sendingContract ||
-                          !selectedPacket.ready ||
-                          !sendReady.ok
-                        }
+                        disabled={Boolean(draftingAction) || saving || !selectedPacket.ready || !sendReady.ok}
                         title={
                           !selectedPacket.ready
                             ? selectedPacket.missing[0] || 'Finish Catalog credits/splits first'
@@ -1136,13 +1179,71 @@ export default function CopyrightPanel({
                               ? sendReady.missing.length
                                 ? `Add email for: ${sendReady.missing.join(', ')}`
                                 : 'No collaborator recipients'
-                              : 'Email contract for signing via Resend'
+                              : 'Open a Department Mail draft with this PDF attached. Nothing sends until you send it there.'
                         }
-                        onClick={() => void sendContractForSigning(selectedPacket)}
+                        onClick={() => void draftContractForReview(selectedPacket, 'pdf')}
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                      >
+                        <FaFilePdf className="text-[10px]" />
+                        {draftingAction === 'pdf' ? 'Opening draft…' : 'Download PDF'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(draftingAction) || saving || !selectedPacket.ready || !sendReady.ok}
+                        title={
+                          !selectedPacket.ready
+                            ? selectedPacket.missing[0] || 'Finish Catalog credits/splits first'
+                            : !sendReady.ok
+                              ? sendReady.missing.length
+                                ? `Add email for: ${sendReady.missing.join(', ')}`
+                                : 'No collaborator recipients'
+                              : 'Open a Department Mail draft with the PDF and DocuSign filled in. You send it after you check it.'
+                        }
+                        onClick={() => void draftContractForReview(selectedPacket, 'mail')}
                         className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-cyan-600/40 text-cyan-100 hover:bg-cyan-950/40 disabled:opacity-40"
                       >
                         <FaPaperPlane className="text-[10px]" />
-                        {sendingContract ? 'Sending…' : 'Email for signing'}
+                        {draftingAction === 'mail' ? 'Opening draft…' : 'Email for signing'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          sendingDocuSign ||
+                          saving ||
+                          Boolean(draftingAction) ||
+                          docuSignEnvelope?.status === 'completed' ||
+                          (!docuSignOpen && (!selectedPacket.ready || !sendReady.ok))
+                        }
+                        title={
+                          docuSignEnvelope?.status === 'completed'
+                            ? 'Everyone signed in DocuSign'
+                            : docuSignOpen
+                              ? 'Check whether the DocuSign envelope is complete'
+                              : !selectedPacket.ready
+                                ? selectedPacket.missing[0] || 'Finish Catalog credits/splits first'
+                                : !sendReady.ok
+                                  ? sendReady.missing.length
+                                    ? `Add email for: ${sendReady.missing.join(', ')}`
+                                    : 'No collaborator recipients'
+                                  : 'Open a Department Mail draft that starts DocuSign when you send it.'
+                        }
+                        onClick={() =>
+                          void (docuSignOpen
+                            ? refreshDocuSign(selectedPacket)
+                            : draftContractForReview(selectedPacket, 'docusign'))
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-100 hover:bg-yellow-950/40 disabled:opacity-40"
+                      >
+                        <FaSignature className="text-[10px]" />
+                        {sendingDocuSign
+                          ? 'Checking…'
+                          : draftingAction === 'docusign'
+                            ? 'Opening draft…'
+                          : docuSignEnvelope?.status === 'completed'
+                            ? 'Signed in DocuSign'
+                            : docuSignOpen
+                              ? 'Check DocuSign'
+                              : 'DocuSign'}
                       </button>
                       <button
                         type="button"
@@ -1205,13 +1306,54 @@ export default function CopyrightPanel({
                       />
                     </label>
                   ))}
-                  {sendNote ? <p className="text-xs text-cyan-300">{sendNote}</p> : null}
+                  {sendNote ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-cyan-300">{sendNote}</p>
+                      {/blank deal terms/i.test(sendNote) ? (
+                        <button
+                          type="button"
+                          onClick={() => applyStandardTerms(selectedPacket)}
+                          disabled={saving}
+                          className="shrink-0 rounded-md border border-cyan-500/40 px-2.5 py-1 text-[11px] font-medium text-cyan-100 hover:bg-cyan-950/40 disabled:opacity-40"
+                        >
+                          Auto-fill
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {docuSignConsentUrl ? (
+                    <a
+                      href={docuSignConsentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-yellow-200 underline"
+                    >
+                      Grant DocuSign consent
+                    </a>
+                  ) : null}
+                  {docuSignEnvelope ? (
+                    <p className="text-xs text-yellow-200/80">
+                      DocuSign {docuSignEnvelope.status}
+                      {docuSignEnvelope.recipients.length
+                        ? ` · ${docuSignEnvelope.recipients.map((row) => row.stage).join(', ')}`
+                        : ''}
+                    </p>
+                  ) : null}
                   {!sendReady.ok && sendReady.missing.length ? (
                     <p className="text-xs text-amber-400">
                       Add email for: {sendReady.missing.join(', ')}
                     </p>
                   ) : null}
                 </div>
+              ) : null}
+              {releaseId && selectedPacket.needed ? (
+                <ContractMailboxStrip
+                  releaseId={releaseId}
+                  releaseTitle={releaseTitle}
+                  packetLabel={selectedPacket.label}
+                  kind={selectedPacket.kind}
+                  refreshKey={0}
+                />
               ) : null}
               {selectedPacket.needed && (selectedPacket.text || packetDraftText) ? (
                 <div className="space-y-2">
@@ -1263,7 +1405,7 @@ export default function CopyrightPanel({
                     className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-violet-500/50"
                   />
                   <p className="text-[11px] text-zinc-600">
-                    Edit freely, save the draft, then email/copy. AI audit & enhance opens Admin AI with findings + a revised packet you can apply back into this field.
+                    Edit freely, save the draft, then download the PDF or email it. AI audit & enhance opens Admin AI with findings + a revised packet you can apply back into this field.
                   </p>
                 </div>
               ) : null}
@@ -1420,8 +1562,16 @@ export default function CopyrightPanel({
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 space-y-2 text-xs text-zinc-500 leading-relaxed">
             <p className="text-zinc-400">How contracts work</p>
             <p>1. Seed splits & credits in Catalog (legal names for collabs).</p>
-            <p>2. Add collaborator emails → Email for signing (Resend) or Copy contract.</p>
-            <p>3. Mark approved when parties reply. SERGIK-only releases can use Approve SERGIK paperwork.</p>
+            <p>2. Add collaborator emails, then Download PDF, Email for signing, or DocuSign.</p>
+            <p>
+              3. Each of those opens a Release Studio draft in{' '}
+              <a href="/admin/email?mailbox=studio&folder=drafts" className="text-violet-300 hover:text-violet-200">
+                Department Mail
+              </a>{' '}
+              with the recipients, the contract, and the PDF already filled in. Nothing goes out until
+              you send that draft. Sending also starts DocuSign for the same PDF. Check DocuSign on
+              this card after they sign and Studio marks the packet approved.
+            </p>
             <p>Legal lock waits for intake, contracts, and DSP attestations.</p>
           </div>
         </div>
@@ -1479,6 +1629,27 @@ export default function CopyrightPanel({
           />
         </div>
       </details>
+
+      <div className="mx-5 mb-5">
+        <MonetizationEnrollmentSection
+          enrollment={readiness.monetization_enrollment || defaultMonetizationEnrollment()}
+          saving={saving}
+          onChange={(next) => onUpdate?.({ monetization_enrollment: next })}
+          onCopyUgc={() => {
+            const pack = readiness.ugc_pack || DEFAULT_UGC_PACK
+            const record = rightsManagerFromUgc(
+              { optedIn: pack.opted_in, meta: pack.meta, status: pack.status },
+              new Date().toISOString().slice(0, 10),
+            )
+            onUpdate?.({
+              monetization_enrollment: {
+                ...(readiness.monetization_enrollment || defaultMonetizationEnrollment()),
+                sergik_meta_rights_manager: record,
+              },
+            })
+          }}
+        />
+      </div>
     </div>
   )
 }

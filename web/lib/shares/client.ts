@@ -2,13 +2,17 @@ import { toSameOriginMediaUrl } from '@/utils/normalizeVaultAudioUrl'
 import {
   DEFAULT_PUBLIC_SITE_ORIGIN,
   embedHtmlSnippet,
+  embedUrlForToken,
   isLocalDevOrigin,
   listenUrlForToken,
+  publicShareOrigin,
   type ResolvedSharePayload,
   type ShareKind,
   type ShareTrackPayload,
   type ShareVisibility,
 } from '@/lib/shares/types'
+import { timedListenUrl } from '@/lib/shares/clip-share'
+import { listenUrlWithUtm } from '@/lib/shares/share-utm'
 import {
   renderStorySnippet,
   shareOrDownloadBlob,
@@ -58,6 +62,20 @@ export function withBrowserOrigin(payload: ResolvedSharePayload): ResolvedShareP
   }
 }
 
+/** Rewrite share URLs onto the live domain. Facebook cannot fetch localhost. */
+export function withPublicShareOrigin(payload: ResolvedSharePayload): ResolvedSharePayload {
+  const origin = publicShareOrigin()
+  const token = payload.share.token
+  return {
+    ...payload,
+    urls: {
+      listen: listenUrlForToken(token, origin),
+      embed: embedUrlForToken(token, origin),
+      embedHtml: embedHtmlSnippet(token, origin),
+    },
+  }
+}
+
 export async function createMusicShare(opts: {
   kind: ShareKind
   targetId: string
@@ -96,11 +114,43 @@ export async function copyShareEmbedHtml(opts: {
   targetId: string
   visibility?: ShareVisibility
 }): Promise<ResolvedSharePayload> {
-  const payload = await createMusicShare(opts)
+  const payload = withPublicShareOrigin(await createMusicShare(opts))
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(payload.urls.embedHtml)
   }
   return payload
+}
+
+/** Public listen URL for a Facebook post. The crawler builds the cover card from it. */
+export async function copyFacebookShareLink(
+  opts: {
+    kind: ShareKind
+    targetId: string
+    visibility?: ShareVisibility
+  },
+  releaseTitle?: string,
+): Promise<{ payload: ResolvedSharePayload; url: string; copied: boolean; videoReady: boolean }> {
+  const payload = withPublicShareOrigin(await createMusicShare(opts))
+  let videoReady = false
+  try {
+    const res = await fetch(`/api/shares/${encodeURIComponent(payload.share.token)}/facebook-card`, {
+      method: 'POST',
+    })
+    videoReady = res.ok
+  } catch {
+    videoReady = false
+  }
+  const url = listenUrlWithUtm(payload.urls.listen, 'facebook', releaseTitle || payload.share.title)
+  let copied = false
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(url)
+      copied = true
+    } catch {
+      copied = false
+    }
+  }
+  return { payload, url, copied, videoReady }
 }
 
 function pickStoryTrack(
@@ -132,6 +182,7 @@ export type ExportShareStoryResult = {
   track: ShareTrackPayload
   snippet: StorySnippetResult
   delivery: 'shared' | 'downloaded'
+  listenAtMoment?: string
 }
 
 export type ExportShareStoryOpts = {
@@ -141,6 +192,8 @@ export type ExportShareStoryOpts = {
   durationSec?: number
   startSec?: number
   onProgress?: (phase: string, ratio?: number) => void
+  /** `none` returns the clip so the caller can hand it to a platform. Default opens the share sheet. */
+  deliver?: 'sheet' | 'none'
 }
 
 /**
@@ -169,19 +222,31 @@ export async function exportShareStoryFromPayload(
     onProgress: opts.onProgress,
   })
 
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+  const listenAtMoment = timedListenUrl(payload.urls.listen, {
+    startSec: snippet.startSec,
+    trackId: track.id,
+    platform: 'instagram',
+    campaign: payload.share.title,
+    base: typeof window !== 'undefined' ? window.location.origin : undefined,
+  })
+
+  if (opts.deliver !== 'none' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
-      await navigator.clipboard.writeText(payload.urls.listen)
+      await navigator.clipboard.writeText(listenAtMoment)
     } catch {
       /* ignore */
     }
+  }
+
+  if (opts.deliver === 'none') {
+    return { payload, track, snippet, delivery: 'downloaded', listenAtMoment }
   }
 
   const delivery = await shareOrDownloadBlob({
     blob: snippet.blob,
     filename: snippet.filename,
     title: `${track.title} — SERGIK`,
-    text: `Listen & scrub: ${payload.urls.listen}`,
+    text: `Listen from this moment: ${listenAtMoment}`,
   })
 
   return { payload, track, snippet, delivery }

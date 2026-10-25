@@ -133,6 +133,26 @@ export async function loadMetaPublishCredentials(): Promise<MetaPublishCredentia
   return credentialsFromStored(stored)
 }
 
+export type MetaRoyaltyAccess = {
+  userToken: string | null
+  pageToken: string | null
+  pageId: string | null
+  igUserId: string | null
+  scopes: string[]
+}
+
+export async function loadMetaRoyaltyAccess(): Promise<MetaRoyaltyAccess | null> {
+  const stored = await readStored()
+  if (!stored) return null
+  return {
+    userToken: stored.user_access_token_sealed ? openMetaToken(stored.user_access_token_sealed) : null,
+    pageToken: openMetaToken(stored.page_access_token_sealed),
+    pageId: stored.page_id,
+    igUserId: stored.ig_user_id,
+    scopes: stored.scopes,
+  }
+}
+
 export async function metaConnectionStatus(): Promise<MetaConnectionStatus> {
   const stored = await readStored()
   const credentials = stored ? credentialsFromStored(stored) : null

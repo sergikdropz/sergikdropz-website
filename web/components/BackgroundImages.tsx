@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import galleryData from '@/data/gallery.json'
-import { useEffect, useState, useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useState, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   collectEpCoverTiles,
   collectReleaseCoverTiles,
@@ -28,6 +28,11 @@ import {
 
 const EP_COVER_TILES = collectEpCoverTiles()
 const RELEASE_COVER_TILES = collectReleaseCoverTiles()
+const FALLBACK_GALLERY_TILES: BackgroundTile[] = galleryData.images.map((img) => ({
+  id: img.id,
+  src: img.src,
+  alt: img.alt,
+}))
 const MOTION_VARIANT_COUNT = 8
 /** Keep in sync with `.mosaic-tile-crossfade-*` duration in globals.css */
 const MOSAIC_CROSSFADE_MS = 3200
@@ -210,12 +215,31 @@ function subscribeLiveCovers(onStoreChange: () => void) {
   return subscribeLiveMosaicCovers(onStoreChange)
 }
 
+type GalleryMosaicLoad = 'loading' | 'ready' | 'fallback'
+
+function tilesFromGalleryApi(images: unknown): BackgroundTile[] {
+  if (!Array.isArray(images)) return []
+  const tiles: BackgroundTile[] = []
+  for (const image of images) {
+    if (!image || typeof image !== 'object') continue
+    const row = image as { id?: unknown; src?: unknown; alt?: unknown }
+    if (typeof row.id !== 'string' || !row.id || typeof row.src !== 'string' || !row.src) continue
+    tiles.push({
+      id: row.id,
+      src: row.src,
+      alt: typeof row.alt === 'string' && row.alt ? row.alt : 'Gallery',
+    })
+  }
+  return tiles
+}
+
 export default function BackgroundImages() {
   const pathname = usePathname()
   const variant = mosaicVariantForPath(pathname)
-  const galleryImages = galleryData.images
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
   const [hasHydrated, setHasHydrated] = useState(false)
+  const [galleryLoad, setGalleryLoad] = useState<GalleryMosaicLoad>('loading')
+  const [liveGalleryTiles, setLiveGalleryTiles] = useState<BackgroundTile[]>([])
 
   const isWebKit = useSyncExternalStore(subscribeNoop, isSafariOrIOSWebKit, () => false)
   const isMobile = useSyncExternalStore(subscribeResize, getMobileSnapshot, () => false)
@@ -234,6 +258,34 @@ export default function BackgroundImages() {
     const id = window.requestAnimationFrame(() => setHasHydrated(true))
     return () => window.cancelAnimationFrame(id)
   }, [])
+
+  // Gallery pages used to tile the static gallery.json snapshot, which still
+  // includes photos removed in admin. The database is the source of truth.
+  useEffect(() => {
+    if (variant !== 'gallery') return
+    let cancelled = false
+    setGalleryLoad('loading')
+
+    async function loadActiveGallery() {
+      try {
+        const response = await fetch('/api/gallery/db?active_only=true', { cache: 'no-store' })
+        if (!response.ok) throw new Error('Failed to fetch active gallery images')
+        const data = await response.json()
+        if (data?.error) throw new Error(String(data.error))
+        if (cancelled) return
+        setLiveGalleryTiles(tilesFromGalleryApi(data?.images))
+        setGalleryLoad('ready')
+      } catch (error) {
+        console.error('Gallery background mosaic using static fallback:', error)
+        if (!cancelled) setGalleryLoad('fallback')
+      }
+    }
+
+    void loadActiveGallery()
+    return () => {
+      cancelled = true
+    }
+  }, [variant])
 
   useEffect(() => {
     if (variant === 'gallery') return
@@ -260,17 +312,15 @@ export default function BackgroundImages() {
 
   useEffect(() => {
     setImageErrors(new Set())
-  }, [variant])
+  }, [variant, galleryLoad, liveGalleryTiles])
 
   const sourceImages = useMemo((): BackgroundTile[] => {
     if (variant === 'vault') return mergeMosaicTiles(EP_COVER_TILES, liveCovers)
     if (variant === 'music') return mergeMosaicTiles(RELEASE_COVER_TILES, liveCovers)
-    return galleryImages.map((img) => ({
-      id: img.id,
-      src: img.src,
-      alt: img.alt,
-    }))
-  }, [variant, galleryImages, liveCovers])
+    if (galleryLoad === 'ready') return liveGalleryTiles
+    if (galleryLoad === 'fallback') return FALLBACK_GALLERY_TILES
+    return []
+  }, [variant, liveCovers, galleryLoad, liveGalleryTiles])
 
   const availableImages = useMemo(
     () => sourceImages.filter((img) => !imageErrors.has(img.id)),
@@ -283,18 +333,31 @@ export default function BackgroundImages() {
   const gridImageCount = isWebKit ? (isMobile ? 2 : 4) : isMobile ? 4 : 6
   const coverMosaic = variant !== 'gallery'
   const enableTileMotion = hasHydrated && !isWebKit && !isMobile
-  const enableTileSwap = hasHydrated && !isWebKit
+  // Art changes dissolve on phone and desktop. Ken Burns stays off on mobile / WebKit.
+  const enableTileSwap = hasHydrated
   const enableCrossfade = enableTileSwap && !prefersReducedMotion
 
   const [gridImageIndices, setGridImageIndices] = useState<number[]>([])
+  const mosaicVariantRef = useRef(variant)
 
   useEffect(() => {
+    const variantChanged = mosaicVariantRef.current !== variant
+    mosaicVariantRef.current = variant
     if (availableImages.length === 0) {
       setGridImageIndices([])
       return
     }
-    setGridImageIndices(buildMosaicGrid(availableImages.length, gridImageCount, gridCols))
-  }, [availableImages.length, gridImageCount, gridCols, variant, liveCovers.length])
+    setGridImageIndices((prev) => {
+      if (
+        !variantChanged &&
+        prev.length === gridImageCount &&
+        prev.every((index) => index >= 0 && index < availableImages.length)
+      ) {
+        return prev
+      }
+      return buildMosaicGrid(availableImages.length, gridImageCount, gridCols)
+    })
+  }, [availableImages.length, gridImageCount, gridCols, variant])
 
   useEffect(() => {
     if (!enableTileSwap || prefersReducedMotion) return
@@ -306,7 +369,7 @@ export default function BackgroundImages() {
     }
     document.addEventListener('visibilitychange', onVisibility)
 
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       if (!visible) return
       const poolSize = availableImages.length
       const cols = gridCols
@@ -317,7 +380,7 @@ export default function BackgroundImages() {
     }, MOSAIC_SWAP_INTERVAL_MS)
 
     return () => {
-      clearInterval(interval)
+      window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [

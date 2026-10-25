@@ -15,6 +15,7 @@ interface ProductCardProps {
   category?: string
   productType?: string
   licensingEnabled?: boolean
+  formatPrices?: { MP3: number; WAV: number }
 }
 
 export default function ProductCard({
@@ -27,13 +28,16 @@ export default function ProductCard({
   category,
   productType,
   licensingEnabled,
+  formatPrices,
 }: ProductCardProps) {
   const href = slug ? `/shop/${slug}` : `/shop/${id}`
 
-  const formattedPrice = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price)
+  const money = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount)
+  const formattedPrice = money(price)
 
   const cover = artwork ? resolveImageUrl(artwork) : ''
 
@@ -66,10 +70,17 @@ export default function ProductCard({
             {title}
           </h3>
           <p className="text-gray-400 text-xs mt-1 line-clamp-2">{description}</p>
-          <div className="flex items-center justify-between mt-3">
-            <span className="text-white font-bold">
-              {licensingEnabled ? `From ${formattedPrice}` : formattedPrice}
-            </span>
+          <div className="flex items-end justify-between mt-3 gap-3">
+            {formatPrices ? (
+              <div className="text-sm leading-snug">
+                <p className="text-white font-bold">MP3 {money(formatPrices.MP3)}</p>
+                <p className="text-gray-300">WAV {money(formatPrices.WAV)}</p>
+              </div>
+            ) : (
+              <span className="text-white font-bold">
+                {licensingEnabled ? `From ${formattedPrice}` : formattedPrice}
+              </span>
+            )}
             {category && (
               <span className="text-gray-500 text-xs uppercase tracking-wide">
                 {category}

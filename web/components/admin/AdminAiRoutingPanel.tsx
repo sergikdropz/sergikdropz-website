@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ADMIN_AI_SMART_MODEL_OVERRIDE } from '@/lib/ai/admin-smart-model-picker'
 import { sameOriginApiUrl } from '@/lib/same-origin-api'
 
-type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'crowelogic'
+type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'crowelogic' | 'cursor'
 
 type ChatSummary = {
   models: Record<string, string>
@@ -35,7 +35,7 @@ type Props = {
   onSaved: () => void
 }
 
-const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'ollama', 'crowelogic']
+const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'ollama', 'crowelogic', 'cursor']
 
 const CUSTOM_MODEL_VALUE = '__custom__'
 
@@ -239,6 +239,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
     openai: preferences.modelOverrides.openai ?? '',
     ollama: preferences.modelOverrides.ollama ?? '',
     crowelogic: preferences.modelOverrides.crowelogic ?? '',
+    cursor: preferences.modelOverrides.cursor ?? '',
   })
   const [previewInput, setPreviewInput] = useState('/plan Launch Q2 single with pre-save and Meta ads')
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
@@ -250,6 +251,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
     openai: [],
     ollama: [],
     crowelogic: [],
+    cursor: [],
   })
   const [modelCatalogMeta, setModelCatalogMeta] = useState<
     Record<
@@ -267,6 +269,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
     openai: {},
     ollama: {},
     crowelogic: {},
+    cursor: {},
   })
   const [modelCatalogLoading, setModelCatalogLoading] = useState(true)
   const [catalogRefreshedAt, setCatalogRefreshedAt] = useState<number | null>(null)
@@ -278,6 +281,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
       openai: [],
       ollama: [],
       crowelogic: [],
+    cursor: [],
     }
     const meta: Record<
       ProviderId,
@@ -293,6 +297,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
       openai: {},
       ollama: {},
       crowelogic: {},
+    cursor: {},
     }
     await Promise.all(
       PROVIDERS.map(async (p) => {
@@ -344,6 +349,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
       openai: preferences.modelOverrides.openai ?? '',
       ollama: preferences.modelOverrides.ollama ?? '',
       crowelogic: preferences.modelOverrides.crowelogic ?? '',
+    cursor: preferences.modelOverrides.cursor ?? '',
     })
   }, [preferences])
 
@@ -393,6 +399,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
               openai: models.openai,
               ollama: models.ollama,
               crowelogic: models.crowelogic,
+              cursor: models.cursor,
             },
           },
         }),
@@ -485,6 +492,7 @@ export function AdminAiRoutingPanel({ chat, preferences, onSaved }: Props) {
                 openai: ADMIN_AI_SMART_MODEL_OVERRIDE,
                 ollama: ADMIN_AI_SMART_MODEL_OVERRIDE,
                 crowelogic: ADMIN_AI_SMART_MODEL_OVERRIDE,
+                cursor: ADMIN_AI_SMART_MODEL_OVERRIDE,
               })
             }
             className="whitespace-nowrap rounded border border-violet-800/50 bg-violet-950/35 px-2 py-1 text-[10px] font-medium text-violet-200 hover:bg-violet-900/45"

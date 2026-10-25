@@ -4,7 +4,7 @@ import { normalizeSupabaseUserIdInput } from '@/lib/stripe/user-metadata'
 import { safeInternalPath } from '@/lib/safe-internal-path'
 import { requireFanAuthWithPassword } from '@/lib/require-fan-membership'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
   apiVersion: '2023-10-16',
 })
 

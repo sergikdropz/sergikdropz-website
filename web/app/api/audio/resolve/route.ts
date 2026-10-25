@@ -5,7 +5,8 @@ import {
   normalizeVaultAudioUrl,
 } from '@/utils/normalizeVaultAudioUrl'
 import { resolveVaultPlaybackUrl } from '@/lib/audio/resolve-vault-playback-url'
-import { syncMediaProxyPlaybackUrl } from '@/lib/audio/skip-background-resolve'
+import { getR2MediaConfig } from '@/lib/audio/r2Media'
+import { isProductionMediaHost } from '@/lib/audio/playback-grant'
 
 const RESOLVE_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
@@ -26,17 +27,6 @@ const RESOLVE_CACHE_HEADERS = {
 export const dynamic = 'force-dynamic';
 
 async function resolveOne(filePath: string) {
-  const proxyUrl = syncMediaProxyPlaybackUrl(filePath)
-  if (proxyUrl) {
-    return {
-      path: filePath,
-      url: proxyUrl,
-      fallbackUrl: proxyUrl,
-      source: 'proxy' as const,
-      expiresIn: undefined,
-    }
-  }
-
   const vaultPlayback = await resolveVaultPlaybackUrl(filePath)
   if (vaultPlayback && vaultPlayback.source !== 'normalized') {
     return {
@@ -79,6 +69,9 @@ export async function GET(request: Request) {
 
     const filePath = filePaths[0]
     const vaultPlayback = await resolveOne(filePath)
+    if (!vaultPlayback && isProductionMediaHost() && getR2MediaConfig() && extractVaultRelativePath(filePath)) {
+      return NextResponse.json({ error: 'Media not found', url: null }, { status: 404 })
+    }
     if (vaultPlayback) {
       return NextResponse.json(
         {

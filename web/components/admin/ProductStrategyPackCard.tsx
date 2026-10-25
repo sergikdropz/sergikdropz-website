@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { AdminAssistantRichText } from '@/components/AdminChatMessageContent'
+import { readStrategyPackPolish } from '@/lib/ai/product-strategy-pack'
 
 function CopyButton({ label, text }: { label: string; text: string }) {
   async function onCopy() {
@@ -83,6 +84,7 @@ export function ProductStrategyPackCard({
     typeof output.refinedMarkdown === 'string' && output.refinedMarkdown.trim()
       ? output.refinedMarkdown.trim()
       : null
+  const polish = readStrategyPackPolish(output)
   const refinementMeta = output.refinementMeta as { provider?: string | null; modelId?: string } | undefined
 
   const siteAudit = output.siteAudit as Record<string, unknown> | null | undefined
@@ -119,6 +121,12 @@ export function ProductStrategyPackCard({
             <li key={i}>{line}</li>
           ))}
         </ul>
+      ) : null}
+
+      {polish?.state === 'failed' ? (
+        <p className="rounded-lg border border-rose-700/40 bg-rose-950/30 px-2 py-1.5 text-[10px] leading-snug text-rose-100">
+          Polish missed. Scaffold kept. {polish.note}
+        </p>
       ) : null}
 
       {refinedMarkdown ? (

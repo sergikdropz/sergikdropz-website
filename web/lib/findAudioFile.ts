@@ -64,12 +64,17 @@ async function findLibraryThenAudio(
   select: string,
   query: { column: string; value: string; exact?: boolean },
 ) {
-  let request = supabase.from('music_library_tracks').select('id, audio_file_id, file_url, sonic_dna')
+  const wantsDna = select.split(',').some((column) => column.trim() === 'sonic_dna')
+  let request = supabase
+    .from('music_library_tracks')
+    .select(wantsDna ? 'id, audio_file_id, file_url, sonic_dna' : 'id, audio_file_id, file_url')
   request = query.exact === false
     ? request.ilike(query.column, query.value)
     : request.eq(query.column, query.value)
   const { data: libRows } = await request.limit(1)
-  const lib = firstRow(libRows)
+  const lib = firstRow(
+    libRows as Array<{ id: string; audio_file_id: string | null; file_url: string | null; sonic_dna?: unknown }> | null,
+  )
   if (!lib) return null
   if (lib.audio_file_id) {
     const { data } = await supabase.from('audio_files').select(select).eq('id', lib.audio_file_id).limit(1)
@@ -80,7 +85,10 @@ async function findLibraryThenAudio(
     const found = await findAudioFileByPath(supabase, lib.file_url, select)
     if (found) return found
   }
-  return lib.audio_file_id || lib.sonic_dna ? { id: lib.audio_file_id || lib.id, sonic_dna: lib.sonic_dna } : null
+  if (!lib.audio_file_id && !(wantsDna && lib.sonic_dna)) return null
+  return wantsDna
+    ? { id: lib.audio_file_id || lib.id, sonic_dna: lib.sonic_dna }
+    : { id: lib.audio_file_id || lib.id }
 }
 
 /**

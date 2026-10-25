@@ -214,7 +214,8 @@ export async function GET(request: Request) {
     }
 
     const supabase = createSupabaseServerClient()
-    const sonicSelect = 'id, title, artist, file_path, file_url, sonic_dna_json_url, sonic_dna, sonic_dna_status, sonic_dna_analyzed_at, sonic_dna_error'
+    const sonicSelect =
+      'id, title, artist, file_path, file_url, sonic_dna_json_url, sonic_dna_status, sonic_dna_analyzed_at, sonic_dna_error'
     let track: any = null
     try {
       track = await findAudioFile(supabase, {
@@ -273,6 +274,24 @@ export async function GET(request: Request) {
         },
         { status: 404 }
       )
+    }
+
+    const artifactUrl = typeof track.sonic_dna_json_url === 'string' ? track.sonic_dna_json_url : ''
+    const fileIsCurrent =
+      /^https:\/\//i.test(artifactUrl) &&
+      track.sonic_dna_status !== 'processing' &&
+      track.sonic_dna_status !== 'failed'
+    if (fileIsCurrent) {
+      return NextResponse.redirect(artifactUrl, 307)
+    }
+
+    if (track.id) {
+      const { data: heavy } = await supabase
+        .from('audio_files')
+        .select('sonic_dna')
+        .eq('id', track.id)
+        .maybeSingle()
+      track.sonic_dna = heavy?.sonic_dna ?? null
     }
 
     const storedHadMeasured = hasDspMeasuredGroove(extractMeasured(track.sonic_dna))
@@ -344,39 +363,9 @@ export async function GET(request: Request) {
           },
         )
       }
-      if (track.sonic_dna_json_url) {
-        try {
-          const res = await fetch(track.sonic_dna_json_url, { cache: 'force-cache' })
-          if (res.ok) {
-            const sonicDNA = prepareSonicDnaResponse(
-              mergePreferredSonicDna(track.sonic_dna, await res.json()),
-            )
-            const parsedJsonDna = parseSonicDna(sonicDNA)
-            if (!storedHadMeasured && parsedJsonDna && hasDspMeasuredGroove(extractMeasured(parsedJsonDna))) {
-              persistMeasuredOverlay(supabase, track.id, parsedJsonDna)
-            }
-            return NextResponse.json(
-              withPercent(
-                {
-                  sonicDNA,
-                  status: track.sonic_dna_status || 'completed',
-                  cached: true,
-                  analyzedAt: track.sonic_dna_analyzed_at,
-                  sonic_dna_json_url: track.sonic_dna_json_url,
-                },
-                track.sonic_dna_status || 'completed',
-                sonicDNA,
-              ),
-              {
-                headers: {
-                  'Cache-Control': dnaResponseCacheControl(track.sonic_dna_status || 'completed', sonicDNA),
-                },
-              },
-            )
-          }
-        } catch {
-          // fall back to DB column
-        }
+      if (typeof track.sonic_dna_json_url === 'string' && /^https:\/\//i.test(track.sonic_dna_json_url)) {
+        // Stored card is the file. The browser reads it from Storage.
+        return NextResponse.redirect(track.sonic_dna_json_url, 307)
       }
 
       const sonicDNA = prepareSonicDnaResponse(track.sonic_dna)

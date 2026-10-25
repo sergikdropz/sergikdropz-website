@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { FaShare, FaSpinner } from 'react-icons/fa'
 import ShareListenUnlockGate from '@/components/shares/ShareListenUnlockGate'
+import SharePlatformPlayers from '@/components/shares/SharePlatformPlayers'
 import ShareMiniPlayer, { type ShareScrubApi } from '@/components/shares/ShareMiniPlayer'
 import ShareStoryClipPicker from '@/components/shares/ShareStoryClipPicker'
 import ShareVinylStage from '@/components/shares/ShareVinylStage'
@@ -10,7 +12,17 @@ import { useAlbumAccents } from '@/hooks/useAlbumAccents'
 import { useVisualViewportBottomOffset } from '@/hooks/useVisualViewportBottomOffset'
 import { exportShareStoryFromPayload } from '@/lib/shares/client'
 import { rgbToCss } from '@/lib/shares/album-accents'
-import { STORY_SNIPPET_DURATION_SEC } from '@/lib/shares/story-snippet'
+import {
+  clipHandoffSuccessMessage,
+  clipReadySharePrompt,
+  clipShareCaption,
+  parseClipCue,
+  prepareClipHandoff,
+  timedListenUrl,
+  type ClipVideoPlatform,
+  type ReadyClipFile,
+} from '@/lib/shares/clip-share'
+import { presentReadyClip, STORY_SNIPPET_DURATION_SEC } from '@/lib/shares/story-snippet'
 import {
   pickShareArtwork,
   shareAccentArtworkUrl,
@@ -63,6 +75,8 @@ export default function ShareListenClient({
   const [clipTrackDuration, setClipTrackDuration] = useState(0)
   const [igBusy, setIgBusy] = useState(false)
   const [igNotice, setIgNotice] = useState<string | null>(null)
+  const [readyClip, setReadyClip] = useState<ReadyClipFile | null>(null)
+  const [clipCue, setClipCue] = useState<{ startSec: number; trackId: string | null } | null>(null)
   const scrubApiRef = useRef<ShareScrubApi | null>(null)
   const scrubWasPlayingRef = useRef(false)
   const visualBottomOffset = useVisualViewportBottomOffset()
@@ -97,6 +111,16 @@ export default function ShareListenClient({
       cancelled = true
     }
   }, [loadShare])
+
+  useEffect(() => {
+    setClipCue(parseClipCue(window.location.search))
+  }, [])
+
+  useEffect(() => {
+    if (!clipCue?.trackId || !data?.tracks?.length) return
+    const index = data.tracks.findIndex((track) => track.id === clipCue.trackId)
+    if (index >= 0) setActiveIndex(index)
+  }, [clipCue, data])
 
   const onShareUnlocked = useCallback(async () => {
     const payload = await loadShare()
@@ -179,41 +203,68 @@ export default function ShareListenClient({
     setClipInitialStart(Math.min(idealStart, maxStart))
     scrubApiRef.current?.pause()
     setClipPickerOpen(true)
+    setReadyClip(null)
     setIgNotice(null)
   }, [activeIndex, data, igBusy])
 
-  const shareToInstagram = useCallback(
-    async (startSec: number) => {
+  const sendVideoToPlatform = useCallback(
+    async (platform: ClipVideoPlatform, startSec: number) => {
       if (!data || igBusy) return
       const track = data.tracks[activeIndex]
+      const label = platform === 'tiktok' ? 'TikTok' : platform === 'youtube' ? 'YouTube' : 'Instagram'
+      setReadyClip(null)
       setIgBusy(true)
-      setIgNotice('Rendering 15s MP4…')
+      setIgNotice(`Preparing ${label}…`)
       try {
         const result = await exportShareStoryFromPayload(data, {
           trackId: track?.id,
           layout: 'vinyl',
           startSec,
           durationSec: STORY_SNIPPET_DURATION_SEC,
+          deliver: 'none',
           onProgress: (phase, ratio) => {
             if (phase === 'recording' && typeof ratio === 'number') {
-              setIgNotice(`Recording Story… ${Math.round(ratio * 100)}%`)
+              setIgNotice(`Recording ${label}… ${Math.round(ratio * 100)}%`)
             } else if (phase === 'encoding' && typeof ratio === 'number') {
-              setIgNotice(`Encoding MPEG-4… ${Math.round(ratio * 100)}%`)
-            } else if (phase === 'loading' || phase === 'share') {
-              setIgNotice('Preparing Instagram Story…')
+              setIgNotice(`Encoding ${label}… ${Math.round(ratio * 100)}%`)
+            } else if (phase === 'loading') {
+              setIgNotice(`Preparing ${label}…`)
             }
           },
         })
-        setClipPickerOpen(false)
-        const isMp4 = result.snippet.mimeType.toLowerCase().includes('mp4')
-        setIgNotice(
-          result.delivery === 'shared'
-            ? `Story ${isMp4 ? 'MP4' : 'video'} shared — paste the Link sticker (listen URL copied).`
-            : `Story ${isMp4 ? 'MP4' : 'video'} downloaded — post to IG, then add a Link sticker (URL copied).`,
-        )
-        window.setTimeout(() => setIgNotice(null), 8000)
+        const moment =
+          result.listenAtMoment ||
+          timedListenUrl(data.urls.listen, {
+            startSec,
+            trackId: track?.id,
+            platform,
+            campaign: data.share.title,
+            base: window.location.origin,
+          })
+        const caption = clipShareCaption({
+          title: track?.title || data.share.title,
+          artist: track?.artist,
+          url: moment,
+          startSec,
+        })
+        const prepared = prepareClipHandoff({
+          platform,
+          blob: result.snippet.blob,
+          filename: result.snippet.filename,
+          title: `${track?.title || data.share.title} — SERGIK`,
+          text: caption,
+          moment,
+          mimeType: result.snippet.mimeType,
+        })
+        if (!prepared.ok) {
+          setIgNotice(prepared.reason)
+          window.setTimeout(() => setIgNotice(null), 8000)
+          return
+        }
+        setReadyClip(prepared.clip)
+        setIgNotice(null)
       } catch (err: any) {
-        setIgNotice(err?.message || 'Failed to render Instagram Story')
+        setIgNotice(err?.message || `Could not prepare ${label}`)
         window.setTimeout(() => setIgNotice(null), 6000)
       } finally {
         setIgBusy(false)
@@ -221,6 +272,37 @@ export default function ShareListenClient({
     },
     [activeIndex, data, igBusy],
   )
+
+  const shareReadyClip = useCallback(async () => {
+    if (!readyClip || igBusy) return
+    const clip = readyClip
+    setIgBusy(true)
+    setIgNotice(clip.mode === 'sheet' ? 'Opening story share…' : 'Saving story clip…')
+    try {
+      const result = await presentReadyClip(clip)
+      if (result === 'cancelled' || result === 'needs_gesture') {
+        setIgNotice(null)
+        return
+      }
+      setClipPickerOpen(false)
+      setReadyClip(null)
+      setIgNotice(clipHandoffSuccessMessage(clip.platform, result === 'shared' ? 'shared' : 'saved'))
+      window.setTimeout(() => setIgNotice(null), 8000)
+    } catch (err: unknown) {
+      setIgNotice(err instanceof Error ? err.message : 'Could not share the story clip')
+      window.setTimeout(() => setIgNotice(null), 6000)
+    } finally {
+      setIgBusy(false)
+    }
+  }, [igBusy, readyClip])
+
+  const readyShare = readyClip
+    ? {
+        platform: readyClip.platform,
+        ...clipReadySharePrompt(readyClip.platform, readyClip.mode),
+        onShare: () => void shareReadyClip(),
+      }
+    : null
 
   if (loading) {
     return (
@@ -345,9 +427,9 @@ export default function ShareListenClient({
           <span className="text-[10px] uppercase tracking-[0.22em] text-white/45">{kindLabel}</span>
         </header>
 
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[calc(13rem+env(safe-area-inset-bottom,0px))] pt-2 sm:px-8 sm:pb-[calc(13.5rem+env(safe-area-inset-bottom,0px))]">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-[calc(13rem+env(safe-area-inset-bottom,0px))] pt-2 sm:px-8 sm:pb-[calc(13.5rem+env(safe-area-inset-bottom,0px))]">
           <div
-            className={`w-full ${
+            className={`my-auto w-full ${
               stageMode === 'sleeve'
                 ? 'max-w-[min(96vw,480px)]'
                 : variant === 'embed'
@@ -429,10 +511,20 @@ export default function ShareListenClient({
                     type="button"
                     disabled={igBusy || !activeTrack}
                     onClick={openClipPicker}
-                    className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[11px] uppercase tracking-[0.16em] text-white/85 transition hover:border-white/35 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label={igBusy ? 'Preparing share' : 'Share'}
+                    aria-busy={igBusy}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-white/85 transition hover:border-white/35 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {igBusy ? 'Rendering…' : 'Share to Instagram'}
+                    {igBusy ? (
+                      <FaSpinner className="animate-spin text-sm" aria-hidden />
+                    ) : (
+                      <FaShare className="text-sm" aria-hidden />
+                    )}
                   </button>
+                  <SharePlatformPlayers
+                    platforms={data.platforms || []}
+                    onOpen={() => scrubApiRef.current?.pause()}
+                  />
                   {igNotice ? (
                     <p className="max-w-sm text-center text-xs leading-relaxed text-zinc-400" role="status">
                       {igNotice}
@@ -492,6 +584,7 @@ export default function ShareListenClient({
           onPlayed={onPlayed}
           onPlayingChange={onPlayingChange}
           scrubApiRef={scrubApiRef}
+          cueSec={clipCue && (!clipCue.trackId || clipCue.trackId === activeTrack?.id) ? clipCue.startSec : null}
         />
       </div>
 
@@ -506,12 +599,19 @@ export default function ShareListenClient({
           trackId={activeTrack.id}
           audioFileId={activeTrack.audioFileId}
           scrubApiRef={scrubApiRef}
+          listenUrl={data.urls.listen}
           busy={igBusy}
           busyLabel={igBusy ? igNotice : null}
           onCancel={() => {
-            if (!igBusy) setClipPickerOpen(false)
+            if (!igBusy) {
+              setClipPickerOpen(false)
+              setReadyClip(null)
+            }
           }}
-          onConfirm={(startSec) => void shareToInstagram(startSec)}
+          onWindowChange={() => setReadyClip((prev) => (prev ? null : prev))}
+          readyShare={readyShare}
+          onSendVideo={(platform, startSec) => void sendVideoToPlatform(platform, startSec)}
+          onConfirm={(startSec) => void sendVideoToPlatform('instagram', startSec)}
         />
       )}
     </div>

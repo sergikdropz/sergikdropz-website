@@ -13,7 +13,7 @@ import {
 } from '@/lib/catalog-lock'
 import { bumpMusicLibraryPublishVersion, isUsableCatalogValue, preferCatalogValue } from '@/lib/music-library-publish'
 import { syncCatalogFieldsToCache } from '@/utils/sonicDNACache'
-import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
+import { mapLibraryTrackToListItem, attachLeanListMetadata, LIST_METADATA_SELECT } from '@/lib/music-library/track-list-fields'
 import { persistedCreatedDateFields, normalizeTrackCreatedDate } from '@/lib/music-library/track-created-date'
 import { persistSystemicCover } from '@/lib/catalog-sync/persist-systemic-cover'
 import { scheduleCatalogTagImprint, scheduleFolderCatalogTags } from '@/lib/audio/imprint-catalog-tags'
@@ -102,12 +102,12 @@ export async function GET(request: NextRequest) {
       'tags',
       'sort_artist',
       'beat_grid_offset',
+      LIST_METADATA_SELECT,
     ]
     
-    // List endpoints stay lean: never TOAST-read sonic_dna / waveform for many rows
-    // unless hydrating sparse playlist/folder rows that lack bpm/key.
+    // List endpoints stay lean: never TOAST-read sonic_dna / waveform / full metadata.
     // Full DNA + waveform are fetched per selected track via /api/audio/sonic-dna and /api/audio/waveform.
-    // Always include metadata so created/original_date is available without a second fetch.
+    // Date and album stamps come from the small metadata keys in LIST_METADATA_SELECT.
     // Folder join keeps Album column in sync with Songs browse.
     const fields = [
       ...baseFields,
@@ -161,19 +161,29 @@ export async function GET(request: NextRequest) {
       return bpmMissing || keyMissing
     }
 
-    const hydrateDna =
-      requestedIds.length > 0 || (data || []).some((t: any) => needsDnaHydration(t))
-
     const audioFilesMetaMap = new Map<string, any>()
     if (audioFileIds.length > 0) {
-      const audioSelect = hydrateDna
-        ? 'id, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature, sonic_dna'
-        : 'id, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature'
+      // Scalar columns and artifact URLs only. sonic_dna stays off this list.
       const { data: audioMeta } = await supabase
         .from('audio_files')
-        .select(audioSelect)
+        .select(
+          'id, file_path, file_url, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature, energy_level, danceability, waveform_json_url, sonic_dna_json_url',
+        )
         .in('id', audioFileIds)
       audioMeta?.forEach((file: any) => audioFilesMetaMap.set(file.id, file))
+    }
+
+    const cacheByTrack = new Map<string, any>()
+    const sparseForCache = (data || []).filter((t: any) => needsDnaHydration(t))
+    const sparseTrackIds = sparseForCache.map((t: any) => t.id).filter(Boolean)
+    if (sparseTrackIds.length > 0) {
+      const { data: cacheRows } = await supabase
+        .from('sonic_dna_cache')
+        .select('track_id, bpm, key_signature, key, primary_genre, subgenre, energy_level, danceability')
+        .in('track_id', sparseTrackIds)
+      cacheRows?.forEach((row: any) => {
+        if (row.track_id) cacheByTrack.set(row.track_id, row)
+      })
     }
 
     // Prefer richer catalog twins (same title+artist) when playlist-ingest rows are sparse.
@@ -185,12 +195,13 @@ export async function GET(request: NextRequest) {
         const { data: twins } = await supabase
           .from('music_library_tracks')
           .select(
-            'id, title, artist, bpm, key_signature, genre, subgenre, duration, year, date, date_created, artwork_url, rating, play_count, folder_id, metadata, music_library_folders(name, type, artwork_url)',
+            'id, title, artist, bpm, key_signature, genre, subgenre, duration, year, date, date_created, artwork_url, rating, play_count, folder_id, meta_original_date:metadata->>original_date, meta_album:metadata->>album, meta_album_title:metadata->>album_title, music_library_folders(name, type, artwork_url)',
           )
           .in('title', titles)
           .or('is_archived.is.null,is_archived.eq.false')
           .limit(200)
         for (const twin of twins || []) {
+          attachLeanListMetadata(twin)
           const key = `${String(twin.title || '').trim().toLowerCase()}::${String(twin.artist || '').trim().toLowerCase()}`
           const score =
             (twin.bpm != null ? 4 : 0) +
@@ -210,8 +221,21 @@ export async function GET(request: NextRequest) {
     }
 
     const tracks = (data || []).map((track: any) => {
+      attachLeanListMetadata(track)
       const folder = track.music_library_folders || null
-      const audio = track.audio_file_id ? audioFilesMetaMap.get(track.audio_file_id) : null
+      const audioFile = track.audio_file_id ? audioFilesMetaMap.get(track.audio_file_id) : null
+      const cache = cacheByTrack.get(track.id)
+      const audio = audioFile
+        ? {
+            ...audioFile,
+            bpm: cache?.bpm ?? audioFile.bpm,
+            key_signature: cache?.key_signature || cache?.key || audioFile.key_signature,
+            genre: cache?.primary_genre,
+            subgenre: cache?.subgenre,
+            energy_level: cache?.energy_level ?? audioFile.energy_level,
+            danceability: cache?.danceability ?? audioFile.danceability,
+          }
+        : null
       const twinKey = `${String(track.title || '').trim().toLowerCase()}::${String(track.artist || '').trim().toLowerCase()}`
       const twin = twinByKey.get(twinKey)
       const merged =
@@ -562,7 +586,11 @@ export async function PUT(request: NextRequest) {
       if (updates.energy_level !== undefined) audioUpdates.energy_level = updates.energy_level
       if (updates.danceability !== undefined) audioUpdates.danceability = updates.danceability
       if (updates.duration !== undefined) audioUpdates.duration_seconds = updates.duration
-      if (dbUpdates.sonic_dna !== undefined) audioUpdates.sonic_dna = dbUpdates.sonic_dna
+      if (dbUpdates.sonic_dna !== undefined) {
+        audioUpdates.sonic_dna = dbUpdates.sonic_dna
+        // The stored file is the previous card. Clear it so the next read uses this edit.
+        audioUpdates.sonic_dna_json_url = null
+      }
 
       await supabase
         .from('audio_files')

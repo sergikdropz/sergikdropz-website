@@ -297,6 +297,13 @@ export default function AdminDashboard() {
       color: 'from-purple-600 to-violet-600',
     },
     {
+      title: 'Sync licensing',
+      description: 'Client inquiries, quotes, and licenses that stay off until payment and review',
+      href: '/admin/licensing',
+      icon: '🎼',
+      color: 'from-violet-600 to-fuchsia-600',
+    },
+    {
       title: 'Email Subscribers',
       description: 'Manage mailing list subscribers from free downloads and tips',
       href: '/admin/subscribers',
@@ -325,7 +332,6 @@ export default function AdminDashboard() {
         {/* Header with Command Palette */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Admin Dashboard</h1>
             <p className="text-gray-400">Welcome back, {user?.email ?? 'Admin'}</p>
           </div>
           <button
@@ -340,10 +346,10 @@ export default function AdminDashboard() {
 
         {/* Jobs-to-be-done: one primary next action */}
         <section className="mb-8 rounded-lg border border-line bg-surface-raised p-5" aria-labelledby="next-best-action">
-          <h2 id="next-best-action" className="mb-1 text-lg font-semibold text-ink">
+          <h2 id="next-best-action" className="mb-1 text-center text-lg font-semibold text-ink">
             Next best action
           </h2>
-          <p className="mb-4 text-sm text-ink-muted">
+          <p className="mb-4 text-center text-sm text-ink-muted">
             Focus on release readiness, catalog quality, campaigns, fans, and revenue — not every module at once.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -491,7 +497,7 @@ export default function AdminDashboard() {
         {/* Quick Actions */}
         {quickActions.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
+            <h2 className="mb-4 text-center text-2xl font-bold">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {quickActions.map((action, idx) => {
                 const Icon = action.icon
@@ -514,7 +520,7 @@ export default function AdminDashboard() {
 
         {/* SERGIK Production DNA Stats */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4">🧬 SERGIK Production DNA</h2>
+          <h2 className="mb-4 text-center text-2xl font-bold">🧬 SERGIK Production DNA</h2>
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
             <ProductionStatsCompact />
             <p className="text-xs text-gray-500 mt-4 text-center">
@@ -555,8 +561,8 @@ export default function AdminDashboard() {
         <div className="mt-8 space-y-6">
           {/* Audio Files Stats */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
+            <div className="relative mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">
                 🎵 Audio Files
                 {loadingStats && (
                   <span className="ml-3 text-xs font-normal text-zinc-500">Updating…</span>
@@ -565,7 +571,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => void refreshStats()}
                 disabled={loadingStats}
-                className="text-gray-400 hover:text-white text-sm transition disabled:opacity-40"
+                className="absolute right-0 text-sm text-gray-400 transition hover:text-white disabled:opacity-40"
               >
                 Refresh
               </button>
@@ -600,12 +606,12 @@ export default function AdminDashboard() {
 
           {/* Sonic DNA Coverage */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">🧬 Sonic DNA Coverage</h2>
+            <div className="relative mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">🧬 Sonic DNA Coverage</h2>
               <button
                 onClick={handleSyncAllStats}
                 disabled={syncing}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition ${
+                className={`absolute right-0 flex items-center gap-2 rounded px-3 py-1.5 text-sm transition ${
                   syncing 
                     ? 'bg-gray-700 text-gray-400 cursor-wait' 
                     : 'bg-cyan-600 hover:bg-cyan-500 text-white'
@@ -662,8 +668,8 @@ export default function AdminDashboard() {
 
           {/* Music Library Stats */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">📂 Music Library Structure</h2>
+            <div className="mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">📂 Music Library Structure</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
@@ -690,8 +696,8 @@ export default function AdminDashboard() {
 
           {/* Purchases & Revenue */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">💰 Purchases</h2>
+            <div className="mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">💰 Purchases</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -707,8 +713,8 @@ export default function AdminDashboard() {
 
           {/* Shop Stats */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">🛒 Shop & Monetization</h2>
+            <div className="mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">🛒 Shop & Monetization</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               <div>
@@ -761,8 +767,8 @@ export default function AdminDashboard() {
 
           {/* Instagram Stats */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">📸 Instagram Media</h2>
+            <div className="mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">📸 Instagram Media</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
@@ -786,8 +792,8 @@ export default function AdminDashboard() {
 
           {/* Analytics & Activity Logs */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">📊 Analytics & Activity</h2>
+            <div className="mb-4 flex items-center justify-center">
+              <h2 className="text-center text-xl font-semibold">📊 Analytics & Activity</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
@@ -830,7 +836,7 @@ export default function AdminDashboard() {
 
         {/* Recent Activity */}
         <div className="mt-8">
-          <h2 className="text-2xl font-bold mb-4">Recent Activity</h2>
+          <h2 className="mb-4 text-center text-2xl font-bold">Recent Activity</h2>
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-lg p-6">
             {recentActivity.length > 0 ? (
               <div className="space-y-3">

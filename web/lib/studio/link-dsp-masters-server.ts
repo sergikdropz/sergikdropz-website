@@ -13,6 +13,7 @@
 
 import { existsSync } from 'fs'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { mayAssignTrackFile, mediaFileMatchesTrackTitle } from '@/lib/audio/catalog-playback-file'
 import { cacheBustMediaUrl } from '@/lib/audio/replace-audio-file'
 import {
   getR2MediaConfig,
@@ -27,6 +28,7 @@ import {
   dspMastersRelativePath,
   dspMastersReleaseSlug,
   isDspMasterUrl,
+  isrcFromMasterFileName,
   matchTrackToDspMaster,
   pickDspMasterR2Key,
   scanDspMasterSources,
@@ -207,6 +209,24 @@ export async function linkDspMastersForRelease(
           globalKeys,
         })
         if (relativePath) {
+          const baseName = relativePath.split('/').pop() || relativePath
+          const fileIsrc = isrcFromMasterFileName(baseName)
+          const wantIsrc = isrc?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null
+          const sameSong =
+            Boolean(wantIsrc && fileIsrc === wantIsrc) || mediaFileMatchesTrackTitle(baseName, title)
+          if (!sameSong) {
+            missing++
+            results.push({
+              trackId,
+              title,
+              isrc,
+              status: 'missing',
+              wav_url: currentWav,
+              relativePath,
+              message: 'refusing to link a different song from this release folder',
+            })
+            continue
+          }
           const fileUrl = mediaUrlForRelative(relativePath)
           const { error: upErr } = await supabase
             .from('distribution_tracks')
@@ -225,7 +245,21 @@ export async function linkDspMastersForRelease(
             continue
           }
           if (vaultId) {
-            await supabase.from('music_library_tracks').update({ file_url: fileUrl }).eq('id', vaultId)
+            const { data: vault } = await supabase
+              .from('music_library_tracks')
+              .select('title, file_url')
+              .eq('id', vaultId)
+              .maybeSingle()
+            const vaultTitle = String(vault?.title || title)
+            if (
+              mayAssignTrackFile({
+                trackTitle: vaultTitle,
+                nextUrl: fileUrl,
+                currentUrl: typeof vault?.file_url === 'string' ? vault.file_url : null,
+              })
+            ) {
+              await supabase.from('music_library_tracks').update({ file_url: fileUrl }).eq('id', vaultId)
+            }
           }
           linked++
           results.push({
@@ -249,6 +283,24 @@ export async function linkDspMastersForRelease(
           releaseTitle,
         })
         if (hit) {
+          const hitIsrc = hit.isrcFromName
+          const wantIsrc = isrc?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null
+          const hitIsThisSong =
+            Boolean(wantIsrc && hitIsrc === wantIsrc) || mediaFileMatchesTrackTitle(hit.fileName, title)
+          if (!hitIsThisSong) {
+            missing++
+            results.push({
+              trackId,
+              title,
+              isrc,
+              status: 'missing',
+              wav_url: currentWav,
+              relativePath: null,
+              localPath: hit.absPath,
+              message: 'local file name does not match this song',
+            })
+            continue
+          }
           const result = await ingestDspMaster(supabase, {
             hit,
             releaseTitle,

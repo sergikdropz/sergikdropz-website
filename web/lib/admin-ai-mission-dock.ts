@@ -11,6 +11,7 @@ export type MissionDockAction =
   | { type: 'week' }
   | { type: 'prompt'; message: string }
   | { type: 'distrokid-hydrate'; target?: 'upload' | 'my_music' }
+  | { type: 'soundcloud-upload' }
 
 export type MissionDockItem = {
   id: string
@@ -178,6 +179,17 @@ function releaseStepMenus(step: WorkflowStepId, releaseId: string, title: string
             ].join('\n'),
           }),
         ]),
+        menu('soundcloud', 'SoundCloud', [
+          item(
+            'sc-fill',
+            'Fill SoundCloud EP',
+            { type: 'soundcloud-upload' },
+            {
+              title: 'Attach this release’s database audio and artwork on soundcloud.com/upload. You click Save.',
+              className: 'text-amber-100',
+            },
+          ),
+        ]),
         menu('ids', 'IDs', [
           item('upc', 'UPC and artist IDs', {
             type: 'prompt',
@@ -192,6 +204,17 @@ function releaseStepMenus(step: WorkflowStepId, releaseId: string, title: string
           fixItem(),
           runbookItem,
           item('open', 'Open launch step', { type: 'open-launch' }, { className: 'text-purple-100' }),
+        ]),
+        menu('soundcloud', 'SoundCloud', [
+          item(
+            'sc-fill',
+            'Fill SoundCloud EP',
+            { type: 'soundcloud-upload' },
+            {
+              title: 'Attach this release’s database audio and artwork on soundcloud.com/upload. You click Save.',
+              className: 'text-amber-100',
+            },
+          ),
         ]),
         menu('campaign', 'Campaign', [
           item('week', 'Week priorities', { type: 'week' }),

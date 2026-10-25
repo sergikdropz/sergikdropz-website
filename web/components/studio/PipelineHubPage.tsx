@@ -10,11 +10,7 @@ import MarketingPipelinePanel from './MarketingPipelinePanel'
 import ReleaseCalendarPanel from './ReleaseCalendarPanel'
 import SoundExchangePanel from './SoundExchangePanel'
 import DistroKidQueuePanel from './DistroKidQueuePanel'
-import {
-  parseStudioPipelineTab,
-  studioPipelineHref,
-  type StudioPipelineTab,
-} from '@/lib/studio/studio-ia'
+import { parseStudioPipelineTab, studioPipelineHref } from '@/lib/studio/studio-ia'
 
 const TABS = [
   {
@@ -49,33 +45,10 @@ const TABS = [
   },
 ]
 
-const COPY: Record<StudioPipelineTab, { subtitle: string }> = {
-  ops: {
-    subtitle:
-      'Cross-release ops with DSP ingest, contract emails, SERGIK UGC, store links, and Release Collab — risk, owners, and the next best action.',
-  },
-  marketing: {
-    subtitle:
-      'Campaigns, smart links, press notes, DSP connect, and collab — filtered by launch phase, not calendar placeholders.',
-  },
-  calendar: {
-    subtitle: 'The yearly slate. Add placeholders here, then create the real package when masters land.',
-  },
-  distrokid: {
-    subtitle:
-      'Scheduled DSP delivery through DistroKid until Revelator Partner API keys are live. Upload on DistroKid, then mark the release submitted.',
-  },
-  isrcs: {
-    subtitle:
-      'SoundExchange Direct registry — mint QTA53 in Catalog, auto-queue SX Direct, export USISRC locker CSV, and mark accepted.',
-  },
-}
-
 function PipelineHubInner() {
   const { user, isAdmin, loading } = useAuth()
   const searchParams = useSearchParams()
   const active = parseStudioPipelineTab(searchParams.get('tab'))
-  const copy = COPY[active]
 
   if (loading) {
     return (
@@ -88,8 +61,8 @@ function PipelineHubInner() {
   if (!user || !isAdmin) return null
 
   return (
-    <StudioPageShell title="Pipeline" subtitle={copy.subtitle}>
-      <StudioHubTabs tabs={TABS} active={active} label="Release pipeline" />
+    <StudioPageShell>
+      <StudioHubTabs tabs={TABS} active={active} label="Release pipeline" centered />
       {active === 'marketing' ? (
         <MarketingPipelinePanel />
       ) : active === 'calendar' ? (

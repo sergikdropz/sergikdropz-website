@@ -38,6 +38,10 @@ deploy/migrate/.env
 # Vercel
 .vercel
 
+# Uploaded merch print files (served from disk in local dev)
+web/data/merch-art/*
+!web/data/merch-art/.gitkeep
+
 # Local dumps / regenerable media (do not ship in git)
 db_cluster*.backup
 web/public/waveforms/

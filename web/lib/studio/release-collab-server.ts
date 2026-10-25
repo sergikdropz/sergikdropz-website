@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { sendEmail } from '@/lib/email'
+import { sendDepartmentEmail } from '@/lib/email/send-department'
 import {
   buildReleaseCollabContext,
   collabContextForPortal,
@@ -16,8 +16,6 @@ import { collabReviewChecklistPatch } from '@/lib/studio/collab-review-writeback
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import {
   COLLAB_TABLE_MISSING_HINT,
-  RELEASE_COLLAB_FROM_EMAIL,
-  RELEASE_COLLAB_FROM_NAME,
   collabInviteExpiresAt,
   collabPortalUrl,
   collabReviewInviteHtml,
@@ -353,7 +351,8 @@ export async function postStudioMessage(input: {
       const portalUrl = invite ? collabPortalUrl(invite.token, input.siteOrigin) : undefined
       const subject = collabHubEmailSubject(releaseTitle, 'New message')
       try {
-        const result = await sendEmail({
+        const result = await sendDepartmentEmail({
+          department: 'studio',
           to: collab.email,
           subject,
           html: collabThreadNotifyHtml({
@@ -363,7 +362,6 @@ export async function postStudioMessage(input: {
             body: message.body,
             portalUrl,
           }),
-          from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
           replyTo: collabOutboundReplyTo(input.releaseId),
           tags: [
             { name: 'type', value: 'release_collab' },
@@ -505,7 +503,8 @@ export async function sendCollabHubEmail(input: {
       links.push({ label: 'Review portal', url: portalUrl })
     }
     try {
-      const result = await sendEmail({
+      const result = await sendDepartmentEmail({
+        department: 'studio',
         to: collab.email,
         subject,
         html: collabHubEmailHtml({
@@ -515,7 +514,6 @@ export async function sendCollabHubEmail(input: {
           body: message.body,
           extraHtml: collabPromoExtraHtml(links),
         }),
-        from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
         replyTo: collabOutboundReplyTo(input.releaseId),
         tags: [
           { name: 'type', value: 'release_collab' },
@@ -637,7 +635,8 @@ export async function createReviewInvite(input: {
     const releaseTitle = String(release?.title || 'SERGIK release')
     const subject = collabReviewInviteSubject(releaseTitle)
     try {
-      const result = await sendEmail({
+      const result = await sendDepartmentEmail({
+        department: 'studio',
         to: collaborator.email,
         subject,
         html: collabReviewInviteHtml({
@@ -646,7 +645,6 @@ export async function createReviewInvite(input: {
           portalUrl,
           note: input.note,
         }),
-        from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
         replyTo: collabOutboundReplyTo(input.releaseId),
         tags: [
           { name: 'type', value: 'release_collab' },

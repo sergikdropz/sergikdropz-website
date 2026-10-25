@@ -4,8 +4,11 @@ import {
   clampSnippetWindow,
   pickRecorderMimeType,
   proxiedArtworkUrl,
+  resolveStoryClipDuration,
   sanitizeStoryFilenamePart,
   STORY_SNIPPET_DURATION_SEC,
+  storyClipLengthChoices,
+  storyClipLengthLabel,
   storySnippetFilename,
   vinylStoryRotationDeg,
 } from './story-snippet'
@@ -27,6 +30,19 @@ describe('story snippet helpers', () => {
     expect(clampSnippetWindow({}).durationSec).toBe(STORY_SNIPPET_DURATION_SEC)
   })
 
+  it('offers 15s steps up to a minute, then the full song', () => {
+    expect(storyClipLengthChoices(200)).toEqual([15, 30, 45, 60, 'full'])
+    expect(storyClipLengthChoices(50)).toEqual([15, 30, 45, 'full'])
+    expect(storyClipLengthChoices(12)).toEqual(['full'])
+    expect(storyClipLengthChoices(null)).toEqual([15, 30, 45, 60, 'full'])
+    expect(storyClipLengthLabel(60)).toBe('1:00')
+    expect(storyClipLengthLabel('full')).toBe('Full')
+    expect(resolveStoryClipDuration(30, 200)).toBe(30)
+    expect(resolveStoryClipDuration('full', 200)).toBe(200)
+    expect(resolveStoryClipDuration('full', null)).toBe(15)
+    expect(resolveStoryClipDuration(60, 40)).toBe(40)
+  })
+
   it('sanitizes filename parts', () => {
     expect(sanitizeStoryFilenamePart('How Be We Like?!')).toBe('How-Be-We-Like')
     expect(sanitizeStoryFilenamePart('')).toBe('track')
@@ -35,6 +51,9 @@ describe('story snippet helpers', () => {
   it('builds a story filename', () => {
     expect(storySnippetFilename('FTP', 'SERGIK', 'video/webm')).toBe('SERGIK-FTP-story.webm')
     expect(storySnippetFilename('FTP', 'SERGIK', 'video/mp4')).toBe('SERGIK-FTP-story.mp4')
+    expect(storySnippetFilename('FTP', 'SERGIK', 'video/mp4', 'sleeve-gold-solid')).toBe(
+      'SERGIK-FTP-story-sleeve-gold-solid.mp4'
+    )
   })
 
   it('picks the first supported recorder mime', () => {

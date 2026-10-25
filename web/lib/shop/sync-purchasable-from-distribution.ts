@@ -138,7 +138,7 @@ function buildCandidate(
     title,
     slug,
     description,
-    price: 2.99,
+    price: 1.99,
     formats: [{ type: 'WAV', file: wav, size: '' }],
     artwork: track.artwork_url || release.artwork_url || undefined,
     duration: typeof track.duration === 'number' ? track.duration : undefined,

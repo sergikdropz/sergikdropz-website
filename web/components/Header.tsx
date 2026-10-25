@@ -26,6 +26,7 @@ export default function Header() {
     { href: '/', label: 'Home' },
     { href: '/music', label: 'Music' },
     { href: '/shop', label: 'Shop' },
+    { href: '/licensing', label: 'Licensing' },
     { href: '/videos', label: 'Videos' },
     { href: '/gallery', label: 'Gallery' },
     { href: '/epk', label: 'EPK' },

@@ -12,9 +12,9 @@ describe('syncMediaProxyPlaybackUrl', () => {
 })
 
 describe('shouldSkipBackgroundAudioResolve', () => {
-  it('skips resolve when optimistic URL is already the media proxy', () => {
+  it('does not skip the media proxy, so resolve can return a signed R2 URL', () => {
     const file = '/api/audio/media/unreleased/Library/foo.mp3'
-    expect(shouldSkipBackgroundAudioResolve(file, file)).toBe(true)
+    expect(shouldSkipBackgroundAudioResolve(file, file)).toBe(false)
   })
 
   it('does not skip for bare vault paths without a proxy optimistic URL', () => {

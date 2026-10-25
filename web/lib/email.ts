@@ -22,10 +22,12 @@ export interface EmailOptions {
   to: string | string[]
   subject: string
   html: string
+  text?: string
   /** Full From header, e.g. `Name <addr@domain>`. Defaults to SERGIK + NEXT_PUBLIC_FROM_EMAIL. */
   from?: string
   replyTo?: string
   tags?: { name: string; value: string }[]
+  attachments?: { filename: string; content: Buffer; contentType?: string }[]
 }
 
 /**
@@ -35,9 +37,11 @@ export async function sendEmail({
   to,
   subject,
   html,
+  text,
   from,
   replyTo,
   tags,
+  attachments,
 }: EmailOptions) {
   try {
     const fromEmail = process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@sergikdropz.com'
@@ -48,8 +52,14 @@ export async function sendEmail({
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
+      text: text?.trim() || undefined,
       reply_to: replyTo,
       tags,
+      attachments: attachments?.map((file) => ({
+        filename: file.filename,
+        content: file.content,
+        content_type: file.contentType,
+      })),
     })
 
     if (response.error) {

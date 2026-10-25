@@ -17,9 +17,10 @@ description: >-
 5. **Scrape or crawl a URL to markdown for grounding:** **Firecrawl** MCP (requires `FIRECRAWL_API_KEY` in config); respect robots, terms of service, and copyright.
 6. **Project database/admin:** continue using **Supabase** MCP and **Notion** MCP when already enabled in the workspace.
 7. **Unified SergikAI / OlliN Pro harness (local):** use **user-ollin-pro-sergikai** MCP (`harness_probe`, `harness_catalog`, `knowledge_search`, `chat_send`) when OlliN Pro API is up (`AIBLETON_API_BASE`, default `http://127.0.0.1:8000`). In the **web Admin AI** assistant, the same probes run server-side via `/exec query_intelligence_harness` (agent **sergik_intelligence**).
-8. **Crowe Logic gateway:** Admin AI chat provider `crowelogic` is server-side OpenAI-compatible chat on the existing Crowe ID (`CROWELOGIC_API_KEY`). Hosted Pro metering stays off until `CROWELOGIC_PRO_LINKED`. Crowe Creative (`CROWE_API_KEY`) is a separate image/video API.
+8. **Crowe Logic gateway:** Admin AI chat provider `crowelogic` calls `https://gpt61.crowelogic.com/v1` model `gpt-6.1-sol` when `CROWELOGIC_API_KEY` is a live deployment credential. The revoked handoff key is refused. Crowe Creative (`CROWE_API_KEY`) is a separate image/video API.
 9. **Sonic DNA unified intelligence:** ground release copy from `query_release_studio_snapshot` → `adminAiBrief.copy_intel` / `sonicDnaUnified`; do not invent DNA claims when `unified` is false.
 10. **In-browser checks:** use **IDE browser** tools for user-initiated UI verification; do not assume audio autoplay is allowed.
+11. **Local admin chat without Anthropic credits:** MCP **sergik-chat** (`mcp/sergik-chat`). Tool `chat` uses Ollama `sergikai:latest`. Tool `cursor_chat` uses a Cursor plan agent (`CURSOR_API_KEY`, model `auto`) in an empty scratch folder. Neither tool uses `ANTHROPIC_API_KEY` or a Claude Pro login. The LLM chosen in Admin AI chat settings is the model for that turn. It is not rerouted to Anthropic or OlliN. Agents and tools, including `query_intelligence_harness`, stay a harness that provider can probe. Cursor plan turns still use `mcp/sergik-chat/brief.mjs` only when the menu selection is `cursor`. Claude Pro OAuth is not a billing bypass.
 
 ## Project knowledge (tiered)
 

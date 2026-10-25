@@ -1,10 +1,14 @@
 import { getSupabaseClient, createSupabaseServerClient } from './supabase'
 import { cookies, headers } from 'next/headers'
 import { MW_SB_ACCESS_HEADER } from '@/lib/auth/middleware-bridge'
-import { isJwtExpired, refreshSupabaseSession } from '@/lib/auth/token'
+import { getRememberMaxAgeSeconds, isJwtExpired, refreshSupabaseSession } from '@/lib/auth/token'
 import { createClient } from '@supabase/supabase-js'
 import type { User } from '@supabase/supabase-js'
-import { cache } from 'react'
+import { cache as reactCache } from 'react'
+
+/** React's per-request `cache` only exists under the react-server condition; fall through in node/vitest. */
+const cache: typeof reactCache =
+  typeof reactCache === 'function' ? reactCache : (((fn: unknown) => fn) as typeof reactCache)
 
 export type ServerAuthSession = {
   user: User
@@ -77,10 +81,26 @@ export const getServerSession = cache(async function getServerSession(): Promise
 
     if ((!authToken || isJwtExpired(authToken)) && !mwAccessToken) {
       const refreshToken = cookieStore.get('sb-refresh-token')?.value
+      const rememberCookie = cookieStore.get('sb-auth-remember')?.value
       if (refreshToken) {
         const refreshed = await refreshSupabaseSession(refreshToken)
-        if (refreshed?.access_token) {
+        if (refreshed?.access_token && refreshed.refresh_token) {
           authToken = refreshed.access_token
+          try {
+            const maxAge = getRememberMaxAgeSeconds(rememberCookie)
+            const opts = {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax' as const,
+              maxAge,
+              path: '/',
+            }
+            cookieStore.set('sb-auth-token', refreshed.access_token, opts)
+            cookieStore.set('sb-refresh-token', refreshed.refresh_token, opts)
+            cookieStore.set('sb-auth-remember', rememberCookie === '1' ? '1' : '0', opts)
+          } catch {
+            // Server Components cannot write cookies. Middleware persists the rotated pair.
+          }
         }
       }
     }

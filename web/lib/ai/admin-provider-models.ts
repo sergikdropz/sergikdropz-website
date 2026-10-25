@@ -6,6 +6,7 @@ import {
   resolveCrowelogicEnv,
   crowelogicOpenAiUrl,
 } from '@/lib/ai/crowelogic-env'
+import { CURSOR_STATIC_MODELS, listCursorModelIds } from '@/lib/ai/cursor-intelligence-harness'
 import { DEFAULT_OLLAMA_MODEL, STATIC_OLLAMA_MODEL_HINTS } from '@/lib/ai/ollama-defaults'
 import { getOllamaApiTagsState, ollamaTagMatchesPreference } from '@/lib/ai/ollama-model-resolve'
 
@@ -33,6 +34,7 @@ const STATIC_MODELS: Record<AdminAiChatProvider, string[]> = {
   ],
   ollama: [...STATIC_OLLAMA_MODEL_HINTS],
   crowelogic: [...CROWELOGIC_STATIC_MODELS],
+  cursor: [...CURSOR_STATIC_MODELS],
 }
 
 function uniqSorted(ids: string[]): string[] {
@@ -161,6 +163,20 @@ export async function listModelsForAdminProvider(provider: AdminAiChatProvider):
         message: `Gateway at ${crowe.baseUrl} did not return models — is the Foundry bridge running?`,
         envDefaultModelId: crowe.model,
         envDefaultPresent: false,
+      }
+    }
+
+    if (provider === 'cursor') {
+      const envModel = process.env.SERGIK_CURSOR_MODEL?.trim() || 'auto'
+      const listed = await listCursorModelIds()
+      const live = listed.ids.filter((id) => id !== 'auto')
+      return {
+        modelIds: mergeWithFallback(listed.ids, fallback),
+        source: live.length ? 'live' : 'static',
+        status: listed.message ? 'degraded' : 'ok',
+        message: listed.message || `${listed.ids.length} Cursor model(s) on this plan`,
+        envDefaultModelId: envModel,
+        envDefaultPresent: listed.ids.includes(envModel),
       }
     }
 

@@ -21,6 +21,7 @@ const MODEL_KEYS: Record<AdminAiChatProvider, string> = {
   openai: PREF_KEYS.modelOpenai,
   ollama: PREF_KEYS.modelOllama,
   crowelogic: PREF_KEYS.modelCrowelogic,
+  cursor: PREF_KEYS.modelCursor,
 }
 
 function isValidModelId(value: string): boolean {
@@ -47,6 +48,7 @@ export async function GET() {
       openai: null as string | null,
       ollama: null as string | null,
       crowelogic: null as string | null,
+      cursor: null as string | null,
     },
     resolvedModels: env,
   }
@@ -64,6 +66,7 @@ export async function GET() {
         openai: prefs.modelOverrides.openai ?? null,
         ollama: prefs.modelOverrides.ollama ?? null,
         crowelogic: prefs.modelOverrides.crowelogic ?? null,
+        cursor: prefs.modelOverrides.cursor ?? null,
       },
       resolvedModels: mergeResolvedModels(env, prefs.modelOverrides),
     }
@@ -94,6 +97,7 @@ export async function GET() {
         openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
         ollama: Boolean(process.env.OLLAMA_API_KEY?.trim()),
         crowelogic: crowe.configured,
+        cursor: Boolean(process.env.CURSOR_API_KEY?.trim()),
       },
     },
     preferences,
@@ -206,7 +210,7 @@ export async function PATCH(request: NextRequest) {
       }
     } else if (!(ADMIN_AI_CHAT_PROVIDERS as readonly string[]).includes(raw)) {
       return NextResponse.json(
-        { error: 'assistantDefaultLlm must be auto, anthropic, openai, ollama, or crowelogic' },
+        { error: 'assistantDefaultLlm must be auto, anthropic, openai, ollama, crowelogic, or cursor' },
         { status: 400 }
       )
     } else {
@@ -236,7 +240,7 @@ export async function PATCH(request: NextRequest) {
       }
     } else if (!(ADMIN_AI_CHAT_PROVIDERS as readonly string[]).includes(raw)) {
       return NextResponse.json(
-        { error: 'sonicDnaLlm must be auto, anthropic, openai, ollama, or crowelogic' },
+        { error: 'sonicDnaLlm must be auto, anthropic, openai, ollama, crowelogic, or cursor' },
         { status: 400 }
       )
     } else {

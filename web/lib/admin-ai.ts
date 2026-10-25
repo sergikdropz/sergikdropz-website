@@ -16,11 +16,13 @@ import {
   tracksForCounsel,
   type MusicCounselReport,
 } from '@/lib/studio/music-law/audit'
+import { reviewMusicBooks } from '@/lib/licensing/books'
 import { counselAuditRecord } from '@/lib/studio/music-law/release-gate'
 import { buildReleaseSnapshotAdminAiBrief } from '@/lib/studio/release-snapshot-admin-ai'
 import { runIntelligenceHarness } from '@/lib/ai/intelligence-harness-server'
 import { runSergikaiChat } from '@/lib/ai/sergikai-chat-server'
 import { runCroweCreativeTool, type CroweCreativeAction } from '@/lib/ai/crowe-creative-server'
+import { runMetaBusinessAgent } from '@/lib/meta/business-agent-run'
 import { fetchStudioCommandCenterSnapshot } from '@/lib/studio/command-center-snapshot'
 import { runAdminBrowserAction } from '@/lib/ai/admin-browser'
 import { runMetaPromoPipeline } from '@/lib/meta/promo-pipeline'
@@ -31,17 +33,22 @@ import {
 } from '@/lib/ai/platform-growth-snapshot'
 import {
   applyAssignIsrcs,
+  applyPatchReleaseIdentifiers,
   applyPatchReleaseMarketingCopy,
   applyUpdateCopyrightChecklist,
   previewAssignIsrcs,
+  previewPatchReleaseIdentifiers,
   previewPatchReleaseMarketingCopy,
   previewUpdateCopyrightChecklist,
 } from '@/lib/studio/admin-ai-studio-tools'
+import { pullDistrokidIsrcsForRelease } from '@/lib/studio/pull-distrokid-isrcs-server'
+import { pickReleaseIdentifiers } from '@/lib/studio/release-identifiers'
 import {
   buildProductStrategyPack,
   normalizeProductStrategyPackPayload,
 } from '@/lib/ai/product-strategy-pack'
 import { refineProductStrategyPackMarkdown } from '@/lib/ai/refine-strategy-pack'
+import { runWorkspaceSource } from '@/lib/ai/workspace-source'
 import {
   TOOL_POLICY,
   isAllowedTool,
@@ -78,7 +85,7 @@ export function validateToolPayload(tool: AdminAiTool, payload: Record<string, u
   if (!skill?.inputSchema) {
     return { valid: true, errors: [] as string[] }
   }
-  return validateAgainstSkillSchema(payload, skill.inputSchema)
+  return validateAgainstSkillSchema(payload, skill.inputSchema, { skillId: skill.id, tool })
 }
 
 export async function createAiRun(params: {
@@ -609,6 +616,8 @@ export async function runAdminTool(params: {
   adminId: string
   runId?: string
   dryRun?: boolean
+  /** Agent loop only. Keeps a browser JPEG so the model can see the page. */
+  retainImages?: boolean
 }): Promise<ToolResult> {
   const { tool, payload } = params
   const dryRun = Boolean(params.dryRun)
@@ -663,12 +672,22 @@ export async function runAdminTool(params: {
 
     let refinedMarkdown: string | undefined
     let refinementMeta: { provider?: string | null; modelId?: string } | undefined
+    let refinementStatus: 'applied' | 'failed' | 'skipped' | undefined
+    let refinementNote: string | undefined
     if (refineWithLlm && dryRun) {
       const refined = await refineProductStrategyPackMarkdown({ pack })
-      if (refined?.markdown) {
+      if (refined.ok) {
         refinedMarkdown = refined.markdown
         refinementMeta = { provider: refined.provider, modelId: refined.modelId }
+        refinementStatus = 'applied'
+        refinementNote = refined.provider ? `Polished by ${refined.provider}.` : 'Editorial brief is on this preview.'
+      } else {
+        refinementStatus = 'failed'
+        refinementNote = refined.reason
       }
+    } else if (refineWithLlm) {
+      refinementStatus = 'skipped'
+      refinementNote = 'Polish stays on previews. Scaffold kept.'
     }
 
     const summaryGoal =
@@ -679,6 +698,7 @@ export async function runAdminTool(params: {
       output: {
         ...pack,
         dryRun,
+        ...(refinementStatus ? { refinementStatus, refinementNote } : {}),
         ...(refinedMarkdown ? { refinedMarkdown, refinementMeta } : {}),
       },
       ...TOOL_CONFIG[tool],
@@ -885,25 +905,80 @@ export async function runAdminTool(params: {
     if (!releaseId) throw new Error('releaseId is required')
     const marketingCopy =
       payload.marketingCopy && typeof payload.marketingCopy === 'object'
-        ? (payload.marketingCopy as Record<string, unknown>)
+        ? { ...(payload.marketingCopy as Record<string, unknown>) }
         : {}
+    const identifiers = pickReleaseIdentifiers({
+      ...(typeof payload.upc === 'string' || typeof payload.upc === 'number' ? { upc: payload.upc } : {}),
+      ...(typeof payload.previous_upc === 'string' || typeof payload.previous_upc === 'number'
+        ? { previous_upc: payload.previous_upc }
+        : {}),
+      ...marketingCopy,
+    })
+    delete marketingCopy.upc
+    delete marketingCopy.previous_upc
     const merge = payload.merge !== false
-    const preview = await previewPatchReleaseMarketingCopy({ releaseId, marketingCopy, merge })
-    const applied = dryRun
-      ? null
-      : await applyPatchReleaseMarketingCopy({ releaseId, marketingCopy, merge })
+    const copyKeys = Object.keys(marketingCopy).filter((key) => typeof marketingCopy[key] === 'string')
+    const hasCopy = copyKeys.some((key) =>
+      [
+        'elevator_pitch',
+        'press_blurb',
+        'spotify_pitch',
+        'social_caption',
+        'store_description',
+        'youtube_visualizer',
+        'platform_tags',
+        'credits_block',
+      ].includes(key),
+    )
+    const hasBarcode = Object.keys(identifiers).length > 0
+    if (!hasCopy && !hasBarcode) {
+      throw new Error(
+        'No valid marketing_copy fields provided. UPC is the release barcode: pass marketingCopy.upc or upc as a 12- or 13-digit code.',
+      )
+    }
+    const copyPreview = hasCopy
+      ? await previewPatchReleaseMarketingCopy({ releaseId, marketingCopy, merge })
+      : null
+    const barcodePreview = hasBarcode
+      ? await previewPatchReleaseIdentifiers({ releaseId, identifiers })
+      : null
+    const appliedCopy =
+      dryRun || !hasCopy ? null : await applyPatchReleaseMarketingCopy({ releaseId, marketingCopy, merge })
+    const appliedBarcode =
+      dryRun || !hasBarcode ? null : await applyPatchReleaseIdentifiers({ releaseId, identifiers })
+    const fieldsUpdated = [
+      ...(barcodePreview?.fieldsUpdated ?? []),
+      ...(copyPreview?.fieldsUpdated ?? []),
+    ]
+    const title = barcodePreview?.title || copyPreview?.title || releaseId
+    const preview = barcodePreview ?? copyPreview
     const result: ToolResult = {
-      title: dryRun ? 'Marketing copy preview' : 'Marketing copy updated',
+      title: hasBarcode && !hasCopy
+        ? dryRun
+          ? 'Release barcode preview'
+          : 'Release barcode updated'
+        : dryRun
+          ? 'Marketing copy preview'
+          : 'Marketing copy updated',
       summary: dryRun
-        ? `Would update ${preview.fieldsUpdated.join(', ')} on "${preview.title}".`
-        : `Updated ${preview.fieldsUpdated.join(', ')} on "${preview.title}".`,
+        ? `Would update ${fieldsUpdated.join(', ')} on "${title}".`
+        : `Updated ${fieldsUpdated.join(', ')} on "${title}".`,
       output: {
         releaseId,
-        fieldsUpdated: preview.fieldsUpdated,
-        before: preview.before,
-        after: preview.after,
-        release: applied?.release ?? null,
-        studioUrl: preview.studioUrl,
+        fieldsUpdated,
+        before: hasBarcode && !hasCopy ? barcodePreview?.before : copyPreview?.before,
+        after: hasBarcode && !hasCopy ? barcodePreview?.after : copyPreview?.after,
+        barcode: barcodePreview
+          ? { before: barcodePreview.before, after: barcodePreview.after }
+          : null,
+        release: appliedBarcode?.release ??
+          appliedCopy?.release ?? {
+            id: releaseId,
+            title,
+            upc: barcodePreview?.after.upc ?? null,
+            preview: true,
+          },
+        studioUrl: preview?.studioUrl,
         dryRun,
       },
       ...TOOL_CONFIG[tool],
@@ -971,6 +1046,41 @@ export async function runAdminTool(params: {
         studioUrl: preview.releaseId
           ? `/studio/releases/${encodeURIComponent(preview.releaseId)}`
           : applied?.studioUrl ?? null,
+        dryRun,
+      },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'pull_distrokid_isrcs') {
+    const releaseId = String(payload.releaseId || '').trim()
+    if (!releaseId) throw new Error('releaseId is required')
+    const pulled = await pullDistrokidIsrcsForRelease(releaseId, { dryRun })
+    const pending = pulled.matches.filter((row) => row.changed).length
+    const result: ToolResult = {
+      title: dryRun ? 'DistroKid ISRC pull preview' : 'DistroKid ISRCs pulled',
+      summary: dryRun
+        ? `Would write ${pending} DistroKid ISRC(s) onto ${pulled.title}. ${pulled.unchanged} already match.`
+        : `Wrote ${pulled.written} DistroKid ISRC(s) onto ${pulled.title}. ${pulled.unchanged} already matched.`,
+      output: {
+        release: { id: pulled.releaseId, title: pulled.title, upc: pulled.upc },
+        studioUrl: pulled.studioUrl,
+        album: pulled.album,
+        albumuuid: pulled.albumuuid,
+        upc: pulled.upc,
+        codes: pulled.codes,
+        matches: pulled.matches,
+        written: pulled.written,
+        unchanged: pulled.unchanged,
+        unmatched: pulled.unmatched,
+        errors: pulled.errors,
         dryRun,
       },
       ...TOOL_CONFIG[tool],
@@ -1170,6 +1280,29 @@ export async function runAdminTool(params: {
     return result
   }
 
+  if (tool === 'query_meta_business_agent') {
+    const action = payload.action === 'test' ? 'test' : 'status'
+    const output = await runMetaBusinessAgent({
+      action,
+      message: String(payload.message || payload.content || payload.query || ''),
+      conversationId: payload.conversationId != null ? String(payload.conversationId) : undefined,
+      entityId: payload.entityId != null ? String(payload.entityId) : undefined,
+    })
+    const result: ToolResult = {
+      title: 'Meta Business Agent',
+      summary: output.agentResponse ? output.agentResponse.slice(0, 240) : output.note,
+      output: { ...output, dryRun },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
   if (tool === 'query_intelligence_harness') {
     const modeRaw = payload.mode ?? payload.action ?? 'stack'
     const output = await runIntelligenceHarness({
@@ -1348,6 +1481,29 @@ export async function runAdminTool(params: {
     return result
   }
 
+  if (tool === 'admin_browser' && String(payload.action || '') === 'soundcloud_prefill') {
+    const out = await runAdminBrowserAction({
+      action: 'soundcloud_prefill',
+      releaseId: payload.releaseId ? String(payload.releaseId) : undefined,
+      soundcloudPacket:
+        payload.soundcloudPacket && typeof payload.soundcloudPacket === 'object'
+          ? (payload.soundcloudPacket as Record<string, unknown>)
+          : undefined,
+      actor: 'assistant',
+      dryRun,
+      includeImage: params.retainImages === true,
+      chatSessionId: typeof payload.chatSessionId === 'string' ? payload.chatSessionId : undefined,
+    })
+    const output = { ...out }
+    if (!params.retainImages) delete output.imageBase64
+    return {
+      title: 'SoundCloud upload',
+      summary: out.error || out.text || `SoundCloud ${out.url}`.trim(),
+      output,
+      ...TOOL_CONFIG[tool],
+    }
+  }
+
   if (tool === 'admin_browser') {
     const actionRaw = String(payload.action || 'read')
     const allowed = new Set([
@@ -1357,12 +1513,16 @@ export async function runAdminTool(params: {
       'back',
       'reload',
       'click',
+      'wheel',
       'type',
       'press',
       'read',
       'drive',
       'probe_fields',
       'inspect',
+      'snapshot',
+      'distrokid_bank_import',
+      'meta_earnings_pull',
     ])
     const action = allowed.has(actionRaw)
       ? (actionRaw as
@@ -1372,32 +1532,88 @@ export async function runAdminTool(params: {
           | 'back'
           | 'reload'
           | 'click'
+          | 'wheel'
           | 'type'
           | 'press'
           | 'read'
           | 'drive'
           | 'probe_fields'
-          | 'inspect')
+          | 'inspect'
+          | 'snapshot'
+          | 'distrokid_bank_import'
+          | 'meta_earnings_pull')
       : 'read'
+    const seePage = action === 'read' || action === 'snapshot' || action === 'inspect'
     const out = await runAdminBrowserAction({
       action,
       url: payload.url ? String(payload.url) : undefined,
       x: typeof payload.x === 'number' ? payload.x : undefined,
       y: typeof payload.y === 'number' ? payload.y : undefined,
+      deltaX: typeof payload.deltaX === 'number' ? payload.deltaX : undefined,
+      deltaY: typeof payload.deltaY === 'number' ? payload.deltaY : undefined,
       text: payload.text ? String(payload.text) : undefined,
+      target: payload.target ? String(payload.target) : undefined,
       key: payload.key ? String(payload.key) : undefined,
       youDrive: typeof payload.youDrive === 'boolean' ? payload.youDrive : undefined,
       actor: 'assistant',
       dryRun,
+      includeImage: params.retainImages === true && seePage,
       chatSessionId: typeof payload.chatSessionId === 'string' ? payload.chatSessionId : undefined,
     })
     const output = { ...out }
-    delete output.imageBase64
+    if (!params.retainImages) delete output.imageBase64
     const result: ToolResult = {
       title: 'Admin browser',
       summary: out.error || out.text || `${out.title || 'Browser'} ${out.url}`.trim(),
       output,
       ...TOOL_CONFIG[tool],
+    }
+    return result
+  }
+
+  if (tool === 'audit_music_books') {
+    const report = reviewMusicBooks({
+      text: payload.text != null ? String(payload.text) : '',
+      quotedCents: typeof payload.quotedCents === 'number' ? payload.quotedCents : null,
+      paidCents: typeof payload.paidCents === 'number' ? payload.paidCents : null,
+      currency: payload.currency != null ? String(payload.currency) : null,
+      paidCurrency: payload.paidCurrency != null ? String(payload.paidCurrency) : null,
+      productType: payload.productType != null ? String(payload.productType) : null,
+      collaboratorShareOpen: payload.collaboratorShareOpen === true,
+      stripeBusinessName: payload.stripeBusinessName != null ? String(payload.stripeBusinessName) : null,
+    })
+    const result: ToolResult = {
+      title: 'Books review',
+      summary: report.findings[0]?.title || 'Books memo',
+      output: { ...report, dryRun: true },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
+    }
+    return result
+  }
+
+  if (tool === 'read_workspace') {
+    const output = runWorkspaceSource(payload)
+    const where =
+      output.action === 'read'
+        ? output.path || 'file'
+        : `${output.matches?.length ?? 0} match${output.matches?.length === 1 ? '' : 'es'} for ${output.query}`
+    const result: ToolResult = {
+      title: 'Workspace source',
+      summary: `Read-only source ${output.action}: ${where}.`,
+      output: { ...output, dryRun: true },
+      ...TOOL_CONFIG[tool],
+    }
+    if (skill?.outputSchema) {
+      const validation = validateAgainstSkillSchema(result.output, skill.outputSchema)
+      if (!validation.valid) {
+        throw new Error(`Skill output validation failed for ${skill.id}: ${validation.errors.join('; ')}`)
+      }
     }
     return result
   }

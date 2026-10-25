@@ -9,6 +9,9 @@ import {
 describe('admin-ai-desks', () => {
   it('maps each bookmark host to a desk card', () => {
     expect(deskCardForUrl('https://distrokid.com/new/')?.id).toBe('distrokid')
+    expect(deskCardForUrl('https://business.facebook.com/')?.id).toBe('meta')
+    expect(deskCardForUrl('https://adsmanager.facebook.com/adsmanager')?.id).toBe('meta')
+    expect(deskCardForUrl('https://www.facebook.com/Sergikdropz')?.id).toBe('facebook')
     expect(deskCardForUrl('https://studio.youtube.com/')?.id).toBe('youtube_studio')
     expect(deskCardForUrl('https://artists.spotify.com/c/artist/x')?.id).toBe('spotify_artists')
     expect(deskCardForUrl('https://sxdirect.soundexchange.com/home/')?.id).toBe('sx_direct')

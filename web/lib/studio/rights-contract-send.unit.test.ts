@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  contractEmailHtml,
   contractSignatories,
   isValidPartyEmail,
   mergePartyContacts,
@@ -82,5 +83,21 @@ describe('rights contract send', () => {
 
   it('strips legal suffix from party labels', () => {
     expect(stageFromPartyLabel('SERGIK (Jordan Caboga)')).toBe('SERGIK')
+  })
+
+  it('tells the signer the email includes the PDF and DocuSign', () => {
+    const html = contractEmailHtml({
+      kind: 'collab_agreement',
+      releaseTitle: 'Walk That Walk',
+      albumArtist: 'SERGIK',
+      partyName: 'Breauxx',
+      packetText: 'Term: 5 years',
+      packetLabel: 'Collab agreement',
+      pdfFilename: 'collab-agreement-walk-that-walk.pdf',
+      docusignIncluded: true,
+    })
+    expect(html).toContain('Download the attached PDF (collab-agreement-walk-that-walk.pdf)')
+    expect(html).toContain('DocuSign is included')
+    expect(html).not.toContain('Reply to this email')
   })
 })

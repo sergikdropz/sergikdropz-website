@@ -6,8 +6,9 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, use
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { FaPlay, FaMusic, FaCompactDisc, FaUser, FaTags, FaList, FaTh, FaBars, FaHistory, FaFire, FaStar, FaPlus, FaMinus, FaClock, FaChevronRight, FaChevronLeft, FaChevronUp, FaChevronDown, FaFolder, FaEdit, FaTrash, FaCopy, FaExternalLinkAlt, FaGripVertical, FaEye, FaEyeSlash, FaBolt, FaFileAlt, FaSync, FaImage, FaUpload, FaTimes, FaRandom, FaClone, FaSortAlphaDown, FaSortAmountDown, FaInfoCircle, FaLink, FaCode, FaInstagram, FaRocket } from 'react-icons/fa'
+import { FaPlay, FaMusic, FaCompactDisc, FaUser, FaTags, FaList, FaTh, FaThList, FaBars, FaHistory, FaFire, FaStar, FaPlus, FaMinus, FaClock, FaChevronRight, FaChevronLeft, FaChevronUp, FaChevronDown, FaFolder, FaEdit, FaTrash, FaCopy, FaExternalLinkAlt, FaGripVertical, FaEye, FaEyeSlash, FaBolt, FaFileAlt, FaSync, FaImage, FaUpload, FaTimes, FaRandom, FaClone, FaSortAlphaDown, FaSortAmountDown, FaInfoCircle, FaLink, FaCode, FaInstagram, FaRocket } from 'react-icons/fa'
 import { copyShareEmbedHtml, copyShareListenLink, exportShareStorySnippet } from '@/lib/shares/client'
+import { copySocialPromoCollaboratorLink } from '@/lib/studio/promo-share-client'
 import { createdDateFromTrack } from '@/lib/music-library/track-created-date'
 import {
   releaseFolderTypeMap,
@@ -59,9 +60,13 @@ import { applySonicDnaAnalysisToTrack, displayTrackBpm, displayTrackGenre, displ
 import { stampCatalogOverrides } from '@/lib/catalog-lock'
 import { genrePickerModel, applyPreferredGenreToSonicDna, preferredGenreDirective, subgenresForGenre } from '@/lib/audio/groove-class-options'
 import { appendSonicDnaLookupParams } from '@/lib/audio/sonic-dna-query'
+import { sonicDnaFromBody } from '@/lib/audio/sonic-dna-body'
 import SonicDnaReportModal from '@/components/music/SonicDnaReportModal'
 import { SergikBrandText } from '@/components/music/SergikBrandText'
-import ReleaseMusicVideosRow from '@/components/music/ReleaseMusicVideosRow'
+import ReleaseMusicVideosRow, {
+  bindReleaseActionsHost,
+  useReleaseActionsClaimed,
+} from '@/components/music/ReleaseMusicVideosRow'
 import { mapTracksForReleaseShare } from '@/lib/shares/release-share-tracks'
 import {
   parseFolderMusicVideos,
@@ -244,7 +249,7 @@ function buildArtworkChoices(input: {
   return dedupeArtworkByReleaseLabel(choices)
 }
 
-type AlbumLayout = 'list' | 'tiles'
+type AlbumLayout = 'list' | 'tiles' | 'expanded'
 
 function loadAlbumLayout(): AlbumLayout {
   if (typeof window === 'undefined') return 'tiles'
@@ -252,7 +257,7 @@ function loadAlbumLayout(): AlbumLayout {
     const saved =
       localStorage.getItem(ALBUM_LAYOUT_STORAGE_KEY) ??
       localStorage.getItem(LEGACY_ALBUM_LAYOUT_STORAGE_KEY)
-    if (saved === 'tiles' || saved === 'list') {
+    if (saved === 'tiles' || saved === 'list' || saved === 'expanded') {
       localStorage.setItem(ALBUM_LAYOUT_STORAGE_KEY, saved)
       return saved
     }
@@ -345,6 +350,12 @@ function noteRecentFolderCoverEdit(folderId: string, storageArt: string, bust: s
   recentFolderCoverEdits.set(folderId, { storage: storageArt, bust, at: Date.now() })
 }
 
+function folderCoverVersionMs(url: string): number {
+  const path = stripArtworkCacheBust(url)
+  const embedded = path.match(/\.v(\d{11,})\.[a-z0-9]+$/i)?.[1]
+  return embedded ? Number(embedded) : 0
+}
+
 function mergeAlbumTileArtwork(incomingTile: AlbumTile, previousArt?: string): AlbumTile {
   const sessionBust = sessionFolderCoverBust(incomingTile.id)
   if (sessionBust) {
@@ -357,20 +368,23 @@ function mergeAlbumTileArtwork(incomingTile: AlbumTile, previousArt?: string): A
   const incomingArt = incomingTile.artwork || ''
   if (isUploadedFolderArtwork(incomingArt)) {
     if (stripArtworkCacheBust(incomingArt) === stripArtworkCacheBust(previousArt)) {
-      if (!/[?&]v=/.test(incomingArt) && /[?&]v=/.test(previousArt)) {
-        const prevToken = previousArt.match(/[?&]v=([^&]+)/)?.[1] ?? ''
-        const prevMs = /^\d{11,}$/.test(prevToken) ? Number(prevToken) : 0
-        if (prevMs > 1_600_000_000_000) {
-          return { ...incomingTile, artwork: previousArt }
-        }
-        return {
-          ...incomingTile,
-          artwork: forceArtworkCacheBust(stripArtworkCacheBust(incomingArt)),
-        }
+      // Same file already on screen. A new ?v= here remounts every cover on open.
+      if (/[?&]v=/.test(previousArt)) {
+        return { ...incomingTile, artwork: previousArt }
       }
       return incomingTile
     }
-    // Browse rows lag behind a Choose/Replace — keep the in-session cover, not stale server art.
+    // A replace saves `folder-{id}.v{ms}.ext`. The higher version is the cover that
+    // was just uploaded; a stale browse row must not paint over it, and a saved
+    // upload must replace the copy already on screen.
+    const incomingVersion = folderCoverVersionMs(incomingArt)
+    const previousVersion = folderCoverVersionMs(previousArt)
+    if (incomingVersion !== previousVersion) {
+      return {
+        ...incomingTile,
+        artwork: incomingVersion > previousVersion ? incomingArt : previousArt,
+      }
+    }
     return { ...incomingTile, artwork: previousArt || incomingArt }
   }
   return { ...incomingTile, artwork: previousArt }
@@ -931,7 +945,12 @@ export default function SergBrowser({
   activeSidebarAlbumRef.current = activeSidebarAlbum
   const albumsRef = useRef<AlbumTile[]>([])
   albumsRef.current = albums
-  const [albumLayout, setAlbumLayout] = useState<AlbumLayout>(loadAlbumLayout)
+  const [albumLayout, setAlbumLayout] = useState<AlbumLayout>('tiles')
+  // Server render has no localStorage, so the saved Tile / List / Expanded choice is applied before paint.
+  useLayoutEffect(() => {
+    const saved = loadAlbumLayout()
+    setAlbumLayout((current) => (current === saved ? current : saved))
+  }, [])
   const [albumTracks, setAlbumTracks] = useState<Track[]>([])
   const [albumTracksByFolder, setAlbumTracksByFolder] = useState<Record<string, Track[]>>({})
   const [folderMeta, setFolderMeta] = useState<Record<string, FolderMeta>>({})
@@ -1299,15 +1318,12 @@ export default function SergBrowser({
           setAlbums(
             isAdminCatalog ? cachedTiles : cachedTiles.filter((t) => !t.hidden),
           )
-          // Public can seed from cache. Admin waits for API merge so private EPs aren't shown as 0 tracks.
-          if (!isAdminCatalog && Object.keys(cachedGrouped).length) {
+          if (Object.keys(cachedGrouped).length) {
             setAlbumTracksByFolder(cachedGrouped)
             setAlbums((prev) => prev.map((tile) => withResolvedArtwork(tile, cachedGrouped[tile.id] || [])))
           }
           const cacheMisses = cachedTiles.some((tile) => !(cachedGrouped[tile.id] && cachedGrouped[tile.id].length > 0))
-          // Admin never seeds tracks from cache, so tiles are empty until the API merge —
-          // show "Loading tracks…" instead of a false "0 tracks / No tracks found".
-          if (cacheMisses || isAdminCatalog) setAlbumTracksHydrating(true)
+          if (cacheMisses) setAlbumTracksHydrating(true)
           setLoading(false)
         } else {
           showBlockingLoader()
@@ -1364,63 +1380,19 @@ export default function SergBrowser({
           const stamped = withEpArtworkOnCrateTracks(next, tiles)
           setAlbumTracksByFolder(stamped)
           const resolveTiles = (prev: AlbumTile[]) =>
-            prev.map((tile) => {
-              const trackList = stamped[tile.id] || []
-              const resolved = withResolvedArtwork(tile, trackList)
-              if (isUploadedFolderArtwork(resolved.artwork)) {
-                const storage =
-                  artworkUrlForCatalogStorage(resolved.artwork || '') ||
-                  stripArtworkCacheBust(resolved.artwork || '')
-                return {
-                  ...resolved,
-                  artwork: storage ? forceArtworkCacheBust(storage) : resolved.artwork,
-                }
-              }
-              return resolved
-            })
+            prev.map((tile) => withResolvedArtwork(tile, stamped[tile.id] || []))
           setAlbums(resolveTiles)
           setSidebarAlbums(resolveTiles)
         }
         // Instant paint from cache, but never trust stub Unknown/None catalog as final.
         if (Object.keys(grouped).length) paintGrouped(grouped)
 
-        const tilesNeedingHydration = tiles.filter((tile) =>
+        const needsLiveTracks = tiles.some((tile) =>
           folderNeedsLiveCatalogHydration(grouped[tile.id]),
         )
-        if (tilesNeedingHydration.length) {
-          setAlbumTracksHydrating(true)
-          try {
-            const BATCH = 6
-            for (let i = 0; i < tilesNeedingHydration.length; i += BATCH) {
-              if (!stillCurrent()) break
-              const slice = tilesNeedingHydration.slice(i, i + BATCH)
-              const fills = await Promise.all(
-                slice.map(async (tile) => {
-                  const pl = curatedPlaylistsRef.current.find(
-                    (p) =>
-                      p.id === playlistIdForFolder(tile.id) ||
-                      p.id === tile.id ||
-                      folderIdFromPlaylistId(p.id) === tile.id,
-                  )
-                  const loaded = await loadTracksForAlbumFolder(tile.id, pl?.trackIds || [], tile.name)
-                  return loaded.length
-                    ? ([tile.id, withAlbumName(loaded, tile.name, tile.type)] as const)
-                    : null
-                }),
-              )
-              for (const fill of fills) {
-                if (fill) grouped[fill[0]] = fill[1]
-              }
-              if (stillCurrent()) paintGrouped(grouped)
-            }
-          } finally {
-            if (stillCurrent()) setAlbumTracksHydrating(false)
-          }
-        } else if (stillCurrent()) {
-          setAlbumTracksHydrating(false)
-        }
+        if (needsLiveTracks) setAlbumTracksHydrating(true)
 
-        // Background overlay so admin edits aren't stuck on the first folder page.
+        // One catalog pass after the names are up. Opening a release still loads that folder.
         void fetchAllTracksSummaryForHydration({
           includeArchived: false,
           shouldPause: () => Boolean((window as any).__sergikVaultPlaybackBusy),
@@ -1445,8 +1417,16 @@ export default function SergBrowser({
                   byId.set(t.id, t)
                   continue
                 }
-                // Prefer live catalog over stale JSON Unknown/None stubs.
-                byId.set(t.id, trackHasStubCatalog(prev) && !trackHasStubCatalog(t) ? t : prev)
+                // Cache is inserted first; this row is the live list.
+                // Keep measured catalog from whichever row has it, and always
+                // take the live file so a copied master URL cannot stick.
+                const catalog =
+                  trackHasStubCatalog(prev) && !trackHasStubCatalog(t) ? t : prev
+                byId.set(t.id, {
+                  ...catalog,
+                  file: t.file || catalog.file,
+                  audioFileId: t.audioFileId || catalog.audioFileId,
+                })
               }
               fromApi[folderId] = [...byId.values()]
               fromApi[folderId].sort(
@@ -1462,6 +1442,9 @@ export default function SergBrowser({
             paintGrouped(fromApi)
           })
           .catch(() => {})
+          .finally(() => {
+            if (stillCurrent()) setAlbumTracksHydrating(false)
+          })
       } else if (view === 'artists') {
         setArtists(data.artists || [])
         setTotal(data.total || 0)
@@ -3185,7 +3168,7 @@ export default function SergBrowser({
 
   function setPersistedAlbumLayout(next: AlbumLayout) {
     setAlbumLayout(next)
-    if (next === 'list') setSelectedAlbumId(null)
+    if (next === 'list' || next === 'expanded') setSelectedAlbumId(null)
     try {
       localStorage.setItem(ALBUM_LAYOUT_STORAGE_KEY, next)
     } catch {
@@ -3204,22 +3187,30 @@ export default function SergBrowser({
     const cached = albumTracksByFolder[albumId]
     const withCrateEpArt = (list: Track[]) =>
       withEpArtworkOnCrateTracks({ [albumId]: list }, albums)[albumId] || list
+    const paint = (list: Track[]) => {
+      const next = withCrateEpArt(withAlbumName(list, albumName, albumType))
+      setAlbumTracks(next)
+      setAlbumTracksByFolder((prev) => ({ ...prev, [albumId]: next }))
+    }
+    selectedAlbumIdRef.current = albumId
     if (cached?.length) {
       setAlbumTracks(withCrateEpArt(withAlbumName(cached, albumName, albumType)))
       setLoadingAlbumTracks(false)
-      return
+    } else {
+      setLoadingAlbumTracks(true)
     }
-    setLoadingAlbumTracks(true)
     try {
       const pl = curatedPlaylists.find(
         (p) => p.id === playlistIdForFolder(albumId) || p.id === albumId
       )
       const folderTracks = await loadTracksForAlbumFolder(albumId, pl?.trackIds || [], albumName)
-      setAlbumTracks(withCrateEpArt(withAlbumName(folderTracks, albumName, albumType)))
+      if (selectedAlbumIdRef.current !== albumId) return
+      if (folderTracks.length) paint(folderTracks)
+      else if (!cached?.length) setAlbumTracks([])
     } catch {
-      setAlbumTracks([])
+      if (selectedAlbumIdRef.current === albumId && !cached?.length) setAlbumTracks([])
     } finally {
-      setLoadingAlbumTracks(false)
+      if (selectedAlbumIdRef.current === albumId) setLoadingAlbumTracks(false)
     }
   }
 
@@ -4133,7 +4124,19 @@ export default function SergBrowser({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header bar — pins under site nav; queue docks as absolute dropdown under it */}
         <div className="sticky top-[var(--music-lib-chrome-top,4rem)] z-[11] shrink-0 bg-gray-950 [contain:layout] transition-[top] duration-300 ease-out motion-reduce:transition-none">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 border-b border-gray-800 bg-gray-950 px-3 py-2.5 sm:px-5 sm:py-3">
+          {!searchControlled && (
+            <div className="flex justify-center border-b border-gray-800 bg-gray-950 px-3 pt-2.5 sm:px-5 sm:pt-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="bg-gray-800/50 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white w-full max-w-[24rem] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
+                aria-label="Search tracks"
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 border-b border-gray-800 bg-gray-950 px-3 py-2.5 sm:px-5 sm:py-3">
             <div className="flex min-w-0 items-center gap-2 justify-self-start">
               {browseSidebarCollapsed && (
                 <button
@@ -4156,6 +4159,53 @@ export default function SergBrowser({
                   <span aria-hidden>←</span>
                   <span className="hidden sm:inline">Back</span>
                 </button>
+              ) : (
+              <h2
+                className={`music-lib-section-title min-w-0 text-left font-six-caps text-[clamp(1.15rem,5.4vw,1.85rem)] leading-none tracking-[0.08em] [overflow-wrap:normal] [word-break:normal] [hyphens:none] whitespace-normal sm:text-4xl sm:tracking-[0.15em] ${
+                  isAdminCatalog && activeCuratedPlaylist ? 'cursor-context-menu' : ''
+                }`}
+                title={
+                  isAdminCatalog && activeCuratedPlaylist
+                    ? 'Right-click for playlist actions'
+                    : undefined
+                }
+                onContextMenu={
+                  isAdminCatalog && activeCuratedPlaylist
+                    ? (e) => {
+                        e.preventDefault()
+                        const el = document.querySelector(
+                          `[data-playlist-id="${CSS.escape(activeCuratedPlaylist)}"]`,
+                        ) as HTMLElement | null
+                        if (el) {
+                          el.dispatchEvent(
+                            new MouseEvent('contextmenu', {
+                              bubbles: true,
+                              cancelable: true,
+                              clientX: e.clientX,
+                              clientY: e.clientY,
+                            }),
+                          )
+                        }
+                      }
+                    : undefined
+                }
+              >
+                {selectedAlbumId
+                  ? albums.find((a) => a.id === selectedAlbumId)?.name || 'Album'
+                  : activePlaylistName || (
+                      view === 'songs' ? 'Songs' :
+                      view === 'albums' ? 'Crates & EPs' :
+                      view === 'artists' ? 'Artists' : 'Genres'
+                    )}
+              </h2>
+              )}
+            </div>
+
+            <div className="min-w-0 max-w-full justify-self-center text-center">
+              {selectedAlbumId ? (
+                <h2 className="music-lib-section-title min-w-0 text-center font-six-caps text-[clamp(1.15rem,5.4vw,1.85rem)] leading-none tracking-[0.08em] [overflow-wrap:normal] [word-break:normal] [hyphens:none] whitespace-normal sm:text-4xl sm:tracking-[0.15em]">
+                  {albums.find((a) => a.id === selectedAlbumId)?.name || 'Album'}
+                </h2>
               ) : view === 'albums' && !activeSmartPlaylist && !activeCuratedPlaylist && !activeSidebarAlbum ? (
                 <div
                   className="flex flex-shrink-0 overflow-hidden rounded-lg border border-gray-700"
@@ -4190,48 +4240,23 @@ export default function SergBrowser({
                     <FaList className="h-3.5 w-3.5" />
                     <span className="sr-only">List view</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setPersistedAlbumLayout('expanded')}
+                    className={`p-2 transition ${
+                      albumLayout === 'expanded'
+                        ? 'bg-purple-600/30 text-purple-200'
+                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                    }`}
+                    aria-pressed={albumLayout === 'expanded'}
+                    title="Expanded view"
+                  >
+                    <FaThList className="h-3.5 w-3.5" />
+                    <span className="sr-only">Expanded view</span>
+                  </button>
                 </div>
               ) : null}
             </div>
-
-            <h2
-              className={`music-lib-section-title min-w-0 w-full max-w-full px-1 text-center font-six-caps text-[clamp(1.15rem,5.4vw,1.85rem)] leading-none tracking-[0.08em] [overflow-wrap:normal] [word-break:normal] [hyphens:none] text-balance whitespace-normal sm:text-4xl sm:tracking-[0.15em] justify-self-stretch ${
-                isAdminCatalog && activeCuratedPlaylist ? 'cursor-context-menu' : ''
-              }`}
-              title={
-                isAdminCatalog && activeCuratedPlaylist
-                  ? 'Right-click for playlist actions'
-                  : undefined
-              }
-              onContextMenu={
-                isAdminCatalog && activeCuratedPlaylist
-                  ? (e) => {
-                      e.preventDefault()
-                      const el = document.querySelector(
-                        `[data-playlist-id="${CSS.escape(activeCuratedPlaylist)}"]`,
-                      ) as HTMLElement | null
-                      if (el) {
-                        el.dispatchEvent(
-                          new MouseEvent('contextmenu', {
-                            bubbles: true,
-                            cancelable: true,
-                            clientX: e.clientX,
-                            clientY: e.clientY,
-                          }),
-                        )
-                      }
-                    }
-                  : undefined
-              }
-            >
-              {selectedAlbumId
-                ? albums.find((a) => a.id === selectedAlbumId)?.name || 'Album'
-                : activePlaylistName || (
-                    view === 'songs' ? 'Songs' :
-                    view === 'albums' ? 'Crates & EPs' :
-                    view === 'artists' ? 'Artists' : 'Genres'
-                  )}
-            </h2>
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-3 justify-self-end">
               {view === 'songs' && !activeSmartPlaylist && !selectedAlbumId && (
@@ -4241,16 +4266,6 @@ export default function SergBrowser({
                     <span className="text-gray-600"> / {total.toLocaleString()}</span>
                   ) : null}
                 </span>
-              )}
-              {!searchControlled && (
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="bg-gray-800/50 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white w-[7.5rem] sm:w-48 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                  aria-label="Search tracks"
-                />
               )}
               <button
                 type="button"
@@ -4444,16 +4459,35 @@ export default function SergBrowser({
                       items={albums}
                       tracksByFolder={albumTracksByFolder}
                       tracksHydrating={albumTracksHydrating}
-                      onOpen={openAlbum}
                       adminCatalog={isAdminCatalog}
+                      currentTrackId={currentTrack?.id}
+                      isPlaying={isPlaying}
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      onRate={handleRate}
+                      sortIcon={sortIcon}
+                      onPlayGroup={(group, track) => {
+                        const folderId = track.folderId || group[0]?.folderId
+                        const source = folderId ? { type: 'folder' as const, id: folderId } : browsePlayerSource()
+                        const startQueue = readCatalogRandomSetting() ? [track] : group
+                        playTrack(track as any, startQueue as any, source)
+                        recordTrackPlay(track.id, { source: 'album' })
+                      }}
+                      onTrackUpdated={applyTrackPatch}
+                      onTrackArchived={applyTrackArchived}
+                      onTracksRemovedFromFolder={applyTracksRemovedFromFolder}
                       onFolderUpdated={applyFolderPatch}
                       onFolderArchived={applyFolderArchived}
                       onTracksReordered={applyFolderTracks}
+                      onFolderReorder={applyFolderReorder}
                       onVisibilityChange={applyFolderVisibility}
                       onAddedToLibrary={applyAddedToLibrary}
+                      onMusicVideosChange={patchFolderMusicVideos}
                     />
                   ) : (
                     <AlbumCatalog
+                      expanded={albumLayout === 'expanded'}
                       items={albums}
                       tracksByFolder={albumTracksByFolder}
                       tracksHydrating={albumTracksHydrating}
@@ -4476,6 +4510,7 @@ export default function SergBrowser({
                       onVisibilityChange={applyFolderVisibility}
                       onAddedToLibrary={applyAddedToLibrary}
                       onMusicVideosChange={patchFolderMusicVideos}
+                      onOpen={openAlbum}
                       onPlayGroup={(group, track) => {
                         const folderId = track.folderId || group[0]?.folderId
                         const source = folderId ? { type: 'folder' as const, id: folderId } : browsePlayerSource()
@@ -5028,6 +5063,15 @@ function SongsTable({
   releaseGroupedByFolder?: Record<string, Track[]> | null
   playerSource?: PlayerSource
 }) {
+  const releaseActionsClaimed = useReleaseActionsClaimed(folderContext?.id)
+  const releaseActionsHostRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      const id = folderContext?.id
+      if (!id) return
+      bindReleaseActionsHost(id, node)
+    },
+    [folderContext?.id],
+  )
   const { playNext, addToQueue, playQueue } = useMusicPlayer()
   const trackCoverPool = usePlayerCoverPool(tracks)
   const [visibleOptional, setVisibleOptional] = useState<Set<SongTableOptionalColumn>>(() =>
@@ -5579,7 +5623,7 @@ function SongsTable({
           })
           const res = await fetch(`/api/audio/sonic-dna?${params.toString()}`, { cache: 'no-store' })
           const data = await res.json().catch(() => ({}))
-          if (res.ok) sonicDna = data.sonicDNA || sonicDna
+          if (res.ok) sonicDna = sonicDnaFromBody(data) || sonicDna
         }
         sonicDna = applyPreferredGenreToSonicDna(sonicDna, genre, subgenre)
         updates.sonic_dna = sonicDna
@@ -6364,7 +6408,7 @@ function SongsTable({
       })
       const res = await fetch(`/api/audio/sonic-dna?${params.toString()}`, { cache: 'no-store' })
       const data = (await res.json().catch(() => ({}))) as { sonicDNA?: unknown }
-      if (res.ok && data.sonicDNA) dna = data.sonicDNA
+      if (res.ok) dna = sonicDnaFromBody(data) || dna
 
       const reportKey = keySignatureFromSonicDnaReport(dna)
       const audioUrl = track.file
@@ -6508,7 +6552,7 @@ function SongsTable({
           })
           const res = await fetch(`/api/audio/sonic-dna?${params.toString()}`, { cache: 'no-store' })
           const data = await res.json().catch(() => ({}))
-          if (res.ok) sonicDna = data.sonicDNA || sonicDna
+          if (res.ok) sonicDna = sonicDnaFromBody(data) || sonicDna
         }
         sonicDna = applyPreferredGenreToSonicDna(sonicDna, genre, subgenre)
       }
@@ -7045,6 +7089,16 @@ function SongsTable({
                 </button>
               )}
               <div className="my-1 border-t border-gray-800" />
+              {selectedCount <= 1 && (
+                <Link
+                  href={`/licensing/request?kind=catalog&track=${encodeURIComponent(trackMenu.track.id || '')}&title=${encodeURIComponent(trackMenu.track.title || '')}`}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800/80"
+                  role="menuitem"
+                  onClick={() => setTrackMenu(null)}
+                >
+                  License this track
+                </Link>
+              )}
           {adminCatalog ? (
             <>
               {adminError && (
@@ -8315,7 +8369,13 @@ function SongsTable({
           onQueueAnalysis={(item, directive) => runTrackSonicDna(item, directive)}
         />
       )}
-      {rowReorder && (
+      {rowReorder && folderContext && releaseActionsClaimed ? (
+        <div
+          ref={releaseActionsHostRef}
+          className="mb-2 flex flex-wrap items-center justify-between gap-2"
+          data-release-actions=""
+        />
+      ) : rowReorder ? (
         <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
           <span>
             Drag rows to reorder or onto a sidebar playlist · ⌘/Ctrl-click and Shift-click to multi-select · ⌘/Ctrl-A select all
@@ -8356,12 +8416,12 @@ function SongsTable({
             </>
           )}
         </p>
-      )}
+      ) : null}
       <table className="w-full table-fixed text-sm">
         <colgroup>
           {rowReorder ? <col style={{ width: 32 }} /> : null}
           <col style={{ width: 32 }} />
-          {adminCatalog ? <col style={{ width: 40 }} /> : null}
+          <col style={{ width: 40 }} />
           {orderedVisibleColumns.map((colKey) => (
             <col key={colKey} style={{ width: columnWidthPx(colKey) }} />
           ))}
@@ -8393,19 +8453,17 @@ function SongsTable({
                 }
               />
             </th>
-            {adminCatalog && (
-              <th
-                className={`w-10 py-2 px-2 text-left cursor-pointer hover:text-white ${
-                  sortField === 'track_number' ? 'text-purple-300' : ''
-                }`}
-                title="Sort by track number"
-                onClick={() => onSort('track_number')}
-              >
-                <span className="inline-flex items-center gap-1 select-none">
-                  #{sortIcon('track_number')}
-                </span>
-              </th>
-            )}
+            <th
+              className={`w-10 py-2 px-2 text-left cursor-pointer hover:text-white ${
+                sortField === 'track_number' ? 'text-purple-300' : ''
+              }`}
+              title="Sort by track number"
+              onClick={() => onSort('track_number')}
+            >
+              <span className="inline-flex items-center gap-1 select-none">
+                #{sortIcon('track_number')}
+              </span>
+            </th>
             {orderedVisibleColumns.map((colKey) => {
               const align = columnHeaderAlign(colKey)
               const sortableField = COLUMN_SORT_FIELD[colKey]
@@ -8526,8 +8584,7 @@ function SongsTable({
                     }}
                   />
                 </td>
-                {adminCatalog && (
-                  <td className="py-2 px-2 text-gray-600 relative">
+                <td className="py-2 px-2 text-gray-600 relative">
                     <span className="group-hover:invisible">
                       {showTrackNumber && track.track_number
                         ? track.track_number
@@ -8560,7 +8617,6 @@ function SongsTable({
                       </span>
                     )}
                   </td>
-                )}
                 {orderedVisibleColumns.map((colKey) => {
                   switch (colKey) {
                     case 'title':
@@ -8860,8 +8916,8 @@ async function fetchSonicDnaProgress(track: Track): Promise<SonicDnaProgress> {
   const percent =
     typeof data.percent === 'number'
       ? data.percent
-      : sonicDnaCompletenessPercent(status, data.sonicDNA || track.sonic_dna)
-  return { status, percent, sonicDNA: data.sonicDNA || null }
+      : sonicDnaCompletenessPercent(status, sonicDnaFromBody(data) || track.sonic_dna)
+  return { status, percent, sonicDNA: sonicDnaFromBody(data) || null }
 }
 
 function ChooseExistingArtworkPanel({
@@ -9459,6 +9515,24 @@ function AdminFolderChrome({
     setMenu(null)
   }
 
+  const shareSocialPromoLink = async () => {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await copySocialPromoCollaboratorLink({ folderId: album.id })
+      setNotice(
+        result.copied
+          ? `Social promo link copied: ${result.url}`
+          : `Social promo link: ${result.url}`,
+      )
+    } catch (err: any) {
+      setError(err?.message || 'Could not copy the social promo link')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const shareFolderLink = async (mode: 'listen' | 'embed') => {
     setBusy(true)
     setError(null)
@@ -9968,6 +10042,15 @@ function AdminFolderChrome({
           >
             <FaLink className="h-3 w-3 text-gray-500" />
             Copy share link
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800/80 disabled:opacity-50"
+            onClick={() => void shareSocialPromoLink()}
+          >
+            <FaLink className="h-3 w-3 text-violet-300" />
+            Copy social promo link
           </button>
           <button
             type="button"
@@ -11834,30 +11917,99 @@ function useCrateMosaics(
   }, [items, libraryCoverPool])
 }
 
+function useAlbumTileColumns() {
+  const [cols, setCols] = useState(2)
+  useLayoutEffect(() => {
+    const queries = ['(min-width: 768px)', '(min-width: 640px)'].map((q) => window.matchMedia(q))
+    const read = () => {
+      if (queries[0].matches) return 4
+      if (queries[1].matches) return 3
+      return 2
+    }
+    const sync = () => setCols(read())
+    sync()
+    queries.forEach((q) => q.addEventListener('change', sync))
+    return () => queries.forEach((q) => q.removeEventListener('change', sync))
+  }, [])
+  return cols
+}
+
 function AlbumSection({
   items,
   tracksByFolder,
   tracksHydrating = false,
-  onOpen,
   adminCatalog = false,
+  currentTrackId,
+  isPlaying = false,
+  sortField,
+  sortDir = 'asc',
+  onSort,
+  onPlayGroup,
+  onRate,
+  sortIcon,
+  onTrackUpdated,
+  onTrackArchived,
+  onTracksRemovedFromFolder,
   onFolderUpdated,
   onFolderArchived,
   onTracksReordered,
+  onFolderReorder,
   onVisibilityChange,
   onAddedToLibrary,
+  onMusicVideosChange,
 }: {
   items: AlbumTile[]
   tracksByFolder: Record<string, Track[]>
   tracksHydrating?: boolean
-  onOpen: (id: string) => void
   adminCatalog?: boolean
+  currentTrackId?: string
+  isPlaying?: boolean
+  sortField: SortField
+  sortDir?: 'asc' | 'desc'
+  onSort: (field: SortField) => void
+  onPlayGroup: (group: Track[], track: Track) => void
+  onRate: (trackId: string, rating: number) => void
+  sortIcon: (field: SortField) => React.ReactNode
+  onTrackUpdated?: (track: Track) => void
+  onTrackArchived?: (trackId: string) => void
+  onTracksRemovedFromFolder?: (folderId: string, trackIds: string[]) => void
   onFolderUpdated?: (id: string, patch: Partial<AlbumTile>, publishVersion?: number | null) => void
   onFolderArchived?: (id: string) => void
   onTracksReordered?: (folderId: string, tracks: Track[]) => void
+  onFolderReorder?: (folderId: string, tracks: Track[]) => void | Promise<void>
   onVisibilityChange?: (id: string, hidden: boolean) => void
   onAddedToLibrary?: (tile: AlbumTile) => void
+  onMusicVideosChange?: (folderId: string, videos: FolderMusicVideo[], fallbackName?: string, fallbackType?: string) => void
 }) {
   const crateMosaics = useCrateMosaics(items, tracksByFolder)
+  const [expandedTileId, setExpandedTileId] = useState<string | null>(null)
+  const albumTileCols = useAlbumTileColumns()
+  const expandedTileRef = useRef<HTMLDivElement | null>(null)
+
+  useLayoutEffect(() => {
+    const el = expandedTileRef.current
+    if (!el || !expandedTileId) return
+    if (!window.matchMedia('(max-width: 767px)').matches) return
+    const frame = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect()
+      if (rect.height < 1) return
+      const header = document.querySelector('header')?.getBoundingClientRect().height ?? 0
+      const playerRaw = getComputedStyle(document.documentElement)
+        .getPropertyValue('--global-music-player-height')
+        .trim()
+      const player = playerRaw.endsWith('rem')
+        ? parseFloat(playerRaw) * 16
+        : parseFloat(playerRaw) || 0
+      const visibleTop = header
+      const visibleBottom = window.innerHeight - player
+      const visibleMid = (visibleTop + visibleBottom) / 2
+      const delta = rect.top + rect.height / 2 - visibleMid
+      if (Math.abs(delta) < 12) return
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      window.scrollBy({ top: delta, behavior: reduceMotion ? 'auto' : 'smooth' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [expandedTileId])
 
   if (items.length === 0) return null
   return (
@@ -11869,16 +12021,48 @@ function AlbumSection({
           <div key={type}>
             <h3 className="text-center font-six-caps text-4xl leading-none text-gray-300 sm:text-5xl">{label}</h3>
             {blurb ? <p className="mt-1 mb-3 text-center text-xs text-gray-500 max-w-2xl mx-auto">{blurb}</p> : <div className="mb-3" />}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4 sm:grid-cols-3 md:grid-cols-4">
               {groupItems.map((album, index) => {
-                const trackCount = tracksByFolder[album.id]?.length || 0
+                const group = tracksByFolder[album.id] || []
+                const trackCount = group.length
+                const expanded = expandedTileId === album.id
+                const musicVideos = Array.isArray(album.musicVideos) ? album.musicVideos : []
+                const musicVideosRow =
+                  adminCatalog || musicVideos.length > 0 ? (
+                    <ReleaseMusicVideosRow
+                      folderId={album.id}
+                      folderName={album.name}
+                      videos={musicVideos}
+                      releaseTracks={mapTracksForReleaseShare(group)}
+                      isAdmin={adminCatalog}
+                      onVideosChange={(next) =>
+                        onMusicVideosChange?.(album.id, next, album.name, album.type || 'ep')
+                      }
+                    />
+                  ) : null
+                const countLabel =
+                  trackCount > 0
+                    ? `${trackCount} track${trackCount === 1 ? '' : 's'}`
+                    : tracksHydrating
+                      ? 'Loading tracks…'
+                      : '0 tracks'
+                const expandLeft = expanded && albumTileCols > 1 && index % albumTileCols === albumTileCols - 1
                 return (
-                  <AdminFolderChrome
+                  <div
                     key={album.id}
+                    className={
+                      expanded && !expandLeft
+                        ? 'relative col-span-2 row-span-2 aspect-[4/5] min-h-0 min-w-0'
+                        : expanded
+                          ? 'relative z-30 min-w-0'
+                          : 'min-w-0'
+                    }
+                  >
+                  <AdminFolderChrome
                     album={album}
                     enabled={adminCatalog}
                     hidden={!!album.hidden}
-                    tracks={tracksByFolder[album.id] || []}
+                    tracks={group}
                     libraryAlbums={items}
                     onUpdated={onFolderUpdated}
                     onArchived={onFolderArchived}
@@ -11886,10 +12070,80 @@ function AlbumSection({
                     onVisibilityChange={onVisibilityChange}
                     onAddedToLibrary={onAddedToLibrary}
                   >
+                    {expanded ? (
+                    <div
+                      ref={expandedTileRef}
+                      className={`z-30 overflow-hidden rounded-xl ${
+                        expandLeft ? 'absolute top-0' : 'absolute inset-0'
+                      }`}
+                      style={
+                        expandLeft
+                          ? { right: 0, width: 'calc(200% + 1rem)', height: 'calc(200% + 1rem)' }
+                          : undefined
+                      }
+                    >
+                      <EpReleaseStage
+                        album={album}
+                        tracks={group}
+                        contained
+                        header={
+                          <button
+                            type="button"
+                            onClick={() => setExpandedTileId(null)}
+                            className="w-full text-center"
+                            title="Collapse"
+                            aria-expanded
+                          >
+                            <div className="truncate font-medium">
+                              <SergikBrandText text={album.name} />
+                            </div>
+                            <div className="truncate text-xs text-white/80">
+                              {album.albumArtist || 'SERGIK'}
+                              {album.year ? ` · ${album.year}` : ''}
+                              {album.type === 'ep' ? ' · EP' : ''}
+                              {` · ${countLabel}`}
+                            </div>
+                          </button>
+                        }
+                      >
+                        {musicVideosRow}
+                        <SongsTable
+                          tracks={group}
+                          loading={tracksHydrating && group.length === 0}
+                          currentTrackId={currentTrackId}
+                          isPlaying={isPlaying}
+                          sortField={sortField}
+                          sortDir={sortDir}
+                          onSort={onSort}
+                          onPlay={(track) => onPlayGroup(group, track)}
+                          onRate={onRate}
+                          sortIcon={sortIcon}
+                          showTrackNumber
+                          columnPreset={album.type === 'ep' ? 'ep' : 'default'}
+                          adminCatalog={adminCatalog}
+                          playerSource={{ type: 'folder', id: album.id }}
+                          onTrackUpdated={onTrackUpdated}
+                          onTrackArchived={onTrackArchived}
+                          folderContext={{ id: album.id, name: album.name }}
+                          onTracksRemovedFromFolder={onTracksRemovedFromFolder}
+                          onFolderReorder={adminCatalog ? onFolderReorder : undefined}
+                        />
+                      </EpReleaseStage>
+                    </div>
+                    ) : null}
+                    {!expanded || expandLeft ? (
                     <button
                       type="button"
-                      onClick={() => onOpen(album.id)}
-                      className="group w-full text-left bg-gray-900/30 rounded-lg p-3 hover:bg-gray-800/40 transition"
+                      onClick={() => setExpandedTileId(album.id)}
+                      aria-expanded={false}
+                      aria-hidden={expandLeft ? true : undefined}
+                      tabIndex={expandLeft ? -1 : undefined}
+                      title="Show tracks"
+                      className={
+                        expandLeft
+                          ? 'invisible pointer-events-none w-full text-left rounded-lg p-3'
+                          : 'group w-full text-left bg-gray-900/30 rounded-lg p-3 hover:bg-gray-800/40 transition [content-visibility:auto] [contain-intrinsic-size:auto_240px]'
+                      }
                     >
                       <div className="aspect-square rounded-md overflow-hidden bg-gray-800 mb-2 relative">
                         {album.type === 'album' ? (
@@ -11934,7 +12188,9 @@ function AlbumSection({
                             : `0 tracks`}
                       </div>
                     </button>
+                    ) : null}
                   </AdminFolderChrome>
+                  </div>
                 )
               })}
             </div>
@@ -11998,6 +12254,8 @@ function AlbumCatalog({
   onVisibilityChange,
   onAddedToLibrary,
   onMusicVideosChange,
+  onOpen,
+  expanded = false,
 }: {
   items: AlbumTile[]
   tracksByFolder: Record<string, Track[]>
@@ -12024,6 +12282,10 @@ function AlbumCatalog({
   onVisibilityChange?: (id: string, hidden: boolean) => void
   onAddedToLibrary?: (tile: AlbumTile) => void
   onMusicVideosChange?: (folderId: string, videos: FolderMusicVideo[], fallbackName?: string, fallbackType?: string) => void
+  /** Opens the release from the compact list. Expanded view shows tracks inline. */
+  onOpen: (id: string) => void
+  /** Full banners and track tables, the previous Crates & EPs list. */
+  expanded?: boolean
 }) {
   const tracksWithEpArt = useMemo(
     () => withEpArtworkOnCrateTracks(tracksByFolder, items),
@@ -12031,6 +12293,15 @@ function AlbumCatalog({
   )
   const crateMosaics = useCrateMosaics(items, tracksWithEpArt)
   const [fileDropFolderId, setFileDropFolderId] = useState<string | null>(null)
+  const [openListIds, setOpenListIds] = useState<Set<string>>(() => new Set())
+  const toggleListOpen = (id: string) => {
+    setOpenListIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const folderFileDropProps = (album: AlbumTile) =>
     adminCatalog && onFolderFileDrop
       ? {
@@ -12069,100 +12340,232 @@ function AlbumCatalog({
               <h3 className="font-six-caps text-4xl leading-none text-gray-300 sm:text-5xl">{label}</h3>
               {blurb ? <p className="mx-auto mt-1 max-w-2xl text-xs text-gray-500">{blurb}</p> : null}
             </div>
-            {groupItems.map((album) => {
-              const group = tracksWithEpArt[album.id] || []
-              const musicVideos = Array.isArray(album.musicVideos) ? album.musicVideos : []
-              const showMusicVideos = adminCatalog || musicVideos.length > 0
-              const musicVideosRow = showMusicVideos ? (
-                <div className="mb-2 sm:mb-3">
-                  <ReleaseMusicVideosRow
-                    folderId={album.id}
-                    folderName={album.name}
-                    videos={musicVideos}
-                    releaseTracks={mapTracksForReleaseShare(group)}
-                    isAdmin={adminCatalog}
-                    onVideosChange={(next) =>
-                      onMusicVideosChange?.(album.id, next, album.name, album.type || 'ep')
-                    }
-                  />
-                </div>
-              ) : null
-              const header = (
-                <AdminFolderChrome
-                  album={album}
-                  enabled={adminCatalog}
-                  hidden={!!album.hidden}
-                  tracks={group}
-                  libraryAlbums={items}
-                  onUpdated={onFolderUpdated}
-                  onArchived={onFolderArchived}
-                  onTracksReordered={onTracksReordered}
-                  onVisibilityChange={onVisibilityChange}
-                  onAddedToLibrary={onAddedToLibrary}
-                  onPlayAll={group[0] ? () => onPlayGroup(group, group[0]) : undefined}
-                >
-                  <div
-                    className={`flex items-center justify-center gap-3 text-center ${
-                      adminCatalog ? 'cursor-context-menu rounded-md px-2 hover:bg-gray-800/30' : ''
-                    }`}
-                  >
-                    {album.type !== 'ep' && (
-                      <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-gray-800">
-                        {album.type === 'album' ? (
-                          <CrateCoverMosaic covers={crateMosaics[album.id] || []} />
-                        ) : (
-                          <CoverArt
-                            src={album.artwork || folderArtworkSrc(album, group)}
-                            fallbackSrc={catalogArtworkForRelease(album.name)}
-                            alt=""
-                            sizes="56px"
-                            quality={COVER_THUMB_QUALITY}
-                            iconClassName="h-6 w-6 text-gray-600"
-                          />
-                        )}
-                      </div>
-                    )}
-                    <div className="min-w-0 max-w-[min(100%,28rem)] sm:max-w-[min(100%,36rem)]">
-                      <div className="truncate font-medium">
-                        <SergikBrandText text={album.name} />
-                      </div>
-                      <div className="truncate text-xs text-gray-400">
-                        {album.albumArtist || 'SERGIK'}
-                        {album.year ? ` · ${album.year}` : ''}
-                        {album.type === 'ep' ? ' · EP' : ''}
-                        {` · ${
-                          group.length > 0
-                            ? `${group.length} track${group.length === 1 ? '' : 's'}`
-                            : tracksHydrating
-                              ? 'loading…'
-                              : '0 tracks'
-                        }`}
-                      </div>
+            <div className={expanded ? 'space-y-8' : 'space-y-1'}>
+            {groupItems.map((album, index) => {
+                const listOpen = !expanded && openListIds.has(album.id)
+                const onCollapse = listOpen ? () => toggleListOpen(album.id) : undefined
+                if (!expanded && !listOpen) {
+                  const group = tracksWithEpArt[album.id] || []
+                  const countLabel =
+                    group.length > 0
+                      ? `${group.length} track${group.length === 1 ? '' : 's'}`
+                      : tracksHydrating
+                        ? 'loading…'
+                        : '0 tracks'
+                  return (
+                    <div
+                      key={album.id}
+                      {...folderFileDropProps(album)}
+                      className={`rounded-lg transition-shadow [content-visibility:auto] [contain-intrinsic-size:auto_72px] ${
+                        fileDropFolderId === album.id
+                          ? album.type === 'ep'
+                            ? 'ring-2 ring-teal-400/60 bg-teal-950/10'
+                            : 'ring-2 ring-violet-400/60 bg-violet-950/10'
+                          : ''
+                      }`}
+                    >
+                      {fileDropFolderId === album.id && (
+                        <p className={`px-3 pt-2 text-center text-[11px] ${album.type === 'ep' ? 'text-teal-300' : 'text-violet-300'}`}>
+                          Drop an image to set the cover, or audio to add tracks
+                        </p>
+                      )}
+                      <AdminFolderChrome
+                        album={album}
+                        enabled={adminCatalog}
+                        hidden={!!album.hidden}
+                        tracks={group}
+                        libraryAlbums={items}
+                        onUpdated={onFolderUpdated}
+                        onArchived={onFolderArchived}
+                        onTracksReordered={onTracksReordered}
+                        onVisibilityChange={onVisibilityChange}
+                        onAddedToLibrary={onAddedToLibrary}
+                        onPlayAll={group[0] ? () => onPlayGroup(group, group[0]) : undefined}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleListOpen(album.id)}
+                          aria-expanded={false}
+                          title="Show tracks"
+                          className={`flex w-full items-center justify-center gap-3 rounded-lg px-2 py-2 text-center hover:bg-gray-800/40 ${
+                            adminCatalog ? 'cursor-context-menu' : ''
+                          }`}
+                        >
+                          <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-gray-800">
+                            {album.type === 'album' ? (
+                              <CrateCoverMosaic covers={crateMosaics[album.id] || []} />
+                            ) : (
+                              <CoverArt
+                                src={album.artwork || folderArtworkSrc(album, group)}
+                                fallbackSrc={catalogArtworkForRelease(album.name)}
+                                alt=""
+                                sizes="56px"
+                                quality={COVER_THUMB_QUALITY}
+                                priority={index < 3}
+                                iconClassName="h-6 w-6 text-gray-600"
+                              />
+                            )}
+                          </div>
+                          <div className="min-w-0 max-w-[min(100%,28rem)] text-center sm:max-w-[min(100%,36rem)]">
+                            <div className="truncate font-medium">
+                              <SergikBrandText text={album.name} />
+                            </div>
+                            <div className="truncate text-xs text-gray-400">
+                              {album.albumArtist || 'SERGIK'}
+                              {album.year ? ` · ${album.year}` : ''}
+                              {album.type === 'ep' ? ' · EP' : ''}
+                              {` · ${countLabel}`}
+                            </div>
+                          </div>
+                          {adminCatalog && <CatalogVisibilityBadge isPrivate={!!album.hidden} />}
+                        </button>
+                      </AdminFolderChrome>
                     </div>
-                    {adminCatalog && <CatalogVisibilityBadge isPrivate={!!album.hidden} />}
+                  )
+                }
+                const group = tracksWithEpArt[album.id] || []
+                const musicVideos = Array.isArray(album.musicVideos) ? album.musicVideos : []
+                const showMusicVideos = adminCatalog || musicVideos.length > 0
+                const musicVideosRow = showMusicVideos ? (
+                  <div className="mb-2 sm:mb-3">
+                    <ReleaseMusicVideosRow
+                      folderId={album.id}
+                      folderName={album.name}
+                      videos={musicVideos}
+                      releaseTracks={mapTracksForReleaseShare(group)}
+                      isAdmin={adminCatalog}
+                      onVideosChange={(next) =>
+                        onMusicVideosChange?.(album.id, next, album.name, album.type || 'ep')
+                      }
+                    />
                   </div>
-                </AdminFolderChrome>
-              )
-              if (album.type === 'ep') {
+                ) : null
+                const header = (
+                  <AdminFolderChrome
+                    album={album}
+                    enabled={adminCatalog}
+                    hidden={!!album.hidden}
+                    tracks={group}
+                    libraryAlbums={items}
+                    onUpdated={onFolderUpdated}
+                    onArchived={onFolderArchived}
+                    onTracksReordered={onTracksReordered}
+                    onVisibilityChange={onVisibilityChange}
+                    onAddedToLibrary={onAddedToLibrary}
+                    onPlayAll={group[0] ? () => onPlayGroup(group, group[0]) : undefined}
+                  >
+                    <div
+                      role={onCollapse ? 'button' : undefined}
+                      tabIndex={onCollapse ? 0 : undefined}
+                      aria-expanded={onCollapse ? true : undefined}
+                      title={onCollapse ? 'Collapse' : undefined}
+                      onClick={onCollapse}
+                      onKeyDown={
+                        onCollapse
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                onCollapse()
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`flex items-center justify-center gap-3 text-center ${
+                        onCollapse ? 'w-full cursor-pointer ' : ''
+                      }${adminCatalog ? 'cursor-context-menu rounded-md px-2 hover:bg-gray-800/30' : ''}`}
+                    >
+                      {album.type !== 'ep' && (
+                        <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-gray-800">
+                          {album.type === 'album' ? (
+                            <CrateCoverMosaic covers={crateMosaics[album.id] || []} />
+                          ) : (
+                            <CoverArt
+                              src={album.artwork || folderArtworkSrc(album, group)}
+                              fallbackSrc={catalogArtworkForRelease(album.name)}
+                              alt=""
+                              sizes="56px"
+                              quality={COVER_THUMB_QUALITY}
+                              iconClassName="h-6 w-6 text-gray-600"
+                            />
+                          )}
+                        </div>
+                      )}
+                      <div className="min-w-0 max-w-[min(100%,28rem)] sm:max-w-[min(100%,36rem)]">
+                        <div className="truncate font-medium">
+                          <SergikBrandText text={album.name} />
+                        </div>
+                        <div className="truncate text-xs text-gray-400">
+                          {album.albumArtist || 'SERGIK'}
+                          {album.year ? ` · ${album.year}` : ''}
+                          {album.type === 'ep' ? ' · EP' : ''}
+                          {` · ${
+                            group.length > 0
+                              ? `${group.length} track${group.length === 1 ? '' : 's'}`
+                              : tracksHydrating
+                                ? 'loading…'
+                                : '0 tracks'
+                          }`}
+                        </div>
+                      </div>
+                      {adminCatalog && <CatalogVisibilityBadge isPrivate={!!album.hidden} />}
+                    </div>
+                  </AdminFolderChrome>
+                )
+                if (album.type === 'ep') {
+                  return (
+                    <div
+                      key={album.id}
+                      {...folderFileDropProps(album)}
+                      className={`rounded-xl transition-shadow ${
+                        fileDropFolderId === album.id ? 'ring-2 ring-teal-400/60 bg-teal-950/10' : ''
+                      }`}
+                    >
+                      {fileDropFolderId === album.id && (
+                        <p className="px-3 pt-2 text-center text-[11px] text-teal-300">
+                          Drop an image to set the cover, or audio to add tracks
+                        </p>
+                      )}
+                      <EpReleaseStage album={album} tracks={group} header={header} variant="banner">
+                        {musicVideosRow}
+                        <SongsTable
+                          tracks={group}
+                          loading={tracksHydrating && group.length === 0}
+                          currentTrackId={currentTrackId}
+                          isPlaying={isPlaying}
+                          sortField={sortField}
+                          sortDir={sortDir}
+                          onSort={onSort}
+                          onPlay={(track) => onPlayGroup(group, track)}
+                          onRate={onRate}
+                          sortIcon={sortIcon}
+                          showTrackNumber
+                          columnPreset="ep"
+                          adminCatalog={adminCatalog}
+                          playerSource={{ type: 'folder', id: album.id }}
+                          onTrackUpdated={onTrackUpdated}
+                          onTrackArchived={onTrackArchived}
+                          folderContext={{ id: album.id, name: album.name }}
+                          onTracksRemovedFromFolder={onTracksRemovedFromFolder}
+                          onFolderReorder={adminCatalog ? onFolderReorder : undefined}
+                        />
+                      </EpReleaseStage>
+                    </div>
+                  )
+                }
                 return (
-                  <div
+                  <section
                     key={album.id}
                     {...folderFileDropProps(album)}
-                    className={`rounded-xl transition-shadow ${
-                      fileDropFolderId === album.id ? 'ring-2 ring-teal-400/60 bg-teal-950/10' : ''
+                    className={`space-y-3 rounded-xl transition-shadow ${
+                      fileDropFolderId === album.id ? 'ring-2 ring-violet-400/60 bg-violet-950/10' : ''
                     }`}
                   >
                     {fileDropFolderId === album.id && (
-                      <p className="px-3 pt-2 text-center text-[11px] text-teal-300">
+                      <p className="px-3 pt-2 text-center text-[11px] text-violet-300">
                         Drop an image to set the cover, or audio to add tracks
                       </p>
                     )}
-                  <EpReleaseStage
-                    album={album}
-                    tracks={group}
-                    header={header}
-                    variant="banner"
-                  >
+                    {header}
                     {musicVideosRow}
                     <SongsTable
                       tracks={group}
@@ -12176,7 +12579,6 @@ function AlbumCatalog({
                       onRate={onRate}
                       sortIcon={sortIcon}
                       showTrackNumber
-                      columnPreset="ep"
                       adminCatalog={adminCatalog}
                       playerSource={{ type: 'folder', id: album.id }}
                       onTrackUpdated={onTrackUpdated}
@@ -12185,48 +12587,10 @@ function AlbumCatalog({
                       onTracksRemovedFromFolder={onTracksRemovedFromFolder}
                       onFolderReorder={adminCatalog ? onFolderReorder : undefined}
                     />
-                  </EpReleaseStage>
-                  </div>
+                  </section>
                 )
-              }
-              return (
-                <section
-                  key={album.id}
-                  {...folderFileDropProps(album)}
-                  className={`space-y-3 rounded-xl transition-shadow ${
-                    fileDropFolderId === album.id ? 'ring-2 ring-violet-400/60 bg-violet-950/10' : ''
-                  }`}
-                >
-                  {fileDropFolderId === album.id && (
-                    <p className="px-3 pt-2 text-center text-[11px] text-violet-300">
-                      Drop an image to set the cover, or audio to add tracks
-                    </p>
-                  )}
-                  {header}
-                  {musicVideosRow}
-                  <SongsTable
-                    tracks={group}
-                    loading={tracksHydrating && group.length === 0}
-                    currentTrackId={currentTrackId}
-                    isPlaying={isPlaying}
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={onSort}
-                    onPlay={(track) => onPlayGroup(group, track)}
-                    onRate={onRate}
-                    sortIcon={sortIcon}
-                    showTrackNumber
-                    adminCatalog={adminCatalog}
-                    playerSource={{ type: 'folder', id: album.id }}
-                    onTrackUpdated={onTrackUpdated}
-                    onTrackArchived={onTrackArchived}
-                    folderContext={{ id: album.id, name: album.name }}
-                    onTracksRemovedFromFolder={onTracksRemovedFromFolder}
-                    onFolderReorder={adminCatalog ? onFolderReorder : undefined}
-                  />
-                </section>
-              )
-            })}
+              })}
+            </div>
           </div>
         )
       })}
@@ -12250,12 +12614,15 @@ function EpReleaseStage({
   children,
   /** `banner` trims top/bottom of cover to fill Crates & EPs list width; `cover` keeps the full square. */
   variant = 'cover',
+  /** Fill a grid cell instead of growing to a full-page square. */
+  contained = false,
 }: {
   album: Pick<AlbumTile, 'name' | 'artwork' | 'albumArtist' | 'year'>
   tracks?: Track[]
   header?: React.ReactNode
   children: React.ReactNode
   variant?: 'cover' | 'banner'
+  contained?: boolean
 }) {
   const artworkSrc = folderArtworkSrc(album, tracks)
   const fallbackSrc = catalogArtworkForRelease(album.name)
@@ -12266,31 +12633,29 @@ function EpReleaseStage({
 
   return (
     <section
-      className={`relative flex w-full justify-center ${isBanner ? 'py-1.5 sm:py-2' : 'py-3 sm:py-4'}`}
+      className={`relative flex w-full justify-center ${
+        contained ? 'h-full min-h-0 py-0' : isBanner ? 'py-1.5 sm:py-2' : 'py-3 sm:py-4'
+      }`}
     >
       <div
         className={`relative w-full overflow-hidden rounded-xl bg-black shadow-[0_12px_48px_rgba(0,0,0,0.55)] ${
-          isBanner ? '' : 'aspect-square'
+          contained ? 'h-full' : isBanner ? '' : 'aspect-square'
         }`}
       >
         <div className="pointer-events-none absolute inset-0" aria-hidden>
           <div className="absolute inset-0 overflow-hidden brightness-[0.58]">
             <div
-              className={
-                isBanner
-                  ? `ep-release-cover-drift ep-release-cover-drift-${driftVariant} absolute inset-0`
-                  : 'absolute inset-0'
-              }
-              style={isBanner ? { animationDelay: `${driftDelaySec}s` } : undefined}
+              className={`ep-release-cover-drift ep-release-cover-drift-${driftVariant} absolute inset-0`}
+              style={{ animationDelay: `${driftDelaySec}s` }}
             >
               <CoverArt
                 src={artworkSrc}
                 fallbackSrc={fallbackSrc}
                 alt=""
-                sizes={COVER_HERO_SIZES}
-                quality={COVER_HERO_QUALITY}
-                heroMaster
-                priority
+                sizes={isBanner || contained ? COVER_THUMB_SIZES : COVER_HERO_SIZES}
+                quality={isBanner || contained ? COVER_THUMB_QUALITY : COVER_HERO_QUALITY}
+                heroMaster={!isBanner && !contained}
+                priority={!isBanner && !contained}
                 objectFit="cover"
               />
             </div>

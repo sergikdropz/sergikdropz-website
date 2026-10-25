@@ -15,6 +15,10 @@ import {
   subscribeAdminAiBrowserHydrate,
 } from '@/lib/admin-ai-client'
 import { DISTROKID_MY_MUSIC_URL } from '@/lib/studio/distrokid-delivery'
+import {
+  ADMIN_BROWSER_LOCAL_ORIGIN,
+  ADMIN_BROWSER_LOCAL_PATH,
+} from '@/lib/ai/admin-browser-bridge-shared'
 
 const HOMES = [
   { label: 'Site', url: 'https://sergikdropz.com/music' },
@@ -25,6 +29,8 @@ const HOMES = [
   { label: 'SoundCloud', url: 'https://soundcloud.com/sergikdropz' },
   { label: 'Instagram', url: 'https://www.instagram.com/sergikdropz/' },
   { label: 'Facebook', url: 'https://www.facebook.com/Sergikdropz' },
+  { label: 'Meta', url: 'https://business.facebook.com/' },
+  { label: 'DistroKid Bank', url: 'https://distrokid.com/bank/' },
   { label: 'Apple Artists', url: 'https://artists.apple.com' },
   { label: 'DistroKid', url: 'https://distrokid.com/mymusic/' },
   { label: 'SoundExchange', url: 'https://isrc.soundexchange.com/' },
@@ -65,27 +71,107 @@ function browserErrorFromBody(
   return `Browser request failed (HTTP ${status}). Check the dev server terminal or close any stuck Chromium profile window.`
 }
 
+const LOCAL_BROWSER_DOWN =
+  'Chrome for the Admin browser runs on this Mac. Start the dev server at localhost:3001, then reload. If the browser asks to let sergikdropz.com use local devices, allow it.'
+
+function pageNeedsLocalBridge(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname
+  return host !== 'localhost' && host !== '127.0.0.1'
+}
+
+let bridgeTicket: { value: string; localOrigin: string; exp: number } | null = null
+let bridgeTicketFlight: Promise<{ value: string; localOrigin: string } | null> | null = null
+
+async function fetchBridgeTicket(force = false): Promise<{ value: string; localOrigin: string } | null> {
+  const now = Date.now()
+  if (!force && bridgeTicket && bridgeTicket.exp - now > 60_000) {
+    return { value: bridgeTicket.value, localOrigin: bridgeTicket.localOrigin }
+  }
+  if (!bridgeTicketFlight) {
+    bridgeTicketFlight = (async () => {
+      try {
+        const response = await fetch('/api/admin/ai/browser', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'bridge' }),
+        })
+        const data = (await response.json().catch(() => null)) as {
+          ticket?: string
+          localOrigin?: string
+          expiresIn?: number
+        } | null
+        if (!response.ok || !data?.ticket) return null
+        const expiresIn = typeof data.expiresIn === 'number' ? data.expiresIn : 600
+        const localOrigin = data.localOrigin?.trim() || ADMIN_BROWSER_LOCAL_ORIGIN
+        bridgeTicket = { value: data.ticket, localOrigin, exp: Date.now() + expiresIn * 1000 }
+        return { value: data.ticket, localOrigin }
+      } catch {
+        return null
+      } finally {
+        bridgeTicketFlight = null
+      }
+    })()
+  }
+  return bridgeTicketFlight
+}
+
+function browserSnapshot(error: string, enabled = true): AdminBrowserSnapshot {
+  return {
+    ok: false,
+    enabled,
+    running: false,
+    youDrive: true,
+    url: '',
+    title: '',
+    error,
+    width: 960,
+    height: 640,
+  }
+}
+
 async function postBrowser(body: Record<string, unknown>): Promise<AdminBrowserSnapshot> {
   let response: Response
   try {
-    response = await fetch('/api/admin/ai/browser', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  } catch (err) {
-    return {
-      ok: false,
-      enabled: true,
-      running: false,
-      youDrive: true,
-      url: '',
-      title: '',
-      error: err instanceof Error ? err.message : 'Network error talking to the admin browser API.',
-      width: 960,
-      height: 640,
+    if (pageNeedsLocalBridge()) {
+      const pass = await fetchBridgeTicket()
+      if (!pass) return browserSnapshot(LOCAL_BROWSER_DOWN)
+      const target = `${pass.localOrigin}${ADMIN_BROWSER_LOCAL_PATH}`
+      try {
+        response = await fetch(target, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pass.value}`,
+          },
+          body: JSON.stringify(body),
+        })
+      } catch {
+        return browserSnapshot(LOCAL_BROWSER_DOWN)
+      }
+      if (response.status === 401) {
+        const retry = await fetchBridgeTicket(true)
+        if (!retry) return browserSnapshot(LOCAL_BROWSER_DOWN)
+        response = await fetch(`${retry.localOrigin}${ADMIN_BROWSER_LOCAL_PATH}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${retry.value}`,
+          },
+          body: JSON.stringify(body),
+        })
+      }
+    } else {
+      response = await fetch('/api/admin/ai/browser', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
     }
+  } catch (err) {
+    return browserSnapshot(err instanceof Error ? err.message : 'Network error talking to the admin browser API.')
   }
   const raw = await response.text()
   let data = {} as AdminBrowserSnapshot & { error?: string; message?: string }
@@ -159,6 +245,7 @@ export default function AdminAiBrowserDock({
   chatSessionId,
   assistantActing = false,
   taskNotice = null,
+  releaseId,
 }: {
   /** `side` = fill a right-hand column (standalone window). `stack` = strip under chat header. */
   layout?: AdminAiBrowserDockLayout
@@ -185,6 +272,8 @@ export default function AdminAiBrowserDock({
   assistantActing?: boolean
   /** In-progress or unfinished browser work, shown under the page title. */
   taskNotice?: string | null
+  /** Open release. SoundCloud fill reads this release’s file URLs from the database. */
+  releaseId?: string | null
 } = {}) {
   const chatId = chatSessionId?.trim() || 'default'
   const chatIdRef = useRef(chatId)
@@ -495,6 +584,29 @@ export default function AdminAiBrowserDock({
         ]
           .filter(Boolean)
           .join(' ')
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function fillSoundCloudFromDatabase() {
+    if (!releaseId) return
+    setBusy(true)
+    setHydrateNote(null)
+    try {
+      const prefill = await browserPost({
+        actor: 'user',
+        action: 'soundcloud_prefill',
+        releaseId,
+      })
+      apply(prefill)
+      const filled = prefill.soundcloudPrefill?.filled?.length || 0
+      setHydrateNote(
+        prefill.error ||
+          (filled
+            ? `Attached database files and filled ${filled} SoundCloud field(s). Review, then click Save. Nothing is posted automatically.`
+            : prefill.text || 'SoundCloud fill finished.'),
       )
     } finally {
       setBusy(false)
@@ -867,6 +979,18 @@ export default function AdminAiBrowserDock({
                 </button>
               ))}
             </div>
+            {releaseId && /soundcloud\.com/i.test(frame?.url || address) ? (
+              <button
+                type="button"
+                data-testid="soundcloud-ep-fill"
+                disabled={busy || assistantLocked}
+                onClick={() => void fillSoundCloudFromDatabase()}
+                className="shrink-0 rounded border border-amber-500/70 px-2 py-1 text-[10px] font-semibold text-amber-100 hover:bg-amber-900/40 disabled:opacity-40"
+                title="Attach this release’s database audio and artwork, then fill the EP. You click Save."
+              >
+                {busy ? 'Filling SoundCloud…' : 'Fill EP from database'}
+              </button>
+            ) : null}
             {hydrate ? (
               <div
                 className="shrink-0 space-y-1.5 rounded border border-amber-700/50 bg-amber-950/40 px-2 py-1.5"

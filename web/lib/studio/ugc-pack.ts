@@ -34,6 +34,12 @@ export type UgcPackPartner = (typeof UGC_PACK_PARTNERS)[number]['id']
 export type UgcPackStatus = (typeof UGC_PACK_STATUSES)[number]['id']
 export type UgcPackPlatformId = (typeof UGC_PACK_PLATFORMS)[number]['id']
 
+export type UgcRegistrationIds = {
+  youtube: string
+  tiktok: string
+  meta: string
+}
+
 export type UgcPack = {
   opted_in: boolean
   partner: UgcPackPartner
@@ -41,6 +47,8 @@ export type UgcPack = {
   youtube: boolean
   tiktok: boolean
   meta: boolean
+  /** Platform registration ids. Live is refused until each enabled platform has one. */
+  registration: UgcRegistrationIds
   /** Freeform ops note (CMS conflict, sample hold, go-live date). */
   notes: string
   /** ISO timestamp when enrollment flipped on. */
@@ -67,6 +75,7 @@ export const DEFAULT_UGC_PACK: UgcPack = {
   youtube: true,
   tiktok: true,
   meta: true,
+  registration: { youtube: '', tiktok: '', meta: '' },
   notes: '',
   enrolled_at: null,
   live_at: null,
@@ -102,9 +111,36 @@ function coerceIso(value: unknown): string | null {
   return Number.isFinite(t) ? new Date(t).toISOString() : null
 }
 
+function registrationId(value: unknown): string {
+  return String(value ?? '').trim().slice(0, 80)
+}
+
+export function parseUgcRegistration(raw: unknown): UgcRegistrationIds {
+  const row = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    youtube: registrationId(row.youtube),
+    tiktok: registrationId(row.tiktok),
+    meta: registrationId(row.meta),
+  }
+}
+
+/** A registration id is the reference the platform returned, not a note. */
+export function isUgcRegistrationId(value: string): boolean {
+  const raw = value.trim()
+  return raw.length >= 4 && raw.length <= 80 && /^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(raw)
+}
+
+export function missingUgcRegistrationIds(pack: UgcPack): Array<keyof UgcRegistrationIds> {
+  const missing: Array<keyof UgcRegistrationIds> = []
+  if (pack.youtube && !isUgcRegistrationId(pack.registration.youtube)) missing.push('youtube')
+  if (pack.tiktok && !isUgcRegistrationId(pack.registration.tiktok)) missing.push('tiktok')
+  if (pack.meta && !isUgcRegistrationId(pack.registration.meta)) missing.push('meta')
+  return missing
+}
+
 export function parseUgcPack(raw: unknown): UgcPack {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_UGC_PACK }
+    return { ...DEFAULT_UGC_PACK, registration: { ...DEFAULT_UGC_PACK.registration } }
   }
   const value = raw as Record<string, unknown>
   const status =
@@ -117,6 +153,7 @@ export function parseUgcPack(raw: unknown): UgcPack {
     youtube: value.youtube !== false,
     tiktok: value.tiktok !== false,
     meta: value.meta !== false,
+    registration: parseUgcRegistration(value.registration),
     notes: typeof value.notes === 'string' ? value.notes.slice(0, 2000) : '',
     enrolled_at: coerceIso(value.enrolled_at),
     live_at: coerceIso(value.live_at),
@@ -134,6 +171,9 @@ export function mergeUgcPack(current: UgcPack | unknown, patch: unknown, now = n
   if (typeof next.youtube === 'boolean') merged.youtube = next.youtube
   if (typeof next.tiktok === 'boolean') merged.tiktok = next.tiktok
   if (typeof next.meta === 'boolean') merged.meta = next.meta
+  if (next.registration && typeof next.registration === 'object') {
+    merged.registration = { ...merged.registration, ...parseUgcRegistration(next.registration) }
+  }
   if (typeof next.notes === 'string') merged.notes = next.notes.slice(0, 2000)
   if ('enrolled_at' in next) merged.enrolled_at = coerceIso(next.enrolled_at)
   if ('live_at' in next) merged.live_at = coerceIso(next.live_at)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { isSyntheticFanEmail } from '@/lib/fan-crm'
-import { sendEmail } from '@/lib/email'
+import { sendDepartmentEmail } from '@/lib/email/send-department'
 
 export async function POST(request: Request) {
   try {
@@ -93,7 +93,8 @@ export async function POST(request: Request) {
       }
       const baseUrl = getBaseUrl()
 
-      await sendEmail({
+      await sendDepartmentEmail({
+        department: 'fans',
         to: email,
         subject: trackId ? 'Your Free Download is Ready!' : 'Welcome to the SERGIK community!',
         html: `

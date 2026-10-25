@@ -55,6 +55,8 @@ type Props = {
   draftCopyLabel?: string
   onWeekPriorities?: () => void
   trailing?: ReactNode
+  /** Shown under the release-status row when the mission dock is open. */
+  statusNote?: ReactNode
   dock?: MissionDockModel
   onAction?: (action: MissionDockAction) => void
 }
@@ -78,6 +80,7 @@ export default function AdminAiStudioMissionStrip({
   draftCopyLabel = 'Draft copy',
   onWeekPriorities,
   trailing,
+  statusNote,
   dock,
   onAction,
 }: Props) {
@@ -273,6 +276,7 @@ export default function AdminAiStudioMissionStrip({
                 </Link>
               ) : null}
             </div>
+            {statusNote}
             {blockersOpen && blockers.length > 0 ? (
               <BlockerJumpList
                 blockers={blockers}

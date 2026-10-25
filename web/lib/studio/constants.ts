@@ -93,6 +93,42 @@ export type MarketingCopy = {
   credits_block?: string
 }
 
+export const MARKETING_COPY_FIELDS = [
+  'elevator_pitch',
+  'press_blurb',
+  'spotify_pitch',
+  'social_caption',
+  'store_description',
+  'youtube_visualizer',
+  'platform_tags',
+  'credits_block',
+] as const satisfies readonly (keyof MarketingCopy)[]
+
+/** Copy fields only. Leaves delivery and artwork keys on the stored object alone. */
+export function readMarketingCopy(input: unknown): MarketingCopy {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  const raw = input as Record<string, unknown>
+  const copy: MarketingCopy = {}
+  for (const key of MARKETING_COPY_FIELDS) {
+    const value = raw[key]
+    if (typeof value !== 'string') continue
+    copy[key] = value.slice(0, 12000)
+  }
+  return copy
+}
+
+export function mergeMarketingCopyFields(existing: unknown, patch: unknown): Record<string, unknown> {
+  const base =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {}
+  const next = readMarketingCopy(patch)
+  for (const key of MARKETING_COPY_FIELDS) {
+    if (typeof next[key] === 'string') base[key] = next[key]
+  }
+  return base
+}
+
 export type CopyTemplateMeta = {
   label: string
   short: string

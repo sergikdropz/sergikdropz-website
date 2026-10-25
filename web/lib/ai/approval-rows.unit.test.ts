@@ -35,6 +35,24 @@ describe('buildApprovalRows', () => {
     expect(rows[0]?.sourceStepId).toBe(rows[1]?.sourceStepId)
   })
 
+  it('names a barcode write as the release UPC', () => {
+    const rows = buildApprovalRows([
+      {
+        id: 'upc',
+        tool: 'patch_release_marketing_copy',
+        payload: {
+          releaseId: 'release-1',
+          merge: true,
+          marketingCopy: { upc: '700563968501' },
+        },
+        riskTier: 'tier_2_operational',
+      },
+    ])
+    expect(rows[0]?.label).toBe('Release UPC 700563968501 — preview')
+    expect(rows[0]?.detail).toContain('upc: 700563968501')
+    expect(rows[1]?.label).toBe('Release UPC 700563968501 — submit')
+  })
+
   it('drops dryRun when storing a submit payload', () => {
     expect(payloadWithoutDryRun({ releaseId: 'a', dryRun: true })).toEqual({ releaseId: 'a' })
   })

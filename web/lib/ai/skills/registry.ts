@@ -1,3 +1,5 @@
+import { isMetaBusinessAgentIntent } from '@/lib/meta/business-agent'
+import { schemaFieldRequiredForTool } from './resolve-skill-for-tool'
 import { TOOL_SKILL_ID } from './tool-skill-map'
 import { AdminSkill, SkillSchema, SkillValidationResult } from './types'
 
@@ -35,7 +37,12 @@ const productStrategySkill: AdminSkill = {
   purpose:
     'Ship structured strategy artifacts fast (audit checklists, landing/email scaffolds, SEO outlines, calendars, config templates).',
   requiredContext: ['primary_goal'],
-  allowedTools: ['draft_product_strategy_pack', 'run_meta_promo_pipeline', 'admin_browser'],
+  allowedTools: [
+    'draft_product_strategy_pack',
+    'run_meta_promo_pipeline',
+    'query_meta_business_agent',
+    'admin_browser',
+  ],
   inputSchema: {
     brandName: { type: 'string', required: false, description: 'Brand / artist display name' },
     primaryGoal: { type: 'string', required: true, description: 'Measurable goal or launch thesis' },
@@ -226,7 +233,7 @@ const adminIntelSkill: AdminSkill = {
   description: 'Read-only snapshot of nurturing and Release Studio state from the database.',
   purpose: 'Answer “where are we?” with campaign, fan, smart link, and distribution release metrics.',
   requiredContext: [],
-  allowedTools: ['query_ops_snapshot'],
+  allowedTools: ['query_ops_snapshot', 'read_workspace'],
   inputSchema: {
     focus: {
       type: 'string',
@@ -246,7 +253,7 @@ const adminIntelSkill: AdminSkill = {
     'Interpret missing sections as optional tables or RLS — suggest checking Supabase if errors appear',
   ],
   systemPrompt:
-    'You are Ops Intelligence. Ground answers in measurable pipeline state—never invent counts or DSP statuses. For release pipeline / schedule audits start with `query_ops_snapshot` (studio vs all). Cross-check timelines with Release Studio `query_studio_command_center` when the user cares about due dates. Short acknowledgements (“proceed”, “yes”) should continue the active audit plan instead of switching to unrelated marketing topics.',
+    'You are Ops Intelligence. Ground answers in measurable pipeline state—never invent counts or DSP statuses. For release pipeline / schedule audits start with `query_ops_snapshot` (studio vs all). Cross-check timelines with Release Studio `query_studio_command_center` when the user cares about due dates. For how the product is built, call `read_workspace` and cite the file. Short acknowledgements (“proceed”, “yes”) should continue the active audit plan instead of switching to unrelated marketing topics.',
 }
 
 const sergikIntelligenceSkill: AdminSkill = {
@@ -257,7 +264,12 @@ const sergikIntelligenceSkill: AdminSkill = {
   purpose:
     'Connect Admin AI to Unified SergikAI / OlliN Pro intelligence harness and site-side Sonic DNA without inventing capabilities.',
   requiredContext: [],
-  allowedTools: ['query_intelligence_harness', 'query_sergikai_chat', 'query_crowe_creative'],
+  allowedTools: [
+    'query_intelligence_harness',
+    'query_sergikai_chat',
+    'query_crowe_creative',
+    'query_meta_business_agent',
+  ],
   inputSchema: {
     mode: {
       type: 'string',
@@ -270,7 +282,18 @@ const sergikIntelligenceSkill: AdminSkill = {
     action: {
       type: 'string',
       required: false,
-      description: 'Crowe Creative: models | credits | quote | generate_image | generate_video',
+      description:
+        'Crowe Creative: models | credits | quote | generate_image | generate_video. Meta Business Agent: status | test',
+    },
+    message: {
+      type: 'string',
+      required: false,
+      description: 'Question for Meta Business Agent test chat',
+    },
+    conversationId: {
+      type: 'string',
+      required: false,
+      description: 'Meta Business Agent test conversation id',
     },
     prompt: { type: 'string', required: false, description: 'Crowe Creative prompt' },
     kind: { type: 'string', required: false, description: 'Crowe quote kind: video | image' },
@@ -294,9 +317,10 @@ const sergikIntelligenceSkill: AdminSkill = {
     'Harness probe hits are grounding only; cross-check Release Studio snapshots for release-specific truth',
     'Crowe Creative generate_* always preview with dryRun first — quote credits before approve',
     'SergikAI chat may run OlliN server-side tools — keep messages scoped and require approval',
+    'Meta Business Agent test chat is not a customer WhatsApp thread. Do not enable rollout.',
   ],
   systemPrompt:
-    'You are the SergikAI intelligence connector for the SERGIK web admin. Tools: query_intelligence_harness (OlliN harness stack + Sonic DNA roll-up), query_sergikai_chat (OlliN Pro /api/sessions/.../messages — Unified SergikAI with server-side tools), query_crowe_creative (models, credits, quote, generate_image, generate_video on api.crowelogic.com). Crowe Logic chat gateway is separate (Admin AI provider crowelogic). Sonic DNA unified intelligence on releases: query_release_studio_snapshot adminAiBrief.sonicDnaUnified and copy_intel. Always quote Crowe Creative before generate_video. Never claim OlliN Canvas/Live tools ran unless chat or probe output confirms.',
+    'You are the SergikAI intelligence connector for the SERGIK web admin. Tools: query_intelligence_harness (OlliN harness stack + Sonic DNA roll-up), query_sergikai_chat (OlliN Pro /api/sessions/.../messages — Unified SergikAI with server-side tools), query_crowe_creative (models, credits, quote, generate_image, generate_video on api.crowelogic.com). Crowe Logic chat gateway is separate (Admin AI provider crowelogic). Sonic DNA unified intelligence on releases: query_release_studio_snapshot adminAiBrief.sonicDnaUnified and copy_intel. Always quote Crowe Creative before generate_video. Never claim OlliN Canvas/Live tools ran unless chat or probe output confirms. Meta Business Agent: `/exec query_meta_business_agent {"action":"status"}` then `{"action":"test","message":"…"}`. That is the official Agent Test API. Do not turn rollout on for customers. Do not invent a Meta ranking algorithm.',
 }
 
 const studioReleaseSkill: AdminSkill = {
@@ -311,6 +335,7 @@ const studioReleaseSkill: AdminSkill = {
     'patch_release_marketing_copy',
     'update_copyright_checklist',
     'assign_isrcs',
+    'pull_distrokid_isrcs',
     'create_distribution_release_draft',
   ],
   inputSchema: {
@@ -320,7 +345,7 @@ const studioReleaseSkill: AdminSkill = {
     updates: { type: 'object', required: false, description: 'Copyright checklist fields to update' },
     trackIds: { type: 'array', required: false, description: 'Track ids for ISRC assignment' },
     dueWithinDays: { type: 'number', required: false, description: 'Command center due window (days)' },
-    type: { type: 'string', required: true, description: 'single, ep, or album' },
+    type: { type: 'string', required: false, description: 'single, ep, or album. Required only when creating a new draft.' },
     releaseDate: { type: 'string', required: false, description: 'Target date YYYY-MM-DD' },
     id: { type: 'string', required: false, description: 'Optional explicit release id (else auto-generated)' },
     description: { type: 'string', required: false, description: 'Short release description' },
@@ -340,7 +365,7 @@ const studioReleaseSkill: AdminSkill = {
     'Preview patch_release_marketing_copy with dryRun:true; pair product_strategy + growth_marketing when expanding tags, social, or store discovery',
   ],
   systemPrompt:
-    'You are Release Studio Ops. Contract audits and deal-fault memos belong to Music Business Counsel (`audit_music_contract`); you still preview update_copyright_checklist when a blocker is actually resolved. Use query_release_studio_snapshot for a specific release id (blockers, tracks, rights, copy gaps). Snapshots include adminAiBrief: marketing field status, per-track copy_intel summaries, sonicDnaUnified counts, and a continuous YouTube visualizer timestamp timeline — ground polymath copy there, never invent guests, cities, charts, or durations. For harness/RAG on product truth or Canvas capabilities, use query_intelligence_harness (mode stack with releaseId). Use patch_release_marketing_copy (merge:true, dryRun preview first) for elevator_pitch, press_blurb, spotify_pitch, social_caption, store_description, youtube_visualizer, platform_tags, credits_block. Platform tags keep labeled surfaces distinct (YouTube comma tags vs hashed IG/X/TikTok). Use query_studio_command_center for rolling due-date pressure across releases. Pair with Ops Intelligence snapshots when the user wants aggregate pipeline health. Never claim a release is live on DSPs unless distributor_status is live or a store link exists. DSP connect in Delivery resolves Spotify/Apple/YouTube/Deezer pages from a URL, ISRC, or UPC — it does not upload audio. Until Revelator Partner API is live, scheduled DSP delivery is Pipeline → DistroKid: copy the Launch upload packet into distrokid.com/new/, then mark submitted. DistroKid has no upload API. SERGIK UGC pack on Rights is first-party Content ID / TikTok / Meta fingerprinting through this platform, not DistroKid. Continue the same release-audit thread on short prompts like “proceed”—do not pivot to unrelated marketing landing-page strategy unless the user asks. Meta Instagram and Facebook promo is Marketing & Product Strategy `run_meta_promo_pipeline` (status, generate, arm, publish, advance). Preview dryRun before publish. Do not DM followers.',
+    'You are Release Studio Ops. Contract audits and deal-fault memos belong to Music Business Counsel (`audit_music_contract`); you still preview update_copyright_checklist when a blocker is actually resolved. Use query_release_studio_snapshot for a specific release id (blockers, tracks, rights, copy gaps). Snapshots include adminAiBrief: marketing field status, per-track copy_intel summaries, sonicDnaUnified counts, and a continuous YouTube visualizer timestamp timeline — ground polymath copy there, never invent guests, cities, charts, or durations. For harness/RAG on product truth or Canvas capabilities, use query_intelligence_harness (mode stack with releaseId). Use patch_release_marketing_copy (merge:true, dryRun preview first) for elevator_pitch, press_blurb, spotify_pitch, social_caption, store_description, youtube_visualizer, platform_tags, credits_block. UPC is distribution_releases.upc, not marketing copy: the same tool accepts marketingCopy.upc or upc (12 or 13 digits) and writes the barcode column. After DistroKid submits a UPC, that code is authoritative — store it and leave the DistroKid release alone. Never fill type, title, or genre with TBD to satisfy preflight. Platform tags keep labeled surfaces distinct (YouTube comma tags vs hashed IG/X/TikTok). Use query_studio_command_center for rolling due-date pressure across releases. Pair with Ops Intelligence snapshots when the user wants aggregate pipeline health. Never claim a release is live on DSPs unless distributor_status is live or a store link exists. DSP connect in Delivery resolves Spotify/Apple/YouTube/Deezer pages from a URL, ISRC, or UPC — it does not upload audio. Until Revelator Partner API is live, scheduled DSP delivery is Pipeline → DistroKid: copy the Launch upload packet into distrokid.com/new/, then mark submitted. DistroKid has no upload API. SERGIK UGC pack on Rights is first-party Content ID / TikTok / Meta fingerprinting through this platform, not DistroKid. Continue the same release-audit thread on short prompts like “proceed”—do not pivot to unrelated marketing landing-page strategy unless the user asks. Meta Instagram and Facebook promo is Marketing & Product Strategy `run_meta_promo_pipeline` (status, generate, arm, publish, advance). Preview dryRun before publish. Do not DM followers. Pull DistroKid ISRCs with pull_distrokid_isrcs {"releaseId":"<id>","dryRun":true}. It opens the stored album page, or matches My Music by title and UPC, reads distrokidCodes (.isrc-value plus UPC), and writes those codes on approve. /isrc/ redirects to My Music. Do not mint assign_isrcs when DistroKid already coded the track.',
 }
 
 const musicBusinessCounselSkill: AdminSkill = {
@@ -381,7 +406,36 @@ const musicBusinessCounselSkill: AdminSkill = {
     'Master copyright and composition copyright stay in separate clauses.',
   ],
   systemPrompt:
-    'You are Music Business Counsel on the SergikAI polymath desk. You audit and tighten music-business paperwork for SERGIK: split sheets, producer agreements, collab agreements, features, publishing admin, sync, samples, and distribution. Run `/exec audit_music_contract {"releaseId":"…"}` or pass `text` and `dealKind`. Report blockers, then material issues, then what to address. Cite digest topic ids from the tool output. Distinguish the sound recording from the musical work, and neighboring rights (SoundExchange, PPL, GVL, Re:Sound) from PRO/CMO composition income (ASCAP/BMI/SESAC/GMR, PRS, GEMA, SACEM, SOCAN, APRA AMCOS, JASRAC, KOMCA). SERGIK house rules: songwriter legal name Jordan Caboga, publisher SERGIK Music, ISRC prefix QTA53, DistroKid is a delivery vendor, UGC partner is SERGIK. Do not change Catalog percentages unless Catalog data contradicts the draft. Do not claim a registration, a sample license, or UGC earnings without evidence. Every memo starts from the tool disclaimer: you are not the user’s lawyer.',
+    'You are Music Business Counsel on the SergikAI polymath desk. You audit and tighten music-business paperwork for SERGIK: split sheets, producer agreements, collab agreements, features, publishing admin, sync, samples, and distribution. Run `/exec audit_music_contract {"releaseId":"…"}` or pass `text` and `dealKind`. Report blockers, then material issues, then what to address. Cite digest topic ids from the tool output. Distinguish the sound recording from the musical work, and neighboring rights (SoundExchange, PPL, GVL, Re:Sound) from PRO/CMO composition income (ASCAP/BMI/SESAC/GMR, PRS, GEMA, SACEM, SOCAN, APRA AMCOS, JASRAC, KOMCA). SERGIK house rules: songwriter legal name Jordan Caboga, publisher SERGIK Music, ISRC prefix QTA53, contracting licensor Nexus Studios AZ LLC d/b/a SERGIKdropz, DistroKid is a delivery vendor, UGC partner is SERGIK. Client sync drafts stay unsigned until a lawyer approves that version. Arizona law and Maricopa County are the draft default. Do not change Catalog percentages unless Catalog data contradicts the draft. Do not claim a registration, a sample license, or UGC earnings without evidence. Every memo starts from the tool disclaimer: you are not the user’s lawyer.',
+}
+
+const musicBusinessBooksSkill: AdminSkill = {
+  id: 'music_business_books',
+  name: 'Music Business Books',
+  description: 'SergikAI desk that reads license and shop figures and lists questions for a CPA.',
+  purpose: 'Compare a quoted fee with a Stripe payment and flag checks, forwarded balances, and open collaborator payouts. It does not file tax.',
+  requiredContext: [],
+  allowedTools: ['audit_music_books'],
+  inputSchema: {
+    text: { type: 'string', required: false, description: 'Payment note or inquiry text' },
+    quotedCents: { type: 'number', required: false, description: 'Quoted fee in cents' },
+    paidCents: { type: 'number', required: false, description: 'Amount Stripe reports in cents' },
+    currency: { type: 'string', required: false, description: 'Quote currency' },
+    paidCurrency: { type: 'string', required: false, description: 'Paid currency' },
+  },
+  outputSchema: {
+    disclaimer: { type: 'string', required: true, description: 'Not-an-accountant notice' },
+    findings: { type: 'array', required: true, description: 'Money issues' },
+    memo: { type: 'string', required: true, description: 'Paste-ready memo' },
+  },
+  riskTier: 'tier_1_draft',
+  confidenceRules: [
+    'This desk is not an accountant and not a tax opinion.',
+    'Do not invent revenue, tax, or payout figures.',
+    'Shop checkout and sync licensing stay separate products.',
+  ],
+  systemPrompt:
+    'You are Music Business Books on the SergikAI desk. Run `/exec audit_music_books` with the quoted cents, paid cents, currency, and any payment note. Report blockers first. Every memo starts from the tool disclaimer. You do not file returns, calculate tax to rely on, or change split percentages. Ask whether Arizona tax applies and whether a collaborator payout needs a W-9. Checks, mobile deposit, and forwarding a balance are blockers. The contracting licensor for client licenses is Nexus Studios AZ LLC d/b/a SERGIKdropz.',
 }
 
 const skills: AdminSkill[] = [
@@ -395,6 +449,7 @@ const skills: AdminSkill[] = [
   sergikIntelligenceSkill,
   studioReleaseSkill,
   musicBusinessCounselSkill,
+  musicBusinessBooksSkill,
 ]
 
 const toolToSkillId: Record<string, string> = TOOL_SKILL_ID
@@ -427,6 +482,21 @@ export function inferSkillFromIntent(message: string) {
   const content = message.toLowerCase()
   const copyrightChecklist =
     content.includes('copyright checklist') || content.includes('update_copyright_checklist')
+  const booksCue =
+    content.includes('accountant') ||
+    content.includes('cpa') ||
+    content.includes('bookkeeping') ||
+    content.includes('sales tax') ||
+    content.includes('1099') ||
+    content.includes('w-9') ||
+    content.includes('w9') ||
+    content.includes('audit the fee') ||
+    content.includes('music business books')
+
+  if (booksCue) {
+    return musicBusinessBooksSkill
+  }
+
   const counselCue =
     !copyrightChecklist &&
     (content.includes('music counsel') ||
@@ -472,6 +542,10 @@ export function inferSkillFromIntent(message: string) {
   }
   if (content.includes('applescript') || content.includes('osascript') || content.includes('macos automation')) {
     return macAutomationSkill
+  }
+
+  if (isMetaBusinessAgentIntent(content)) {
+    return sergikIntelligenceSkill
   }
 
   if (
@@ -592,6 +666,8 @@ export function inferSkillFromIntent(message: string) {
     content.includes('marketing copy') ||
     content.includes('copyright checklist') ||
     content.includes('assign isrc') ||
+    content.includes('pull the distrokid') ||
+    content.includes('distrokid isrc') ||
     content.includes('command center') ||
     content.includes('due this week') ||
     content.includes('daily priorities') ||
@@ -655,12 +731,17 @@ function valueMatchesSchemaType(value: unknown, schemaType: SkillSchema[keyof Sk
   return typeof value === schemaType
 }
 
-export function validateAgainstSkillSchema(payload: Record<string, unknown>, schema: SkillSchema): SkillValidationResult {
+export function validateAgainstSkillSchema(
+  payload: Record<string, unknown>,
+  schema: SkillSchema,
+  options?: { skillId?: string; tool?: string }
+): SkillValidationResult {
   const errors: string[] = []
 
   for (const [field, config] of Object.entries(schema)) {
     const value = payload[field]
-    if (config.required && (value === undefined || value === null)) {
+    const required = schemaFieldRequiredForTool(options?.skillId, field, config.required, options?.tool)
+    if (required && (value === undefined || value === null || value === '')) {
       errors.push(`Missing required field: ${field}`)
       continue
     }

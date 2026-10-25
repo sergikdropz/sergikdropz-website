@@ -7,6 +7,8 @@ import { readdir, stat } from 'fs/promises'
 import { basename, extname, join } from 'path'
 
 export const DEFAULT_EXPORTS_ROOT = '/Volumes/SERGIK/Exports SERGIK'
+/** Finished WAV masters. Sibling of MP3s / stems under Exports — not the DSP Masters vault folder. */
+export const WAV_FILES_FOLDER_NAME = 'SERGIK WAVs'
 
 const AUDIO_EXT = new Set(['.wav', '.mp3', '.aiff', '.aif', '.flac', '.m4a', '.aac'])
 
@@ -39,6 +41,34 @@ export function getExportsRoot(): string {
     process.env.EXPORTS_SERGIK_ROOT?.trim() ||
     DEFAULT_EXPORTS_ROOT
   )
+}
+
+export function wavFilesRootFromExports(exportsRoot: string): string {
+  return join(exportsRoot, WAV_FILES_FOLDER_NAME)
+}
+
+/** Local folder that holds the WAV masters. Separate from the Music Vault “DSP Masters” folder. */
+export function getWavFilesRoot(): string {
+  return wavFilesRootFromExports(getExportsRoot())
+}
+
+export async function describeWavFilesRoot(root = getWavFilesRoot()): Promise<{
+  path: string
+  exists: boolean
+  wavCount: number
+}> {
+  try {
+    const entries = await readdir(root, { withFileTypes: true })
+    const wavCount = entries.filter(
+      (entry) =>
+        entry.isFile() &&
+        !entry.name.startsWith('._') &&
+        entry.name.toLowerCase().endsWith('.wav'),
+    ).length
+    return { path: root, exists: true, wavCount }
+  } catch {
+    return { path: root, exists: false, wavCount: 0 }
+  }
 }
 
 /** Calendar date in local timezone (avoid UTC day-shift for Pacific). */

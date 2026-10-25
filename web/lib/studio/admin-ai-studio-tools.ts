@@ -5,6 +5,7 @@ import { pushDistributionToVault } from '@/lib/studio/vault-writeback'
 import { registerMintedIsrcsWithSxDirect } from '@/lib/studio/soundexchange-registry'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { mergeUgcPack, parseUgcPack } from '@/lib/studio/ugc-pack'
+import { pickReleaseIdentifiers, type ReleaseIdentifiers } from '@/lib/studio/release-identifiers'
 
 const MARKETING_COPY_KEYS = [
   'elevator_pitch',
@@ -130,6 +131,66 @@ export async function applyPatchReleaseMarketingCopy(params: {
 
   if (error) {
     throw new Error(error.message || 'Failed to update marketing copy')
+  }
+
+  return {
+    release: data,
+    fieldsUpdated: preview.fieldsUpdated,
+    studioUrl: preview.studioUrl,
+  }
+}
+
+export async function previewPatchReleaseIdentifiers(params: {
+  releaseId: string
+  identifiers: ReleaseIdentifiers
+}) {
+  const identifiers = pickReleaseIdentifiers(params.identifiers)
+  if (Object.keys(identifiers).length === 0) {
+    throw new Error('No valid release barcode provided. Pass upc as a 12- or 13-digit code.')
+  }
+
+  const supabase = createSupabaseServerClient()
+  const { data: release, error } = await supabase
+    .from('distribution_releases')
+    .select('id, title, upc, previous_upc')
+    .eq('id', params.releaseId)
+    .single()
+
+  if (error || !release) {
+    throw new Error('Release not found')
+  }
+
+  const before = {
+    upc: release.upc ?? '',
+    previous_upc: release.previous_upc ?? '',
+  }
+  const after = { ...before, ...identifiers }
+
+  return {
+    releaseId: params.releaseId,
+    title: release.title as string,
+    fieldsUpdated: Object.keys(identifiers),
+    before,
+    after,
+    studioUrl: `/studio/releases/${encodeURIComponent(params.releaseId)}`,
+  }
+}
+
+export async function applyPatchReleaseIdentifiers(params: {
+  releaseId: string
+  identifiers: ReleaseIdentifiers
+}) {
+  const preview = await previewPatchReleaseIdentifiers(params)
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('distribution_releases')
+    .update(pickReleaseIdentifiers(params.identifiers))
+    .eq('id', params.releaseId)
+    .select('id, title, upc, previous_upc')
+    .single()
+
+  if (error) {
+    throw new Error(error.message || 'Failed to update release barcode')
   }
 
   return {

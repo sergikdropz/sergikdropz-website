@@ -4,8 +4,10 @@ import { isAdminAuthPath } from '@/lib/auth/admin-paths'
 import { MW_SB_ACCESS_HEADER } from '@/lib/auth/middleware-bridge'
 import { middlewareHasAdminAccess } from '@/lib/auth/middleware-edge'
 import {
+  applyRefreshedSessionCookies,
   nextWithRefreshedSession,
   tryMiddlewareSessionRefresh,
+  type MiddlewareRefreshResult,
 } from '@/lib/auth/middleware-refresh'
 import { resolveRequestAccessToken } from '@/lib/auth/resolve-request-token'
 
@@ -27,6 +29,17 @@ function adminLoginRedirect(request: NextRequest): NextResponse {
   const response = NextResponse.redirect(url)
   response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
   return response
+}
+
+function refreshResultFromResolved(
+  refreshed: {
+    accessToken: string
+    refreshToken: string
+    rememberCookie: string | undefined
+  } | undefined
+): MiddlewareRefreshResult | null {
+  if (!refreshed?.accessToken || !refreshed.refreshToken) return null
+  return refreshed
 }
 
 async function denyUnlessAdmin(
@@ -108,7 +121,10 @@ export async function middleware(request: NextRequest) {
           refreshed.accessToken,
           isPrivilegedOpsApi
         )
-        if (denied) return denied
+        if (denied) {
+          applyRefreshedSessionCookies(denied, refreshed)
+          return denied
+        }
       }
       return nextWithRefreshedSession(request, refreshed, requestHeaders)
     }
@@ -119,10 +135,15 @@ export async function middleware(request: NextRequest) {
     if (!resolved?.accessToken) {
       return adminLoginRedirect(request)
     }
+    const refreshed = refreshResultFromResolved(resolved.refreshed)
     const denied = await denyUnlessAdmin(request, resolved.accessToken, false)
-    if (denied) return denied
+    if (denied) {
+      if (refreshed) applyRefreshedSessionCookies(denied, refreshed)
+      return denied
+    }
 
     const requestHeaders = withPathnameHeader(request, pathname)
+    if (refreshed) return nextWithRefreshedSession(request, refreshed, requestHeaders)
     return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
@@ -131,10 +152,15 @@ export async function middleware(request: NextRequest) {
     if (!resolved?.accessToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const refreshed = refreshResultFromResolved(resolved.refreshed)
     const denied = await denyUnlessAdmin(request, resolved.accessToken, true)
-    if (denied) return denied
+    if (denied) {
+      if (refreshed) applyRefreshedSessionCookies(denied, refreshed)
+      return denied
+    }
 
     const requestHeaders = stripInternalMiddlewareHeaders(request)
+    if (refreshed) return nextWithRefreshedSession(request, refreshed, requestHeaders)
     return NextResponse.next({ request: { headers: requestHeaders } })
   }
 

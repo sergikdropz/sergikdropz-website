@@ -6,11 +6,16 @@ import {
   type UgcPackEligibility,
 } from '@/lib/studio/ugc-pack'
 import {
+  parseMonetizationEnrollment,
+  type MonetizationEnrollment,
+} from '@/lib/studio/monetization-enrollment'
+import {
   evaluateReleaseIngest,
   type DspIngestResult,
 } from '@/lib/studio/dsp-ingest'
 import { hydrateRightsPacket, publisherFromAlbumArtist } from '@/lib/studio/rights-ops'
 import { parsePartyContacts } from '@/lib/studio/rights-contract-send'
+import { parseDocuSignEnvelopes, type DocuSignEnvelopeRecord } from '@/lib/studio/docusign-records'
 import {
   parseRightsPacketDrafts,
   type RightsPacketDrafts,
@@ -82,6 +87,7 @@ type CopyrightChecklist = {
   sample_clearance_status: 'missing' | 'pending' | 'approved' | null
   due_date: string | null
   ugc_pack?: unknown
+  monetization_enrollment?: unknown
   party_contacts?: unknown
   rights_packets?: unknown
   publisher_name: string | null
@@ -90,6 +96,7 @@ type CopyrightChecklist = {
   neighboring_rights_registered?: boolean | null
   neighboring_rights_society?: string | null
   counsel_audit?: unknown
+  docusign_envelopes?: unknown
   updated_at?: string
 }
 
@@ -168,6 +175,7 @@ export type CopyrightReadiness = {
     monitoring_enabled: boolean
   }
   ugc_pack: UgcPack
+  monetization_enrollment: MonetizationEnrollment
   ugc: UgcPackEligibility
   ingest: DspIngestResult
   collection: {
@@ -175,6 +183,7 @@ export type CopyrightReadiness = {
     neighboring_rights_society: string | null
   }
   counsel_audit: CounselAuditRecord | null
+  docusign_envelopes?: DocuSignEnvelopeRecord[]
 }
 
 const DEFAULT_CHECKLIST: Omit<CopyrightChecklist, 'release_id'> = {
@@ -495,6 +504,7 @@ function buildReadiness(
       monitoring_enabled: checklist.monitoring_enabled,
     },
     ugc_pack: pack,
+    monetization_enrollment: parseMonetizationEnrollment(checklist.monetization_enrollment),
     ugc: eligibility,
     ingest,
     collection: {
@@ -502,16 +512,22 @@ function buildReadiness(
       neighboring_rights_society: checklist.neighboring_rights_society?.trim() || null,
     },
     counsel_audit: parseCounselAudit(checklist.counsel_audit),
+    docusign_envelopes: parseDocuSignEnvelopes(checklist.docusign_envelopes),
   }
 }
 
 const CHECKLIST_SELECT_BASE =
-  'release_id, rights_intake_complete, legal_locked, composition_registered, master_registered, pro_registered, monitoring_enabled, owner_name, role_queue, split_sheet_status, producer_agreement_status, sample_clearance_status, due_date, ugc_pack, party_contacts, rights_packets, publisher_name, publisher_ipi, writer_ipi, updated_at'
+  'release_id, rights_intake_complete, legal_locked, composition_registered, master_registered, pro_registered, monitoring_enabled, owner_name, role_queue, split_sheet_status, producer_agreement_status, sample_clearance_status, due_date, ugc_pack, monetization_enrollment, party_contacts, rights_packets, publisher_name, publisher_ipi, writer_ipi, updated_at'
 
 const CHECKLIST_SELECT = `${CHECKLIST_SELECT_BASE.replace(
   ', updated_at',
   ', neighboring_rights_registered, neighboring_rights_society, counsel_audit, updated_at',
 )}`
+
+const CHECKLIST_SELECT_DOCUSIGN = CHECKLIST_SELECT.replace(
+  ', updated_at',
+  ', docusign_envelopes, updated_at',
+)
 
 const CHECKLIST_SELECT_LEGACY =
   'release_id, rights_intake_complete, legal_locked, composition_registered, master_registered, pro_registered, monitoring_enabled, owner_name, role_queue, split_sheet_status, producer_agreement_status, sample_clearance_status, due_date, updated_at'
@@ -519,8 +535,15 @@ const CHECKLIST_SELECT_LEGACY =
 async function fetchCopyrightChecklists(supabase: any, releaseIds: string[]) {
   let withPack = await supabase
     .from('release_copyright_checklists')
-    .select(CHECKLIST_SELECT)
+    .select(CHECKLIST_SELECT_DOCUSIGN)
     .in('release_id', releaseIds)
+
+  if (withPack.error && /docusign_envelopes/i.test(String(withPack.error.message || ''))) {
+    withPack = await supabase
+      .from('release_copyright_checklists')
+      .select(CHECKLIST_SELECT)
+      .in('release_id', releaseIds)
+  }
 
   if (withPack.error && /counsel_audit|neighboring_rights/i.test(String(withPack.error.message || ''))) {
     withPack = await supabase
@@ -532,6 +555,13 @@ async function fetchCopyrightChecklists(supabase: any, releaseIds: string[]) {
   if (!withPack.error) return withPack
 
   const message = String(withPack.error.message || '')
+  if (/monetization_enrollment/i.test(message)) {
+    const withoutEnrollment = await supabase
+      .from('release_copyright_checklists')
+      .select(CHECKLIST_SELECT.replace(', monetization_enrollment', ''))
+      .in('release_id', releaseIds)
+    if (!withoutEnrollment.error) return withoutEnrollment
+  }
   const missingContacts = /party_contacts/i.test(message)
   if (missingContacts) {
     const withoutContacts = await supabase

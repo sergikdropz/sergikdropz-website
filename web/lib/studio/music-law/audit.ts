@@ -13,6 +13,7 @@ import {
   searchMusicLaw,
   type MusicLawTopic,
 } from '@/lib/studio/music-law/corpus'
+import { LICENSING_LICENSOR } from '@/lib/licensing/identity'
 
 export type MusicDealKind =
   | 'split_sheet'
@@ -22,6 +23,7 @@ export type MusicDealKind =
   | 'publishing'
   | 'distribution'
   | 'sync'
+  | 'client_license'
   | 'sample'
   | 'session'
   | 'unknown'
@@ -65,6 +67,7 @@ export function inferMusicDealKind(text: string, hinted?: string | null): MusicD
     'publishing',
     'distribution',
     'sync',
+    'client_license',
     'sample',
     'session',
     'unknown',
@@ -76,7 +79,7 @@ export function inferMusicDealKind(text: string, hinted?: string | null): MusicD
   if (/collab agreement|collaboration agreement/.test(t)) return 'collab'
   if (/featured artist|featuring agreement/.test(t)) return 'featured_artist'
   if (/publishing admin|co-publishing|copublishing|administration agreement/.test(t)) return 'publishing'
-  if (/sync|synchroni[sz]/.test(t)) return 'sync'
+  if (/sync|synchroni[sz]|client license|licensing inquiry/.test(t)) return 'sync'
   if (/sample licen[sc]e|interpolation/.test(t)) return 'sample'
   if (/session musician|sideman/.test(t)) return 'session'
   if (/distrokid|aggregat|distribution agreement/.test(t)) return 'distribution'
@@ -400,11 +403,34 @@ function auditProse(text: string, dealKind: MusicDealKind): CounselFinding[] {
       id: 'autorenew-no-notice',
       severity: 'watch',
       topicId: 'deal-red-flags',
-      title: 'Renewal or option without a notice window',
-      issue: 'The term extends automatically and the draft does not give a notice period.',
-      whyItMatters: 'Options are how short deals become long ones.',
-      address: 'Require written notice a stated number of days before renewal, and cap the number of options.',
+      title: 'Renewal without a notice window',
+      issue: 'The term renews or an option continues without a stated notice period.',
+      whyItMatters: 'A silent renewal can extend a grant the artist meant to end.',
+      address: 'State how many days of written notice stop the renewal, and who may send it.',
     })
+  }
+
+  if (dealKind === 'sync' || dealKind === 'client_license') {
+    push(findings, {
+      id: 'sergik-licensor-block',
+      severity: 'note',
+      topicId: 'two-copyrights',
+      title: 'SERGIK licensor block',
+      issue: `${LICENSING_LICENSOR.legalName}, doing business as ${LICENSING_LICENSOR.tradeName}, is the contracting licensor. Songwriter ${LICENSING_LICENSOR.songwriterName}. Publisher ${LICENSING_LICENSOR.publisherName}.`,
+      whyItMatters: 'The signer and the payee need to be the same party. Credits are not extra licensors.',
+      address: `Keep Arizona law and ${LICENSING_LICENSOR.forum}. Do not enable this draft for signature until a lawyer approves that version.`,
+    })
+    if (raw.length > 40 && !/content id|youtube claim|tiktok/i.test(raw)) {
+      push(findings, {
+        id: 'content-id-unspoken',
+        severity: 'material',
+        topicId: 'two-copyrights',
+        title: 'Content ID is not addressed',
+        issue: 'The draft does not say who may claim the recording on YouTube, Meta, or TikTok.',
+        whyItMatters: 'SERGIK keeps the UGC and Content ID relationship unless the grant says otherwise.',
+        address: 'Add a sentence that platform claims stay with SERGIK unless this agreement expressly allows the licensee to claim the recording.',
+      })
+    }
   }
 
   return findings

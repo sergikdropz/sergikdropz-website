@@ -13,6 +13,7 @@ export const ADMIN_UI_CRAWL_PATHS: readonly string[] = [
   '/admin/gallery',
   '/admin/instagram',
   '/admin/licenses',
+  '/admin/licensing',
   '/admin/logs',
   '/admin/memberships',
   '/admin/merch',

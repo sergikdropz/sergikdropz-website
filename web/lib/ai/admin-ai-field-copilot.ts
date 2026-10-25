@@ -144,21 +144,33 @@ export function getFieldCopilotQuickActions(focus: AdminAiFocusContext): FieldCo
   })
 }
 
-export function buildFieldCopilotPrompt(focus: AdminAiFocusContext, intent: FieldCopilotIntent): string {
+export function buildFieldCopilotPrompt(
+  focus: AdminAiFocusContext,
+  intent: FieldCopilotIntent,
+  attached?: string,
+): string {
   const hasValue = Boolean(focus.value?.trim())
+  const context = attached?.trim() ?? ''
+  const subjectFromMessage = Boolean(context) && keyMatches(focus, ['subject'])
   let instruction: string
 
   switch (intent.kind) {
     case 'suggest':
-      instruction = hasValue
-        ? 'Suggest a refined value for this field.'
-        : 'Draft a strong value for this empty field.'
+      instruction = subjectFromMessage
+        ? 'Draft one email subject line from the attached message.'
+        : hasValue
+          ? 'Suggest a refined value for this field.'
+          : 'Draft a strong value for this empty field.'
       break
     case 'improve':
-      instruction = 'Improve this field value: clearer, more professional, on-brand for SERGIK / electronic music.'
+      instruction = subjectFromMessage
+        ? 'Rewrite the subject so it matches the attached message.'
+        : 'Improve this field value: clearer, more professional, on-brand for SERGIK / electronic music.'
       break
     case 'fill':
-      instruction = 'Draft a complete value for this empty field using only context you have; do not invent ISRCs, dates, or credits.'
+      instruction = subjectFromMessage
+        ? 'Draft one email subject line from the attached message.'
+        : 'Draft a complete value for this empty field using only context you have; do not invent ISRCs, dates, or credits.'
       break
     case 'custom':
       instruction = intent.instruction
@@ -175,6 +187,10 @@ export function buildFieldCopilotPrompt(focus: AdminAiFocusContext, intent: Fiel
     focus.hint ? `Hint: ${focus.hint}` : '',
     `Current value: ${hasValue ? JSON.stringify(focus.value) : '(empty)'}`,
     focus.placeholder ? `Placeholder: ${focus.placeholder}` : '',
+    context ? `Attached message:\n${context}` : '',
+    subjectFromMessage
+      ? 'One line, under 70 characters. Use the release title from the message. Do not invent dates, codes, or credits.'
+      : '',
     '',
     'Reply with ONLY the exact text to put in the field (no preamble). End with:',
     '```ai-apply',

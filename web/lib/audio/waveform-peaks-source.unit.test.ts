@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchWaveformPeaksFromUrl,
+  peaksFromWaveformBody,
   resolveWaveformPeaks,
 } from '@/lib/audio/waveform-peaks-source'
 
@@ -21,6 +22,13 @@ function jsonResponse(body: unknown, ok = true) {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('peaksFromWaveformBody', () => {
+  it('reads the site envelope and the stored tape', () => {
+    expect(peaksFromWaveformBody({ waveform_data: peaks(80) })).toHaveLength(80)
+    expect(peaksFromWaveformBody({ d: peaks(80) })).toHaveLength(80)
+  })
 })
 
 describe('fetchWaveformPeaksFromUrl', () => {

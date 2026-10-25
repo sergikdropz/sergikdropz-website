@@ -15,15 +15,33 @@ import Link from 'next/link'
 import { LuBrainCircuit, LuSettings2 } from 'react-icons/lu'
 import { ADMIN_AI_FAB_ANCHOR_ID } from '@/components/shell/AppShell'
 import { useAdminAiPageContextOptional } from '@/contexts/AdminAiPageContext'
-import type { AdminAiPageContext } from '@/lib/ai/admin-ai-page-context'
+import { collectSignedInFormFields, type AdminAiPageContext } from '@/lib/ai/admin-ai-page-context'
 import type { AdminChatRoutingEcho } from '@/lib/ai/admin-chat-guards'
 import { STICKY_SKILL_CLIENT_TTL_MS } from '@/lib/ai/admin-chat-guards'
 import type { AdminChatEnergyPreset, AdminChatHonestyMode } from '@/lib/ai/admin-chat-session-tuning'
 import { isContinuationOnlyUserMessage } from '@/lib/ai/chat-skill-context'
-import { suggestAnchorSnippetsFromUserText } from '@/lib/admin-ai-anchor-suggestions'
+import { clipChatHistory } from '@/lib/ai/admin-ai-agent-transcript'
+import { appendDictationText } from '@/lib/ai/dictation-text'
+import { suggestThreadAnchors, threadMemoryWithAnchors } from '@/lib/admin-ai-anchor-suggestions'
 import { shallowPayloadDiffLines } from '@/lib/admin-ai-exec-preview-diff'
+import { composerGhostSuggestion, planArmedPrompt, recommendReplyFollowUps, sanitizeArmedPrompts, MAX_STORED_ARMED_PROMPTS, type StoredArmedPrompt } from '@/lib/ai/admin-ai-composer-suggestion'
+import {
+  ADMIN_AI_FOCUS_SESSION_EVENT,
+  ADMIN_AI_SESSIONS_KEY,
+  attachedThreadTitle,
+  notifyChatThreadsChanged,
+  questionThreadTitle,
+} from '@/lib/ai/admin-ai-chat-threads'
+import { firstPartyWorkspaceFromUrl } from '@/lib/ai/first-party-workspace'
 import { buildApprovalRows, payloadWithoutDryRun, type ApprovalRow } from '@/lib/ai/approval-rows'
 import { applyKnownPrimaryGoal, goalFromKnownRelease, type KnownGoalContext } from '@/lib/ai/known-primary-goal'
+import {
+  readStrategyPackPolish,
+  strategyPackPolishCue,
+  withStrategyPackPolish,
+  type StrategyPackPolishMode,
+  type StrategyPackPolishState,
+} from '@/lib/ai/product-strategy-pack'
 import {
   missingRequiredSkillFields,
   resolveSkillForTool,
@@ -38,6 +56,8 @@ import {
 } from '@/lib/ai/admin-ai-focus-context'
 import FieldCopilotPanel from '@/components/FieldCopilotPanel'
 import { ProductStrategyPackCard } from '@/components/admin/ProductStrategyPackCard'
+import { AdminAiWorkingStatus } from '@/components/admin/AdminAiWorkingStatus'
+import { visibleStreamingReply } from '@/lib/ai/admin-ai-reply-stream'
 import AdminAiQuickStartPanel from '@/components/admin/AdminAiQuickStartPanel'
 import AdminAiBrowserDock from '@/components/admin/AdminAiBrowserDock'
 import AdminAiElementPickerButton from '@/components/admin/AdminAiElementPickerButton'
@@ -61,9 +81,9 @@ import {
   type ComposerChipKind,
 } from '@/lib/ai/admin-ai-composer-chips'
 import AdminAiStudioMissionStrip from '@/components/admin/AdminAiStudioMissionStrip'
+import ArmedPromptStack from '@/components/admin/ArmedPromptStack'
 import {
   AdminAiApplyDiffCards,
-  AdminAiMentionChips,
   AdminAiMemoryStrip,
   AdminAiToolStepCards,
 } from '@/components/admin/AdminAiAgentPanels'
@@ -81,6 +101,7 @@ import {
   normalizeThreadMemory,
   type AdminAiThreadMemory,
 } from '@/lib/ai/admin-ai-thread-memory'
+import { noteApprovedWrite } from '@/lib/ai/admin-ai-thread-checklist'
 import { buildMissionDock, type MissionDockAction } from '@/lib/admin-ai-mission-dock'
 import {
   dispatchAdminAiStudioNavigate,
@@ -126,7 +147,11 @@ import {
   AdminAssistantRichText,
   AdminChatActionChoices,
   AdminChatPlainText,
+  AdminChatReplySuggestions,
+  AdminReplyCopyButton,
+  replyThreadTitle,
 } from '@/components/AdminChatMessageContent'
+import { parseAdminChatActionChoices } from '@/lib/ai/admin-chat-action-choices'
 
 /** Same-origin fetch with clearer errors when the dev server is down or the connection is refused. */
 function adminAiFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -169,14 +194,18 @@ type ExecuteTool =
   | 'patch_release_marketing_copy'
   | 'update_copyright_checklist'
   | 'assign_isrcs'
+  | 'pull_distrokid_isrcs'
   | 'create_distribution_release_draft'
   | 'query_intelligence_harness'
   | 'query_sergikai_chat'
   | 'query_crowe_creative'
+  | 'query_meta_business_agent'
   | 'audit_music_contract'
+  | 'audit_music_books'
   | 'run_meta_promo_pipeline'
   | 'admin_browser'
   | 'query_platform_growth_snapshot'
+  | 'read_workspace'
 
 type ToolPreview = {
   tool: ExecuteTool
@@ -202,7 +231,12 @@ type AssistantActionResponse = {
   toolPreview?: ToolPreview
   actionId?: string
   stepPreviews?: StepPreview[]
-  results?: Array<{ stepId: string; tool: ExecuteTool; output: Record<string, unknown> }>
+  results?: Array<{
+    stepId: string
+    tool: ExecuteTool
+    output: Record<string, unknown>
+    verification?: { matched: boolean; summary: string } | null
+  }>
 }
 
 type SkillSchemaField = {
@@ -223,7 +257,18 @@ type SkillSummary = {
   inputSchema?: Record<string, SkillSchemaField> | null
 }
 
-type ChatProviderChoice = 'auto' | 'anthropic' | 'openai' | 'ollama' | 'crowelogic'
+type ChatProviderChoice = 'auto' | 'anthropic' | 'openai' | 'ollama' | 'crowelogic' | 'cursor'
+
+function isChatProviderChoice(value: string | null | undefined): value is ChatProviderChoice {
+  return (
+    value === 'auto' ||
+    value === 'anthropic' ||
+    value === 'openai' ||
+    value === 'ollama' ||
+    value === 'crowelogic' ||
+    value === 'cursor'
+  )
+}
 
 const AGENT_SKILL_MODES = [
   'release_ops',
@@ -303,27 +348,15 @@ type PlanStep = {
   skillId: string | null
 }
 
-function mergeStrategyPackRefinePayload(steps: PlanStep[], prefer: boolean): PlanStep[] {
-  if (!prefer) return steps
-  return steps.map((step) =>
-    step.tool === 'draft_product_strategy_pack' ?
-      { ...step, payload: { ...step.payload, refineWithLlm: true } }
-    : step
-  )
-}
-
-/** Force LLM polish on/off for strategy pack steps (e.g. regenerate preview). */
-function applyStrategyPackPreviewMode(steps: PlanStep[], mode: 'polish' | 'deterministic'): PlanStep[] {
-  return steps.map((step) => {
-    if (step.tool !== 'draft_product_strategy_pack') return step
-    const payload = { ...step.payload }
-    if (mode === 'polish') {
-      payload.refineWithLlm = true
-    } else {
-      delete payload.refineWithLlm
-    }
-    return { ...step, payload }
-  })
+function strategyPackPreviewNote(output: Record<string, unknown>): string {
+  const live = readStrategyPackPolish(output)
+  if (live?.state === 'applied') {
+    return `Strategy pack preview. ${live.note} Approve keeps the scaffold and does not call the model again.`
+  }
+  if (live?.state === 'failed') {
+    return `Strategy pack preview kept the scaffold. ${live.note}`
+  }
+  return 'Strategy pack preview — structured sections below. Approve when ready.'
 }
 
 function strategyPackPreviewRows(action: AssistantActionResponse): StepPreview[] {
@@ -350,7 +383,7 @@ function strategyPackEmbedChatMessagesFromResult(result: AssistantActionResponse
     id: createMessageId(),
     role: 'assistant',
     content:
-      'Strategy pack preview — structured sections below. Approve when ready. (LLM polish runs on preview only when the checkbox is enabled.)',
+      strategyPackPreviewNote(row.preview),
     embed: { type: 'product_strategy_pack', output: row.preview },
   }))
 }
@@ -384,9 +417,9 @@ type ComposerLink = {
   label: string
 }
 
-const ADMIN_AI_SESSIONS_KEY = 'admin-ai-chat-sessions-v1'
 const ADMIN_AI_UNFINISHED_DISMISS_LS = 'admin-ai-unfinished-dismissed-v1'
 const ADMIN_AI_UNFINISHED_ARCHIVE_LS = 'admin-ai-unfinished-archive-v1'
+const ADMIN_AI_LLM_LS = 'admin-ai-llm-v1'
 const ADMIN_AI_HONESTY_LS = 'admin-ai-honesty-v1'
 const ADMIN_AI_ENERGY_LS = 'admin-ai-energy-v1'
 const ADMIN_AI_ANCHORS_PANEL_LS = 'admin-ai-anchors-panel-v1'
@@ -442,6 +475,10 @@ type AdminChatSession = {
   threadMemory: AdminAiThreadMemory
   /** Undo stack for approved Apply diffs. */
   checkpoints: AdminAiCheckpoint[]
+  /** Prompts armed to send themselves at a date and time from the latest reply. */
+  armedPrompts?: StoredArmedPrompt[]
+  /** Release Studio ids this thread is attached to. */
+  attachedReleaseIds?: string[]
   /** Rotating high-priority quick starts (fresh chat only). */
   priorityQuickStart?: AdminAiPriorityQuickStartState
   /** Rotating explore quick starts (fresh chat only). */
@@ -562,6 +599,8 @@ function createEmptySession(id: string): AdminChatSession {
     preferStrategyPackRefine: false,
     threadMemory: emptyThreadMemory(),
     checkpoints: [],
+    armedPrompts: [],
+    attachedReleaseIds: [],
   }
 }
 
@@ -666,6 +705,7 @@ function parseExecuteCommand(input: string): { tool: ExecuteTool; payload: Recor
     toolRaw !== 'patch_release_marketing_copy' &&
     toolRaw !== 'update_copyright_checklist' &&
     toolRaw !== 'assign_isrcs' &&
+    toolRaw !== 'pull_distrokid_isrcs' &&
     toolRaw !== 'create_distribution_release_draft' &&
     toolRaw !== 'query_intelligence_harness' &&
     toolRaw !== 'query_sergikai_chat' &&
@@ -673,7 +713,8 @@ function parseExecuteCommand(input: string): { tool: ExecuteTool; payload: Recor
     toolRaw !== 'audit_music_contract' &&
     toolRaw !== 'run_meta_promo_pipeline' &&
     toolRaw !== 'admin_browser' &&
-    toolRaw !== 'query_platform_growth_snapshot'
+    toolRaw !== 'query_platform_growth_snapshot' &&
+    toolRaw !== 'read_workspace'
   ) {
     return null
   }
@@ -748,33 +789,177 @@ function AnchorsPanelToggle({
   )
 }
 
-/** LLM polish for strategy pack dry-run previews (same state as former checkbox). */
+const PACK_POLISH_MODE_LS = 'admin-ai-pack-polish-mode-v1'
+
+const PACK_POLISH_MODES: Array<{ id: StrategyPackPolishMode; label: string; detail: string }> = [
+  { id: 'suggest', label: 'Suggest', detail: 'Glow when a strategy pack is the next step. You click to turn it on.' },
+  { id: 'auto', label: 'Auto', detail: 'Turn polish on when that cue appears. Click still turns it off.' },
+  { id: 'always', label: 'Always on', detail: 'Every strategy pack preview gets a brief.' },
+  { id: 'off', label: 'Always off', detail: 'Scaffold only. No glow.' },
+]
+
+/** Preview-only editorial brief. The glow is a cue. One click turns the brief on or off. */
 function StrategyPackPolishToggle({
   on,
+  live,
+  mode,
+  cue,
+  hasPreview,
   onToggle,
+  onMode,
+  onPolishPreview,
+  onScaffoldPreview,
   disabled,
 }: {
   on: boolean
+  live: { state: StrategyPackPolishState; note: string } | null
+  mode: StrategyPackPolishMode
+  cue: boolean
+  hasPreview: boolean
   onToggle: () => void
+  onMode: (mode: StrategyPackPolishMode) => void
+  onPolishPreview: () => void
+  onScaffoldPreview: () => void
   disabled?: boolean
 }) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const missed = on && live?.state === 'failed'
+  const ready = on && live?.state === 'applied'
+  const showCue = !on && cue && (mode === 'suggest' || mode === 'auto')
+  const label = !on ? 'Pack polish Off' : missed ? 'Pack polish Missed' : ready ? 'Pack polish Ready' : 'Pack polish On'
+  const title = showCue
+    ? 'A strategy pack brief would help. Click once to turn polish on. Right-click for Suggest, Auto, Always on, or Always off.'
+    : !on
+      ? 'Off. Click once to ask for a brief on the next strategy pack preview. Right-click for Suggest, Auto, Always on, or Always off.'
+      : missed
+        ? `On. Last preview kept the scaffold. ${live?.note ?? ''} Click to turn off.`
+        : ready
+          ? `On. ${live?.note ?? 'Last preview includes the brief.'} Click to turn off.`
+          : 'On. The next strategy pack preview adds an editorial brief. Click to turn off.'
+  const solid = missed
+    ? 'border-rose-300 bg-rose-400 text-rose-950 hover:bg-rose-300'
+    : ready
+      ? 'border-emerald-300 bg-emerald-400 text-emerald-950 hover:bg-emerald-300'
+      : on
+        ? 'border-amber-200 bg-amber-400 text-amber-950 hover:bg-amber-300'
+        : 'border-gray-600 bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    const onPointer = (event: MouseEvent) => {
+      if (event.button !== 0) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('[data-admin-ai-pack-polish-menu]')) return
+      if (buttonRef.current?.contains(target)) return
+      close()
+    }
+    const timer = window.setTimeout(() => document.addEventListener('mousedown', onPointer), 0)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
+
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      role="switch"
-      aria-checked={on ? 'true' : 'false'}
-      aria-label={`Strategy pack LLM polish on previews ${on ? 'on' : 'off'}`}
-      title="When on, draft_product_strategy_pack /exec previews use your configured chat provider for LLM polish (dry-run only)."
-      className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors disabled:opacity-40 ${
-        on
-          ? 'border-amber-500/45 bg-amber-950/55 text-amber-100 hover:bg-amber-900/45'
-          : 'border-gray-600 bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-      }`}
-      onClick={onToggle}
-    >
-      Pack polish {on ? 'On' : 'Off'}
-    </button>
+    <>
+      <span className="relative inline-flex rounded-full">
+        <button
+          ref={buttonRef}
+          type="button"
+          disabled={disabled}
+          role="switch"
+          aria-checked={on ? 'true' : 'false'}
+          aria-haspopup="menu"
+          aria-label={title}
+          title={title}
+          data-pack-polish-mode={mode}
+          className={`relative overflow-hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors disabled:opacity-40 ${
+            showCue ? 'admin-ai-pack-polish-cue' : ''
+          } ${solid}`}
+          onClick={onToggle}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            const rect = buttonRef.current?.getBoundingClientRect()
+            const x = rect ? rect.left : event.clientX
+            const y = rect ? rect.top : event.clientY
+            setMenu({ x, y })
+          }}
+        >
+          {showCue ? <span className="admin-ai-pack-polish-glow" data-testid="admin-ai-pack-polish-glow" aria-hidden /> : null}
+          <span className="relative z-[1]">{label}</span>
+        </button>
+      </span>
+      {menu && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              data-admin-ai-pack-polish-menu
+              role="menu"
+              aria-label="Pack polish actions"
+              className="fixed z-[12050] w-64 overflow-hidden rounded-lg border border-gray-600 bg-gray-900 text-sm shadow-2xl"
+              style={{
+                left: Math.min(menu.x, window.innerWidth - 272),
+                top: Math.max(8, menu.y - 228),
+              }}
+            >
+              {PACK_POLISH_MODES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={mode === item.id}
+                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-gray-800"
+                  onClick={() => {
+                    onMode(item.id)
+                    setMenu(null)
+                  }}
+                >
+                  <span className={`text-xs font-medium ${mode === item.id ? 'text-amber-200' : 'text-gray-100'}`}>
+                    {mode === item.id ? '✓ ' : ''}
+                    {item.label}
+                  </span>
+                  <span className="text-[10px] leading-snug text-gray-500">{item.detail}</span>
+                </button>
+              ))}
+              <div className="border-t border-gray-800">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={disabled || !hasPreview}
+                  className="block w-full px-3 py-2 text-left text-xs text-gray-100 hover:bg-gray-800 disabled:opacity-40"
+                  onClick={() => {
+                    onPolishPreview()
+                    setMenu(null)
+                  }}
+                >
+                  Polish this preview
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={disabled || !hasPreview}
+                  className="block w-full px-3 py-2 text-left text-xs text-gray-100 hover:bg-gray-800 disabled:opacity-40"
+                  onClick={() => {
+                    onScaffoldPreview()
+                    setMenu(null)
+                  }}
+                >
+                  Scaffold this preview
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   )
 }
 
@@ -843,9 +1028,17 @@ export default function AdminAiAssistant({
   >([])
   const [missionRefreshNonce, setMissionRefreshNonce] = useState(0)
   const [missionBlockerCount, setMissionBlockerCount] = useState(0)
+  const [threadAwayFromBottom, setThreadAwayFromBottom] = useState(false)
+  const [threadHasEarlierUserMessage, setThreadHasEarlierUserMessage] = useState(false)
 
   const [sending, setSending] = useState(false)
+  const [queuedExec, setQueuedExec] = useState<string | null>(null)
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
+  const replyStreamRef = useRef({ round: -1, raw: '' })
   const sendLockRef = useRef(false)
+  const sendComposerTurnRef = useRef<(rawText: string, fromComposer: boolean) => Promise<void>>(
+    async () => undefined,
+  )
   const [browserLiveNote, setBrowserLiveNote] = useState<string | null>(null)
   const [browserHolds, setBrowserHolds] = useState<Record<string, string>>({})
   const [approvalEditId, setApprovalEditId] = useState<string | null>(null)
@@ -853,6 +1046,11 @@ export default function AdminAiAssistant({
   const [approvalEditError, setApprovalEditError] = useState<string | null>(null)
   const [approvalHiddenRowIds, setApprovalHiddenRowIds] = useState<string[]>([])
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const threadScrollRef = useRef<HTMLDivElement | null>(null)
+  /** True while the reader is at the latest message, so incoming reply content keeps the bottom in view. */
+  const threadStickRef = useRef(true)
+  const threadScrollLockRef = useRef(false)
+  const threadScrollTopRef = useRef(0)
   const dragOffsetRef = useRef({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
@@ -893,6 +1091,7 @@ export default function AdminAiAssistant({
   const [dockMode, setDockMode] = useState<ChatDockMode>('dock-left')
   const dockModeHydrated = useRef(false)
   const [gripDockMenu, setGripDockMenu] = useState<{ x: number; y: number } | null>(null)
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const gripDockMenuRef = useRef<HTMLDivElement | null>(null)
   const gripDockMenuClamp = useClampedFixedMenuPosition(
     !!gripDockMenu,
@@ -906,13 +1105,15 @@ export default function AdminAiAssistant({
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [disabledTools, setDisabledTools] = useState<ExecuteTool[]>([])
   const [chatProvider, setChatProvider] = useState<ChatProviderChoice>('auto')
+  const chatProviderTouchedRef = useRef(false)
   const [agentMode, setAgentMode] = useState<AgentModeChoice>('auto')
   const [providerCatalog, setProviderCatalog] = useState<Array<{ id: string; configured: boolean }>>([])
   const [fileDragDepth, setFileDragDepth] = useState(0)
-  const [isListening, setIsListening] = useState(false)
+  const [dictationPhase, setDictationPhase] = useState<'idle' | 'recording' | 'transcribing'>('idle')
   const [speechError, setSpeechError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const dictationStreamRef = useRef<MediaStream | null>(null)
   const composerRef = useRef<AdminAiComposerFieldHandle | null>(null)
   const [honestyMode, setHonestyMode] = useState<AdminChatHonestyMode>('strict')
   const [energyPreset, setEnergyPreset] = useState<AdminChatEnergyPreset>('default')
@@ -920,6 +1121,9 @@ export default function AdminAiAssistant({
   const assistantPrefsLoaded = useRef(false)
   const anchorsPanelLoaded = useRef(false)
   const [anchorsPanelOpen, setAnchorsPanelOpen] = useState(false)
+  const polishModeLoaded = useRef(false)
+  const polishAutoHold = useRef(false)
+  const [polishMode, setPolishMode] = useState<StrategyPackPolishMode>('suggest')
   const [chatSettingsMenuOpen, setChatSettingsMenuOpen] = useState(false)
   const chatSettingsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -944,10 +1148,10 @@ export default function AdminAiAssistant({
     lastRunbookGraph,
     pendingAction,
     execPreviewDiffBaseline,
-    anchorSuggestions,
     preferStrategyPackRefine,
     threadMemory,
     checkpoints,
+    armedPrompts,
   } = activeSession
   const picks = elementPicks ?? []
   const linkChips = links ?? []
@@ -959,8 +1163,142 @@ export default function AdminAiAssistant({
   attachmentsLiveRef.current = attachments
   picksLiveRef.current = picks
   linksLiveRef.current = linkChips
+  const sendArmedPromptRef = useRef<(text: string) => void>(() => undefined)
+  const firingArmedIdRef = useRef<string | null>(null)
+  sendArmedPromptRef.current = (text: string) => {
+    void sendComposerTurn(text, false)
+  }
 
   const visibleMessages = useMemo(() => sanitizeAdminChatMessagesForDisplay(messages), [messages])
+
+  const threadDistanceFromBottom = useCallback((el: HTMLElement) => {
+    return el.scrollHeight - el.scrollTop - el.clientHeight
+  }, [])
+
+  const earlierUserMessageTop = useCallback((el: HTMLElement) => {
+    const pad = Number.parseFloat(getComputedStyle(el).paddingTop) || 0
+    const viewTop = el.getBoundingClientRect().top + pad
+    const nodes = el.querySelectorAll<HTMLElement>('[data-thread-user-message]')
+    let target: number | null = null
+    for (const node of nodes) {
+      const top = el.scrollTop + (node.getBoundingClientRect().top - viewTop)
+      if (top < el.scrollTop - 28) target = top
+      else break
+    }
+    return target
+  }, [])
+
+  const jumpToPreviousUserMessage = useCallback(() => {
+    const el = threadScrollRef.current
+    if (!el) return
+    const top = earlierUserMessageTop(el)
+    if (top == null) return
+    threadStickRef.current = false
+    el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+  }, [earlierUserMessageTop])
+
+  const jumpThreadToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const el = threadScrollRef.current
+    if (!el) return
+    threadStickRef.current = true
+    threadScrollLockRef.current = true
+    el.scrollTo({ top: el.scrollHeight, behavior })
+    const release = () => {
+      threadScrollLockRef.current = false
+      setThreadAwayFromBottom(threadDistanceFromBottom(el) > 48)
+    }
+    if (behavior === 'smooth') {
+      const started = performance.now()
+      const tick = () => {
+        if (!threadScrollLockRef.current) return
+        const away = threadDistanceFromBottom(el) > 48
+        if (!away || performance.now() - started > 1500) {
+          release()
+          return
+        }
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    } else {
+      requestAnimationFrame(release)
+    }
+  }, [threadDistanceFromBottom])
+
+  useEffect(() => {
+    const el = threadScrollRef.current
+    if (!el) return
+
+    const publishAway = () => {
+      const top = el.scrollTop
+      const previousTop = threadScrollTopRef.current
+      threadScrollTopRef.current = top
+      const away = threadDistanceFromBottom(el) > 48
+      if (threadScrollLockRef.current) {
+        if (top + 2 < previousTop) {
+          threadStickRef.current = false
+          threadScrollLockRef.current = false
+        }
+      } else {
+        threadStickRef.current = !away
+      }
+      setThreadAwayFromBottom((current) => (current === away ? current : away))
+      const earlier = earlierUserMessageTop(el) != null
+      setThreadHasEarlierUserMessage((current) => (current === earlier ? current : earlier))
+    }
+
+    const followThread = () => {
+      if (!threadStickRef.current) {
+        publishAway()
+        return
+      }
+      if (threadDistanceFromBottom(el) > 1) {
+        threadScrollLockRef.current = true
+        el.scrollTop = el.scrollHeight
+        threadScrollTopRef.current = el.scrollTop
+        requestAnimationFrame(() => {
+          threadScrollLockRef.current = false
+        })
+      }
+      setThreadAwayFromBottom(false)
+    }
+
+    threadStickRef.current = threadDistanceFromBottom(el) <= 48
+    publishAway()
+    el.addEventListener('scroll', publishAway, { passive: true })
+    const resizeObserver = new ResizeObserver(() => followThread())
+    const watchChildren = () => {
+      resizeObserver.disconnect()
+      resizeObserver.observe(el)
+      for (const child of el.children) resizeObserver.observe(child)
+    }
+    watchChildren()
+    const mutationObserver = new MutationObserver(() => {
+      watchChildren()
+      followThread()
+    })
+    mutationObserver.observe(el, { childList: true, subtree: true, characterData: true })
+
+    return () => {
+      el.removeEventListener('scroll', publishAway)
+      resizeObserver.disconnect()
+      mutationObserver.disconnect()
+    }
+  }, [open, activeSessionId, threadDistanceFromBottom, earlierUserMessageTop])
+
+  useEffect(() => {
+    if (!sending) return
+    threadStickRef.current = true
+    const el = threadScrollRef.current
+    if (!el) return
+    threadScrollLockRef.current = true
+    el.scrollTop = el.scrollHeight
+    threadScrollTopRef.current = el.scrollTop
+    const frame = requestAnimationFrame(() => {
+      threadScrollLockRef.current = false
+      setThreadAwayFromBottom(false)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [sending])
   const actionChoiceHostId = useMemo(() => {
     for (let i = visibleMessages.length - 1; i >= 0; i -= 1) {
       const message = visibleMessages[i]
@@ -1031,6 +1369,47 @@ export default function AdminAiAssistant({
   const studioMissionReleaseId = pageCtx?.pageContext?.studio?.releaseId
   const studioReleaseTitle = pageCtx?.pageContext?.studio?.title
   const studioActiveStep = pageCtx?.pageContext?.studio?.activeStep
+  const anchorIdeas = useMemo(() => {
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
+    const assistants = messages.filter((message) => message.role === 'assistant')
+    const latestAssistant = assistants[assistants.length - 1]?.content ?? ''
+    const recentAssistant = assistants
+      .slice(-4)
+      .map((message) => message.content)
+      .join('\n')
+    return suggestThreadAnchors({
+      lastUserText: lastUser.slice(0, 2000),
+      recentAssistantText: recentAssistant.slice(-6000),
+      latestAssistantText: latestAssistant.slice(-2500),
+      goal: threadMemory?.goal,
+      releaseTitle: threadMemory?.releaseTitle || studioReleaseTitle,
+      deskLabel: threadMemory?.deskLabel,
+      activeStep: studioActiveStep,
+      notes: threadMemory?.notes,
+      existingAnchors: anchors,
+    })
+  }, [messages, threadMemory, studioReleaseTitle, studioActiveStep, anchors])
+
+  const workingPhraseContext = useMemo(() => {
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
+    return [
+      threadMemory?.goal,
+      threadMemory?.deskLabel,
+      threadMemory?.releaseTitle || studioReleaseTitle,
+      lastUser.slice(0, 400),
+    ]
+      .filter((part) => part?.trim())
+      .join('\n')
+  }, [messages, threadMemory, studioReleaseTitle])
+
+  const polishCue = useMemo(() => {
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
+    return strategyPackPolishCue({
+      agentMode,
+      planTools: pendingPlanSteps.map((step) => step.tool),
+      texts: [input, lastUser.slice(0, 500), threadMemory?.goal ?? ''],
+    })
+  }, [messages, agentMode, pendingPlanSteps, input, threadMemory?.goal])
 
   const mergeIntoActive = useCallback(
     (patch: Partial<AdminChatSession> | ((s: AdminChatSession) => Partial<AdminChatSession>)) => {
@@ -1261,6 +1640,40 @@ export default function AdminAiAssistant({
     mergeIntoActive({ skillShiftNotice: null })
   }, [mergeIntoActive])
 
+  const openReplyInNewChat = useCallback(
+    (raw: string) => {
+      const content = raw.trim()
+      if (!content) return
+      const id = createMessageId()
+      const memory = threadMemory ?? emptyThreadMemory()
+      const session = {
+        ...createEmptySession(id),
+        title: replyThreadTitle(content),
+        updatedAt: Date.now(),
+        messages: [{ id: createMessageId(), role: 'assistant' as const, content }],
+        threadMemory: {
+          ...emptyThreadMemory(),
+          goal: memory.goal,
+          releaseId: memory.releaseId,
+          releaseTitle: memory.releaseTitle,
+          deskUrl: memory.deskUrl,
+          deskLabel: memory.deskLabel,
+          updatedAt: Date.now(),
+        },
+      }
+      setSessions((prev) => {
+        const next = [...prev, session]
+        if (next.length <= MAX_CHAT_SESSIONS) return next
+        const dropId = [...prev].sort((a, b) => a.updatedAt - b.updatedAt)[0]!.id
+        releaseAdminBrowserChat(dropId)
+        return next.filter((row) => row.id !== dropId)
+      })
+      setActiveSessionId(id)
+      setShowSessionHistory(false)
+    },
+    [threadMemory],
+  )
+
   const startNewChat = useCallback(() => {
     const id = createMessageId()
     setSessions((prev) => {
@@ -1279,6 +1692,67 @@ export default function AdminAiAssistant({
     setSessions((prev) => (prev.length <= 1 ? prev : prev.filter((s) => s.id !== id)))
     releaseAdminBrowserChat(id)
   }, [])
+
+  useEffect(() => {
+    setSessions((prev) => {
+      let changed = false
+      const next = prev.map((session) => {
+        if (!(session.attachedReleaseIds ?? []).length) return session
+        const memory = session.threadMemory ?? emptyThreadMemory()
+        const releaseTitle = memory.releaseTitle?.trim()
+        if (!releaseTitle) return session
+        const userLines = session.messages.filter((message) => message.role === 'user').map((message) => message.content)
+        const title = attachedThreadTitle({
+          releaseTitle,
+          goal: memory.goal,
+          texts: [...memory.notes, ...userLines],
+        })
+        if (session.title === title) return session
+        changed = true
+        return { ...session, title, updatedAt: Date.now() }
+      })
+      return changed ? next : prev
+    })
+  }, [sessions])
+
+  const setSessionReleaseAttachment = useCallback(
+    (sessionId: string, releaseId: string, releaseTitle: string | null, attach: boolean) => {
+      setSessions((prev) =>
+        prev.map((session) => {
+          if (session.id !== sessionId) return session
+          const current = session.attachedReleaseIds ?? []
+          const attachedReleaseIds = attach
+            ? current.includes(releaseId)
+              ? current
+              : [...current, releaseId].slice(0, 12)
+            : current.filter((id) => id !== releaseId)
+          const memory = session.threadMemory ?? emptyThreadMemory()
+          const userLines = session.messages.filter((message) => message.role === 'user').map((message) => message.content)
+          const namedRelease = releaseTitle || memory.releaseTitle || 'Release'
+          return {
+            ...session,
+            attachedReleaseIds,
+            title: attach
+              ? attachedThreadTitle({
+                  releaseTitle: namedRelease,
+                  goal: memory.goal,
+                  texts: [...memory.notes, ...userLines],
+                })
+              : questionThreadTitle(userLines),
+            threadMemory: attach
+              ? {
+                  ...memory,
+                  releaseId: memory.releaseId || releaseId,
+                  releaseTitle: memory.releaseTitle || releaseTitle || memory.releaseTitle,
+                }
+              : memory,
+            updatedAt: Date.now(),
+          }
+        }),
+      )
+    },
+    [],
+  )
 
   useEffect(() => {
     if (sessions.length > 0 && !sessions.some((s) => s.id === activeSessionId)) {
@@ -1343,6 +1817,12 @@ export default function AdminAiAssistant({
             ),
             checkpoints: Array.isArray((s as { checkpoints?: unknown }).checkpoints)
               ? ((s as { checkpoints: AdminAiCheckpoint[] }).checkpoints || []).slice(-12)
+              : [],
+            armedPrompts: sanitizeArmedPrompts((s as { armedPrompts?: unknown }).armedPrompts),
+            attachedReleaseIds: Array.isArray((s as { attachedReleaseIds?: unknown }).attachedReleaseIds)
+              ? (s as { attachedReleaseIds: unknown[] }).attachedReleaseIds
+                  .filter((id): id is string => typeof id === 'string' && id.length > 0)
+                  .slice(0, 12)
               : [],
             priorityQuickStart: sanitizeRotatingQuickStartState(s.priorityQuickStart),
             creativeQuickStart: sanitizeRotatingQuickStartState(s.creativeQuickStart),
@@ -1432,6 +1912,8 @@ export default function AdminAiAssistant({
     if (typeof window === 'undefined') return
     if (!assistantPrefsLoaded.current) {
       try {
+        const llm = localStorage.getItem(ADMIN_AI_LLM_LS)
+        if (isChatProviderChoice(llm)) setChatProvider(llm)
         const h = localStorage.getItem(ADMIN_AI_HONESTY_LS)
         if (h === 'relaxed' || h === 'strict') setHonestyMode(h)
         const e = localStorage.getItem(ADMIN_AI_ENERGY_LS)
@@ -1451,6 +1933,43 @@ export default function AdminAiAssistant({
       /* quota */
     }
   }, [honestyMode, energyPreset])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!polishModeLoaded.current) {
+      try {
+        const stored = localStorage.getItem(PACK_POLISH_MODE_LS)
+        if (stored === 'suggest' || stored === 'auto' || stored === 'always' || stored === 'off') {
+          setPolishMode(stored)
+        }
+      } catch {
+        /* keep */
+      }
+      polishModeLoaded.current = true
+      return
+    }
+    try {
+      localStorage.setItem(PACK_POLISH_MODE_LS, polishMode)
+    } catch {
+      /* quota */
+    }
+  }, [polishMode])
+
+  useEffect(() => {
+    if (!polishModeLoaded.current) return
+    if (polishMode === 'always') {
+      if (!preferStrategyPackRefine) setPreferStrategyPackRefine(true)
+      return
+    }
+    if (polishMode === 'off') {
+      if (preferStrategyPackRefine) setPreferStrategyPackRefine(false)
+      return
+    }
+    if (!polishCue) polishAutoHold.current = false
+    if (polishMode === 'auto' && polishCue && !polishAutoHold.current && !preferStrategyPackRefine) {
+      setPreferStrategyPackRefine(true)
+    }
+  }, [polishMode, polishCue, preferStrategyPackRefine])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1521,6 +2040,7 @@ export default function AdminAiAssistant({
             })),
           })
         )
+        notifyChatThreadsChanged()
       } catch {
         /* quota */
       }
@@ -1561,6 +2081,28 @@ export default function AdminAiAssistant({
   }, [enabled])
 
   useEffect(() => {
+    if (!tabMenu) return
+    function onDown(e: MouseEvent) {
+      if (e.button !== 0) return
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-admin-ai-tab-menu]')) return
+      setTabMenu(null)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setTabMenu(null)
+    }
+    const timer = window.setTimeout(() => {
+      document.addEventListener('mousedown', onDown)
+    }, 0)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [tabMenu])
+
+  useEffect(() => {
     if (!gripDockMenu) return
 
     function onDown(e: MouseEvent) {
@@ -1595,7 +2137,7 @@ export default function AdminAiAssistant({
     }
 
     function onPrompt(event: Event) {
-      const detail = (event as CustomEvent<{ message?: string; agentMode?: string }>).detail
+      const detail = (event as CustomEvent<{ message?: string; agentMode?: string; submit?: boolean }>).detail
       setEnabled(true)
       setOpen(true)
       if (
@@ -1609,12 +2151,27 @@ export default function AdminAiAssistant({
         setAgentMode(detail.agentMode)
       }
       if (typeof detail?.message === 'string' && detail.message.trim()) {
-        setInput(detail.message.trim())
+        const message = detail.message.trim()
+        if (detail.submit) {
+          setQueuedExec(message)
+          setInput('')
+        } else {
+          setInput(message)
+        }
       }
+    }
+
+    function onFocusSession(event: Event) {
+      const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId
+      if (!sessionId) return
+      setEnabled(true)
+      setOpen(true)
+      setActiveSessionId(sessionId)
     }
 
     window.addEventListener('admin-ai:toggle', onToggle as EventListener)
     window.addEventListener('admin-ai:open', onOpen as EventListener)
+    window.addEventListener(ADMIN_AI_FOCUS_SESSION_EVENT, onFocusSession as EventListener)
     function onApplyField(event: Event) {
       const detail = (event as CustomEvent<{ fieldId?: string; value?: string }>).detail
       if (!detail?.fieldId || typeof detail.value !== 'string') return
@@ -1632,10 +2189,18 @@ export default function AdminAiAssistant({
     return () => {
       window.removeEventListener('admin-ai:toggle', onToggle as EventListener)
       window.removeEventListener('admin-ai:open', onOpen as EventListener)
+      window.removeEventListener(ADMIN_AI_FOCUS_SESSION_EVENT, onFocusSession as EventListener)
       window.removeEventListener('admin-ai:prompt', onPrompt as EventListener)
       window.removeEventListener('admin-ai:apply-field', onApplyField as EventListener)
     }
-  }, [setInput])
+  }, [setInput, setQueuedExec])
+
+  useEffect(() => {
+    if (!enabled || sending || !queuedExec) return
+    const message = queuedExec
+    setQueuedExec(null)
+    void sendComposerTurnRef.current(message, false)
+  }, [enabled, sending, queuedExec])
 
   useEffect(() => {
     async function loadSkills() {
@@ -1661,6 +2226,7 @@ export default function AdminAiAssistant({
           'query_sergikai_chat',
           'query_crowe_creative',
           'audit_music_contract',
+          'audit_music_books',
           'query_release_studio_snapshot',
           'query_studio_command_center',
           'patch_release_marketing_copy',
@@ -1669,6 +2235,7 @@ export default function AdminAiAssistant({
           'run_meta_promo_pipeline',
           'admin_browser',
           'query_platform_growth_snapshot',
+          'read_workspace',
         ]
         setDisabledTools(dt.filter((t): t is ExecuteTool => known.includes(t as ExecuteTool)))
       } catch {
@@ -1691,9 +2258,15 @@ export default function AdminAiAssistant({
         if (Array.isArray(body.providers)) {
           setProviderCatalog(body.providers)
         }
-        if (body.assistantDefaultLlm === 'auto' || body.assistantDefaultLlm === 'anthropic' || body.assistantDefaultLlm === 'openai' || body.assistantDefaultLlm === 'ollama' || body.assistantDefaultLlm === 'crowelogic') {
-          setChatProvider(body.assistantDefaultLlm)
+        const saved = body.assistantDefaultLlm
+        let localChoice: string | null = null
+        try {
+          localChoice = window.localStorage.getItem(ADMIN_AI_LLM_LS)
+        } catch {
+          localChoice = null
         }
+        if (chatProviderTouchedRef.current || isChatProviderChoice(localChoice)) return
+        if (isChatProviderChoice(saved)) setChatProvider(saved)
       } catch {
         setProviderCatalog([])
       }
@@ -2086,11 +2659,13 @@ export default function AdminAiAssistant({
   useEffect(() => {
     return () => {
       try {
-        recognitionRef.current?.stop()
+        mediaRecorderRef.current?.stop()
       } catch {
         /* ignore */
       }
-      recognitionRef.current = null
+      dictationStreamRef.current?.getTracks().forEach((track) => track.stop())
+      dictationStreamRef.current = null
+      mediaRecorderRef.current = null
     }
   }, [])
 
@@ -2140,6 +2715,91 @@ export default function AdminAiAssistant({
       }
     })
   }, [input, picks, attachments, linkChips])
+
+  const composerGuide = useMemo(() => {
+    const steps = heldApprovalSteps()
+    const missing = steps.flatMap((step) => getMissingRequiredFields(step.tool, step.payload))
+    const submit = missing.length ? undefined : buildApprovalRows(steps).find((row) => row.phase === 'submit')
+    const studio = pageCtx?.pageContext?.studio
+    const guide = {
+      messages,
+      heldWrite: submit?.label ?? null,
+      goal: threadMemory?.goal ?? null,
+      releaseTitle: threadMemory?.releaseTitle || studioReleaseTitle || null,
+      studio: studio
+        ? {
+            title: studio.title,
+            nextAction: studio.nextAction,
+            blockers: studio.blockers,
+            hasArtwork: studio.hasArtwork,
+            hasGenre: studio.hasGenre,
+            trackCount: studio.trackCount,
+            releaseDate: studio.releaseDate,
+            readinessScore: studio.readinessScore,
+          }
+        : null,
+      focus: pageFocus
+        ? {
+            fieldLabel: pageFocus.fieldLabel,
+            fieldKey: pageFocus.fieldKey,
+            fieldType: pageFocus.fieldType,
+            value: pageFocus.value,
+            section: pageFocus.section,
+            entityLabel: pageFocus.entityLabel,
+            hint: pageFocus.hint,
+          }
+        : null,
+    }
+    return {
+      suggestion: composerGhostSuggestion(guide),
+      followUps: recommendReplyFollowUps(guide),
+    }
+  }, [messages, pendingPlanSteps, pendingAction, skills, threadMemory, pageFocus, pageCtx?.pageContext?.studio, studioReleaseTitle])
+  const composerSuggestion = composerGuide.suggestion
+  const replyFollowUps = composerGuide.followUps
+
+  useEffect(() => {
+    if (!sessionsHydrated.current) return
+    const last = [...messages].reverse().find((message) => message.role === 'assistant' && message.content.trim())
+    if (!last) return
+    const plan = planArmedPrompt(last.content)
+    if (!plan) return
+    const existing = armedPrompts ?? []
+    if (existing.some((row) => row.prompt === plan.prompt && row.runAt === plan.runAt)) return
+    mergeIntoActive({
+      armedPrompts: [
+        ...existing,
+        {
+          id: createMessageId(),
+          prompt: plan.prompt,
+          runAt: plan.runAt,
+          whenLabel: plan.whenLabel,
+          status: 'armed' as const,
+        },
+      ].slice(-MAX_STORED_ARMED_PROMPTS),
+    })
+  }, [messages, armedPrompts, mergeIntoActive])
+
+  useEffect(() => {
+    if (!sessionsHydrated.current) return
+    const tick = () => {
+      const due = (armedPrompts ?? []).find((row) => row.status === 'armed' && row.runAt <= Date.now())
+      if (!due || firingArmedIdRef.current) return
+      firingArmedIdRef.current = due.id
+      mergeIntoActive((session) => ({
+        armedPrompts: (session.armedPrompts ?? []).map((row) =>
+          row.id === due.id ? { ...row, status: 'fired' as const } : row,
+        ),
+      }))
+      sendArmedPromptRef.current(due.prompt)
+      window.setTimeout(() => {
+        if (firingArmedIdRef.current === due.id) firingArmedIdRef.current = null
+      }, 5000)
+    }
+    tick()
+    const timer = window.setInterval(tick, 30_000)
+    return () => window.clearInterval(timer)
+  }, [armedPrompts, activeSessionId, mergeIntoActive])
 
   const lastRunId = useMemo(() => {
     const fromPending = pendingAction?.runId
@@ -2287,62 +2947,117 @@ export default function AdminAiAssistant({
     )
   }
 
-  function speechRecognitionCtor(): (new () => SpeechRecognition) | null {
-    if (typeof window === 'undefined') return null
-    return (window.SpeechRecognition || window.webkitSpeechRecognition) as (new () => SpeechRecognition) | null
+  function mailComposeExcerpt(): string {
+    const nodes = [...document.querySelectorAll('textarea[aria-label], input[aria-label]')]
+    const lines: string[] = []
+    for (const node of nodes) {
+      if (!(node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement)) continue
+      const label = node.getAttribute('aria-label') || ''
+      if (!/^(Press title|Press for .+|Promo title|Promo for .+|Cover title|Link label)$/.test(label)) continue
+      const value = node.value.trim()
+      if (!value) continue
+      lines.push(`${label}:\n${value}`)
+    }
+    return lines.join('\n\n')
   }
 
-  function toggleDictation() {
+  function attachedComposerContext(): string {
+    const value = composerValueNow()
+    if (!chipsIn(value).length) return ''
+    const picksNow = picksLiveRef.current
+    const aboutMail = picksNow.some((pick) => /message|press|promo/i.test(`${pick.label}\n${pick.text}`))
+    const live = aboutMail ? mailComposeExcerpt() : ''
+    if (live) return live
+    return composeComposerMessage(value, attachmentsLiveRef.current, picksNow, linksLiveRef.current)
+  }
+
+  function appendSpokenText(transcript: string) {
+    const next = appendDictationText(composerValueNow(), transcript)
+    inputLiveRef.current = next
+    composerRef.current?.expectCaretAt(next.length)
+    setInput(next)
+  }
+
+  function stopDictationTracks() {
+    dictationStreamRef.current?.getTracks().forEach((track) => track.stop())
+    dictationStreamRef.current = null
+  }
+
+  async function toggleDictation() {
     setSpeechError(null)
-    const Ctor = speechRecognitionCtor()
-    if (!Ctor) {
-      setSpeechError('Talk-to-text needs Chrome or Edge (Web Speech API).')
+    if (dictationPhase === 'transcribing') return
+    if (dictationPhase === 'recording') {
+      const rec = mediaRecorderRef.current
+      if (rec && rec.state !== 'inactive') rec.stop()
       return
     }
-    if (isListening) {
-      try {
-        recognitionRef.current?.stop()
-      } catch {
-        /* ignore */
-      }
-      setIsListening(false)
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setSpeechError('This browser cannot record the microphone.')
       return
     }
 
-    const rec = new Ctor()
-    rec.lang = 'en-US'
-    rec.continuous = true
-    rec.interimResults = true
-    rec.onresult = (event: SpeechRecognitionEvent) => {
-      let chunk = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        chunk += event.results[i]?.[0]?.transcript ?? ''
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setSpeechError('Allow the microphone to use talk to text.')
+      return
+    }
+
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : ''
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+    const chunks: Blob[] = []
+    rec.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data)
+    }
+    rec.onstop = () => {
+      stopDictationTracks()
+      mediaRecorderRef.current = null
+      const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' })
+      if (blob.size < 800) {
+        setDictationPhase('idle')
+        setSpeechError('No speech captured. Talk, then tap the mic again.')
+        return
       }
-      if (!chunk) return
-      setInput((prev) => `${prev}${chunk}`)
+      const ext = (rec.mimeType || '').includes('mp4') ? 'm4a' : 'webm'
+      const file = new File([blob], `dictation.${ext}`, { type: blob.type || 'audio/webm' })
+      setDictationPhase('transcribing')
+      void transcribeWithServer(file)
+        .then((text) => {
+          appendSpokenText(text)
+          setSpeechError(null)
+        })
+        .catch((error: unknown) => {
+          setSpeechError(getErrorMessage(error))
+        })
+        .finally(() => setDictationPhase('idle'))
     }
-    rec.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setSpeechError(event.error || 'speech error')
-      setIsListening(false)
-    }
-    rec.onend = () => {
-      setIsListening(false)
-      recognitionRef.current = null
-    }
-    recognitionRef.current = rec
+    dictationStreamRef.current = stream
+    mediaRecorderRef.current = rec
     try {
       rec.start()
-      setIsListening(true)
-    } catch (e) {
-      setSpeechError(getErrorMessage(e))
-      setIsListening(false)
+      setDictationPhase('recording')
+    } catch (error: unknown) {
+      stopDictationTracks()
+      mediaRecorderRef.current = null
+      setDictationPhase('idle')
+      setSpeechError(getErrorMessage(error))
     }
   }
 
   async function sendChatMessage(
     content: string,
     skillId?: string,
-    options?: { onToolStep?: (step: AdminAiAgentToolStep) => void },
+    options?: {
+      onToolStep?: (step: AdminAiAgentToolStep) => void
+      onReplyDelta?: (text: string, round: number) => void
+    },
   ) {
     const agentEnabled = agentMode !== 'chat'
     const payload: {
@@ -2358,14 +3073,16 @@ export default function AdminAiAssistant({
       stream?: boolean
       threadMemory?: AdminAiThreadMemory
       chatSessionId?: string
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>
     } = {
       message: content,
       honestyMode,
       energyPreset,
       agent: agentEnabled,
-      stream: agentEnabled,
-      threadMemory: threadMemory ?? emptyThreadMemory(),
+      stream: true,
+      threadMemory: threadMemoryWithAnchors(threadMemory ?? emptyThreadMemory(), anchors),
       chatSessionId: activeSessionId,
+      history: clipChatHistory(messages),
     }
     if (chatProvider !== 'auto') {
       payload.provider = chatProvider
@@ -2380,16 +3097,38 @@ export default function AdminAiAssistant({
       }
     }
     if (pageCtx?.pageContext) {
-      payload.pageContext = pageCtx.pageContext
+      const formFields = collectSignedInFormFields()
+      payload.pageContext = formFields.length
+        ? { ...pageCtx.pageContext, formFields }
+        : pageCtx.pageContext
     }
-    const response = await adminAiFetch('/api/admin/ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    const postChat = () =>
+      adminAiFetch('/api/admin/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+    let sessionStillAdmin = false
+    let response = await postChat()
+    if (response.status === 401) {
+      const sessionRes = await adminAiFetch('/api/auth/session').catch(() => null)
+      const session = sessionRes?.ok ? await sessionRes.json().catch(() => null) : null
+      sessionStillAdmin = Boolean(session?.authenticated && session?.isAdmin)
+      if (sessionStillAdmin) {
+        response = await postChat()
+      }
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Failed to contact AI chat API.' }))
+      if (response.status === 401) {
+        throw new Error(
+          sessionStillAdmin
+            ? 'Chat could not confirm the admin session. Send this message once more.'
+            : 'Your admin session expired. Sign in again, then send this message once more.'
+        )
+      }
       throw new Error(errorData.error || 'Failed to contact AI chat API.')
     }
 
@@ -2410,10 +3149,12 @@ export default function AdminAiAssistant({
           try {
             const row = JSON.parse(line) as {
               type?: string
-              event?: { type?: string; step?: AdminAiAgentToolStep }
+              event?: { type?: string; step?: AdminAiAgentToolStep; text?: string; round?: number }
               error?: string
             } & ChatResponse
-            if (row.type === 'event' && row.event?.step) {
+            if (row.type === 'event' && row.event?.type === 'reply_delta' && row.event.text) {
+              options?.onReplyDelta?.(row.event.text, row.event.round ?? 0)
+            } else if (row.type === 'event' && row.event?.step) {
               options?.onToolStep?.(row.event.step)
             } else if (row.type === 'done') {
               finalPayload = row
@@ -2519,7 +3260,7 @@ export default function AdminAiAssistant({
 
   async function previewFullRunbookFromGraph(steps: PlanStep[]) {
     if (!steps.length) return
-    const mergedSteps = mergeStrategyPackRefinePayload(steps, preferStrategyPackRefine)
+    const mergedSteps = withStrategyPackPolish(steps, preferStrategyPackRefine)
     const missingByStep = mergedSteps.map((step) => ({
       tool: step.tool,
       missing: getMissingRequiredFields(step.tool, step.payload),
@@ -2581,9 +3322,11 @@ export default function AdminAiAssistant({
 
   async function regeneratePendingPreview(mode: 'polish' | 'deterministic') {
     if (!pendingPlanSteps.length) return
+    const polish = mode === 'polish'
+    setPreferStrategyPackRefine(polish)
     setSending(true)
     try {
-      const merged = applyStrategyPackPreviewMode(pendingPlanSteps, mode)
+      const merged = withStrategyPackPolish(pendingPlanSteps, polish)
       const first = merged[0]
       const result = await runExecute({
         tool: first.tool,
@@ -2593,15 +3336,19 @@ export default function AdminAiAssistant({
       })
       setPendingPlanSteps(merged)
       setPendingAction(result)
+      const polishLive = readStrategyPackPolish(strategyPackPreviewRows(result)[0]?.preview)
       setMessages((prev) => [
         ...prev,
         {
           id: nextId(),
           role: 'assistant',
-          content:
-            mode === 'polish'
-              ? 'Preview regenerated with LLM polish (dry-run).'
-              : 'Preview regenerated (deterministic pack only).',
+          content: !polish
+            ? 'Preview regenerated. Scaffold only.'
+            : polishLive?.state === 'failed'
+              ? `Preview regenerated. Scaffold kept. ${polishLive.note}`
+              : polishLive?.state === 'applied'
+                ? `Preview regenerated. ${polishLive.note}`
+                : 'Preview regenerated.',
         },
         ...strategyPackEmbedChatMessagesFromResult(result),
       ])
@@ -2646,7 +3393,8 @@ export default function AdminAiAssistant({
   function getMissingRequiredFields(tool: ExecuteTool, payload: Record<string, unknown>) {
     return missingRequiredSkillFields(
       getSkillByTool(tool),
-      applyKnownPrimaryGoal(tool, payload, knownGoalContext())
+      applyKnownPrimaryGoal(tool, payload, knownGoalContext()),
+      tool
     )
   }
 
@@ -2656,8 +3404,8 @@ export default function AdminAiAssistant({
     basePayload: Record<string, unknown>,
   ): Promise<AssistantActionResponse | undefined> {
     let execPayload = applyKnownPrimaryGoal(tool, basePayload, knownGoalContext())
-    if (preferStrategyPackRefine && tool === 'draft_product_strategy_pack') {
-      execPayload = { ...execPayload, refineWithLlm: true }
+    if (tool === 'draft_product_strategy_pack') {
+      execPayload = withStrategyPackPolish([{ tool, payload: execPayload }], preferStrategyPackRefine)[0]!.payload
     }
     const { plan, graph } = await planExecution(tool, execPayload)
     if (plan.skill) {
@@ -2689,7 +3437,7 @@ export default function AdminAiAssistant({
     }
 
     setPreflightSuggestion(null)
-    const graphSteps = mergeStrategyPackRefinePayload(graph.steps || [], preferStrategyPackRefine)
+    const graphSteps = withStrategyPackPolish(graph.steps || [], preferStrategyPackRefine)
     setPendingPlanSteps(graphSteps)
     setLastRunbookGraph(graph)
     const result = await runExecute({
@@ -2828,21 +3576,39 @@ export default function AdminAiAssistant({
           : isAgentSkillMode(agentMode)
             ? agentMode
             : undefined
-      mergeIntoActive({ anchorSuggestions: suggestAnchorSnippetsFromUserText(plain) })
+      mergeIntoActive({ anchorSuggestions: [] })
       const liveSteps: AdminAiAgentToolStep[] = []
       const streamingId = nextId()
+      const placeholder = agentMode === 'chat' ? '…' : 'Working…'
+      replyStreamRef.current = { round: -1, raw: '' }
+      setStreamingMessageId(streamingId)
       setBrowserLiveNote('In progress: Assistant is working on this chat.')
       setMessages((prev) => [
         ...prev,
         {
           id: streamingId,
           role: 'assistant',
-          content: agentMode === 'chat' ? '…' : 'Working…',
+          content: placeholder,
           toolSteps: [],
         },
       ])
       const result = await sendChatMessage(chatBody, chatSkillId, {
+        onReplyDelta: (text, round) => {
+          const stream = replyStreamRef.current
+          if (stream.round !== round) {
+            stream.round = round
+            stream.raw = ''
+          }
+          stream.raw += text
+          const visible = visibleStreamingReply(stream.raw)
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingId ? { ...m, content: visible.trim() ? visible : placeholder } : m,
+            ),
+          )
+        },
         onToolStep: (step) => {
+          followWorkspaceOnOpenPage(step)
           const idx = liveSteps.findIndex((s) => s.id === step.id)
           if (idx >= 0) liveSteps[idx] = step
           else liveSteps.push(step)
@@ -2850,10 +3616,11 @@ export default function AdminAiAssistant({
           if (line) {
             setBrowserLiveNote(step.status === 'error' ? `Unfinished: ${line}` : `In progress: ${line}`)
           }
+          const visible = visibleStreamingReply(replyStreamRef.current.raw)
           setMessages((prev) =>
             prev.map((m) =>
               m.id === streamingId
-                ? { ...m, content: 'Working…', toolSteps: [...liveSteps] }
+                ? { ...m, content: visible.trim() ? visible : placeholder, toolSteps: [...liveSteps] }
                 : m,
             ),
           )
@@ -2912,21 +3679,29 @@ export default function AdminAiAssistant({
       )
       setMessages((prev) => {
         const errText = `Error: ${getErrorMessage(error)}`
-        const workingIdx = [...prev]
-          .reverse()
-          .findIndex((m) => m.role === 'assistant' && (m.content === 'Working…' || m.content === '…'))
-        if (workingIdx >= 0) {
-          const idx = prev.length - 1 - workingIdx
-          return prev.map((m, i) => (i === idx ? { ...m, content: errText, toolSteps: m.toolSteps } : m))
+        const assistantAt = [...prev].reverse().findIndex((m) => m.role === 'assistant')
+        const userAt = [...prev].reverse().findIndex((m) => m.role === 'user')
+        if (assistantAt >= 0 && (userAt < 0 || assistantAt < userAt)) {
+          const idx = prev.length - 1 - assistantAt
+          const current = prev[idx]!
+          const partial = current.content === 'Working…' || current.content === '…' ? '' : current.content
+          return prev.map((m, i) =>
+            i === idx
+              ? { ...m, content: partial ? `${partial}\n\n${errText}` : errText, toolSteps: m.toolSteps }
+              : m,
+          )
         }
         return [...prev, { id: nextId(), role: 'assistant', content: errText }]
       })
     } finally {
       sendLockRef.current = false
+      setStreamingMessageId(null)
       setBrowserLiveNote(null)
       setSending(false)
     }
   }
+
+  sendComposerTurnRef.current = sendComposerTurn
 
   function settleBrowserHold(sessionId: string, hold: string | null) {
     setBrowserHolds((prev) => {
@@ -2943,6 +3718,18 @@ export default function AdminAiAssistant({
     if (!onRelease && typeof window !== 'undefined') {
       window.location.assign(studioNavigateHref(nav))
     }
+  }
+
+  function followWorkspaceOnOpenPage(step: AdminAiAgentToolStep) {
+    if (step.status !== 'done' || step.tool !== 'admin_browser') return
+    const action = String(step.payload.action || '')
+    if (action !== 'open' && action !== 'navigate') return
+    const workspace = firstPartyWorkspaceFromUrl(typeof step.payload.url === 'string' ? step.payload.url : '')
+    if (!workspace?.releaseId) return
+    applyStudioNav({
+      releaseId: workspace.releaseId,
+      ...(workspace.step ? { step: workspace.step } : {}),
+    })
   }
 
   async function handlePlaybookRun(playbook: AdminAiPlaybook) {
@@ -3070,10 +3857,33 @@ export default function AdminAiAssistant({
       }
 
       const chatSkillId = agentSkillId ?? undefined
-      mergeIntoActive({ anchorSuggestions: suggestAnchorSnippetsFromUserText(userText) })
+      mergeIntoActive({ anchorSuggestions: [] })
+      const streamingId = nextId()
+      const placeholder = 'Working…'
+      replyStreamRef.current = { round: -1, raw: '' }
+      setStreamingMessageId(streamingId)
       setBrowserLiveNote('In progress: Assistant is working on this chat.')
+      setMessages((prev) => [
+        ...prev,
+        { id: streamingId, role: 'assistant', content: placeholder, toolSteps: [] },
+      ])
       const result = await sendChatMessage(userText, chatSkillId, {
+        onReplyDelta: (text, round) => {
+          const stream = replyStreamRef.current
+          if (stream.round !== round) {
+            stream.round = round
+            stream.raw = ''
+          }
+          stream.raw += text
+          const visible = visibleStreamingReply(stream.raw)
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingId ? { ...m, content: visible.trim() ? visible : placeholder } : m,
+            ),
+          )
+        },
         onToolStep: (step) => {
+          followWorkspaceOnOpenPage(step)
           const line = step.summary.replace(/\s+/g, ' ').trim().slice(0, 160)
           if (line) {
             setBrowserLiveNote(step.status === 'error' ? `Unfinished: ${line}` : `In progress: ${line}`)
@@ -3098,7 +3908,9 @@ export default function AdminAiAssistant({
               }
             : null,
       })
-      setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: result.reply }])
+      setMessages((prev) =>
+        prev.map((m) => (m.id === streamingId ? { ...m, content: result.reply } : m)),
+      )
       settleBrowserHold(turnSessionId, result.browserHold ?? null)
       setSessions((prev) => {
         const i = prev.findIndex((s) => s.id === turnSessionId)
@@ -3116,11 +3928,22 @@ export default function AdminAiAssistant({
         turnSessionId,
         `Unfinished: ${getErrorMessage(error).replace(/\s+/g, ' ').trim().slice(0, 160)}. Turn off You drive to hand this page back.`,
       )
-      setMessages((prev) => [
-        ...prev,
-        { id: nextId(), role: 'assistant', content: `Error: ${getErrorMessage(error)}` },
-      ])
+      setMessages((prev) => {
+        const errText = `Error: ${getErrorMessage(error)}`
+        const assistantAt = [...prev].reverse().findIndex((m) => m.role === 'assistant')
+        const userAt = [...prev].reverse().findIndex((m) => m.role === 'user')
+        if (assistantAt >= 0 && (userAt < 0 || assistantAt < userAt)) {
+          const idx = prev.length - 1 - assistantAt
+          const current = prev[idx]!
+          const partial = current.content === 'Working…' || current.content === '…' ? '' : current.content
+          return prev.map((m, i) =>
+            i === idx ? { ...m, content: partial ? `${partial}\n\n${errText}` : errText } : m,
+          )
+        }
+        return [...prev, { id: nextId(), role: 'assistant', content: errText }]
+      })
     } finally {
+      setStreamingMessageId(null)
       setBrowserLiveNote(null)
       setSending(false)
     }
@@ -3312,6 +4135,17 @@ export default function AdminAiAssistant({
           content: result.message || `${row.label} approved and sent.`,
         },
       ])
+      const verifications = (result.results || []).map((item) => item.verification).filter((item) => item != null)
+      const verified = verifications.some((item) => item.matched === false) ? false : verifications.length ? true : null
+      const checklist = noteApprovedWrite(threadMemory?.checklist, { verified })
+      if (checklist || verifications[0]?.summary) {
+        mergeIntoActive({
+          threadMemory: mergeThreadMemory(threadMemory ?? emptyThreadMemory(), {
+            ...(checklist ? { checklist } : {}),
+            ...(verifications[0]?.summary ? { addNote: verifications[0].summary.slice(0, 240) } : {}),
+          }),
+        })
+      }
       dropApprovalSource(row.sourceStepId)
     } catch (error: unknown) {
       setMessages((prev) => [
@@ -3517,8 +4351,26 @@ export default function AdminAiAssistant({
         />
         <StrategyPackPolishToggle
           on={preferStrategyPackRefine}
+          live={readStrategyPackPolish(strategyPackPreviewRows(pendingAction ?? { message: '' })[0]?.preview ?? null)}
+          mode={polishMode}
+          cue={polishCue}
+          hasPreview={pendingPlanSteps.some((step) => step.tool === 'draft_product_strategy_pack')}
           disabled={!enabled || sending}
-          onToggle={() => setPreferStrategyPackRefine((v) => !v)}
+          onToggle={() => {
+            const next = !preferStrategyPackRefine
+            if (!next && polishMode === 'always') setPolishMode('suggest')
+            if (!next && polishMode === 'auto') polishAutoHold.current = true
+            if (next && polishMode === 'off') setPolishMode('suggest')
+            setPreferStrategyPackRefine(next)
+          }}
+          onMode={(nextMode) => {
+            setPolishMode(nextMode)
+            polishAutoHold.current = false
+            if (nextMode === 'always') setPreferStrategyPackRefine(true)
+            if (nextMode === 'off') setPreferStrategyPackRefine(false)
+          }}
+          onPolishPreview={() => void regeneratePendingPreview('polish')}
+          onScaffoldPreview={() => void regeneratePendingPreview('deterministic')}
         />
       </>
     )
@@ -3650,6 +4502,46 @@ export default function AdminAiAssistant({
         })()
         return
       }
+      if (action.type === 'soundcloud-upload') {
+        if (!studioMissionReleaseId) return
+        const releaseId = studioMissionReleaseId
+        const releaseTitle = pageCtx?.pageContext?.studio?.title || releaseId
+        void (async () => {
+          setSending(true)
+          try {
+            const prefillRes = await adminAiFetch('/api/admin/ai/browser', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                actor: 'user',
+                action: 'soundcloud_prefill',
+                releaseId,
+                chatSessionId: activeSessionId,
+              }),
+            })
+            const prefillJson = (await prefillRes.json().catch(() => ({}))) as {
+              text?: string
+              error?: string
+              soundcloudPrefill?: { filled?: string[] }
+            }
+            const filled = prefillJson.soundcloudPrefill?.filled?.length || 0
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: nextId(),
+                role: 'assistant',
+                content:
+                  prefillJson.error ||
+                  prefillJson.text ||
+                  `Filled SoundCloud for “${releaseTitle}” from database files (${filled} step(s)). Review the form, then click Save. Nothing is posted automatically.`,
+              },
+            ])
+          } finally {
+            setSending(false)
+          }
+        })()
+        return
+      }
       if (action.type === 'harness') {
         const query = action.query
         const payload = {
@@ -3734,8 +4626,9 @@ export default function AdminAiAssistant({
           <AdminAiBrowserDock
             layout="side"
             chatSessionId={activeSessionId}
+            releaseId={studioMissionReleaseId}
             assistantActing={sending}
-            taskNotice={sending ? browserLiveNote || 'In progress: Assistant is working on this chat.' : browserHolds[activeSessionId] ?? null}
+            taskNotice={sending ? null : browserHolds[activeSessionId] ?? null}
             expanded={isStandalone ? browserPaneOpen : true}
             onExpandedChange={isStandalone ? setBrowserPaneOpen : undefined}
             onExitWorkspace={isStandalone ? undefined : () => setDockBrowserWorkspace(false)}
@@ -3810,12 +4703,26 @@ export default function AdminAiAssistant({
                 <div className="min-w-0 flex-1 overflow-x-auto border-b border-transparent">
                   <div className="flex h-8 min-w-0 items-end gap-0.5">
                     {sessions.map((s) => (
-                      <div key={s.id} className="group relative flex min-w-0 max-w-[min(7.5rem,32vw)] shrink-0 items-center">
+                      <div
+                        key={s.id}
+                        className={`group relative flex min-w-0 shrink-0 items-center ${
+                          (s.attachedReleaseIds ?? []).length
+                            ? 'max-w-[min(16rem,46vw)]'
+                            : 'max-w-[min(7.5rem,32vw)]'
+                        }`}
+                      >
                         <button
                           type="button"
                           onClick={() => {
                             setActiveSessionId(s.id)
                             setShowSessionHistory(false)
+                          }}
+                          onContextMenu={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            setShowSessionHistory(false)
+                            setGripDockMenu(null)
+                            setTabMenu({ x: event.clientX, y: event.clientY, sessionId: s.id })
                           }}
                           className={`min-w-0 flex-1 truncate rounded-t px-1.5 py-1.5 text-left text-[11px] font-medium leading-tight ${
                             s.id === activeSessionId
@@ -3824,6 +4731,9 @@ export default function AdminAiAssistant({
                           }`}
                           title={s.title}
                         >
+                          {(s.attachedReleaseIds ?? []).length > 0 ? (
+                            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-400 align-middle" aria-hidden />
+                          ) : null}
                           {s.title}
                         </button>
                         {sessions.length > 1 ? (
@@ -3972,16 +4882,6 @@ export default function AdminAiAssistant({
                   })()
                 }}
               />
-              {activeSkill?.name || disabledTools.length > 0 ? (
-                <div className="border-t border-gray-800/80 bg-gray-950/60 px-2.5 py-1.5">
-                  {activeSkill?.name ? (
-                    <p className="truncate text-[10px] text-purple-300/90">Active skill: {activeSkill.name}</p>
-                  ) : null}
-                  {disabledTools.length > 0 ? (
-                    <p className="truncate text-[10px] text-amber-300/90">Disabled: {disabledTools.join(', ')}</p>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
             <div
@@ -4006,12 +4906,17 @@ export default function AdminAiAssistant({
               <AdminAiBrowserDock
                 layout="stack"
                 chatSessionId={activeSessionId}
+                releaseId={studioMissionReleaseId}
                 assistantActing={sending}
-                taskNotice={sending ? browserLiveNote || 'In progress: Assistant is working on this chat.' : browserHolds[activeSessionId] ?? null}
+                taskNotice={sending ? null : browserHolds[activeSessionId] ?? null}
                 onWorkspaceExpand={() => setDockBrowserWorkspace(true)}
               />
             ) : null}
-                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain px-3 py-3">
+                  <div className="relative flex min-h-0 flex-1 flex-col">
+                  <div
+                    ref={threadScrollRef}
+                    className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain px-3 py-3"
+                  >
               <AdminAiQuickStartPanel
                   compact={!showQuickStart}
                   sessionId={activeSessionId}
@@ -4111,9 +5016,10 @@ export default function AdminAiAssistant({
                 ? visibleMessages.map((message) => (
                   <div
                     key={message.id}
+                    {...(message.role === 'user' ? { 'data-thread-user-message': '' } : {})}
                     className={`rounded-lg px-3 py-3 text-sm leading-relaxed ${
                       message.role === 'user'
-                        ? 'ml-8 bg-purple-600/20 text-purple-100'
+                        ? 'ml-8 bg-purple-600/20 text-right text-purple-100'
                         : message.role === 'assistant'
                           ? 'mr-8 bg-gray-800/95 text-gray-100 ring-1 ring-gray-700/80'
                           : 'bg-gray-900 text-gray-400'
@@ -4121,16 +5027,36 @@ export default function AdminAiAssistant({
                   >
                     {message.role === 'assistant' ? (
                       <>
-                        <AdminAssistantRichText content={message.content} />
-                        {message.id === actionChoiceHostId ? (
-                          <AdminChatActionChoices
-                            content={message.content}
-                            disabled={!enabled || sending}
-                            onPick={(text) => void sendComposerTurn(text, false)}
-                          />
-                        ) : null}
                         {message.toolSteps?.length ? (
                           <AdminAiToolStepCards steps={message.toolSteps} />
+                        ) : null}
+                        {message.content === 'Working…' || message.content === '…' ? (
+                          <AdminAiWorkingStatus note={browserLiveNote} context={workingPhraseContext} />
+                        ) : (
+                          <div className={message.toolSteps?.length ? 'mt-3' : undefined}>
+                            <AdminAssistantRichText content={message.content} />
+                            {message.id === streamingMessageId ? (
+                              <span className="admin-ai-working-caret" aria-hidden />
+                            ) : null}
+                          </div>
+                        )}
+                        {message.id === actionChoiceHostId &&
+                        message.id !== streamingMessageId &&
+                        message.content !== 'Working…' &&
+                        message.content !== '…' ? (
+                          parseAdminChatActionChoices(message.content) ? (
+                            <AdminChatActionChoices
+                              content={message.content}
+                              disabled={!enabled || sending}
+                              onPick={(text) => void sendComposerTurn(text, false)}
+                            />
+                          ) : replyFollowUps.length && !input.trim() ? (
+                            <AdminChatReplySuggestions
+                              items={replyFollowUps}
+                              disabled={!enabled || sending}
+                              onPick={(text) => void sendComposerTurn(text, false)}
+                            />
+                          ) : null
                         ) : null}
                         {message.applyDiffs?.length ? (
                           <AdminAiApplyDiffCards
@@ -4186,6 +5112,21 @@ export default function AdminAiAssistant({
                             />
                           </div>
                         ) : null}
+                        {message.content !== 'Working…' &&
+                        message.content !== '…' &&
+                        message.id !== streamingMessageId ? (
+                          <div className="mt-2 flex justify-between gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openReplyInNewChat(message.content)}
+                              className="rounded-md border border-gray-600/80 bg-gray-900/80 px-2 py-0.5 text-[10px] font-medium text-gray-300 hover:bg-gray-800 hover:text-white"
+                              aria-label="Open reply in a new chat"
+                            >
+                              New thread
+                            </button>
+                            <AdminReplyCopyButton text={message.content} />
+                          </div>
+                        ) : null}
                       </>
                     ) : (
                       <AdminChatPlainText
@@ -4198,6 +5139,29 @@ export default function AdminAiAssistant({
                   </div>
                 ))
                 : null}
+            </div>
+            {threadHasEarlierUserMessage ? (
+              <button
+                type="button"
+                className="absolute top-2 right-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-600 bg-gray-900/95 text-sm leading-none text-gray-200 shadow-md hover:bg-gray-800 hover:text-white"
+                aria-label="Jump to previous message you sent"
+                title="Previous message you sent"
+                onClick={jumpToPreviousUserMessage}
+              >
+                <span aria-hidden>↑</span>
+              </button>
+            ) : null}
+            {threadAwayFromBottom ? (
+              <button
+                type="button"
+                className="absolute bottom-2 right-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-600 bg-gray-900/95 text-sm leading-none text-gray-200 shadow-md hover:bg-gray-800 hover:text-white"
+                aria-label="Jump to bottom of thread"
+                title="Jump to bottom"
+                onClick={() => jumpThreadToBottom('smooth')}
+              >
+                <span aria-hidden>↓</span>
+              </button>
+            ) : null}
             </div>
 
             {lastRunbookGraph && lastRunbookGraph.steps.length > 0 && (
@@ -4510,9 +5474,33 @@ export default function AdminAiAssistant({
                 </div>
               ) : null}
               {anchorsPanelOpen ? (
-              <div className="mb-2 space-y-2 rounded-lg border border-gray-800/80 bg-gray-900/40 px-2 py-2">
+              <div className="mb-2 space-y-2 rounded-lg border border-gray-800/80 bg-gray-900/40 px-2 py-2" data-testid="admin-ai-anchors">
+                <p className="text-[10px] leading-snug text-gray-400">
+                  <span className="font-semibold uppercase tracking-wide text-gray-500">Anchors</span>
+                  {' '}
+                  Pin up to three facts this chat should keep. Filled slots go with every message. Click a suggestion to fill the first empty slot.
+                </p>
+                {anchorIdeas.length > 0 ? (
+                  <div className="flex flex-wrap gap-1" data-testid="admin-ai-anchor-suggestions">
+                    {anchorIdeas.map((idea) => (
+                      <button
+                        key={`${idea.reason}:${idea.text}`}
+                        type="button"
+                        disabled={!enabled || sending || anchors.every((anchor) => anchor.trim())}
+                        onClick={() => applyAnchorSuggestion(idea.text)}
+                        className="max-w-full truncate rounded-full border border-gray-600 bg-gray-950/80 px-2 py-0.5 text-left text-[10px] text-gray-200 hover:bg-gray-800 disabled:opacity-40"
+                        title={anchors.every((anchor) => anchor.trim()) ? 'Clear a slot to pin another fact' : idea.text}
+                      >
+                        <span className="text-gray-500">{idea.reason}</span> {idea.text.length > 56 ? `${idea.text.slice(0, 54)}…` : idea.text}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-500">
+                    Suggestions appear from the release, codes, desk, and the latest reply. You can also type a fact into a slot.
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Anchors</span>
                   {([0, 1, 2] as const).map((i) => (
                     <input
                       key={i}
@@ -4520,8 +5508,9 @@ export default function AdminAiAssistant({
                       value={anchors[i]}
                       onChange={(e) => setAnchorSlot(i, e.target.value)}
                       disabled={!enabled || sending}
-                      placeholder={`Anchor ${i + 1}`}
-                      className="min-w-[5.5rem] max-w-[140px] flex-1 rounded border border-gray-700 bg-gray-950 px-2 py-1 text-[11px] text-gray-200 placeholder:text-gray-600"
+                      placeholder={i === 0 ? 'Release or rule' : i === 1 ? 'Code or date' : 'Next fact'}
+                      aria-label={`Pinned fact ${i + 1}`}
+                      className="min-w-[5.5rem] max-w-[180px] flex-1 rounded border border-gray-700 bg-gray-950 px-2 py-1 text-[11px] text-gray-200 placeholder:text-gray-600"
                     />
                   ))}
                   <button
@@ -4534,32 +5523,11 @@ export default function AdminAiAssistant({
                       setInput((prev) => (prev.trim() ? `${block}\n${prev}` : block))
                     }}
                     className="rounded border border-gray-600 bg-gray-800 px-2 py-1 text-[10px] font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-40"
+                    title="Also paste the pinned facts into the composer so you can edit them before sending"
                   >
-                    Insert
+                    Add to message
                   </button>
                 </div>
-                {anchorSuggestions.length > 0 ? (
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-gray-500">
-                      Suggested from your last message (heuristic; may miss nuance or sensitive text). Click to fill the
-                      first empty slot.
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {anchorSuggestions.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          disabled={!enabled || sending || anchors.every((a) => a.trim())}
-                          onClick={() => applyAnchorSuggestion(s)}
-                          className="max-w-full truncate rounded-full border border-gray-600 bg-gray-950/80 px-2 py-0.5 text-left text-[10px] text-gray-200 hover:bg-gray-800 disabled:opacity-40"
-                          title={s}
-                        >
-                          {s.length > 48 ? `${s.slice(0, 46)}…` : s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
                 {attachments.some((a) => a.kind === 'audio') ? (
                   <p className="text-[10px] leading-snug text-gray-500">
                     Clip-to-strategy: transcription is not wired yet. Paste a transcript into an anchor or send it as a
@@ -4606,7 +5574,11 @@ export default function AdminAiAssistant({
               {fileDragDepth > 0 ? (
                 <p className="mb-1 text-center text-[11px] font-medium text-purple-200">Drop files or links into the message</p>
               ) : null}
-              {speechError ? (
+              {dictationPhase === 'recording' ? (
+                <p className="mb-1 text-[11px] text-red-300">Listening… tap the mic again to transcribe.</p>
+              ) : dictationPhase === 'transcribing' ? (
+                <p className="mb-1 text-[11px] text-amber-200">Transcribing…</p>
+              ) : speechError ? (
                 <p className="mb-1 text-[11px] text-amber-300">{speechError}</p>
               ) : null}
               {pageCtx ? (
@@ -4614,6 +5586,18 @@ export default function AdminAiAssistant({
                   docked
                   dock={missionDock}
                   onAction={handleMissionAction}
+                  statusNote={
+                    <ArmedPromptStack
+                      prompts={armedPrompts ?? []}
+                      onCancel={(id) =>
+                        mergeIntoActive({
+                          armedPrompts: (armedPrompts ?? []).map((row) =>
+                            row.id === id ? { ...row, status: 'cancelled' as const } : row,
+                          ),
+                        })
+                      }
+                    />
+                  }
                   releaseId={studioMissionReleaseId}
                   releaseTitle={pageCtx?.pageContext?.studio?.title}
                   activeStep={pageCtx?.pageContext?.studio?.activeStep}
@@ -4728,15 +5712,16 @@ export default function AdminAiAssistant({
                   </button>
                 </div>
               ) : null}
-              <div className="mb-1.5">
-                <AdminAiMentionChips
-                  onInsert={(text) => {
-                    const next = `${input.trimEnd()}${input.trim() ? ' ' : ''}${text}`
-                    setInput(next)
-                    composerRef.current?.focus?.()
-                  }}
-                />
-              </div>
+              {activeSkill?.name || disabledTools.length > 0 ? (
+                <div className="mb-2 -mt-1 text-center">
+                  {activeSkill?.name ? (
+                    <p className="truncate text-[10px] text-purple-300/90">Active skill: {activeSkill.name}</p>
+                  ) : null}
+                  {disabledTools.length > 0 ? (
+                    <p className="truncate text-[10px] text-amber-300/90">Disabled: {disabledTools.join(', ')}</p>
+                  ) : null}
+                </div>
+              ) : null}
               <div
                 className={
                   focusCopilotEnabled && pageFocus
@@ -4751,6 +5736,7 @@ export default function AdminAiAssistant({
                     busy={sending}
                     onClear={() => setPageFocus(null)}
                     onFocusUpdate={setPageFocus}
+                    attachedContext={attachedComposerContext()}
                     requestCopilot={async (prompt) => {
                       const result = await sendChatMessage(prompt, 'studio_release')
                       return { reply: result.reply }
@@ -4765,6 +5751,7 @@ export default function AdminAiAssistant({
                   framed={!(focusCopilotEnabled && pageFocus)}
                   onChange={setInput}
                   onRemoveChip={removeComposerChip}
+                  suggestion={composerSuggestion}
                   placeholder={
                     !enabled
                       ? 'Toggle AI ON to start'
@@ -4841,13 +5828,27 @@ export default function AdminAiAssistant({
                             <span className="w-14 shrink-0 text-[11px] text-gray-500">LLM</span>
                             <select
                               value={chatProvider}
-                              onChange={(e) => setChatProvider(e.target.value as ChatProviderChoice)}
+                              onChange={(e) => {
+                                const next = e.target.value as ChatProviderChoice
+                                chatProviderTouchedRef.current = true
+                                setChatProvider(next)
+                                try {
+                                  window.localStorage.setItem(ADMIN_AI_LLM_LS, next)
+                                } catch {
+                                  /* keep the in-memory choice */
+                                }
+                                void adminAiFetch('/api/admin/ai/settings', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ preferences: { assistantDefaultLlm: next } }),
+                                }).catch(() => {})
+                              }}
                               disabled={!enabled}
                               className="min-w-0 flex-1 rounded border border-gray-700 bg-gray-950 px-2 py-1.5 text-[11px] text-gray-100"
-                              title="Chat completion provider (see ADMIN_AI_CHAT_PROVIDER and provider API keys)"
+                              title="This model runs the turn and can probe every agent and tool"
                             >
                               <option value="auto">Auto</option>
-                              {(['anthropic', 'openai', 'ollama', 'crowelogic'] as const).map((id) => {
+                              {(['anthropic', 'openai', 'ollama', 'crowelogic', 'cursor'] as const).map((id) => {
                                 const ok =
                                   !providerCatalog.length ||
                                   id === 'ollama' ||
@@ -4861,6 +5862,9 @@ export default function AdminAiAssistant({
                               })}
                             </select>
                           </div>
+                          <p className="text-[10px] leading-snug text-gray-500">
+                            This model runs the turn. Every agent and tool is a harness it can probe.
+                          </p>
                           <div className="flex items-center gap-2">
                             <span className="w-14 shrink-0 text-[11px] text-gray-500">Energy</span>
                             <select
@@ -4913,15 +5917,28 @@ export default function AdminAiAssistant({
                   </button>
                   <button
                     type="button"
-                    aria-label={isListening ? 'Stop talk to text' : 'Talk to text'}
-                    disabled={!enabled || !speechRecognitionCtor()}
-                    onClick={() => toggleDictation()}
+                    aria-label={
+                      dictationPhase === 'recording'
+                        ? 'Stop talk to text'
+                        : dictationPhase === 'transcribing'
+                          ? 'Transcribing'
+                          : 'Talk to text'
+                    }
+                    aria-pressed={dictationPhase === 'recording'}
+                    disabled={!enabled || dictationPhase === 'transcribing'}
+                    onClick={() => void toggleDictation()}
                     className={`inline-flex h-8 w-8 items-center justify-center rounded border disabled:opacity-40 ${
-                      isListening
+                      dictationPhase === 'recording'
                         ? 'border-red-700 bg-red-950/60 text-red-200'
                         : 'border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800'
                     }`}
-                    title={speechRecognitionCtor() ? 'Talk to text (Chrome / Edge)' : 'Talk to text not supported in this browser'}
+                    title={
+                      dictationPhase === 'recording'
+                        ? 'Stop and transcribe'
+                        : dictationPhase === 'transcribing'
+                          ? 'Transcribing…'
+                          : 'Talk to text'
+                    }
                   >
                     <IconMic />
                   </button>
@@ -5104,6 +6121,71 @@ export default function AdminAiAssistant({
           )}
         </div>
       ))}
+
+      {tabMenu ? (
+        <div
+          data-admin-ai-tab-menu
+          role="menu"
+          aria-label="Chat tab actions"
+          className="fixed z-[12050] min-w-[14rem] overflow-hidden rounded-lg border border-gray-600 bg-gray-900 text-sm shadow-2xl"
+          style={{
+            left: Math.min(tabMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 800) - 230),
+            top: Math.min(tabMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 600) - 160),
+          }}
+        >
+          {(() => {
+            const session = sessions.find((row) => row.id === tabMenu.sessionId)
+            if (!session) return null
+            const releaseId = studioMissionReleaseId
+            const releaseTitle = studioReleaseTitle || 'this release'
+            const attached = Boolean(releaseId && (session.attachedReleaseIds ?? []).includes(releaseId))
+            return (
+              <div className="py-1">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!releaseId}
+                  className="flex w-full flex-col items-start px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800 disabled:cursor-not-allowed disabled:text-gray-500"
+                  onClick={() => {
+                    if (!releaseId) return
+                    setSessionReleaseAttachment(session.id, releaseId, studioReleaseTitle ?? null, !attached)
+                    setTabMenu(null)
+                  }}
+                >
+                  <span>{attached ? `Detach from ${releaseTitle}` : `Attach to ${releaseTitle}`}</span>
+                  <span className="text-[10px] text-gray-500">
+                    {releaseId ? 'Keep this chat on the release' : 'Open a release in Studio first'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(session.title)
+                    setTabMenu(null)
+                  }}
+                >
+                  Copy chat title
+                </button>
+                {sessions.length > 1 ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center px-3 py-2 text-left text-xs text-red-200 hover:bg-red-950/50"
+                    onClick={() => {
+                      removeSession(session.id)
+                      setTabMenu(null)
+                    }}
+                  >
+                    Close tab
+                  </button>
+                ) : null}
+              </div>
+            )
+          })()}
+        </div>
+      ) : null}
 
       {gripDockMenu && !isStandalone ? (
         <div

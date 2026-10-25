@@ -5,7 +5,7 @@ import { AdminAiRoutingPanel } from '@/components/admin/AdminAiRoutingPanel'
 import { CroweLogicSetupPanel } from '@/components/admin/CroweLogicSetupPanel'
 import { sameOriginApiUrl } from '@/lib/same-origin-api'
 
-type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'crowelogic'
+type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'crowelogic' | 'cursor'
 
 type SettingsPayload = {
   chat?: {
@@ -80,8 +80,8 @@ export default function AdminAiProviderSettings() {
 
       {!loading && chat && (
         <>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {(['anthropic', 'openai', 'ollama', 'crowelogic'] as ProviderId[]).map((id) => {
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {(['anthropic', 'openai', 'ollama', 'crowelogic', 'cursor'] as ProviderId[]).map((id) => {
               const configured = Boolean(providers.find((p) => p.id === id)?.configured)
               const keyOn = id === 'ollama' ? true : Boolean(keys[id])
               return (

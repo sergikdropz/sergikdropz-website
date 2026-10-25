@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   FaChevronDown,
   FaCode,
@@ -20,19 +20,31 @@ import ShareDownloadFloater from '@/components/shares/ShareDownloadFloater'
 import ShareStoryClipPicker from '@/components/shares/ShareStoryClipPicker'
 import type { FolderMusicVideo } from '@/lib/music-library/folder-music-videos'
 import {
+  clipHandoffSuccessMessage,
+  clipReadySharePrompt,
+  clipShareCaption,
+  prepareClipHandoff,
+  timedListenUrl,
+  type ClipVideoPlatform,
+  type ReadyClipFile,
+} from '@/lib/shares/clip-share'
+import {
+  copyFacebookShareLink,
   copyShareEmbedHtml,
   copyShareListenLink,
   createMusicShare,
+  withPublicShareOrigin,
   exportShareStoryFromPayload,
   exportShareStorySnippet,
 } from '@/lib/shares/client'
 import { downloadReleasePromoterPack } from '@/lib/shares/release-promoter-pack'
+import { copySocialPromoCollaboratorLink } from '@/lib/studio/promo-share-client'
 import {
   pickReleaseShareTrack,
   type ReleaseShareTrack,
 } from '@/lib/shares/release-share-tracks'
 import { listenUrlWithUtm, type ShareUtmPlatform } from '@/lib/shares/share-utm'
-import type { StorySnippetLayout } from '@/lib/shares/story-snippet'
+import { presentReadyClip, type StorySnippetLayout } from '@/lib/shares/story-snippet'
 
 type Props = {
   folderId: string
@@ -112,7 +124,11 @@ export default function ReleaseAdminShareMenu({
   const [clipPickerOpen, setClipPickerOpen] = useState(false)
   const [downloadOpen, setDownloadOpen] = useState(false)
   const [clipIntent, setClipIntent] = useState<ClipExportIntent | null>(null)
+  const [clipListenUrl, setClipListenUrl] = useState<string | null>(null)
+  const [readyClip, setReadyClip] = useState<ReadyClipFile | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [menuBox, setMenuBox] = useState<{ top: number; left: number } | null>(null)
 
   useEffect(() => {
     if (!tracks.length) {
@@ -126,6 +142,29 @@ export default function ReleaseAdminShareMenu({
     () => pickReleaseShareTrack(tracks, selectedTrackId),
     [tracks, selectedTrackId],
   )
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuBox(null)
+      return
+    }
+    const place = () => {
+      const btn = buttonRef.current
+      if (!btn) return
+      const rect = btn.getBoundingClientRect()
+      const width = Math.min(352, window.innerWidth - 16)
+      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+      const top = rect.bottom + 4
+      setMenuBox((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }))
+    }
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -189,8 +228,13 @@ export default function ReleaseAdminShareMenu({
       return
     }
     setClipIntent(intent)
+    setClipListenUrl(null)
     setClipPickerOpen(true)
+    setReadyClip(null)
     setOpen(false)
+    void createMusicShare(shareFolder)
+      .then((payload) => setClipListenUrl(payload.urls.listen))
+      .catch(() => setClipListenUrl(null))
   }
 
   const finishClipExport = async (startSec: number) => {
@@ -240,6 +284,85 @@ export default function ReleaseAdminShareMenu({
     }
   }
 
+  const sendClipVideo = async (platform: ClipVideoPlatform, startSec: number) => {
+    if (clipIntent?.promoterPack) {
+      await finishClipExport(startSec)
+      return
+    }
+    const label = platform === 'tiktok' ? 'TikTok' : platform === 'youtube' ? 'YouTube' : 'Instagram'
+    setReadyClip(null)
+    setBusy(true)
+    setNotice(`Preparing ${label}…`)
+    try {
+      const payload = await createMusicShare(shareFolder)
+      const result = await exportShareStoryFromPayload(payload, {
+        trackId: selectedTrack?.id,
+        layout: clipIntent?.layout || 'vinyl',
+        startSec,
+        deliver: 'none',
+        onProgress: (phase, ratio) => {
+          if (phase === 'recording' && typeof ratio === 'number') {
+            setNotice(`${label}… ${Math.round(ratio * 100)}%`)
+          }
+        },
+      })
+      const moment =
+        result.listenAtMoment ||
+        timedListenUrl(payload.urls.listen, {
+          startSec,
+          trackId: selectedTrack?.id,
+          platform,
+          campaign: releaseTitle,
+        })
+      const prepared = prepareClipHandoff({
+        platform,
+        blob: result.snippet.blob,
+        filename: result.snippet.filename,
+        title: `${result.track.title || releaseTitle} — SERGIK`,
+        text: clipShareCaption({
+          title: result.track.title || releaseTitle || 'SERGIK',
+          artist: result.track.artist,
+          url: moment,
+          startSec,
+        }),
+        moment,
+        mimeType: result.snippet.mimeType,
+      })
+      if (!prepared.ok) {
+        setNotice(prepared.reason)
+        return
+      }
+      setReadyClip(prepared.clip)
+      setNotice(null)
+    } catch (err: unknown) {
+      setNotice(err instanceof Error ? err.message : 'Could not prepare the clip')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const shareReadyClip = async () => {
+    if (!readyClip || busy) return
+    const clip = readyClip
+    setBusy(true)
+    setNotice(clip.mode === 'sheet' ? 'Opening story share…' : 'Saving story clip…')
+    try {
+      const result = await presentReadyClip(clip)
+      if (result === 'cancelled' || result === 'needs_gesture') {
+        setNotice(null)
+        return
+      }
+      setNotice(clipHandoffSuccessMessage(clip.platform, result === 'shared' ? 'shared' : 'saved'))
+      setClipPickerOpen(false)
+      setClipIntent(null)
+      setReadyClip(null)
+    } catch (err: unknown) {
+      setNotice(err instanceof Error ? err.message : 'Could not share the story clip')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const quickStoryWithoutPicker = (layout: StorySnippetLayout, platformLabel: string) =>
     void run(`Rendering ${platformLabel}…`, async () => {
       const result = await exportShareStorySnippet({
@@ -258,6 +381,7 @@ export default function ReleaseAdminShareMenu({
     <>
       <div ref={rootRef} className="relative shrink-0">
         <button
+          ref={buttonRef}
           type="button"
           disabled={disabled || busy}
           aria-haspopup="menu"
@@ -274,11 +398,12 @@ export default function ReleaseAdminShareMenu({
           />
         </button>
 
-        {open ? (
+        {open && menuBox ? (
           <div
             role="menu"
             aria-label="Release share options"
-            className="absolute right-0 top-full z-40 mt-1 max-h-[min(70vh,28rem)] w-[min(100vw-2rem,22rem)] overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-2xl"
+            className="fixed z-[80] max-h-[min(70vh,28rem)] w-[min(100vw-2rem,22rem)] overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-2xl"
+            style={{ top: menuBox.top, left: menuBox.left }}
           >
             {tracks.length > 0 ? (
               <div className="border-b border-gray-800 px-3 py-2">
@@ -310,6 +435,23 @@ export default function ReleaseAdminShareMenu({
               </div>
             ) : null}
 
+            {menuSection('Promo schedule')}
+            {menuButton({
+              icon: <FaLink className="h-3 w-3 text-violet-300" aria-hidden />,
+              label: 'Copy social promo link',
+              hint: 'Collaborator schedule. Meta publish stays in Studio.',
+              disabled: busy,
+              onClick: () =>
+                void run('Copying social promo link…', async () => {
+                  const result = await copySocialPromoCollaboratorLink({ folderId })
+                  setNotice(
+                    result.copied
+                      ? `Social promo link copied: ${result.url}`
+                      : `Copy this link: ${result.url}`,
+                  )
+                }),
+            })}
+
             {menuSection('Listen on SERGIK')}
             {menuButton({
               icon: <FaLink className="h-3 w-3 text-gray-400" aria-hidden />,
@@ -337,11 +479,26 @@ export default function ReleaseAdminShareMenu({
             {menuButton({
               icon: <FaCode className="h-3 w-3 text-gray-400" aria-hidden />,
               label: 'Copy embed HTML',
+              hint: 'iframe for a website. Facebook will not play this.',
               disabled: busy,
               onClick: () =>
                 void run('Embed copied', async () => {
                   await copyShareEmbedHtml(shareFolder)
-                  setNotice('Embed HTML copied.')
+                  setNotice('Embed HTML copied. Use the Facebook link for a post.')
+                }),
+            })}
+            {menuButton({
+              icon: <FaFacebook className="h-3 w-3 text-blue-500" aria-hidden />,
+              label: 'Copy Facebook link',
+              hint: 'Timeline card shows the cover and track list, and plays the first song.',
+              disabled: busy,
+              onClick: () =>
+                void run('Building the Facebook player…', async () => {
+                  const { url, copied, videoReady } = await copyFacebookShareLink(shareFolder, releaseTitle)
+                  const lead = videoReady
+                    ? 'Facebook link ready. The card plays the first track.'
+                    : 'Link ready. The playable card did not finish.'
+                  setNotice(copied ? `${lead} ${url}` : `${lead} Copy this into a post: ${url}`)
                 }),
             })}
             {menuButton({
@@ -458,7 +615,7 @@ export default function ReleaseAdminShareMenu({
               disabled: busy,
               onClick: () =>
                 void run('Opening Facebook…', async () => {
-                  const payload = await createMusicShare(shareFolder)
+                  const payload = withPublicShareOrigin(await createMusicShare(shareFolder))
                   const url = listenUrlWithUtm(payload.urls.listen, 'facebook', releaseTitle)
                   window.open(
                     `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
@@ -543,13 +700,26 @@ export default function ReleaseAdminShareMenu({
         file={selectedTrack?.file}
         trackId={selectedTrack?.id}
         audioFileId={selectedTrack?.audioFileId}
+        listenUrl={clipListenUrl}
         busy={busy}
         busyLabel={busy ? notice : null}
         onCancel={() => {
           if (busy) return
           setClipPickerOpen(false)
           setClipIntent(null)
+          setReadyClip(null)
         }}
+        onWindowChange={() => setReadyClip((prev) => (prev ? null : prev))}
+        readyShare={
+          readyClip
+            ? {
+                platform: readyClip.platform,
+                ...clipReadySharePrompt(readyClip.platform, readyClip.mode),
+                onShare: () => void shareReadyClip(),
+              }
+            : null
+        }
+        onSendVideo={(platform, startSec) => void sendClipVideo(platform, startSec)}
         onConfirm={(startSec) => void finishClipExport(startSec)}
       />
     </>

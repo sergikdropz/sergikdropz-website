@@ -39,6 +39,11 @@ export function parseWaveformTapePayload(body: unknown): WaveformTapePayload | n
   return { peaks, envelopes }
 }
 
+/** API envelope `{ waveform_data }` or a Storage tape (`{ d }` / peak array). */
+export function peaksFromWaveformBody(body: unknown): number[] | null {
+  return parseWaveformTapePayload(body)?.peaks ?? null
+}
+
 export async function fetchWaveformTapeFromUrl(url: string): Promise<WaveformTapePayload | null> {
   try {
     const res = await fetch(url, { cache: 'force-cache' })

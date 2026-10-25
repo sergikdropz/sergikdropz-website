@@ -275,6 +275,33 @@ export function displayArtistLine(rows: TrackContributor[], fallback = DEFAULT_A
   return `${head} feat. ${featured.join(', ')}`
 }
 
+function billedNameCount(line: string): number {
+  const billed = parseBilledArtists(line)
+  return billed.primary.length + billed.featured.length
+}
+
+/** Prefer the credit line that names every billed artist, including collaborators. */
+export function billedArtistLine(input: {
+  contributors?: unknown
+  libraryArtist?: string | null
+  title?: string | null
+  fallback?: string | null
+}): string {
+  const fallback = clean(input.fallback) || DEFAULT_ARTIST
+  const saved = parseContributors(input.contributors)
+  const savedLine = saved.length ? displayArtistLine(saved, fallback) : ''
+  const inferredLine = displayArtistLine(
+    contributorsFromVault({
+      artist: input.libraryArtist || fallback,
+      title: input.title,
+      albumArtist: fallback,
+    }),
+    fallback,
+  )
+  if (billedNameCount(inferredLine) > billedNameCount(savedLine || fallback)) return inferredLine
+  return savedLine || inferredLine || fallback
+}
+
 export function instrumentCreditsFromContributors(rows: TrackContributor[]): InstrumentCredit[] {
   return normalizeContributorRows(rows)
     .filter((row) => row.role === 'instrument' && row.name)

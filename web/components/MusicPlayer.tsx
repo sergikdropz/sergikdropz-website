@@ -17,6 +17,8 @@ import {
 } from 'react-icons/fa'
 import Image from 'next/image'
 import { resolveAudioUrl, resolveAudioUrls } from '@/utils/resolveAudioUrl'
+import { loadWaveformPeaks } from '@/lib/audio/load-waveform-peaks'
+import { sonicDnaFromBody } from '@/lib/audio/sonic-dna-body'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import {
   isUploadedFolderArtwork,
@@ -238,8 +240,10 @@ import {
 import {
   isDirectPlayableUrl,
   isEdgePlaybackUrl,
-  isR2BrowserPlayEnabled,
+  isMediaProxyUrl,
+  isSignedEdgeUrl,
 } from '@/lib/audio/edge-playback-url'
+import { signedUrlExpired, signedUrlShouldRefresh } from '@/lib/audio/playback-grant'
 import { playbackTimingMark, playbackTimingStart } from '@/lib/audio/playback-timing'
 import { shouldSkipBackgroundAudioResolve } from '@/lib/audio/skip-background-resolve'
 import {
@@ -991,7 +995,6 @@ function PlayerCoverArt({
   if (!src) return null
   return (
     <Image
-      key={src}
       src={src}
       alt={alt}
       fill
@@ -1045,6 +1048,8 @@ interface Track {
   // Sonic DNA analysis (from Supabase)
   sonic_dna?: any
   sonic_dna_status?: string | null
+  waveformJsonUrl?: string | null
+  sonicDnaJsonUrl?: string | null
   display_order?: number
   track_number?: number
   musicbrainz_id?: string
@@ -3398,30 +3403,16 @@ export default function MusicPlayer({
   }, [onQueueChange])
 
   // Fetch waveform from Supabase API
-  const fetchWaveformFromSupabase = useCallback(async (filePath: string, trackId?: string): Promise<number[] | null> => {
+  const fetchWaveformFromSupabase = useCallback(async (filePath: string, trackId?: string, waveformUrl?: string | null): Promise<number[] | null> => {
     try {
-      const params = new URLSearchParams()
       const lookupPath = waveformLookupPath(filePath)
-      if (lookupPath) params.set('path', lookupPath)
-      if (trackId) params.set('trackId', trackId)
-      if (!params.toString()) return null
+      if (!lookupPath && !trackId && !waveformUrl) return null
 
-      const response = await fetch(`/api/audio/waveform?${params.toString()}`)
-      if (!response.ok) {
-        if (response.status === 404) return null
-        if (response.status === 500 && process.env.NODE_ENV === 'development') {
-          const errorData = await response.json().catch(() => ({}))
-          console.warn('Waveform API error (will generate from audio):', errorData.error || 'Server error')
-        }
-        return null
-      }
-
-      const data = await response.json()
-      if (data.waveform_data && Array.isArray(data.waveform_data) && data.waveform_data.length > 0) {
-        return data.waveform_data
-      }
-
-      return null
+      return await loadWaveformPeaks({
+        path: lookupPath,
+        trackId,
+        waveformUrl,
+      })
     } catch {
       return null
     }
@@ -3588,7 +3579,11 @@ export default function MusicPlayer({
         return
       }
       try {
-        const peaks = await fetchWaveformFromSupabase(currentTrack.file, currentTrack.id)
+        const peaks = await fetchWaveformFromSupabase(
+          currentTrack.file,
+          currentTrack.id,
+          currentTrack.waveformJsonUrl,
+        )
         if (peaks?.length) applyPeaks(peaks)
       } catch {
         // ignore — decode path below is authoritative
@@ -4158,11 +4153,12 @@ export default function MusicPlayer({
     }
 
     const cached = resolvedUrlCacheRef.current.get(trackFile)
+    const cachedSigned = cached && isSignedEdgeUrl(cached) ? cached : null
     const optimistic =
-      cached && isDirectPlayableUrl(cached) && !isEdgePlaybackUrl(cached)
-        ? cached
-        : isDirectPlayableUrl(syncNormalized)
-          ? syncNormalized
+      cachedSigned && !signedUrlExpired(cachedSigned)
+        ? cachedSigned
+        : cached && !isSignedEdgeUrl(cached) && isDirectPlayableUrl(cached) && !isMediaProxyUrl(cached)
+          ? cached
           : null
 
     if (optimistic) {
@@ -4228,7 +4224,13 @@ export default function MusicPlayer({
     const nextTracks = queue.slice(currentIndex + 1, currentIndex + 1 + lookahead)
     const tracksToResolve = nextTracks
       .map(track => track.file)
-      .filter(file => file && !resolvedUrlCacheRef.current.has(file))
+      .filter((file) => {
+        if (!file) return false
+        const cached = resolvedUrlCacheRef.current.get(file)
+        if (!cached) return true
+        if (isSignedEdgeUrl(cached)) return signedUrlShouldRefresh(cached)
+        return false
+      })
     
     if (tracksToResolve.length === 0) return
 
@@ -4236,7 +4238,7 @@ export default function MusicPlayer({
     for (const file of tracksToResolve) {
       const sync = normalizeVaultAudioUrl(file)
       const playable = toSameOriginMediaUrl(file) || sync
-      if (!isR2BrowserPlayEnabled() && isDirectPlayableUrl(playable)) {
+      if (isDirectPlayableUrl(playable) && !isMediaProxyUrl(playable)) {
         resolvedUrlCacheRef.current.set(file, playable)
       } else {
         asyncNeeded.push(file)
@@ -4308,7 +4310,7 @@ export default function MusicPlayer({
       }
 
       const playable = toSameOriginMediaUrl(nextTrack.file) || syncUrl
-      if (!isR2BrowserPlayEnabled() && isDirectPlayableUrl(playable)) {
+      if (isDirectPlayableUrl(playable) && !isMediaProxyUrl(playable)) {
         applyIdleSrc(playable)
         return
       }
@@ -4360,9 +4362,12 @@ export default function MusicPlayer({
       const cache = resolvedUrlCacheRef.current
       const resolved = tracksToPreload.map((file) => {
         const cached = cache.get(file)
-        if (cached && isDirectPlayableUrl(cached)) return cached
+        if (cached && isSignedEdgeUrl(cached) && !signedUrlShouldRefresh(cached)) return cached
+        if (cached && isDirectPlayableUrl(cached) && !isMediaProxyUrl(cached) && !isSignedEdgeUrl(cached)) {
+          return cached
+        }
         const playable = toSameOriginMediaUrl(file) || normalizeVaultAudioUrl(file)
-        if (!isR2BrowserPlayEnabled() && isDirectPlayableUrl(playable)) {
+        if (isDirectPlayableUrl(playable) && !isMediaProxyUrl(playable)) {
           cache.set(file, playable)
           return playable
         }
@@ -5103,6 +5108,7 @@ export default function MusicPlayer({
           const proxy = toSameOriginMediaUrl(resolvedUrl || currentTrack.file)
           if (
             proxy &&
+            !isSignedEdgeUrl(resolvedUrl || '') &&
             assignMediaSrcIfChanged(audio, proxy) &&
             (isEdgePlaybackUrl(resolvedUrl || '') || !isDirectPlayableUrl(resolvedUrl || ''))
           ) {
@@ -10972,24 +10978,40 @@ export default function MusicPlayer({
           file: track.file,
           title: track.title,
         })
-        const res = await fetch(`/api/audio/sonic-dna?${params.toString()}`, { cache: 'no-store' })
-        if (!res.ok || cancelled) return
-        const data = await res.json().catch(() => ({}))
-        const sonicDna = data?.sonicDNA
+        let sonicDna: unknown = null
+        let status: string | undefined
+        const directUrl = track.sonicDnaJsonUrl
+        if (directUrl && /^https:\/\//i.test(directUrl)) {
+          try {
+            const direct = await fetch(directUrl)
+            if (direct.ok && !cancelled) {
+              sonicDna = sonicDnaFromBody(await direct.json().catch(() => null))
+            }
+          } catch {
+            /* fall through to the site route */
+          }
+        }
+        if (!sonicDna) {
+          const res = await fetch(`/api/audio/sonic-dna?${params.toString()}`)
+          if (!res.ok || cancelled) return
+          const data = await res.json().catch(() => ({}))
+          sonicDna = sonicDnaFromBody(data)
+          if (typeof data.status === 'string') status = data.status
+        }
         if (!sonicDna || cancelled) return
         track.sonic_dna = sonicDna
-        if (typeof data.status === 'string') track.sonic_dna_status = data.status
+        if (status) track.sonic_dna_status = status
         if (onQueueChangeRef.current) {
           onQueueChangeRef.current(
             (queueRef.current || []).map((t) =>
-              t.id === trackId ? { ...t, sonic_dna: sonicDna, sonic_dna_status: data.status || t.sonic_dna_status } : t,
+              t.id === trackId ? { ...t, sonic_dna: sonicDna, sonic_dna_status: status || t.sonic_dna_status } : t,
             ),
           )
         }
         setCurrentTrack?.({
           ...track,
           sonic_dna: sonicDna,
-          sonic_dna_status: data.status || track.sonic_dna_status,
+          sonic_dna_status: status || track.sonic_dna_status,
         })
       } catch {
         /* ignore — mix features degrade without DNA */

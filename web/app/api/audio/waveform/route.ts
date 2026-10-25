@@ -74,8 +74,16 @@ export async function GET(request: Request) {
       )
     }
 
-    if (track.waveform_json_url) {
-      const tape = await fetchWaveformTapeFromUrl(track.waveform_json_url)
+    const artifactUrl = typeof track.waveform_json_url === 'string' ? track.waveform_json_url : ''
+    const inline = new URL(request.url).searchParams.get('inline') === '1'
+    if (!inline && /^https:\/\//i.test(artifactUrl)) {
+      // The peaks file is already stored. Send the browser there instead of
+      // downloading it inside this function.
+      return NextResponse.redirect(artifactUrl, 307)
+    }
+
+    if (artifactUrl) {
+      const tape = await fetchWaveformTapeFromUrl(artifactUrl)
       if (tape?.peaks?.length) {
         return NextResponse.json(
           {

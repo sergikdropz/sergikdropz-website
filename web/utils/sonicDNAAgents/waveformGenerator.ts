@@ -120,10 +120,12 @@ export class WaveformGeneratorAgent extends BaseAgent {
       if (response.ok) {
         const data = await response.json()
         
-        if (data.waveform_data && Array.isArray(data.waveform_data)) {
+        const { peaksFromWaveformBody } = await import('@/lib/audio/waveform-peaks-source')
+        const peaks = peaksFromWaveformBody(data)
+        if (peaks?.length) {
           return {
-            data: data.waveform_data,
-            length: data.waveform_data.length,
+            data: peaks,
+            length: peaks.length,
             sampleRate: 44100
           }
         }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shareClipboardOrigin, storyAudioUrlForTrack, withBrowserOrigin } from './client'
+import { shareClipboardOrigin, storyAudioUrlForTrack, withBrowserOrigin, withPublicShareOrigin } from './client'
 import {
   DEFAULT_PUBLIC_SITE_ORIGIN,
   isLocalDevOrigin,
@@ -62,6 +62,22 @@ describe('withBrowserOrigin', () => {
       expect(out.urls.listen).toBe(`${DEFAULT_PUBLIC_SITE_ORIGIN}/s/tok123`)
       expect(out.urls.embed).toContain(DEFAULT_PUBLIC_SITE_ORIGIN)
       expect(out.urls.embedHtml).toContain(DEFAULT_PUBLIC_SITE_ORIGIN)
+    } finally {
+      process.env.NEXT_PUBLIC_SITE_URL = prev
+    }
+  })
+})
+
+describe('withPublicShareOrigin', () => {
+  it('points Facebook and embed copies at the live site even from local admin', () => {
+    const prev = process.env.NEXT_PUBLIC_SITE_URL
+    try {
+      process.env.NEXT_PUBLIC_SITE_URL = 'http://127.0.0.1:3001'
+      const out = withPublicShareOrigin(samplePayload('http://localhost:3001'))
+      expect(out.urls.listen).toBe(`${DEFAULT_PUBLIC_SITE_ORIGIN}/s/tok123`)
+      expect(out.urls.embed).toBe(`${DEFAULT_PUBLIC_SITE_ORIGIN}/embed/tok123`)
+      expect(out.urls.embedHtml).toContain(`src="${DEFAULT_PUBLIC_SITE_ORIGIN}/embed/tok123"`)
+      expect(out.urls.listen).not.toContain('localhost')
     } finally {
       process.env.NEXT_PUBLIC_SITE_URL = prev
     }

@@ -1,5 +1,7 @@
 import { applyKnownPrimaryGoal, type KnownGoalContext } from '@/lib/ai/known-primary-goal'
+import { missingRequiredSkillFields } from '@/lib/ai/skills/resolve-skill-for-tool'
 import { getSkillById, getSkillByTool, inferSkillFromIntent } from '@/lib/ai/skills/registry'
+import { isMetaBusinessAgentIntent } from '@/lib/meta/business-agent'
 import { isMetaPromoIntent } from '@/lib/meta/promo-workflow'
 
 export type PlannerTool =
@@ -15,14 +17,18 @@ export type PlannerTool =
   | 'patch_release_marketing_copy'
   | 'update_copyright_checklist'
   | 'assign_isrcs'
+  | 'pull_distrokid_isrcs'
   | 'create_distribution_release_draft'
   | 'query_intelligence_harness'
   | 'query_sergikai_chat'
   | 'query_crowe_creative'
+  | 'query_meta_business_agent'
   | 'audit_music_contract'
+  | 'audit_music_books'
   | 'run_meta_promo_pipeline'
   | 'admin_browser'
   | 'query_platform_growth_snapshot'
+  | 'read_workspace'
 
 export type ExecutionPlan = {
   skill: {
@@ -37,34 +43,15 @@ export type ExecutionPlan = {
   suggestedPayload: Record<string, unknown>
 }
 
-function placeholderForType(type: 'string' | 'number' | 'boolean' | 'object' | 'array') {
-  if (type === 'number') return 0
-  if (type === 'boolean') return false
-  if (type === 'array') return []
-  if (type === 'object') return {}
-  return 'TBD'
-}
-
 export function buildExecutionPlan(
   tool: PlannerTool,
   payload: Record<string, unknown>,
   ctx?: KnownGoalContext | null
 ): ExecutionPlan {
   const skill = getSkillByTool(tool)
-  const schema = skill?.inputSchema ?? {}
   const hydrated = applyKnownPrimaryGoal(tool, payload, ctx)
   const suggestedPayload: Record<string, unknown> = { ...hydrated }
-
-  for (const [field, config] of Object.entries(schema)) {
-    if (suggestedPayload[field] === undefined || suggestedPayload[field] === null) {
-      suggestedPayload[field] = placeholderForType(config.type)
-    }
-  }
-
-  const missingRequiredFields = Object.entries(schema)
-    .filter(([, config]) => Boolean(config.required))
-    .map(([field]) => field)
-    .filter((field) => hydrated[field] === undefined || hydrated[field] === null || hydrated[field] === '')
+  const missingRequiredFields = missingRequiredSkillFields(skill, hydrated, tool)
 
   return {
     skill: skill
@@ -92,7 +79,11 @@ export function buildIntentPlan(
   const skill =
     (options?.skillId && getSkillById(options.skillId)) || inferSkillFromIntent(message)
   const recommendedTool = (
-    skill.id === 'product_strategy' && isMetaPromoIntent(message)
+    skill.id === 'studio_release' && /pull the distrokid|distrokid isrc/i.test(message)
+      ? 'pull_distrokid_isrcs'
+      : skill.id === 'sergik_intelligence' && isMetaBusinessAgentIntent(message)
+      ? 'query_meta_business_agent'
+      : skill.id === 'product_strategy' && isMetaPromoIntent(message)
       ? 'run_meta_promo_pipeline'
       : skill.id === 'growth_marketing' &&
           /campaign draft|create campaign|persist campaign/i.test(message)

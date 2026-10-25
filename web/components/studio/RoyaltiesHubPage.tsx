@@ -1,9 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import Link from 'next/link'
 import StudioPageShell from './StudioPageShell'
+import RoyaltyLedgerTable from './RoyaltyLedgerTable'
+import { MetaBusinessAgentPanel } from './MetaBusinessAgentPanel'
 import { LABEL_LEGAL_ENTITY_NAME } from '@/lib/studio/royalties/constants'
+import type { MonetizationMeasurement } from '@/lib/studio/royalties/measurement'
 import type {
   PayeeLedgerSummary,
   RoyaltyLedgerEntry,
@@ -12,7 +14,8 @@ import type {
   RoyaltyPayee,
   RoyaltyStatement,
 } from '@/lib/studio/royalties/types'
-import { studioReleaseHref } from '@/lib/studio/studio-ia'
+import { groupLedgerByTrack, type TrackMedia } from '@/lib/studio/royalties/ledger-groups'
+import videosData from '@/data/videos.json'
 import {
   FaCheckCircle,
   FaFileUpload,
@@ -33,14 +36,21 @@ type OverviewResponse = {
     paidLabel: string
     labelRetainLabel: string
   }
+  measurement?: MonetizationMeasurement
   updatedAt: string
 }
 
 type TabId = 'overview' | 'ingest' | 'ledger' | 'payouts'
 
+const TRACK_MEDIA: TrackMedia[] = (videosData.videos || []).map((video) => ({
+  title: video.title,
+  text: `${video.title} ${video.description || ''}`,
+  youtubeId: video.youtube_id,
+}))
+
 const TABS: { id: TabId; label: string; hint: string }[] = [
   { id: 'overview', label: 'Overview', hint: 'Owed by payee + LLC retain' },
-  { id: 'ingest', label: 'Ingest', hint: 'DistroKid / Revelator CSV' },
+  { id: 'ingest', label: 'Ingest', hint: 'Royalties, creator payouts, ad spend' },
   { id: 'ledger', label: 'Ledger', hint: 'Allocated line items' },
   { id: 'payouts', label: 'Payouts', hint: 'Mark collaborator paid' },
 ]
@@ -61,11 +71,16 @@ export default function RoyaltiesHubPage() {
   const [ingestNotes, setIngestNotes] = useState('')
   const [ingestBusy, setIngestBusy] = useState(false)
   const [ingestResult, setIngestResult] = useState<string | null>(null)
+  const [pullStatus, setPullStatus] = useState<RoyaltyPullStatus | null>(null)
+  const [pullBusy, setPullBusy] = useState<string | null>(null)
+  const [pullMessage, setPullMessage] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [payVia, setPayVia] = useState('venmo')
   const [payNotes, setPayNotes] = useState('')
   const [payBusy, setPayBusy] = useState(false)
   const [filterPayee, setFilterPayee] = useState('')
+  const [trackMedia, setTrackMedia] = useState<TrackMedia[]>(TRACK_MEDIA)
+  const [mediaNote, setMediaNote] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +102,22 @@ export default function RoyaltiesHubPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/studio/royalties/media')
+      .then(async (response) => {
+        if (!response.ok || cancelled) return
+        const json = (await response.json()) as { media?: TrackMedia[]; note?: string | null }
+        if (cancelled || !Array.isArray(json.media) || json.media.length === 0) return
+        setTrackMedia(json.media)
+        setMediaNote(json.note || null)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const collabOwed = useMemo(
     () => (data?.payeeSummary || []).filter((p) => !p.isLabelEntity && p.owedCents !== 0),
     [data],
@@ -97,6 +128,8 @@ export default function RoyaltiesHubPage() {
     if (!filterPayee) return rows
     return rows.filter((r) => r.payeeId === filterPayee)
   }, [data, filterPayee])
+
+  const trackGroups = useMemo(() => groupLedgerByTrack(ledgerRows, trackMedia), [ledgerRows, trackMedia])
 
   async function onFile(file: File | null) {
     if (!file) return
@@ -240,6 +273,38 @@ export default function RoyaltiesHubPage() {
                 />
               </div>
 
+              <MonetizationSystems />
+              <MetaBusinessAgentPanel />
+
+              {data.measurement && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5" data-testid="monetization-measurement">
+                  <h2 className="text-lg font-semibold mb-1">Actuals by category</h2>
+                  <p className="text-sm text-zinc-500 mb-4">{data.measurement.note}</p>
+                  <dl className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <dt className="text-zinc-500">Recording royalties</dt>
+                      <dd className="text-zinc-100 font-mono">{formatCents(data.measurement.recordingRoyaltyCents)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Meta creator payouts</dt>
+                      <dd className="text-zinc-100 font-mono">{formatCents(data.measurement.metaCreatorCents)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Meta ad spend</dt>
+                      <dd className="text-zinc-100 font-mono">{formatCents(data.measurement.adSpendCents)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">ROAS</dt>
+                      <dd className="text-zinc-100 font-mono">{data.measurement.roasLabel}</dd>
+                    </div>
+                  </dl>
+                  <p className="text-xs text-zinc-500 mt-4">
+                    Amount basis: {data.measurement.amountBasis}. Reported figures are stored as-is.
+                    Licensing link: {data.measurement.licensingUrl}
+                  </p>
+                </div>
+              )}
+
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <h2 className="text-lg font-semibold mb-1">Payee ledger</h2>
                 <p className="text-sm text-zinc-500 mb-4">
@@ -308,12 +373,41 @@ export default function RoyaltiesHubPage() {
 
           {tab === 'ingest' && (
             <div className="space-y-4 max-w-3xl" data-testid="royalties-ingest">
+              <PullPanel
+                status={pullStatus}
+                busy={pullBusy}
+                message={pullMessage}
+                onStatus={setPullStatus}
+                onPull={async (source) => {
+                  setPullBusy(source)
+                  setPullMessage(null)
+                  try {
+                    const response = await fetch('/api/studio/royalties/pull', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ source }),
+                    })
+                    const body = await response.json()
+                    if (!response.ok) throw new Error(body.error || 'Pull failed')
+                    setPullMessage(
+                      body.note ||
+                        (body.duplicate
+                          ? 'That snapshot is already in the ledger.'
+                          : `Imported ${body.lineCount} rows${body.replaced ? ' and replaced the previous snapshot' : ''}.`),
+                    )
+                    await load()
+                  } catch (err) {
+                    setPullMessage(err instanceof Error ? err.message : 'Pull failed')
+                  } finally {
+                    setPullBusy(null)
+                  }
+                }}
+              />
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
                 <h2 className="text-lg font-semibold">Statement ingest</h2>
                 <p className="text-sm text-zinc-500">
-                  Accepts DistroKid earnings CSV and Revelator / generic exports with ISRC + amount
-                  columns. Matching ISRCs use Rights split sheets; unknown lines stay 100% with the
-                  LLC until splits exist.
+                  DistroKid and Revelator stay CSV. Amounts stay as reported. Ad spend is not allocated to collaborators.
+                  Matching ISRCs use Rights split sheets; unknown lines stay 100% with the LLC until splits exist.
                 </p>
                 <label className="block">
                   <span className="text-xs uppercase tracking-wide text-zinc-500">Upload CSV</span>
@@ -408,56 +502,16 @@ export default function RoyaltiesHubPage() {
                     ))}
                   </select>
                 </label>
-                <p className="text-xs text-zinc-500">{ledgerRows.length} rows (latest 500)</p>
+                <p className="text-xs text-zinc-500">
+                  {trackGroups.length} tracks · {ledgerRows.length} rows
+                </p>
+                {mediaNote ? <p className="text-xs text-amber-300/90">{mediaNote}</p> : null}
               </div>
-              <div className="overflow-x-auto rounded-xl border border-zinc-800">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-zinc-900/80 text-zinc-500 text-left">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Payee</th>
-                      <th className="px-3 py-2 font-medium">Track</th>
-                      <th className="px-3 py-2 font-medium">Store</th>
-                      <th className="px-3 py-2 font-medium">Split</th>
-                      <th className="px-3 py-2 font-medium">Amount</th>
-                      <th className="px-3 py-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {ledgerRows.map((row) => (
-                      <tr key={row.id} className="text-zinc-300">
-                        <td className="px-3 py-2">{row.payeeName}</td>
-                        <td className="px-3 py-2">
-                          {row.releaseId ? (
-                            <Link
-                              href={studioReleaseHref(row.releaseId, 'rights')}
-                              className="text-violet-300 hover:underline"
-                            >
-                              {row.trackTitle || row.isrc || '—'}
-                            </Link>
-                          ) : (
-                            row.trackTitle || row.isrc || '—'
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-zinc-500">{row.store || '—'}</td>
-                        <td className="px-3 py-2 font-mono text-xs">{row.splitPercent}%</td>
-                        <td className={`px-3 py-2 font-mono ${moneyClass(row.amountCents)}`}>
-                          {formatCents(row.amountCents)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <StatusPill status={row.status} />
-                        </td>
-                      </tr>
-                    ))}
-                    {!ledgerRows.length && (
-                      <tr>
-                        <td colSpan={6} className="px-3 py-8 text-center text-zinc-500">
-                          No ledger entries yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {!trackGroups.length ? (
+                <p className="px-3 py-8 text-center text-zinc-500 text-sm">No ledger entries yet.</p>
+              ) : (
+                <RoyaltyLedgerTable groups={trackGroups} />
+              )}
             </div>
           )}
 
@@ -588,20 +642,122 @@ function Stat({
   )
 }
 
-function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === 'paid'
-      ? 'bg-emerald-500/15 text-emerald-300'
-      : status === 'voided'
-        ? 'bg-zinc-700/40 text-zinc-500'
-        : 'bg-amber-500/15 text-amber-200'
+type RoyaltyPullStatus = {
+  distrokid: { reason: string }
+  metaAds: { ready: boolean; reason: string }
+  metaCreator: { ready: boolean; reason: string }
+  metaCreatorInstagram: { ready: boolean; reason: string }
+  connectPath: string
+}
+
+function MonetizationSystems() {
+  const [systems, setSystems] = useState<Array<{ id: string; label: string; state: string; detail: string }>>([])
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/studio/royalties/monetization')
+      .then(async (response) => {
+        if (!response.ok || cancelled) return
+        const body = await response.json()
+        if (!cancelled && Array.isArray(body.systems)) setSystems(body.systems)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  if (!systems.length) return null
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wide ${cls}`}>
-      {status}
-    </span>
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5" data-testid="monetization-systems">
+      <h2 className="text-lg font-semibold mb-1">Monetization systems</h2>
+      <p className="text-sm text-zinc-500 mb-4">
+        Stars and Subscriptions stay closed until Meta’s follower rules are met. A view is not turned into a royalty.
+      </p>
+      <ul className="divide-y divide-zinc-800">
+        {systems.map((system) => (
+          <li key={system.id} className="py-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-zinc-100">{system.label}</p>
+              <p className="text-xs text-zinc-500 mt-1 max-w-2xl">{system.detail}</p>
+            </div>
+            <span className="text-[10px] uppercase tracking-wide text-zinc-400">{system.state}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
+}
+
+function PullPanel({
+  status,
+  busy,
+  message,
+  onStatus,
+  onPull,
+}: {
+  status: RoyaltyPullStatus | null
+  busy: string | null
+  message: string | null
+  onStatus: (status: RoyaltyPullStatus) => void
+  onPull: (source: 'meta_ads' | 'meta_creator' | 'meta_creator_instagram') => Promise<void>
+}) {
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/studio/royalties/pull')
+      .then(async (response) => {
+        if (!response.ok || cancelled) return
+        onStatus(await response.json())
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [onStatus])
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3" data-testid="royalty-pull">
+      <h2 className="text-lg font-semibold">Pull from the source</h2>
+      <p className="text-sm text-zinc-400">{status?.distrokid.reason || 'Checking which sources can be pulled.'}</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={!status?.metaAds.ready || Boolean(busy)}
+          onClick={() => void onPull('meta_ads')}
+          className="px-3 py-1.5 rounded-full bg-violet-600 text-white text-xs font-medium disabled:opacity-40"
+        >
+          {busy === 'meta_ads' ? 'Pulling ad spend…' : 'Pull Meta ad spend'}
+        </button>
+        <button
+          type="button"
+          disabled={!status?.metaCreator.ready || Boolean(busy)}
+          onClick={() => void onPull('meta_creator')}
+          className="px-3 py-1.5 rounded-full border border-zinc-600 text-zinc-100 text-xs font-medium disabled:opacity-40"
+        >
+          {busy === 'meta_creator' ? 'Pulling creator earnings…' : 'Pull Facebook creator earnings'}
+        </button>
+        <button
+          type="button"
+          disabled={!status?.metaCreatorInstagram.ready || Boolean(busy)}
+          onClick={() => void onPull('meta_creator_instagram')}
+          className="px-3 py-1.5 rounded-full border border-zinc-600 text-zinc-100 text-xs font-medium disabled:opacity-40"
+        >
+          {busy === 'meta_creator_instagram' ? 'Pulling Instagram earnings…' : 'Pull Instagram creator earnings'}
+        </button>
+        <a href={status?.connectPath || '/api/studio/meta/connect?earnings=1&next=/studio/royalties'} className="px-3 py-1.5 rounded-full border border-sky-500/40 text-sky-200 text-xs">
+          Reconnect Meta earnings
+        </a>
+      </div>
+      {status ? (
+        <div className="text-xs text-zinc-500 space-y-1">
+          <p>{status.metaAds.reason}</p>
+          <p>{status.metaCreator.reason}</p>
+          <p>{status.metaCreatorInstagram.reason}</p>
+        </div>
+      ) : null}
+      {message ? <p className="text-sm text-zinc-200">{message}</p> : null}
+    </div>
+  )
 }

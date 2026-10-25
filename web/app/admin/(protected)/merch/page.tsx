@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useRouter } from 'next/navigation'
+import MerchFittingRoom from '@/components/admin/MerchFittingRoom'
+import type { StageView } from '@/components/admin/MerchDesignMaker'
 
 interface MerchOrder {
   id: string
@@ -30,6 +32,8 @@ export default function AdminMerchPage() {
   const [updatingOrder, setUpdatingOrder] = useState(false)
   const [orderStatusEdit, setOrderStatusEdit] = useState('')
   const [trackingEdit, setTrackingEdit] = useState('')
+  const [desk, setDesk] = useState<'design' | 'store'>('design')
+  const [stageView, setStageView] = useState<StageView>('design')
 useEffect(() => {
     if (isAdmin) loadData()
   }, [isAdmin])
@@ -106,9 +110,37 @@ useEffect(() => {
     }
   }
 
+  const analytics = useMemo(() => {
+    const byStatus: Record<string, number> = {}
+    const unitsByProduct = new Map<string, { name: string; units: number; revenue: number }>()
+    let revenue = 0
+    let paidOrders = 0
+    for (const o of orders) {
+      byStatus[o.status] = (byStatus[o.status] || 0) + 1
+      const counts = o.status !== 'failed' && o.status !== 'canceled'
+      if (counts) {
+        revenue += o.total || 0
+        paidOrders += 1
+      }
+      for (const item of o.items || []) {
+        const key = (item?.name as string) || 'Item'
+        const prev = unitsByProduct.get(key) || { name: key, units: 0, revenue: 0 }
+        const qty = Number(item?.quantity) || 1
+        prev.units += qty
+        prev.revenue += (Number(item?.price) || 0) * qty
+        unitsByProduct.set(key, prev)
+      }
+    }
+    const topProducts = [...unitsByProduct.values()].sort((a, b) => b.units - a.units).slice(0, 5)
+    return { byStatus, topProducts, aov: paidOrders > 0 ? revenue / paidOrders : 0, paidOrders }
+  }, [orders])
+
   if (loading || !isAdmin) return null
 
   const statusColors: Record<string, string> = {
+    returned: 'bg-orange-600/20 text-orange-400',
+    refunded: 'bg-orange-600/20 text-orange-400',
+    on_hold: 'bg-amber-600/20 text-amber-400',
     pending: 'bg-yellow-600/20 text-yellow-400',
     processing: 'bg-blue-600/20 text-blue-400',
     shipped: 'bg-green-600/20 text-green-400',
@@ -119,16 +151,40 @@ useEffect(() => {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Merch Store</h1>
-        <button
-          onClick={syncFromPrintful}
-          disabled={syncing}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 text-white text-sm font-semibold rounded-lg transition-all"
-        >
-          {syncing ? 'Syncing...' : 'Sync from Printful'}
-        </button>
+      <div className="relative mb-6 flex items-center justify-center">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDesk('design')}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+              desk === 'design' ? 'bg-white text-black' : 'bg-gray-800 text-gray-300'
+            }`}
+          >
+            Design
+          </button>
+          <button
+            onClick={() => setDesk('store')}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+              desk === 'store' ? 'bg-white text-black' : 'bg-gray-800 text-gray-300'
+            }`}
+          >
+            Store
+          </button>
+        </div>
+        {desk === 'store' && (
+          <button
+            onClick={syncFromPrintful}
+            disabled={syncing}
+            className="absolute right-0 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 text-white text-sm font-semibold rounded-lg transition-all"
+          >
+            {syncing ? 'Syncing...' : 'Sync from Printful'}
+          </button>
+        )}
       </div>
+
+      {desk === 'design' ? (
+        <MerchFittingRoom stageView={stageView} onStageViewChange={setStageView} />
+      ) : (
+      <>
 
       {syncResult && (
         <div
@@ -160,11 +216,52 @@ useEffect(() => {
         </div>
       </div>
 
+      {/* Analytics */}
+      {orders.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <p className="text-gray-400 text-sm mb-2">Order status</p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(analytics.byStatus).map(([status, count]) => (
+                <span
+                  key={status}
+                  className={`px-2 py-0.5 text-xs rounded ${statusColors[status] || 'bg-gray-600/20 text-gray-400'}`}
+                >
+                  {status.replace('_', ' ')} · {count}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <p className="text-gray-400 text-sm mb-1">Avg order value</p>
+            <p className="text-2xl font-bold text-white">${(analytics.aov / 100).toFixed(2)}</p>
+            <p className="text-gray-500 text-xs mt-1">{analytics.paidOrders} paid orders</p>
+          </div>
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <p className="text-gray-400 text-sm mb-2">Best sellers (units)</p>
+            {analytics.topProducts.length === 0 ? (
+              <p className="text-gray-500 text-xs">No sales yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {analytics.topProducts.map((p) => (
+                  <div key={p.name} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-300 truncate pr-2">{p.name}</span>
+                    <span className="text-white font-medium shrink-0">
+                      {p.units} · ${(p.revenue / 100).toFixed(0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Products */}
       <h2 className="text-lg font-bold text-white mb-3">Products ({products.length})</h2>
       {products.length === 0 ? (
         <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-8 text-center text-gray-500 mb-8">
-          No products synced. Click &quot;Sync from Printful&quot; to import products.
+          No products yet. Design one in the Design tab, or sync a product that already exists in Printful.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
@@ -436,6 +533,8 @@ useEffect(() => {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   )

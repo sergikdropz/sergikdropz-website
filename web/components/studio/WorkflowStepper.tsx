@@ -1,13 +1,15 @@
 'use client'
 
 import { WORKFLOW_STEPS, type WorkflowStepId } from '@/lib/studio/constants'
-import { FaCheck, FaBrain } from 'react-icons/fa'
+import { FaCheck, FaBrain, FaBullhorn } from 'react-icons/fa'
 
 type Props = {
   activeStep: WorkflowStepId
   completedSteps: WorkflowStepId[]
   onStepClick?: (step: WorkflowStepId) => void
   onCompleteWithAi?: (step: WorkflowStepId) => void
+  promoActive?: boolean
+  onPromoClick?: () => void
 }
 
 export default function WorkflowStepper({
@@ -15,12 +17,14 @@ export default function WorkflowStepper({
   completedSteps,
   onStepClick,
   onCompleteWithAi,
+  promoActive = false,
+  onPromoClick,
 }: Props) {
   return (
     <ol className="flex flex-wrap gap-2 md:gap-0 md:flex-nowrap md:justify-between relative">
       {WORKFLOW_STEPS.map((step, index) => {
         const done = completedSteps.includes(step.id)
-        const active = step.id === activeStep
+        const active = step.id === activeStep && !promoActive
         return (
           <li key={step.id} className="flex-1 min-w-[7rem] md:min-w-0">
             <button
@@ -75,6 +79,31 @@ export default function WorkflowStepper({
           </li>
         )
       })}
+      {onPromoClick ? (
+        <li className="flex-1 min-w-[7rem] md:min-w-0">
+          <button
+            type="button"
+            onClick={onPromoClick}
+            className={`w-full text-left px-2 py-3 rounded-lg transition border cursor-pointer ${
+              promoActive
+                ? 'border-pink-500/60 bg-pink-500/10'
+                : 'border-transparent hover:border-zinc-700 hover:bg-zinc-900/50'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold mb-2 ${
+                promoActive ? 'bg-pink-500/30 text-pink-200' : 'bg-zinc-800 text-zinc-500'
+              }`}
+            >
+              <FaBullhorn className="text-[10px]" />
+            </div>
+            <span className="block text-xs font-semibold text-white">Promo</span>
+            <span className="block text-[10px] text-zinc-500 mt-0.5 leading-tight">
+              Meta / IG schedule
+            </span>
+          </button>
+        </li>
+      ) : null}
     </ol>
   )
 }

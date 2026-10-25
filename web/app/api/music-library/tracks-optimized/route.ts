@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getMusicVaultApiAccess } from '@/lib/music-vault-access'
-import { mapLibraryTrackToListItem } from '@/lib/music-library/track-list-fields'
+import { mapLibraryTrackToListItem, attachLeanListMetadata, LIST_METADATA_SELECT } from '@/lib/music-library/track-list-fields'
 import { buildTrackLibrarySearchOrFilter } from '@/lib/music-library/track-search'
 import { applyStableTrackPaginationOrder } from '@/lib/music-library/stable-track-pagination'
 
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         'year',
         'date',
         'date_created',
-        'metadata',
+        LIST_METADATA_SELECT,
       )
     }
 
@@ -195,14 +195,16 @@ export async function GET(request: NextRequest) {
     const sparseRows = rows.filter((track: any) => catalogBlank(track))
     const audioMap = new Map<string, any>()
     const cacheMap = new Map<string, any>()
+    // Every row needs its audio_files path. A filled BPM/key used to skip this
+    // lookup, so a copied release-master file_url kept playing the wrong song.
     const audioFileIds = [
-      ...new Set(sparseRows.map((track: any) => track.audio_file_id).filter(Boolean)),
+      ...new Set(rows.map((track: any) => track.audio_file_id).filter(Boolean)),
     ] as string[]
     const sparseIds = sparseRows.map((track: any) => track.id).filter(Boolean) as string[]
     if (audioFileIds.length > 0) {
       const { data: audioMeta } = await supabase
         .from('audio_files')
-        .select('id, duration_seconds, artwork_url, sonic_dna_status, bpm, key_signature, energy_level, danceability')
+        .select('id, file_path, file_url, duration_seconds, artwork_url, sonic_dna_status, bpm, key_signature, energy_level, danceability')
         .in('id', audioFileIds)
       audioMeta?.forEach((file: any) => audioMap.set(file.id, file))
     }
@@ -217,6 +219,7 @@ export async function GET(request: NextRequest) {
     // List loads use scalar DNA cache columns — no sonic_dna blobs.
     let keyMissing = 0
     const tracks = rows.map((track: any) => {
+      attachLeanListMetadata(track)
       const folder = Array.isArray(track.music_library_folders)
         ? track.music_library_folders[0]
         : track.music_library_folders
@@ -224,6 +227,8 @@ export async function GET(request: NextRequest) {
       const cache = cacheMap.get(track.id)
       const audio = audioFile || cache
         ? {
+            file_path: audioFile?.file_path,
+            file_url: audioFile?.file_url,
             duration_seconds: audioFile?.duration_seconds,
             artwork_url: audioFile?.artwork_url,
             sonic_dna_status: audioFile?.sonic_dna_status,

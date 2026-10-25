@@ -1,4 +1,4 @@
-import { DEFAULT_OLLAMA_MODEL } from '@/lib/ai/ollama-defaults'
+import { DEFAULT_OLLAMA_MODEL, OLLAMA_ADMIN_BASE_MODEL } from '@/lib/ai/ollama-defaults'
 
 const TAG_CACHE_TTL_OK_MS = 60_000
 const TAG_CACHE_ERR_MS = 5_000
@@ -124,4 +124,35 @@ export async function resolveOllamaModelIdForRequest(modelOverride?: string | nu
 
 export function clearOllamaModelTagCache() {
   tagCache = null
+}
+
+function installedMatch(want: string, installed: string[]): string | null {
+  return installed.find((tag) => ollamaTagMatchesPreference(want, tag)) ?? null
+}
+
+/**
+ * Admin chat should not inherit sergikai's Ableton system prompt.
+ * OLLAMA_ADMIN_MODEL forces a tag. Otherwise prefer the base Qwen tag, then sergikai.
+ */
+export function pickOllamaAdminModel(installed: string[], requested?: string | null): string {
+  const forced = process.env.OLLAMA_ADMIN_MODEL?.trim()
+  if (forced) {
+    return installedMatch(forced, installed) || forced
+  }
+  const ask = requested?.trim() || ''
+  if (ask && !/^sergikai\b/i.test(ask)) {
+    const hit = installedMatch(ask, installed)
+    if (hit) return hit
+  }
+  return (
+    installedMatch(OLLAMA_ADMIN_BASE_MODEL, installed) ||
+    installedMatch(DEFAULT_OLLAMA_MODEL, installed) ||
+    ask ||
+    DEFAULT_OLLAMA_MODEL
+  )
+}
+
+export async function resolveOllamaAdminModelId(modelOverride?: string | null): Promise<string> {
+  const tags = await fetchOllamaModelTagNames()
+  return pickOllamaAdminModel(tags, modelOverride)
 }

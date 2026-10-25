@@ -4,12 +4,14 @@
  */
 
 import { runAdminBrowserAction } from '@/lib/ai/admin-browser'
+import { messageWantsSoundCloudUpload } from '@/lib/ai/soundcloud-upload'
 import { deskCardForUrl, formatDeskCard } from '@/lib/ai/admin-ai-desks'
 import { fetchReleaseStudioSnapshot } from '@/lib/studio/release-snapshot'
+import { buildReleaseSnapshotAdminAiBrief } from '@/lib/studio/release-snapshot-admin-ai'
 
-const MAX_LIVE_CHARS = 6_000
+const MAX_LIVE_CHARS = 12_000
 const MAX_FIELDS = 36
-const MAX_PAGE_TEXT = 1_800
+const MAX_PAGE_TEXT = 3_500
 
 export function messageWantsLiveContext(message: string): boolean {
   const t = message.trim()
@@ -27,6 +29,7 @@ export function messageWantsLiveContext(message: string): boolean {
 }
 
 export function messageWantsFormProbe(message: string): boolean {
+  if (messageWantsSoundCloudUpload(message)) return false
   return (
     /\b(upc|isrc|field|form|input|blank|required|invalid|fill|prefill|songwriter|genre|release date)\b/i.test(
       message,
@@ -54,6 +57,26 @@ function slimReleaseBlock(snapshot: Awaited<ReturnType<typeof fetchReleaseStudio
       return `${i + 1}. ${title}: ${isrc}`
     })
     .slice(0, 20)
+  const brief = buildReleaseSnapshotAdminAiBrief(snapshot)
+  const marketing =
+    r.marketing_copy && typeof r.marketing_copy === 'object'
+      ? (r.marketing_copy as Record<string, unknown>)
+      : {}
+  const copyLines = brief.marketingCopyFields.slice(0, 8).map((row) => {
+    const raw = typeof marketing[row.field] === 'string' ? String(marketing[row.field]).replace(/\s+/g, ' ').trim() : ''
+    const preview = raw ? raw.slice(0, 160) : '(empty)'
+    return `${row.field} [${row.status}]: ${preview}`
+  })
+  const dnaLines = brief.copyIntelTracks
+    .filter((track) => track.hasSignal)
+    .slice(0, 8)
+    .map((track) => {
+      const bits = [track.groove, track.intention].map((part) => part.trim()).filter(Boolean)
+      return `${track.title}: ${bits.join(' · ') || 'signal'}`
+    })
+  const timeLines = brief.youtubeTimestampTimeline
+    .slice(0, 8)
+    .map((cue) => `${cue.range} ${cue.title}${cue.complete ? '' : ' (duration missing)'}`)
   return [
     `Release: ${String(r.title || '').trim() || r.id}`,
     `id: ${r.id}`,
@@ -64,7 +87,21 @@ function slimReleaseBlock(snapshot: Awaited<ReturnType<typeof fetchReleaseStudio
     `tracks: ${tracks.length}`,
     ...isrcs.map((line) => `  ${line}`),
     blockers.length ? `blockers: ${blockers.join('; ')}` : 'blockers: none listed',
-  ].join('\n')
+    copyLines.length ? `marketing copy:\n${copyLines.map((line) => `  ${line}`).join('\n')}` : '',
+    dnaLines.length ? `sonic dna:\n${dnaLines.map((line) => `  ${line}`).join('\n')}` : 'sonic dna: none with signal',
+    timeLines.length ? `youtube timeline:\n${timeLines.map((line) => `  ${line}`).join('\n')}` : '',
+    awarenessLine(snapshot),
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function awarenessLine(snapshot: Awaited<ReturnType<typeof fetchReleaseStudioSnapshot>>): string {
+  const brief = buildReleaseSnapshotAdminAiBrief(snapshot)
+  const empty = brief.emptyMarketingFields.slice(0, 8).join(', ') || 'none'
+  const dna = brief.sonicDnaUnified
+  const next = brief.copyDesk.recommendedNextFields.slice(0, 4).join(', ') || 'none'
+  return `copy empty: ${empty}; next: ${next}; sonic dna ${dna.copyIntelSignalTracks}/${dna.trackCount}`
 }
 
 function formatFieldProbe(fields: NonNullable<Awaited<ReturnType<typeof runAdminBrowserAction>>['fieldProbe']>): string {
@@ -88,8 +125,12 @@ export async function buildAdminAiLiveContextPrompt(input: {
   message: string
   releaseId?: string | null
   chatSessionId?: string | null
+  /** When a release is open, include its snapshot even if the message does not name a field. */
+  groundRelease?: boolean
 }): Promise<string> {
-  if (!messageWantsLiveContext(input.message)) return ''
+  const wantsLive = messageWantsLiveContext(input.message)
+  const releaseId = input.releaseId?.trim() || ''
+  if (!wantsLive && !(input.groundRelease && releaseId)) return ''
 
   const parts: string[] = []
   const wantsProbe =
@@ -97,7 +138,9 @@ export async function buildAdminAiLiveContextPrompt(input: {
   const pageMatch = input.message.match(/^Page:\s*(\S+)/m)
   const pageUrl = pageMatch?.[1] || ''
 
-  const browserPromise = (async () => {
+  const browserPromise = !wantsLive
+    ? Promise.resolve('')
+    : (async () => {
     try {
       const status = await runAdminBrowserAction({
         action: 'status',
@@ -118,6 +161,26 @@ export async function buildAdminAiLiveContextPrompt(input: {
       ]
       const desk = deskCardForUrl(status.url || pageUrl)
       if (desk) lines.push(formatDeskCard(desk))
+
+      if (status.running) {
+        const snap = await runAdminBrowserAction({
+          action: 'snapshot',
+          actor: 'assistant',
+          includeImage: false,
+          chatSessionId: input.chatSessionId || undefined,
+        }).catch(() => null)
+        const outline = snap?.pageOutline?.slice(0, 24) ?? []
+        if (outline.length) {
+          lines.push(
+            'Page controls:',
+            ...outline.map((row) => {
+              const value = row.value ? ` = ${JSON.stringify(row.value)}` : ''
+              const id = row.id ? `${row.id} ` : ''
+              return `- ${id}${row.role} ${row.name}${value}`.trim()
+            }),
+          )
+        }
+      }
 
       if (wantsProbe) {
         const probe = await runAdminBrowserAction({
@@ -149,11 +212,11 @@ export async function buildAdminAiLiveContextPrompt(input: {
   })()
 
   const releasePromise = (async () => {
-    const releaseId = input.releaseId?.trim()
     if (!releaseId) return ''
     const wantsRelease =
+      Boolean(input.groundRelease) ||
       wantsProbe ||
-      /\b(upc|isrc|this release|release studio|metadata|blocker|distrokid|revelator)\b/i.test(
+      /\b(upc|isrc|this release|release studio|metadata|blocker|distrokid|revelator|pitch|caption|copy|track)\b/i.test(
         input.message,
       ) ||
       Boolean(deskCardForUrl(pageUrl)?.skillHint === 'studio_release')

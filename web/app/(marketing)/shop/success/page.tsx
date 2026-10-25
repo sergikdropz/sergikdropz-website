@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { safeInternalPath } from '@/lib/safe-internal-path'
@@ -12,34 +12,15 @@ export default function PurchaseSuccessPage() {
   const type = searchParams.get('type')
   const tier = searchParams.get('tier')
   const continuePath = safeInternalPath(searchParams.get('next'))
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
   useEffect(() => {
     if (sessionId && method !== 'gumroad') {
-      verifyPurchase(sessionId)
+      fetch('/api/stripe/sale-notice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      }).catch(() => {})
     }
   }, [sessionId, method])
-
-  async function verifyPurchase(sid: string) {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/purchases/verify?session_id=${sid}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.downloadUrl) {
-          setDownloadUrl(data.downloadUrl)
-        }
-      } else {
-        setError('Could not verify purchase. Please contact support.')
-      }
-    } catch {
-      setError('Could not verify purchase. Please contact support.')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const isGumroad = method === 'gumroad'
   const isLicense = type === 'license'
@@ -139,15 +120,12 @@ export default function PurchaseSuccessPage() {
         {!isLicense && !isTip && !isSubscription && !isMerch && !isGumroad && (
           <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 space-y-4">
             <p className="text-gray-400 text-lg">Your purchase was successful.</p>
-            {loading ? (
-              <p className="text-gray-400 animate-pulse">Verifying your purchase...</p>
-            ) : downloadUrl ? (
+            {sessionId ? (
               <>
                 <p className="text-gray-300 text-sm">Your download is ready:</p>
                 <a
-                  href={downloadUrl}
+                  href={`/api/download/order?session_id=${encodeURIComponent(sessionId)}`}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all"
-                  download
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -155,11 +133,9 @@ export default function PurchaseSuccessPage() {
                   Download
                 </a>
                 <p className="text-gray-500 text-xs">
-                  A download link has also been sent to your email.
+                  The same download link is in your email.
                 </p>
               </>
-            ) : error ? (
-              <p className="text-red-400 text-sm">{error}</p>
             ) : (
               <p className="text-gray-400 text-sm">
                 A download link has been sent to your email.

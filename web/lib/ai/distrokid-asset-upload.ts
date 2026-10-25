@@ -97,7 +97,7 @@ export async function downloadWavToPath(wavUrl: string, dest: string): Promise<v
   await downloadHttp(abs, dest)
 }
 
-async function downloadArtworkDspReady(url: string, destBase: string): Promise<string> {
+export async function downloadArtworkDspReady(url: string, destBase: string): Promise<string> {
   const dest = `${destBase}.jpg`
   try {
     const { buffer } = await fetchArtworkBuffer(url)

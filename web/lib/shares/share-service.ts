@@ -20,6 +20,7 @@ import {
   type ShareVisibility,
   resolveFolderShareCoverArt,
 } from '@/lib/shares/types'
+import { loadSharePlatformEmbeds } from '@/lib/shares/load-share-platforms'
 import { lockSharePlayback, shareNeedsListenUnlock } from '@/lib/shares/share-listen-gate'
 
 const SHARE_SELECT =
@@ -44,6 +45,21 @@ function rawTrackArtworkUrl(track: any, audio?: any, folder?: any): string | und
     (inheritFolderArt ? folderRow?.artwork_url : null) ||
     undefined
   return raw ? String(raw).trim() : undefined
+}
+
+async function audioFilesForTracks(tracks: Array<{ audio_file_id?: string | null }>) {
+  const ids = [...new Set(tracks.map((track) => String(track.audio_file_id || '').trim()).filter(Boolean))]
+  const byId = new Map<string, { file_path?: string | null; file_url?: string | null; artwork_url?: string | null }>()
+  if (!ids.length) return byId
+  const supabase = createSupabaseServerClient()
+  const { data } = await supabase
+    .from('audio_files')
+    .select('id, file_path, file_url, artwork_url')
+    .in('id', ids)
+  for (const row of data || []) {
+    if (row?.id) byId.set(String(row.id), row)
+  }
+  return byId
 }
 
 function mapTrackRow(track: any, audio?: any, folder?: any): ShareTrackPayload {
@@ -159,8 +175,11 @@ async function loadFolderShare(folderId: string): Promise<{
     .order('track_number', { ascending: true })
     .order('title', { ascending: true })
 
+  const audioById = await audioFilesForTracks(trackRows || [])
   const tracks = await enrichArtworkFromAudioFiles(
-    (trackRows || []).map((row) => mapTrackRow(row, null, folder)),
+    (trackRows || []).map((row) =>
+      mapTrackRow(row, row.audio_file_id ? audioById.get(String(row.audio_file_id)) : null, folder),
+    ),
   )
   const collectionDraft: ShareCollectionPayload = {
       id: String(folder.id),
@@ -202,7 +221,12 @@ async function loadTrackShare(trackId: string): Promise<{
 
   const folderRaw = track.music_library_folders
   const folder = Array.isArray(folderRaw) ? folderRaw[0] : folderRaw
-  let mapped = mapTrackRow(track, null, folder)
+  const audioById = await audioFilesForTracks([track])
+  let mapped = mapTrackRow(
+    track,
+    track.audio_file_id ? audioById.get(String(track.audio_file_id)) : null,
+    folder,
+  )
   ;[mapped] = await enrichArtworkFromAudioFiles([mapped])
   const collection: ShareCollectionPayload | null = folder
     ? {
@@ -419,6 +443,17 @@ export async function resolveShareByToken(
   }
 
   const resolved = buildResolved(row, loaded.collection, tracks, opts?.origin)
+  try {
+    const platforms = await loadSharePlatformEmbeds({
+      trackIds: loaded.tracks.map((track) => track.id),
+      folderId: loaded.collection?.id || loaded.tracks[0]?.folderId || null,
+      title: resolved.share.title,
+      artist: loaded.collection?.artist || loaded.tracks[0]?.artist || 'SERGIK',
+    })
+    if (platforms.length) resolved.platforms = platforms
+  } catch {
+    /* subscription players are optional */
+  }
   return listenLocked ? lockSharePlayback(resolved) : resolved
 }
 

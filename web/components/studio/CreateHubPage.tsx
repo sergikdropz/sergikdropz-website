@@ -8,11 +8,7 @@ import StudioHubTabs from './StudioHubTabs'
 import NewReleaseWizard from './NewReleaseWizard'
 import TrackUploadPanel from './TrackUploadPanel'
 import CatalogImportPanel from './CatalogImportPanel'
-import {
-  parseStudioCreateTab,
-  studioCreateHref,
-  type StudioCreateTab,
-} from '@/lib/studio/studio-ia'
+import { parseStudioCreateTab, studioCreateHref } from '@/lib/studio/studio-ia'
 
 const TABS = [
   {
@@ -35,27 +31,10 @@ const TABS = [
   },
 ]
 
-const COPY: Record<StudioCreateTab, { title: string; subtitle: string }> = {
-  release: {
-    title: 'Create',
-    subtitle: 'Start a release, add a catalog track, or import ISRCs, splits, and DistroKid — one ingest path.',
-  },
-  track: {
-    title: 'Create',
-    subtitle: 'Upload a WAV, then mint an ISRC. Vault EPs still import from the Release tab.',
-  },
-  import: {
-    title: 'Create',
-    subtitle:
-      'Migrate & keep streams: DistroKid JSON or Spotify/Apple URL, plus bulk ISRCs and split sheets.',
-  },
-}
-
 function CreateHubInner() {
   const { user, isAdmin, loading } = useAuth()
   const searchParams = useSearchParams()
   const active = parseStudioCreateTab(searchParams.get('tab'))
-  const copy = COPY[active]
 
   if (loading) {
     return (
@@ -68,8 +47,8 @@ function CreateHubInner() {
   if (!user || !isAdmin) return null
 
   return (
-    <StudioPageShell title={copy.title} subtitle={copy.subtitle}>
-      <StudioHubTabs tabs={TABS} active={active} label="Create ingest" />
+    <StudioPageShell>
+      <StudioHubTabs tabs={TABS} active={active} label="Create ingest" centered />
       {active === 'track' ? (
         <TrackUploadPanel />
       ) : active === 'import' ? (

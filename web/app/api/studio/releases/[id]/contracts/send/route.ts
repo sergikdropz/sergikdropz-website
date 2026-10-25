@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { sendEmail } from '@/lib/email'
+import { recordSentDepartmentMail, saveDepartmentDraft } from '@/lib/email/department-mailbox-store'
+import { sendDepartmentEmail } from '@/lib/email/send-department'
 import { getSingleReleaseCopyrightReadiness } from '@/lib/studio/copyright-pipeline'
 import { buildRightsPackets, rightsPacketPendingPatch, applyRightsPacketDrafts, type RightsPacketKind } from '@/lib/studio/rights-packets'
+import {
+  buildContractPdf,
+  contractComposeBody,
+  contractOutboundDeskBody,
+  contractPdfFilename,
+  contractStudioUrl,
+} from '@/lib/studio/contract-pdf'
+import { contractDraftHref } from '@/lib/studio/contract-mail-link'
+import { includeDocuSign } from '@/lib/studio/contract-docusign-include'
+import { setRightsPacketDraft } from '@/lib/studio/rights-packet-drafts'
 import {
   contractEmailHtml,
   contractEmailSubject,
@@ -12,11 +23,7 @@ import {
   parsePartyContacts,
   signatoriesReadyToSend,
 } from '@/lib/studio/rights-contract-send'
-import {
-  RELEASE_COLLAB_FROM_EMAIL,
-  RELEASE_COLLAB_FROM_NAME,
-  collabOutboundReplyTo,
-} from '@/lib/studio/release-collab'
+import { collabOutboundReplyTo } from '@/lib/studio/release-collab'
 import { recordCollabEmailSend, postCollabSystemMessage } from '@/lib/studio/collab-email-log'
 import { contractKindToEmailKind } from '@/lib/studio/collab-review-writeback'
 import { logActivity } from '@/lib/activity-log'
@@ -54,14 +61,15 @@ export async function POST(
       )
     }
 
-    if (!process.env.RESEND_API_KEY) {
+    const body = await request.json().catch(() => ({}))
+    const drafting = body.draft === true
+    if (!drafting && !process.env.RESEND_API_KEY) {
       return NextResponse.json(
         { error: 'RESEND_API_KEY is not configured — cannot send contract emails.' },
         { status: 503 },
       )
     }
 
-    const body = await request.json().catch(() => ({}))
     const kind = String(body.kind || '') as RightsPacketKind
     if (!KINDS.has(kind)) {
       return NextResponse.json(
@@ -71,6 +79,7 @@ export async function POST(
     }
 
     const partyContactsPatch = parsePartyContacts(body.party_contacts)
+    const textOverride = typeof body.text === 'string' ? body.text.trim().slice(0, 100000) : ''
     const supabase = createSupabaseServerClient()
 
     const { data: release, error: releaseError } = await supabase
@@ -84,11 +93,9 @@ export async function POST(
 
     const { data: trackRows } = await supabase
       .from('distribution_tracks')
-      .select(
-        'id, title, contributors, splits, isrc_full, iswc, writer_legal_names, origin, publisher_name, mechanical_licensed, contains_samples, sonic_snapshot',
-      )
+      .select('*')
       .eq('release_id', params.id)
-      .order('track_number', { ascending: true })
+      .order('created_at', { ascending: true })
 
     const tracks = (trackRows || []) as Array<{
       id?: string
@@ -120,7 +127,8 @@ export async function POST(
       }),
       readiness?.rights_packets,
     )
-    const packet = packets.find((row) => row.kind === kind)
+    let packet = packets.find((row) => row.kind === kind)
+    if (packet && textOverride) packet = { ...packet, text: textOverride }
     if (!packet || !packet.needed || !packet.text) {
       return NextResponse.json(
         { error: 'This contract is not required for the current Catalog credits.' },
@@ -188,27 +196,105 @@ export async function POST(
     }
 
     const emailKind = contractKindToEmailKind(kind)
-    const contractSubject = contractEmailSubject(kind, release.title || 'SERGIK release')
+    const releaseTitle = release.title || 'SERGIK release'
+    const contractSubject = contractEmailSubject(kind, releaseTitle)
+    const pdf = buildContractPdf({
+      title: packet.label,
+      releaseTitle,
+      albumArtist,
+      body: packet.text,
+    })
+    const pdfFilename = contractPdfFilename(packet.label, releaseTitle)
+    const studioUrl = contractStudioUrl(params.id)
+
+    if (drafting) {
+      if (textOverride || partyContactsPatch.length) {
+        await supabase.from('release_copyright_checklists').upsert(
+          {
+            release_id: params.id,
+            ...(textOverride
+              ? { rights_packets: setRightsPacketDraft(readiness?.rights_packets, kind, packet.text) }
+              : {}),
+            party_contacts: partyContacts,
+          },
+          { onConflict: 'release_id' },
+        )
+      }
+      const draft = await saveDepartmentDraft({
+        accountId: 'studio',
+        to: recipients.map((row) => row.email).join(', '),
+        subject: contractSubject,
+        body: contractComposeBody({
+          packetLabel: packet.label,
+          releaseTitle,
+          albumArtist,
+          partyNames: recipients.map((row) => row.stage).join(', '),
+          pdfFilename,
+          packetText: packet.text,
+          studioUrl,
+        }),
+        attachments: [
+          {
+            filename: pdfFilename,
+            contentType: 'application/pdf',
+            size: pdf.length,
+            contentBase64: pdf.toString('base64'),
+          },
+        ],
+      })
+      return NextResponse.json({
+        ok: true,
+        drafted: true,
+        draftId: draft.id,
+        href: contractDraftHref(draft.id),
+      })
+    }
+
+    const docusign = await includeDocuSign({
+      supabase,
+      releaseId: params.id,
+      kind,
+      packetText: packet.text,
+      packetLabel: packet.label,
+      releaseTitle,
+      subject: contractSubject,
+      pdf,
+      pdfFilename,
+      signatories,
+      existingEnvelopes: readiness?.docusign_envelopes,
+      statusPatch: {
+        ...(partyContactsPatch.length ? { party_contacts: partyContacts } : {}),
+      },
+    })
+    if (docusign.blocked) {
+      return NextResponse.json(
+        { error: docusign.error, consentUrl: docusign.consentUrl },
+        { status: docusign.status },
+      )
+    }
     const sent: Array<{ stage: string; email: string; messageId?: string }> = []
     for (const recipient of recipients) {
-      const result = await sendEmail({
+      const result = await sendDepartmentEmail({
+        department: 'studio',
         to: recipient.email,
         subject: contractSubject,
         html: contractEmailHtml({
           kind,
-          releaseTitle: release.title || 'Untitled',
+          releaseTitle,
           albumArtist,
           partyName: recipient.stage,
           packetText: packet.text,
           packetLabel: packet.label,
+          pdfFilename,
+          docusignIncluded: docusign.included,
         }),
-        from: `${RELEASE_COLLAB_FROM_NAME} <${RELEASE_COLLAB_FROM_EMAIL}>`,
         replyTo: collabOutboundReplyTo(params.id),
         tags: [
           { name: 'type', value: 'rights_contract' },
           { name: 'kind', value: kind },
           { name: 'release_id', value: params.id.slice(0, 200) },
         ],
+        attachments: [{ filename: pdfFilename, content: pdf, contentType: 'application/pdf' }],
       })
       sent.push({ stage: recipient.stage, email: recipient.email, messageId: result.messageId })
       await recordCollabEmailSend({
@@ -219,20 +305,50 @@ export async function POST(
         kind: emailKind,
         status: 'sent',
       })
+      await recordSentDepartmentMail({
+        accountId: 'studio',
+        to: recipient.email,
+        subject: contractSubject,
+        body: contractOutboundDeskBody({
+          packetLabel: packet.label,
+          releaseTitle,
+          recipients: [`${recipient.stage} <${recipient.email}>`],
+          packetText: packet.text,
+          studioUrl,
+          docusignIncluded: docusign.included,
+        }),
+        resendId: result.messageId || null,
+        attachments: [
+          {
+            filename: pdfFilename,
+            contentType: 'application/pdf',
+            size: pdf.length,
+            contentBase64: pdf.toString('base64'),
+          },
+        ],
+      }).catch((error) => {
+        console.error('contract mailbox copy:', error)
+      })
     }
 
     await postCollabSystemMessage({
       releaseId: params.id,
-      body: `${packet.label} emailed to ${sent.map((row) => `${row.stage} <${row.email}>`).join(', ')}.`,
+      body: `${packet.label} emailed to ${sent.map((row) => `${row.stage} <${row.email}>`).join(', ')}.${
+        docusign.included ? ' The PDF and DocuSign were both included.' : ' The PDF was included. DocuSign was not.'
+      }`,
       emailSubject: contractSubject,
     })
 
     const pending = rightsPacketPendingPatch(packet)
-    if (pending) {
+    const rightsPackets = textOverride
+      ? setRightsPacketDraft(readiness?.rights_packets, kind, packet.text)
+      : null
+    if (pending || rightsPackets) {
       await supabase.from('release_copyright_checklists').upsert(
         {
           release_id: params.id,
-          ...pending,
+          ...(pending || {}),
+          ...(rightsPackets ? { rights_packets: rightsPackets } : {}),
           party_contacts: partyContacts,
         },
         { onConflict: 'release_id' },
@@ -243,7 +359,13 @@ export async function POST(
       actionType: 'rights_contract_sent',
       resourceType: 'distribution_release',
       resourceId: params.id,
-      details: { kind, recipients: sent.map((row) => row.email), count: sent.length },
+      details: {
+        kind,
+        recipients: sent.map((row) => row.email),
+        count: sent.length,
+        docusign: docusign.included,
+        envelopeId: docusign.envelopeId,
+      },
     }).catch(() => null)
 
     const next = await getSingleReleaseCopyrightReadiness(supabase, params.id)
@@ -253,6 +375,12 @@ export async function POST(
       sent,
       count: sent.length,
       readiness: next,
+      docusign: {
+        included: docusign.included,
+        envelopeId: docusign.envelopeId,
+        reason: docusign.reason,
+      },
+      envelopes: docusign.envelopes,
     })
   } catch (error: unknown) {
     return NextResponse.json(

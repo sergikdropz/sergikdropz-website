@@ -6,7 +6,7 @@ import { FaSearch, FaTimes, FaPlus, FaMusic, FaFolder, FaPlay, FaPause, FaEdit, 
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useMusicPlayer } from '@/contexts/MusicPlayerContext'
 import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   fetchMusicLibrary,
   fetchFolders,
@@ -38,13 +38,14 @@ type ViewMode = 'vault' | 'browse'
 export default function AdminMusicVault() {
   const { user, isAdmin, loading: authLoading } = useAdminAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { playTrack, playQueue, currentTrack, isPlaying } = useMusicPlayer()
 
   const [libraryData, setLibraryData] = useState<MusicLibraryData | null>(null)
   const [allTracks, setAllTracks] = useState<Track[]>([])
   const [folders, setFolders] = useState<FolderItem[]>([])
   const [loadingLibrary, setLoadingLibrary] = useState(true)
-  const [viewMode, setViewMode] = useState<ViewMode>('vault')
+  const viewMode: ViewMode = searchParams.get('view') === 'browse' ? 'browse' : 'vault'
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFolder, setSelectedFolder] = useState<FolderItem | null>(null)
   const [displayTracks, setDisplayTracks] = useState<Track[]>([])
@@ -57,6 +58,8 @@ export default function AdminMusicVault() {
   const [showSmartPlaylistBuilder, setShowSmartPlaylistBuilder] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: Track } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [wavRoot, setWavRoot] = useState<{ path: string; exists: boolean; wavCount: number } | null>(null)
+  const [wavRootBusy, setWavRootBusy] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
 
   const rootVaultFolders = useMemo(
@@ -99,8 +102,45 @@ export default function AdminMusicVault() {
   }, [selectedFolder])
 
   useEffect(() => {
-    if (isAdmin && !authLoading) loadData()
-  }, [isAdmin, authLoading, loadData])
+    // Browse paints from SergBrowser. The full vault library waits until that grid is shown.
+    if (isAdmin && !authLoading && viewMode === 'vault') loadData()
+  }, [isAdmin, authLoading, loadData, viewMode])
+
+  useEffect(() => {
+    if (!isAdmin || authLoading || viewMode !== 'vault') return
+    let cancelled = false
+    fetch('/api/music-library/wav-root')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data || typeof data.path !== 'string') return
+        setWavRoot({
+          path: data.path,
+          exists: Boolean(data.exists),
+          wavCount: Number(data.wavCount) || 0,
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin, authLoading, viewMode])
+
+  async function revealWavRoot() {
+    setWavRootBusy(true)
+    try {
+      const res = await fetch('/api/music-library/wav-root', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(typeof data.error === 'string' ? data.error : 'Could not open the WAV folder')
+        return
+      }
+      showToast('Opened WAV files root in Finder')
+    } catch {
+      showToast('Could not open the WAV folder')
+    } finally {
+      setWavRootBusy(false)
+    }
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -321,35 +361,8 @@ export default function AdminMusicVault() {
         />
 
         {/* Header — mirrors front-end vault */}
-        <div className="mb-6">
-          <div className="flex flex-col items-center justify-center mb-4 w-full">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold mb-1 font-six-caps text-center border border-yellow-400 text-yellow-400 px-3 py-1.5 rounded">
-              SERGIK Music Vault
-            </h1>
-
-            {/* View toggle */}
-            <div className="flex items-center space-x-1 bg-gray-900/40 border border-gray-700 rounded-lg p-0.5 mt-3">
-              <button
-                onClick={() => setViewMode('vault')}
-                className={`px-4 py-1.5 rounded-md text-xs font-medium transition ${
-                  viewMode === 'vault' ? 'bg-yellow-500 text-black' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Vault
-              </button>
-              <button
-                onClick={() => setViewMode('browse')}
-                className={`px-4 py-1.5 rounded-md text-xs font-medium transition ${
-                  viewMode === 'browse' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Browse
-              </button>
-            </div>
-          </div>
-
-          {/* Search */}
-          {viewMode === 'vault' && (
+        {viewMode === 'vault' && (
+          <div className="mb-6">
             <div className="relative max-w-2xl mx-auto">
               <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -370,8 +383,8 @@ export default function AdminMusicVault() {
                 </button>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Browse Mode — overflow-visible so the page scrolls (same as the public vault).
             A fixed-height overflow-hidden pane clipped the track list with no inner scroller. */}
@@ -413,10 +426,32 @@ export default function AdminMusicVault() {
               </div>
             )}
 
+            {folderPath.length === 0 && wavRoot && (
+              <div className="mb-6 mx-auto max-w-3xl rounded-lg border border-gray-700 bg-gray-900/50 px-4 py-3 text-center">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-gray-500">WAV files root</div>
+                <div className="mt-1 font-mono text-sm text-yellow-300 break-all">{wavRoot.path}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {wavRoot.exists
+                    ? `${wavRoot.wavCount.toLocaleString()} WAV files on this Mac`
+                    : 'That folder is not mounted on the machine running this site'}
+                </div>
+                {wavRoot.exists && (
+                  <button
+                    type="button"
+                    onClick={() => void revealWavRoot()}
+                    disabled={wavRootBusy}
+                    className="mt-3 inline-flex items-center rounded-md border border-yellow-500/40 px-3 py-1.5 text-xs font-medium text-yellow-300 hover:bg-yellow-500/10 disabled:opacity-50"
+                  >
+                    {wavRootBusy ? 'Opening…' : 'Show in Finder'}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Folder Grid (same as front-end vault) */}
             {displayFolders.length > 0 && (
               <div className="mb-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <div className="flex flex-wrap justify-center gap-4">
                   {displayFolders.map((folder) => {
                     const artwork = folder.artwork
                       ? resolveImageUrl(folder.artwork)
@@ -430,7 +465,7 @@ export default function AdminMusicVault() {
                       <div
                         key={folder.id}
                         onClick={() => navigateToFolder(folder)}
-                        className="group cursor-pointer transition hover:scale-[1.02]"
+                        className="group w-[calc(50%-0.5rem)] cursor-pointer transition hover:scale-[1.02] sm:w-[calc(33.333%-0.667rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(20%-0.8rem)] xl:w-[calc(16.667%-0.833rem)]"
                       >
                         <div className="relative aspect-square rounded-lg overflow-hidden shadow-xl bg-gray-700/40 border border-gray-600/50 group-hover:border-yellow-500/50 transition">
                           {artwork ? (

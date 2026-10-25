@@ -9,6 +9,7 @@ import { readdirSync, statSync } from 'fs'
 import { basename, extname, join } from 'path'
 import { DEFAULT_EXPORTS_ROOT, normalizeAudioStem } from '@/lib/audio/export-folder-dates'
 import { normalizeTitleKey } from '@/lib/studio/distrokid-import'
+import { mediaFileMatchesTrackTitle } from '@/lib/audio/catalog-playback-file'
 import { safeAudioFileName } from '@/lib/audio/replace-audio-file'
 
 /** Stable Music Vault folder for distribution masters (playlist-style, like Distrokid Exports). */
@@ -126,15 +127,20 @@ export function pickDspMasterR2Key(
     .map((key) => {
       const base = key.split('/').pop() || key
       const isrc = isrcFromMasterFileName(base)
+      const isrcHit = Boolean(wantIsrc && isrc === wantIsrc)
+      const titleHit = mediaFileMatchesTrackTitle(base, opts.trackTitle)
+      // Sharing a release folder is not a match. That copied All Around onto
+      // every other song in Walk That Walk.
+      if (!isrcHit && !titleHit) return null
       let score = 0
-      if (wantIsrc && isrc === wantIsrc) score += 200
+      if (isrcHit) score += 200
+      if (titleHit) score += 80
       if (releaseSlug && key.startsWith(`${DSP_MASTERS_R2_PREFIX}/${releaseSlug}/`)) score += 40
       const nameSlug = slugify(base.replace(/\.wav$/i, '').replace(/^[A-Z0-9]{12}-/i, ''), 60)
-      if (nameSlug === titleSlug) score += 80
-      else if (nameSlug.includes(titleSlug) || titleSlug.includes(nameSlug)) score += 25
+      if (nameSlug === titleSlug) score += 10
       return { key, score }
     })
-    .filter((row) => row.score > 0)
+    .filter((row): row is { key: string; score: number } => row != null && row.score > 0)
     .sort((a, b) => b.score - a.score)
 
   return scored[0]?.key || null

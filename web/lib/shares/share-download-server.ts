@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { existsSync } from 'fs'
 import path from 'path'
-import { sendEmail } from '@/lib/email'
+import { sendDepartmentEmail } from '@/lib/email/send-department'
 import { getR2MediaConfig, r2ObjectExists } from '@/lib/audio/r2Media'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { shareDownloadSecret } from '@/lib/shares/share-download-cookie'
@@ -254,7 +254,8 @@ export async function sendDownloadInvite(opts: {
   detail: string
 }): Promise<void> {
   const title = opts.title.trim() || 'SERGIK'
-  await sendEmail({
+  await sendDepartmentEmail({
+    department: 'drops',
     to: opts.to,
     subject: `SERGIK shared a download — ${title}`,
     html: `

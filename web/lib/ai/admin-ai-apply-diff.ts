@@ -53,6 +53,7 @@ export function applyDiffPromptHint(): string {
     '{"tool":"patch_release_marketing_copy","releaseId":"<id>","field":"elevator_pitch","before":"…","after":"…","label":"Elevator pitch"}',
     '```',
     'The UI shows before/after; the user Approves. Do not claim the field was written until approved.',
+    'UPC is not marketing copy. Use field "upc" (12 or 13 digits). Approve writes distribution_releases.upc. Once DistroKid has submitted a UPC, that code is the one to store. Do not edit DistroKid.',
   ].join('\n')
 }
 

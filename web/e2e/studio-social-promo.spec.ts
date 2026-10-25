@@ -62,16 +62,12 @@ test.describe('studio marketing social promo', () => {
         await accept.click()
       }
       await socialBtn.click()
-      await expect(page.getByText(/Social \/ Meta promo schedule/i)).toBeVisible({
+      await expect(page.getByText(/SERGIK Promo Lab/i)).toBeVisible({
         timeout: 30_000,
       })
       await expect(
         page.getByRole('button', { name: /Generate schedule|Regenerate schedule/i })
       ).toBeVisible()
-      await expect(page.getByTestId('social-download-kit')).toBeVisible()
-      await expect(page.getByRole('button', { name: /Vinyl story/i })).toBeVisible()
-      await expect(page.getByRole('button', { name: /Vinyl reel/i })).toBeVisible()
-      await expect(page.getByTestId('social-spotify-canvas')).toBeVisible()
     }
   })
 })

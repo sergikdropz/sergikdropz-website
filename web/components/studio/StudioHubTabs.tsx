@@ -13,12 +13,13 @@ type Props = {
   tabs: StudioHubTab[]
   active: string
   label: string
+  centered?: boolean
 }
 
-export default function StudioHubTabs({ tabs, active, label }: Props) {
+export default function StudioHubTabs({ tabs, active, label, centered = false }: Props) {
   return (
     <div
-      className="flex flex-wrap gap-1 mb-8 p-1 rounded-2xl border border-zinc-800 bg-zinc-900/60 w-full sm:w-fit"
+      className={`mb-8 flex w-full flex-wrap gap-1 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1 sm:w-fit ${centered ? 'sm:mx-auto' : ''}`}
       role="tablist"
       aria-label={label}
     >

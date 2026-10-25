@@ -9,6 +9,7 @@ interface License {
   track_id: string
   track_title?: string
   tier: string
+  license_tier?: string
   customer_email: string
   customer_name?: string
   amount_paid: number
@@ -95,6 +96,10 @@ useEffect(() => {
       setLoadingStats(true)
       const res = await fetch('/api/admin/licenses/stats')
       const data = await res.json()
+      if (!res.ok || !data?.summary) {
+        setStats(null)
+        return
+      }
       setStats(data)
     } catch (err) {
       console.error('Error fetching license stats:', err)
@@ -126,7 +131,7 @@ useEffect(() => {
       </div>
 
       {/* Stats Cards */}
-      {stats && (
+      {stats?.summary && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
             <p className="text-gray-400 text-sm">Total Licenses</p>
@@ -149,17 +154,17 @@ useEffect(() => {
           <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
             <p className="text-gray-400 text-sm">Top Tier Revenue</p>
             <p className="text-2xl font-bold text-purple-400">
-              {stats.summary.topTier.tier}
+              {stats.summary.topTier?.tier || 'N/A'}
             </p>
             <p className="text-xs text-gray-400">
-              ${stats.summary.topTier.revenue.toFixed(2)}
+              ${(stats.summary.topTier?.revenue || 0).toFixed(2)}
             </p>
           </div>
         </div>
       )}
 
       {/* Tier Breakdown */}
-      {stats && Object.keys(stats.revenueByTier).length > 0 && (
+      {stats?.revenueByTier && Object.keys(stats.revenueByTier).length > 0 && (
         <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 mb-6">
           <h2 className="text-lg font-semibold text-white mb-3">Tier Breakdown</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -312,10 +317,10 @@ useEffect(() => {
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 text-xs rounded font-medium ${
-                          tierColors[license.tier] || 'bg-gray-600/20 text-gray-400'
+                          tierColors[license.tier || license.license_tier || ''] || 'bg-gray-600/20 text-gray-400'
                         }`}
                       >
-                        {license.tier}
+                        {license.tier || license.license_tier || 'unknown'}
                       </span>
                     </td>
                     <td className="p-3 text-green-400">
@@ -425,10 +430,10 @@ useEffect(() => {
                     <div className="text-gray-400 text-sm mb-1">Tier</div>
                     <span
                       className={`px-2 py-0.5 text-xs rounded font-medium ${
-                        tierColors[selectedLicense.tier] || 'bg-gray-600/20 text-gray-400'
+                        tierColors[selectedLicense.tier || selectedLicense.license_tier || ''] || 'bg-gray-600/20 text-gray-400'
                       }`}
                     >
-                      {selectedLicense.tier}
+                      {selectedLicense.tier || selectedLicense.license_tier || 'unknown'}
                     </span>
                   </div>
                 </div>

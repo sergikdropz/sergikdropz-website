@@ -48,6 +48,30 @@ describe('resolveSkillForTool', () => {
 
   it('does not treat an empty primaryGoal as present', () => {
     const skill = resolveSkillForTool(skills, 'run_meta_promo_pipeline')
-    expect(missingRequiredSkillFields(skill, { primaryGoal: '', action: 'status' })).toEqual(['primaryGoal'])
+    expect(missingRequiredSkillFields(skill, { primaryGoal: '', action: 'status' }, 'run_meta_promo_pipeline')).toEqual(['primaryGoal'])
+  })
+
+  it('does not require a release type when updating an existing release barcode', () => {
+    const studio: SkillToolCandidate = {
+      id: 'studio_release',
+      allowedTools: ['patch_release_marketing_copy', 'create_distribution_release_draft'],
+      inputSchema: {
+        releaseId: { required: false },
+        title: { required: true },
+        type: { required: true },
+        marketingCopy: { required: false },
+      },
+    }
+    expect(
+      missingRequiredSkillFields(
+        studio,
+        { releaseId: 'release-collection-unreleased-eps-sergik---stayi-mu5pzoor', marketingCopy: { upc: '700563968501' } },
+        'patch_release_marketing_copy'
+      )
+    ).toEqual([])
+    expect(missingRequiredSkillFields(studio, { releaseId: 'r1' }, 'create_distribution_release_draft')).toEqual([
+      'title',
+      'type',
+    ])
   })
 })

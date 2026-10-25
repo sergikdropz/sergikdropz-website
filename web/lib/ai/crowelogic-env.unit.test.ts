@@ -77,7 +77,7 @@ describe('resolveCrowelogicEnv', () => {
     expect(env.model).toBe('supreme')
   })
 
-  it('holds hosted chat until Pro linkage is confirmed', () => {
+  it('holds other hosted gateways until Pro linkage is confirmed', () => {
     snapshotEnv()
     for (const key of ENV_KEYS) delete process.env[key]
     process.env.CROWELOGIC_API_KEY = 'customer-credential'
@@ -91,5 +91,23 @@ describe('resolveCrowelogicEnv', () => {
     const live = resolveCrowelogicEnv()
     expect(live.configured).toBe(true)
     expect(live.activation).toBe('pro_gateway')
+  })
+
+  it('enables the live GPT-6.1 gateway from a replacement credential', () => {
+    snapshotEnv()
+    for (const key of ENV_KEYS) delete process.env[key]
+    process.env.CROWELOGIC_API_KEY = 'replacement-deployment-credential'
+    process.env.CROWELOGIC_BASE_URL = 'https://gpt61.crowelogic.com/v1'
+    const env = resolveCrowelogicEnv()
+    expect(env.configured).toBe(true)
+    expect(env.activation).toBe('pro_gateway')
+    expect(env.model).toBe('gpt-6.1-sol')
+    expect(env.revokedCredential).toBe(false)
+  })
+
+  it('builds the usage URL on the versioned gateway', () => {
+    expect(crowelogicOpenAiUrl('https://gpt61.crowelogic.com/v1', 'usage')).toBe(
+      'https://gpt61.crowelogic.com/v1/usage'
+    )
   })
 })

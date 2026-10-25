@@ -43,7 +43,7 @@ Preview → Approve flow.
 
 ### CroweLM chat
 
-Admin chat providers are `anthropic` (native messages API), `openai`, `ollama`, and `crowelogic`. CroweLM is server-side OpenAI-compatible `POST /v1/chat/completions` (`web/lib/ai/crowelogic-env.ts`). It uses the existing Crowe ID and a deployment-only customer credential (`CROWELOGIC_API_KEY`). As of 2026-10-04 that credential has not been issued. Pro is verified on the $99/month subscription, with a one-time 3,000-credit allowance through 2026-10-22 and no automatic overage. Hosted calls stay off until Crowe sends the credential and `CROWELOGIC_PRO_LINKED` is set. `CROWE_API_KEY` is Crowe Creative only (`web/lib/ai/crowe-creative-client.ts`). Do not put passwords or live keys in the repo.
+Admin chat providers are `anthropic` (native messages API), `openai`, `ollama`, and `crowelogic`. CroweLM is server-side OpenAI-compatible `POST /v1/chat/completions` (`web/lib/ai/crowelogic-env.ts`). The live gateway is `https://gpt61.crowelogic.com/v1` with model `gpt-6.1-sol`, non-streaming, an `Idempotency-Key` on each request, and `GET /v1/usage` for the balance. Pro includes 3,000 credits per period through 2026-10-22, 5 credits per request, and no overage. The first deployment key was revoked and is refused by hash. Chat stays off until a replacement is set in `CROWELOGIC_API_KEY`. `CROWE_API_KEY` is Crowe Creative only (`web/lib/ai/crowe-creative-client.ts`). Do not put passwords or live keys in the repo.
 
 ## Production vs local
 

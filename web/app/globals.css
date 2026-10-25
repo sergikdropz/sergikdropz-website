@@ -9,6 +9,115 @@
   transition: outline-color 0.15s ease;
 }
 
+@property --pack-polish-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes admin-ai-pack-polish-orbit {
+  to { --pack-polish-angle: 360deg; }
+}
+
+@keyframes admin-ai-pack-polish-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.admin-ai-pack-polish-cue {
+  box-shadow: inset 0 0 0 1px rgb(226 179 64 / 0.45);
+}
+
+.admin-ai-pack-polish-glow {
+  position: absolute;
+  z-index: 0;
+  width: 18px;
+  height: 10px;
+  margin-left: -9px;
+  margin-top: -5px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, #fff8dc 0%, #f3d56a 46%, rgb(226 179 64 / 0) 72%);
+  pointer-events: none;
+  left: calc(50% + cos(var(--pack-polish-angle)) * (50% - 14px));
+  top: calc(50% + sin(var(--pack-polish-angle)) * (50% - 8px));
+  animation:
+    admin-ai-pack-polish-orbit 5.8s linear infinite,
+    admin-ai-pack-polish-pulse 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-ai-pack-polish-glow {
+    animation: none;
+    opacity: 0.8;
+    left: calc(100% - 18px);
+    top: 50%;
+  }
+}
+
+@keyframes admin-ai-working-caret {
+  0%, 45% {
+    opacity: 1;
+    box-shadow: 0 0 8px 1px rgb(246 231 168 / 0.95);
+  }
+  60%, 100% {
+    opacity: 0.2;
+    box-shadow: 0 0 2px 0 rgb(246 231 168 / 0.25);
+  }
+}
+
+.admin-ai-working-caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 4px;
+  vertical-align: -0.12em;
+  border-radius: 1px;
+  background: #fff6d4;
+  box-shadow: 0 0 8px 1px rgb(246 231 168 / 0.95);
+  animation: admin-ai-working-caret 1.05s ease-in-out infinite;
+}
+
+@keyframes admin-ai-working-sweep {
+  0% { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+
+.admin-ai-working-phrase {
+  display: inline-block;
+  background-image: linear-gradient(
+    90deg,
+    #c9a24a 0%,
+    #e8c96a 40%,
+    #fff6d4 48%,
+    #fffef8 52%,
+    #fff6d4 56%,
+    #e8c96a 64%,
+    #c9a24a 100%
+  );
+  background-size: 280% 100%;
+  background-repeat: no-repeat;
+  background-position: 100% center;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: admin-ai-working-sweep 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-ai-working-caret {
+    animation: none;
+    opacity: 1;
+  }
+
+  .admin-ai-working-phrase {
+    animation: none;
+    background-image: none;
+    color: #fef3c7;
+    -webkit-text-fill-color: #fef3c7;
+  }
+}
+
 @keyframes pulse-glow {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.8; }
@@ -202,6 +311,15 @@
   will-change: opacity;
 }
 
+/* Mobile shortens other motion to 0.3s. Keep the art dissolve at full length. */
+@media (max-width: 768px) {
+  .site-background-mosaic .mosaic-tile-crossfade-in,
+  .site-background-mosaic .mosaic-tile-crossfade-out {
+    animation-duration: 3.2s !important;
+    animation-timing-function: ease-in-out !important;
+  }
+}
+
 .mosaic-tile-crossfade-in {
   animation-name: mosaicTileCrossfadeIn;
 }
@@ -389,13 +507,12 @@
   backdrop-filter: none !important;
 }
 
-/* Safari / iOS WebKit: kill Ken Burns + pulse layers (JS also gates these). */
+/* Safari / iOS WebKit: kill the full-page mosaic Ken Burns (JS also gates it).
+   EP / share cover drift stays — one clipped pan/zoom, not a grid of tiles.
+   Opacity crossfades stay so a new cover dissolves instead of cutting in. */
 @supports (-webkit-touch-callout: none) {
-  .site-background-mosaic .animate-fade-in,
-  .site-background-mosaic .mosaic-tile-crossfade-in,
-  .site-background-mosaic .mosaic-tile-crossfade-out {
+  .site-background-mosaic .animate-fade-in {
     animation: none !important;
-    opacity: 1 !important;
   }
 
   .mosaic-tile-motion,
@@ -406,16 +523,7 @@
   .mosaic-tile-motion-4,
   .mosaic-tile-motion-5,
   .mosaic-tile-motion-6,
-  .mosaic-tile-motion-7,
-  .ep-release-cover-drift,
-  .ep-release-cover-drift-0,
-  .ep-release-cover-drift-1,
-  .ep-release-cover-drift-2,
-  .ep-release-cover-drift-3,
-  .ep-release-cover-drift-4,
-  .ep-release-cover-drift-5,
-  .ep-release-cover-drift-6,
-  .ep-release-cover-drift-7 {
+  .mosaic-tile-motion-7 {
     animation: none !important;
     will-change: auto !important;
     transform: none !important;
@@ -868,11 +976,10 @@ textarea,
 }
 
 .font-six-caps {
-  font-family: var(--font-six-caps), 'Six Caps', Impact, sans-serif;
+  font-family: var(--font-six-caps, 'Six Caps'), Impact, sans-serif;
   letter-spacing: 0.15em;
   font-weight: 400;
   text-transform: uppercase;
-  font-stretch: 75%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -880,7 +987,7 @@ textarea,
 /* Inline SERGIK letters inside mixed titles — slightly taller than caps, 2× horizontal. */
 .font-sergik-brand-letter {
   display: inline-block;
-  font-family: var(--font-six-caps), 'Six Caps', Impact, sans-serif;
+  font-family: var(--font-six-caps, 'Six Caps'), Impact, sans-serif;
   font-size: 1.06em;
   font-weight: 400;
   line-height: 1;
@@ -906,11 +1013,10 @@ textarea,
 }
 
 .font-six-caps-hero {
-  font-family: var(--font-six-caps), 'Six Caps', Impact, sans-serif;
+  font-family: var(--font-six-caps, 'Six Caps'), Impact, sans-serif;
   letter-spacing: 4.8px;
   font-weight: 400;
   text-transform: uppercase;
-  font-stretch: 75%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-shadow: 

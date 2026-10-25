@@ -128,7 +128,7 @@ async function browseSongs(supabase: any, opts: BrowseOpts) {
   if (audioFileIds.length > 0) {
     const { data: audioMeta } = await supabase
       .from('audio_files')
-      .select('id, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature')
+      .select('id, file_path, file_url, duration_seconds, artwork_url, created_at, sonic_dna_status, bpm, key_signature')
       .in('id', audioFileIds)
     audioMeta?.forEach((file: any) => audioMap.set(file.id, file))
   }

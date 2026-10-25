@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   allocateStatementLine,
   applyPayout,
+  campaignRoas,
   emptyRoyaltyStore,
   formatUsdCents,
   ingestRoyaltyStatement,
   isLabelRetainName,
   parseRoyaltyStatementCsv,
   royaltyOpsSignals,
+  summarizeMonetization,
   summarizePayeeLedger,
   LABEL_LEGAL_ENTITY_PAYEE_ID,
 } from '@/lib/studio/royalties'
@@ -160,5 +162,84 @@ describe('payouts', () => {
       paidVia: 'wire',
     })
     expect('error' in blocked).toBe(true)
+  })
+})
+
+const META_ADS_CSV = `Campaign name,Ad set name,Amount spent,Currency,Impressions
+UTOPIA launch,Reels,25.00,USD,10000
+=CMD|calc,Feed,10.00,USD,200
+`
+
+const META_CREATOR_CSV = `Page ID,Approximate earnings,Currency,Song Title,ISRC
+111,40.00,USD,Neon Drift,QTA530000001
+`
+
+describe('meta actuals stay separate from splits', () => {
+  it('stores ad spend as a cost and does not pay collaborators', () => {
+    const parsed = parseRoyaltyStatementCsv(META_ADS_CSV)
+    expect(parsed.source).toBe('meta_ads')
+    expect(parsed.category).toBe('meta_ad_spend')
+    expect(parsed.lines[1].raw?.campaignname?.startsWith("'")).toBe(true)
+
+    const result = ingestRoyaltyStatement({
+      csvText: META_ADS_CSV,
+      trackLookup: [
+        {
+          isrc: 'QTA530000001',
+          trackId: 't1',
+          releaseId: 'r1',
+          title: 'Neon Drift',
+          splits: [
+            { name: 'SERGIK', percentage: 50 },
+            { name: 'Auxlee', percentage: 50 },
+          ],
+        },
+      ],
+    })
+    expect(result.statement.grossCents).toBe(3500)
+    expect(result.ledgerCreated).toBe(0)
+    expect(summarizeMonetization(result.store).adSpendCents).toBe(3500)
+    expect(summarizeMonetization(result.store).roasLabel).toBe('N/A')
+    expect(campaignRoas(7000, 3500)).toBe('2.00')
+    expect(campaignRoas(null, 0)).toBe('N/A')
+  })
+
+  it('keeps creator payouts with the LLC and does not deduct 20 percent', () => {
+    const result = ingestRoyaltyStatement({
+      csvText: META_CREATOR_CSV,
+      trackLookup: [
+        {
+          isrc: 'QTA530000001',
+          trackId: 't1',
+          releaseId: 'r1',
+          title: 'Neon Drift',
+          splits: [
+            { name: 'SERGIK', percentage: 50 },
+            { name: 'Auxlee', percentage: 50 },
+          ],
+        },
+      ],
+    })
+    expect(result.statement.category).toBe('meta_creator')
+    expect(result.statement.amountBasis).toBe('unknown')
+    expect(result.statement.grossCents).toBe(4000)
+    expect(result.store.ledger.every((entry) => entry.payeeId === LABEL_LEGAL_ENTITY_PAYEE_ID)).toBe(true)
+    expect(result.store.payees.some((payee) => payee.name === 'Auxlee')).toBe(false)
+    expect(result.warnings.some((warning) => warning.includes('20%'))).toBe(true)
+  })
+
+  it('replaces an API snapshot instead of stacking the same days', () => {
+    const first = ingestRoyaltyStatement({
+      csvText: META_ADS_CSV,
+      externalKey: 'meta_ads:last_30d',
+    })
+    const second = ingestRoyaltyStatement({
+      csvText: META_ADS_CSV.replace('25.00', '30.00'),
+      externalKey: 'meta_ads:last_30d',
+      store: first.store,
+    })
+    expect(second.replaced).toBe(true)
+    expect(second.store.statements.filter((statement) => statement.externalKey === 'meta_ads:last_30d')).toHaveLength(1)
+    expect(second.statement.grossCents).toBe(4000)
   })
 })

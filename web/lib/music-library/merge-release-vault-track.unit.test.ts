@@ -67,6 +67,24 @@ describe('mergeReleaseOntoVaultTrack', () => {
     expect(merged.metadata.isrc).toBe('QZES72569811')
     expect(merged.metadata.primary_genre).toBe('Hip-Hop')
   })
+
+  it('does not copy a different song onto the vault row', () => {
+    const merged = mergeReleaseOntoVaultTrack(
+      {
+        id: 'walk',
+        title: 'Walk Dat Walk',
+        file_url: '/audio/vault/SERGIK x Breauxx - Walk Dat Walk2.mp3',
+        audio_file_id: 'audio-walk',
+      },
+      {
+        file_url: '/api/audio/media/dsp-masters/walk-that-walk/SERGIK-x-Breauxxx-All-Around.wav',
+        audio_file_id: 'audio-all-around',
+      },
+    )
+    expect(merged.file_url).toContain('Walk Dat Walk2')
+    expect(merged.audio_file_id).toBe('audio-walk')
+    expect(merged.metadata.distribution_wav_url).toBeUndefined()
+  })
 })
 
 describe('dedupeTracksPreferringReleaseMasters', () => {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Six_Caps } from 'next/font/google'
+import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { Providers } from '@/components/Providers'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
@@ -12,12 +13,15 @@ const inter = Inter({
   preload: false,
   adjustFontFallback: true,
 })
-const sixCaps = Six_Caps({
+const sixCaps = localFont({
+  src: '../fonts/six-caps-latin.woff2',
   weight: '400',
-  subsets: ['latin'],
+  style: 'normal',
   variable: '--font-six-caps',
   display: 'swap',
   preload: true,
+  adjustFontFallback: 'Arial',
+  fallback: ['Impact', 'sans-serif'],
 })
 
 export const metadata: Metadata = {

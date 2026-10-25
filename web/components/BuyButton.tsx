@@ -58,6 +58,7 @@ export default function BuyButton({
         } else if (productType === 'ep-bundle' && productId) {
           body.productId = productId
           body.productType = 'ep-bundle'
+          if (stripe_format) body.format = stripe_format
         } else {
           if (!stripe_track_id || !stripe_format) {
             throw new Error('Missing track ID or format for Stripe checkout')

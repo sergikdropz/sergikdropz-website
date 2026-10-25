@@ -16,6 +16,9 @@ describe('admin-ai-tool-literacy', () => {
     expect(prompt).toContain('probe_fields')
     expect(prompt).toContain('SX Direct')
     expect(prompt).toContain('QTA53')
+    expect(prompt).toContain('pull_distrokid_isrcs')
+    expect(prompt).toContain('distrokidCodes')
+    expect(prompt).toContain('/isrc/')
   })
 
   it('reads chrome selections and compresses their dumps', () => {

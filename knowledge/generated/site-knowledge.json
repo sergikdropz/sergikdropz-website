@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-08T18:06:54.692Z",
+    "generatedAt": "2026-10-25T16:35:39.793Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,22 +15,22 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 91,
-      "appRouterRouteHandlers": 298,
-      "componentsTsx": 197,
-      "libTs": 723
+      "appRouterPages": 99,
+      "appRouterRouteHandlers": 345,
+      "componentsTsx": 222,
+      "libTs": 925
     },
     "pagesByCategory": {
       "fan": 5,
       "music_library": 2,
-      "public": 20,
+      "public": 26,
       "debug": 1,
       "tooling": 1,
       "shop": 9,
-      "admin": 39,
+      "admin": 41,
       "studio": 14
     },
-    "contentHash": "58b5ff6b9cdfbafb"
+    "contentHash": "9234fbeeaf71e26a"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -55,10 +55,12 @@
   "e2e": {
     "playwrightConfig": "web/playwright.config.ts",
     "adminCrawlListFile": "web/e2e/admin-ui-paths.ts",
-    "adminCrawlPathCount": 42,
+    "adminCrawlPathCount": 43,
     "drift": {
       "crawlPathsMissingMatchingAdminPage": [],
-      "adminPagesNotInCrawlList": []
+      "adminPagesNotInCrawlList": [
+        "/admin/email"
+      ]
     },
     "suites": {
       "guest": "admin-guest, admin-api, admin-audit, admin-a11y, fan-public",
@@ -141,6 +143,26 @@
         "urlPath": "/instagram-helper",
         "file": "web/app/(marketing)/instagram-helper/page.tsx",
         "category": "tooling"
+      },
+      {
+        "urlPath": "/licensing/desk/[token]",
+        "file": "web/app/(marketing)/licensing/desk/[token]/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/licensing",
+        "file": "web/app/(marketing)/licensing/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/licensing/request",
+        "file": "web/app/(marketing)/licensing/request/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/licensing/verify/[publicId]",
+        "file": "web/app/(marketing)/licensing/verify/[publicId]/page.tsx",
+        "category": "public"
       },
       {
         "urlPath": "/music/[slug]",
@@ -278,6 +300,11 @@
         "category": "admin"
       },
       {
+        "urlPath": "/admin/email",
+        "file": "web/app/admin/(protected)/email/page.tsx",
+        "category": "admin"
+      },
+      {
         "urlPath": "/admin/events",
         "file": "web/app/admin/(protected)/events/page.tsx",
         "category": "admin"
@@ -295,6 +322,11 @@
       {
         "urlPath": "/admin/licenses",
         "file": "web/app/admin/(protected)/licenses/page.tsx",
+        "category": "admin"
+      },
+      {
+        "urlPath": "/admin/licensing",
+        "file": "web/app/admin/(protected)/licensing/page.tsx",
         "category": "admin"
       },
       {
@@ -438,8 +470,18 @@
         "category": "public"
       },
       {
+        "urlPath": "/download/order",
+        "file": "web/app/download/order/page.tsx",
+        "category": "public"
+      },
+      {
         "urlPath": "/embed/[token]",
         "file": "web/app/embed/[token]/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/promo/[token]",
+        "file": "web/app/promo/[token]/page.tsx",
         "category": "public"
       },
       {
@@ -655,6 +697,36 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/email/attachment",
+        "file": "web/app/api/admin/email/attachment/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/email/broadcast",
+        "file": "web/app/api/admin/email/broadcast/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/email/departments",
+        "file": "web/app/api/admin/email/departments/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/email/desk",
+        "file": "web/app/api/admin/email/desk/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/email/mailbox",
+        "file": "web/app/api/admin/email/mailbox/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/email/send",
+        "file": "web/app/api/admin/email/send/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/events/[id]",
         "file": "web/app/api/admin/events/[id]/route.ts",
         "category": "api"
@@ -690,6 +762,21 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/licensing/inquiries/[id]",
+        "file": "web/app/api/admin/licensing/inquiries/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/licensing/inquiries",
+        "file": "web/app/api/admin/licensing/inquiries/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/licensing/operator",
+        "file": "web/app/api/admin/licensing/operator/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/logs",
         "file": "web/app/api/admin/logs/route.ts",
         "category": "api"
@@ -710,6 +797,61 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/merch/art-sources",
+        "file": "web/app/api/admin/merch/art-sources/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/art/generate",
+        "file": "web/app/api/admin/merch/art/generate/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/art",
+        "file": "web/app/api/admin/merch/art/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/catalog/[id]/mockup",
+        "file": "web/app/api/admin/merch/catalog/[id]/mockup/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/catalog/[id]",
+        "file": "web/app/api/admin/merch/catalog/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/catalog/categories",
+        "file": "web/app/api/admin/merch/catalog/categories/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/catalog",
+        "file": "web/app/api/admin/merch/catalog/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/designs/[id]/mockups",
+        "file": "web/app/api/admin/merch/designs/[id]/mockups/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/designs/[id]/publish",
+        "file": "web/app/api/admin/merch/designs/[id]/publish/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/designs/[id]/visibility",
+        "file": "web/app/api/admin/merch/designs/[id]/visibility/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/designs",
+        "file": "web/app/api/admin/merch/designs/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/merch/orders/[id]",
         "file": "web/app/api/admin/merch/orders/[id]/route.ts",
         "category": "api"
@@ -720,8 +862,18 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/merch/printful-status",
+        "file": "web/app/api/admin/merch/printful-status/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/merch/sync",
         "file": "web/app/api/admin/merch/sync/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/webhook",
+        "file": "web/app/api/admin/merch/webhook/route.ts",
         "category": "api"
       },
       {
@@ -1100,13 +1252,33 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/cron/department-mail",
+        "file": "web/app/api/cron/department-mail/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/cron/meta-promo",
         "file": "web/app/api/cron/meta-promo/route.ts",
         "category": "api"
       },
       {
+        "urlPath": "/api/cron/release-reminders",
+        "file": "web/app/api/cron/release-reminders/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/devtools",
         "file": "web/app/api/devtools/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/download/order/file",
+        "file": "web/app/api/download/order/file/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/download/order",
+        "file": "web/app/api/download/order/route.ts",
         "category": "api"
       },
       {
@@ -1265,6 +1437,36 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/licensing/checkout",
+        "file": "web/app/api/licensing/checkout/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/licensing/confirm",
+        "file": "web/app/api/licensing/confirm/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/licensing/desk/[token]",
+        "file": "web/app/api/licensing/desk/[token]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/licensing/inquiries",
+        "file": "web/app/api/licensing/inquiries/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/licensing/verify/[publicId]",
+        "file": "web/app/api/licensing/verify/[publicId]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/local/admin-browser",
+        "file": "web/app/api/local/admin-browser/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/media/session-artwork",
         "file": "web/app/api/media/session-artwork/route.ts",
         "category": "api"
@@ -1272,6 +1474,11 @@
       {
         "urlPath": "/api/membership/status",
         "file": "web/app/api/membership/status/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/merch/art/[id]",
+        "file": "web/app/api/merch/art/[id]/route.ts",
         "category": "api"
       },
       {
@@ -1425,6 +1632,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/music-library/wav-root",
+        "file": "web/app/api/music-library/wav-root/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/music/search",
         "file": "web/app/api/music/search/route.ts",
         "category": "api"
@@ -1500,6 +1712,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/promo/[token]",
+        "file": "web/app/api/promo/[token]/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/public/homepage-flags",
         "file": "web/app/api/public/homepage-flags/route.ts",
         "category": "api"
@@ -1527,6 +1744,11 @@
       {
         "urlPath": "/api/shares/[token]/download",
         "file": "web/app/api/shares/[token]/download/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shares/[token]/facebook-card",
+        "file": "web/app/api/shares/[token]/facebook-card/route.ts",
         "category": "api"
       },
       {
@@ -1615,6 +1837,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/stripe/sale-notice",
+        "file": "web/app/api/stripe/sale-notice/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/stripe/webhook",
         "file": "web/app/api/stripe/webhook/route.ts",
         "category": "api"
@@ -1642,6 +1869,11 @@
       {
         "urlPath": "/api/studio/isrc/config",
         "file": "web/app/api/studio/isrc/config/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/meta/business-agent",
+        "file": "web/app/api/studio/meta/business-agent/route.ts",
         "category": "api"
       },
       {
@@ -1715,6 +1947,16 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/[id]/contracts/docusign",
+        "file": "web/app/api/studio/releases/[id]/contracts/docusign/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/contracts/pdf",
+        "file": "web/app/api/studio/releases/[id]/contracts/pdf/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/[id]/contracts/send",
         "file": "web/app/api/studio/releases/[id]/contracts/send/route.ts",
         "category": "api"
@@ -1732,6 +1974,11 @@
       {
         "urlPath": "/api/studio/releases/[id]/distribute",
         "file": "web/app/api/studio/releases/[id]/distribute/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/releases/[id]/distrokid/pull",
+        "file": "web/app/api/studio/releases/[id]/distrokid/pull/route.ts",
         "category": "api"
       },
       {
@@ -1795,6 +2042,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/releases/[id]/social-promo/share",
+        "file": "web/app/api/studio/releases/[id]/social-promo/share/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/releases/[id]/status",
         "file": "web/app/api/studio/releases/[id]/status/route.ts",
         "category": "api"
@@ -1855,8 +2107,23 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/studio/royalties/media",
+        "file": "web/app/api/studio/royalties/media/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/royalties/monetization",
+        "file": "web/app/api/studio/royalties/monetization/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/studio/royalties/payouts",
         "file": "web/app/api/studio/royalties/payouts/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/royalties/pull",
+        "file": "web/app/api/studio/royalties/pull/route.ts",
         "category": "api"
       },
       {
@@ -1867,6 +2134,11 @@
       {
         "urlPath": "/api/studio/royalties/statements",
         "file": "web/app/api/studio/royalties/statements/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/studio/social-promo/share",
+        "file": "web/app/api/studio/social-promo/share/route.ts",
         "category": "api"
       },
       {
@@ -1947,6 +2219,11 @@
       {
         "urlPath": "/api/videos/youtube-description",
         "file": "web/app/api/videos/youtube-description/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/webhooks/docusign",
+        "file": "web/app/api/webhooks/docusign/route.ts",
         "category": "api"
       },
       {

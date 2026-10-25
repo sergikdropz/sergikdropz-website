@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { artworkSrcForCanvas } from '@/lib/media/canvas-artwork-load'
+import { promoBilledArtistByTrackId, promoLibraryMetaByTrackId, promoPlaybackUrlByTrackId } from '@/lib/studio/promo-track-audio'
+import { mergeMarketingCopyFields, readMarketingCopy } from '@/lib/studio/constants'
 import {
   generateSocialPromoPlan,
   mergeSocialPromoPlan,
@@ -42,7 +44,7 @@ async function loadReleaseBundle(releaseId: string) {
   const { data, error } = await supabase
     .from('distribution_releases')
     .select(
-      'id, title, album_artist, release_date, artwork_url, artwork_dsp_url, marketing_copy, social_promo, distributor_status'
+      'id, title, type, genre, subgenre, description, label_name, language, album_artist, release_date, artwork_url, artwork_dsp_url, marketing_copy, social_promo, distributor_status'
     )
     .eq('id', releaseId)
     .maybeSingle()
@@ -52,7 +54,9 @@ async function loadReleaseBundle(releaseId: string) {
       columnMissing = true
       const fallback = await supabase
         .from('distribution_releases')
-        .select('id, title, album_artist, release_date, artwork_url, marketing_copy, distributor_status')
+        .select(
+          'id, title, type, genre, subgenre, description, label_name, language, album_artist, release_date, artwork_url, marketing_copy, distributor_status'
+        )
         .eq('id', releaseId)
         .maybeSingle()
       if (fallback.error) return { error: fallback.error.message }
@@ -70,7 +74,7 @@ async function loadReleaseBundle(releaseId: string) {
   const [{ data: tracks }, { data: smart }] = await Promise.all([
     supabase
       .from('distribution_tracks')
-      .select('id, title, wav_url, preview_start_seconds, track_number, music_library_track_id')
+      .select('id, title, wav_url, preview_start_seconds, track_number, music_library_track_id, contributors')
       .eq('release_id', releaseId)
       .order('track_number', { ascending: true }),
     supabase.from('smartlinks').select('slug').eq('release_id', releaseId).maybeSingle(),
@@ -81,7 +85,7 @@ async function loadReleaseBundle(releaseId: string) {
   if (!tracks) {
     const retry = await supabase
       .from('distribution_tracks')
-      .select('id, title, wav_url, preview_start_seconds, track_number')
+      .select('id, title, wav_url, preview_start_seconds, track_number, contributors')
       .eq('release_id', releaseId)
       .order('track_number', { ascending: true })
     trackRows = (retry.data || []).map((t) => ({ ...t, music_library_track_id: null }))
@@ -119,6 +123,14 @@ export async function GET(_request: NextRequest, context: Ctx) {
         : {}
 
     const artwork = releaseArtworkResolved(release)
+    const supabase = createSupabaseServerClient()
+    const playback = await promoPlaybackUrlByTrackId(supabase, bundle.tracks || [])
+    const billedArtists = await promoBilledArtistByTrackId(
+      supabase,
+      bundle.tracks || [],
+      typeof release.album_artist === 'string' ? release.album_artist : 'SERGIK',
+    )
+    const libraryMeta = await promoLibraryMetaByTrackId(supabase, bundle.tracks || [])
 
     return NextResponse.json({
       release: {
@@ -130,14 +142,26 @@ export async function GET(_request: NextRequest, context: Ctx) {
         artwork_resolved: artwork.artwork_resolved,
         distributor_status: release.distributor_status,
         social_caption: marketingCopy.social_caption || null,
+        type: release.type,
+        genre: release.genre,
+        subgenre: release.subgenre,
+        description: release.description,
+        label_name: release.label_name,
+        language: release.language,
       },
+      marketing_copy: readMarketingCopy(release.marketing_copy),
       smart_link: bundle.smartSlug ? `/l/${bundle.smartSlug}` : null,
       tracks: (bundle.tracks || []).map((t) => ({
         id: t.id,
         title: t.title,
-        wav_url: t.wav_url,
+        track_number: t.track_number,
+        contributors: t.contributors,
+        wav_url: playback.get(t.id) || t.wav_url,
         preview_start_seconds: t.preview_start_seconds,
         music_library_track_id: t.music_library_track_id ?? null,
+        bpm: libraryMeta.get(t.id)?.bpm ?? null,
+        duration_seconds: libraryMeta.get(t.id)?.durationSec ?? null,
+        artist: billedArtists.get(t.id) || release.album_artist || 'SERGIK',
       })),
       plan,
       summary: summarizeSocialPromo(plan),
@@ -190,6 +214,7 @@ export async function PUT(request: NextRequest, context: Ctx) {
         : {}
 
     if (body.generate === true || body.regenerate === true) {
+      const keptToken = plan.share_token || null
       const { data: smart } = await supabase
         .from('smartlinks')
         .select('slug')
@@ -205,6 +230,7 @@ export async function PUT(request: NextRequest, context: Ctx) {
         socialCaption: marketingCopy.social_caption || null,
         smartLink: smart?.slug ? `${site}/l/${smart.slug}` : null,
       })
+      plan.share_token = keptToken
     } else if (body.plan) {
       plan = mergeSocialPromoPlan(plan, body.plan)
     } else if (body.post && typeof body.post === 'object') {
@@ -226,6 +252,35 @@ export async function PUT(request: NextRequest, context: Ctx) {
     return NextResponse.json({ plan: saved, summary: summarizeSocialPromo(saved) })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to save social promo'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest, context: Ctx) {
+  try {
+    const session = await getServerSession()
+    if (!session?.isAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const { id } = await context.params
+    const body = (await request.json().catch(() => ({}))) as { marketing_copy?: unknown }
+    const supabase = createSupabaseServerClient()
+    const { data: current, error: loadError } = await supabase
+      .from('distribution_releases')
+      .select('id, marketing_copy')
+      .eq('id', id)
+      .maybeSingle()
+    if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 })
+    if (!current) return NextResponse.json({ error: 'Release not found' }, { status: 404 })
+    const marketing_copy = mergeMarketingCopyFields(current.marketing_copy, body.marketing_copy)
+    const { error } = await supabase
+      .from('distribution_releases')
+      .update({ marketing_copy, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ marketing_copy: readMarketingCopy(marketing_copy) })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to save copy'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

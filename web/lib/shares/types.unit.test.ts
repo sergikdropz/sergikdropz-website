@@ -17,6 +17,7 @@ import {
   shareDisplayArtworkUrl,
   pickShareArtwork,
   resolveFolderShareCoverArt,
+  publicShareOrigin,
   siteOrigin,
 } from './types'
 
@@ -48,6 +49,18 @@ describe('share link helpers', () => {
     expect(isLocalDevOrigin('http://127.0.0.1:3001')).toBe(true)
     expect(isLocalDevOrigin('http://localhost:3001')).toBe(true)
     expect(isLocalDevOrigin('https://sergik.com')).toBe(false)
+  })
+
+  it('never returns localhost for links that leave the machine', () => {
+    const prev = process.env.NEXT_PUBLIC_SITE_URL
+    try {
+      process.env.NEXT_PUBLIC_SITE_URL = 'http://127.0.0.1:3001'
+      expect(publicShareOrigin()).toBe(DEFAULT_PUBLIC_SITE_ORIGIN)
+      process.env.NEXT_PUBLIC_SITE_URL = 'https://sergikdropz.com'
+      expect(publicShareOrigin()).toBe('https://sergikdropz.com')
+    } finally {
+      process.env.NEXT_PUBLIC_SITE_URL = prev
+    }
   })
 
   it('prefers live request host over a localhost SITE_URL', () => {

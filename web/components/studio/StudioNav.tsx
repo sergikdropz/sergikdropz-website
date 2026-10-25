@@ -25,7 +25,7 @@ export default function StudioNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="flex flex-wrap gap-2 mb-8" aria-label="Release Studio">
+    <nav className="mb-8 flex flex-wrap justify-center gap-2" aria-label="Release Studio">
       {links.map(({ href, label, icon: Icon, id }) => {
         const active = isStudioNavActive(id, pathname)
         return (

@@ -59,7 +59,24 @@ export type SocialPromoPlan = {
   street_date: string | null
   generated_at: string
   posts: SocialPromoPost[]
+  /** Unguessable collaborator link. Absent until Share is used. */
+  share_token?: string | null
 }
+
+export const PROMO_SHARE_TOKEN_RE = /^[A-Za-z0-9_-]{16,80}$/
+
+export function readPromoShareToken(value: unknown): string | null {
+  const token = value == null ? '' : String(value).trim()
+  return PROMO_SHARE_TOKEN_RE.test(token) ? token : null
+}
+
+export function promoSharePath(token: string): string | null {
+  const safe = readPromoShareToken(token)
+  return safe ? `/promo/${safe}` : null
+}
+
+/** Page heading, link-preview title, and the label painted on the promo OG card. */
+export const PROMO_SHARE_OG_LABEL = 'SERGIK Promo Lab'
 
 export const DEFAULT_SOCIAL_PROMO: SocialPromoPlan = {
   version: 1,
@@ -67,6 +84,7 @@ export const DEFAULT_SOCIAL_PROMO: SocialPromoPlan = {
   street_date: null,
   generated_at: '',
   posts: [],
+  share_token: null,
 }
 
 type SlotTemplate = {
@@ -359,6 +377,7 @@ export function generateSocialPromoPlan(input: {
     street_date: streetYmd,
     generated_at: input.nowIso || new Date().toISOString(),
     posts,
+    share_token: null,
   }
 }
 
@@ -399,6 +418,7 @@ export function parseSocialPromoPlan(raw: unknown): SocialPromoPlan {
     street_date: clean(value.street_date) || null,
     generated_at: clean(value.generated_at) || '',
     posts,
+    share_token: readPromoShareToken(value.share_token),
   }
 }
 
@@ -411,6 +431,10 @@ export function mergeSocialPromoPlan(
   const next = patch as Record<string, unknown>
   const merged: SocialPromoPlan = {
     ...base,
+    share_token:
+      next.share_token === null
+        ? null
+        : readPromoShareToken(next.share_token) || base.share_token || null,
     timezone: clean(next.timezone) || base.timezone,
     street_date:
       next.street_date === null

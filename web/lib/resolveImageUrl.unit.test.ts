@@ -104,6 +104,13 @@ describe('resolveImageUrl', () => {
     ).toBe('/images/audio/artwork/folder-1787720929879.jpg')
   })
 
+  it('keeps a versioned Happy Camper upload instead of the retired master', () => {
+    clearResolveImageUrlCache()
+    const uploaded =
+      '/images/audio/artwork/folder-1787720929879.v1792867370088.jpg?v=1792867370088'
+    expect(resolveImageUrl(uploaded)).toBe(uploaded)
+  })
+
   it('does not double-encode', () => {
     const once = resolveImageUrl('/images/audio/unreleased/eps/SERGIK - Daze/a.PNG')
     expect(resolveImageUrl(once)).toBe(once)
@@ -126,13 +133,24 @@ describe('shouldUnoptimizeImage', () => {
     ).toBe(true)
   })
 
-  it('serves local folder artwork natively (next/image rejects ?v= bust URLs)', () => {
+  it('serves our JPEG and PNG masters directly, and still optimizes HEIC', () => {
+    expect(shouldUnoptimizeImage('/images/gallery/IMG_5629.jpg')).toBe(true)
+    expect(
+      shouldUnoptimizeImage(
+        'https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/photos/shot.jpeg',
+      ),
+    ).toBe(true)
+    expect(
+      shouldUnoptimizeImage(
+        'https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/photos/shot.heic',
+      ),
+    ).toBe(false)
     expect(shouldUnoptimizeImage('/images/audio/artwork/folder-daze.jpg?v=1')).toBe(true)
     expect(
       shouldUnoptimizeImage(
         'https://utgwlgcejflqxyalnlze.supabase.co/storage/v1/object/public/audio-files/artwork/folder-x.jpg',
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('never sends placeholder storage hosts to next/image', () => {

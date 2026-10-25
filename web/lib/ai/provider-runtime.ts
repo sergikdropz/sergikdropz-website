@@ -3,7 +3,7 @@
  * Centralizes timeout, model selection metadata, and redaction helpers.
  */
 
-import { crowelogicChatBlockReason, resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
+import { crowelogicChatBlockReason, crowelogicChatHeaders, resolveCrowelogicEnv, crowelogicOpenAiUrl } from '@/lib/ai/crowelogic-env'
 
 export type AiProviderId = 'anthropic' | 'openai' | 'ollama' | 'crowelogic'
 
@@ -114,8 +114,11 @@ async function completeOpenAiCompatible(
     request.provider === 'crowelogic'
       ? crowelogicOpenAiUrl(base, 'chat/completions')
       : `${base}/v1/chat/completions`
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+  const headers: Record<string, string> =
+    request.provider === 'crowelogic' && apiKey
+      ? crowelogicChatHeaders(apiKey)
+      : { 'Content-Type': 'application/json' }
+  if (request.provider !== 'crowelogic' && apiKey) headers.Authorization = `Bearer ${apiKey}`
 
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -132,6 +135,7 @@ async function completeOpenAiCompatible(
         ],
         max_tokens: request.maxTokens ?? 900,
         temperature: request.temperature ?? 0.35,
+        ...(request.provider === 'crowelogic' ? { stream: false } : {}),
       }),
     })
     const json = (await res.json().catch(() => ({}))) as {

@@ -7,6 +7,14 @@
     {
       "path": "/api/instagram/cron",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/release-reminders",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/department-mail",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

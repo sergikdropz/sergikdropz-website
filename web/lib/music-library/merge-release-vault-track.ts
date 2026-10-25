@@ -3,6 +3,7 @@
  * so the same song isn't listed twice.
  */
 
+import { mayAssignTrackFile } from '@/lib/audio/catalog-playback-file'
 import { normalizeTitleKey } from '@/lib/studio/distrokid-import'
 
 export const DISTROKID_EXPORTS_FOLDER_ID = '1789691284218'
@@ -153,18 +154,26 @@ export function mergeReleaseOntoVaultTrack(
   meta.merged_at = new Date().toISOString()
 
   const releaseUrl = release.file_url || ''
+  const releaseBelongs =
+    !releaseUrl ||
+    mayAssignTrackFile({
+      trackTitle: keep.title,
+      nextUrl: releaseUrl,
+      currentUrl: keep.file_url,
+      isrc: release.isrc,
+    })
   const releaseIsWavMaster = /\.wav(\?|$)/i.test(releaseUrl) || /\/dsp-masters\//i.test(releaseUrl)
-  if (releaseIsWavMaster && release.file_url) {
+  if (releaseBelongs && releaseIsWavMaster && release.file_url) {
     meta.distribution_wav_url = release.file_url
     meta.dspMastersPath = meta.dspMastersPath || release.file_url
   }
   const keepIsStream = /\.mp3(\?|$)/i.test(keep.file_url || '')
-  const releaseIsStream = /\.mp3(\?|$)/i.test(releaseUrl)
+  const releaseIsStream = releaseBelongs && /\.mp3(\?|$)/i.test(releaseUrl)
   const streamUrl = keepIsStream
     ? keep.file_url || null
     : releaseIsStream
       ? release.file_url || null
-      : keep.file_url || release.file_url || null
+      : keep.file_url || (releaseBelongs ? release.file_url || null : null)
 
   return {
     file_url: streamUrl,
@@ -266,6 +275,7 @@ export function dedupeTracksPreferringReleaseMasters<
       const merged = mergeReleaseOntoVaultTrack(
         {
           id: keepRow.id,
+          title: keepRow.title,
           file_url: keepRow.file_url || keepRow.file || null,
           artwork_url: keepRow.artwork_url || keepRow.artwork || null,
           duration: keepRow.duration ?? null,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   FaCalendarAlt,
   FaCheck,
@@ -8,7 +8,7 @@ import {
   FaDownload,
   FaExternalLinkAlt,
   FaEye,
-  FaFileArchive,
+  FaLink,
   FaSpinner,
   FaSync,
   FaTimes,
@@ -16,6 +16,15 @@ import {
 } from 'react-icons/fa'
 import { useNotifications } from '@/contexts/NotificationContext'
 import MetaPromoConnect from '@/components/studio/MetaPromoConnect'
+import CopywritingStudio from '@/components/studio/CopywritingStudio'
+import PromoCardsGallery from '@/components/studio/PromoCardsGallery'
+import StoryStylePicker from '@/components/studio/StoryStylePicker'
+import VinylSectionPlayer, { type VinylAudition } from '@/components/studio/VinylSectionPlayer'
+import {
+  resolveStoryClipDuration,
+  storyClipLengthChoices,
+  type StoryClipLengthChoice,
+} from '@/lib/shares/story-snippet'
 import { dispatchAdminAiBrowserHydrate } from '@/lib/admin-ai-client'
 import { buildSocialPromoBrowserHydrate } from '@/lib/ai/social-promo-browser-hydrate'
 import {
@@ -24,35 +33,44 @@ import {
   buildSocialStoryStillBlob,
   buildSocialStoryVideoBlob,
   downloadSocialFeedSquare,
-  downloadSocialPromoAssetZip,
   downloadSocialStoryStill,
   downloadSocialStoryVideo,
-  downloadSpotifyCanvas,
 } from '@/lib/studio/social-promo-assets'
 import {
   formatPromoSlotLocal,
+  PROMO_SHARE_OG_LABEL,
   socialPromoChannelLabel,
   SOCIAL_PROMO_STATUSES,
   type SocialPromoPlan,
   type SocialPromoPost,
   type SocialPromoSummary,
 } from '@/lib/studio/social-promo'
+import type { MarketingCopy } from '@/lib/studio/constants'
+import { DEFAULT_STORY_LOOK, storyTapePeaksFromBody, type StoryLook } from '@/lib/studio/story-look'
 
 type TrackRow = {
   id: string
   title: string
   wav_url: string | null
   preview_start_seconds: number | null
+  artist?: string | null
+  music_library_track_id?: string | null
+  bpm?: number | null
+  duration_seconds?: number | null
+  track_number?: number | null
+  contributors?: unknown
 }
 
 type Props = {
-  releaseId: string
+  releaseId?: string
   title: string
   artworkUrl?: string | null
   artist?: string | null
   streetDate?: string | null
   compact?: boolean
   onChanged?: () => void
+  /** Public collaborator view. Hides Meta connect, publish, and schedule edits. */
+  shareToken?: string
 }
 
 export default function SocialPromoPanel({
@@ -63,20 +81,42 @@ export default function SocialPromoPanel({
   streetDate,
   compact,
   onChanged,
+  shareToken,
 }: Props) {
+  const shared = Boolean(shareToken)
   const { showNotification } = useNotifications()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [busyAsset, setBusyAsset] = useState<string | null>(null)
-  const [kitProgress, setKitProgress] = useState<string | null>(null)
+  const [, setKitProgress] = useState<string | null>(null)
   const [plan, setPlan] = useState<SocialPromoPlan | null>(null)
-  const [summary, setSummary] = useState<SocialPromoSummary | null>(null)
+  const [, setSummary] = useState<SocialPromoSummary | null>(null)
   const [tracks, setTracks] = useState<TrackRow[]>([])
   const [columnMissing, setColumnMissing] = useState(false)
   const [selectedTrackId, setSelectedTrackId] = useState<string>('')
   const [resolvedArtwork, setResolvedArtwork] = useState<string | null>(artworkUrl || null)
-  const [resolvedArtist, setResolvedArtist] = useState<string | null>(artist || null)
+  const [albumArtist, setAlbumArtist] = useState<string | null>(artist || null)
   const [resolvedStreet, setResolvedStreet] = useState<string | null>(streetDate || null)
+  const [resolvedTitle, setResolvedTitle] = useState(title)
+  const [sharing, setSharing] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [shareMissing, setShareMissing] = useState(false)
+  const [clipStartSec, setClipStartSec] = useState(0)
+  const [clipLength, setClipLength] = useState<StoryClipLengthChoice>(15)
+  const [audioDurationSec, setAudioDurationSec] = useState(0)
+  const [storyLook, setStoryLook] = useState<StoryLook>(DEFAULT_STORY_LOOK)
+  const [marketingCopy, setMarketingCopy] = useState<MarketingCopy>({})
+  const [savingCopy, setSavingCopy] = useState(false)
+  const [copyRelease, setCopyRelease] = useState({
+    type: '',
+    genre: '',
+    subgenre: '',
+    description: '',
+    labelName: '',
+    language: '',
+  })
+  const [tapePeaks, setTapePeaks] = useState<number[] | null>(null)
+  const auditionRef = useRef<VinylAudition | null>(null)
   const [assetPreview, setAssetPreview] = useState<{
     postLabel: string
     assetKind: SocialPromoPost['asset']
@@ -89,23 +129,94 @@ export default function SocialPromoPanel({
   const selectedTrack =
     tracks.find((t) => t.id === selectedTrackId) || tracks.find((t) => t.wav_url) || null
   const hasAudio = Boolean(selectedTrack?.wav_url)
+  const lookArtist = selectedTrack?.artist?.trim() || albumArtist?.trim() || 'SERGIK'
+  const tapeFields = {
+    peaks: tapePeaks,
+    trackDurationSec: selectedTrack?.duration_seconds ?? null,
+    bpm: selectedTrack?.bpm ?? null,
+    timeOriginSec: clipStartSec,
+  }
+
+  useEffect(() => {
+    setClipStartSec(Math.max(0, Number(selectedTrack?.preview_start_seconds) || 0))
+    setAudioDurationSec(0)
+  }, [selectedTrack?.id, selectedTrack?.preview_start_seconds])
+
+  const knownTrackSec =
+    audioDurationSec > 0
+      ? audioDurationSec
+      : Number(selectedTrack?.duration_seconds) > 0
+        ? Number(selectedTrack?.duration_seconds)
+        : 0
+  useEffect(() => {
+    if (!knownTrackSec) return
+    if (!storyClipLengthChoices(knownTrackSec).includes(clipLength)) setClipLength('full')
+  }, [knownTrackSec, clipLength])
+  const clipDurationSec = resolveStoryClipDuration(clipLength, knownTrackSec || null)
+
+  useEffect(() => {
+    const libraryId = selectedTrack?.music_library_track_id?.trim()
+    if (!libraryId) {
+      setTapePeaks(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/audio/waveform?trackId=${encodeURIComponent(libraryId)}`)
+      .then(async (response) => {
+        if (!response.ok) return null
+        const body = await response.json()
+        return storyTapePeaksFromBody(body)
+      })
+      .then((peaks) => {
+        if (!cancelled) setTapePeaks(peaks)
+      })
+      .catch(() => {
+        if (!cancelled) setTapePeaks(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedTrack?.music_library_track_id])
   const opsBusy = Boolean(busyAsset)
 
   const load = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/social-promo`)
+      setShareMissing(false)
+      const res = await fetch(
+        shareToken
+          ? `/api/promo/${encodeURIComponent(shareToken)}`
+          : `/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo`
+      )
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Failed to load social promo')
+      if (!res.ok) {
+        if (shareToken && res.status === 404) {
+          setShareMissing(true)
+          return
+        }
+        throw new Error(data.error || 'Failed to load social promo')
+      }
       setPlan(data.plan || null)
       setSummary(data.summary || null)
       setTracks(data.tracks || [])
       setColumnMissing(Boolean(data.column_missing))
+      setResolvedTitle(data.release?.title || title)
       setResolvedArtwork(
         data.release?.artwork_resolved || data.release?.artwork_url || artworkUrl || null
       )
-      setResolvedArtist(data.release?.album_artist || artist || 'SERGIK')
+      setAlbumArtist(data.release?.album_artist || artist || 'SERGIK')
       setResolvedStreet(data.release?.release_date || streetDate || null)
+      setMarketingCopy(
+        data.marketing_copy && typeof data.marketing_copy === 'object' ? data.marketing_copy : {}
+      )
+      setCopyRelease({
+        type: typeof data.release?.type === 'string' ? data.release.type : '',
+        genre: typeof data.release?.genre === 'string' ? data.release.genre : '',
+        subgenre: typeof data.release?.subgenre === 'string' ? data.release.subgenre : '',
+        description: typeof data.release?.description === 'string' ? data.release.description : '',
+        labelName: typeof data.release?.label_name === 'string' ? data.release.label_name : '',
+        language: typeof data.release?.language === 'string' ? data.release.language : '',
+      })
       const firstWithAudio = (data.tracks || []).find((t: TrackRow) => t.wav_url)
       setSelectedTrackId(firstWithAudio?.id || data.tracks?.[0]?.id || '')
     } catch (error: unknown) {
@@ -114,11 +225,39 @@ export default function SocialPromoPanel({
     } finally {
       setLoading(false)
     }
-  }, [artworkUrl, artist, releaseId, showNotification, streetDate])
+  }, [artworkUrl, artist, releaseId, shareToken, showNotification, streetDate, title])
 
   useEffect(() => {
     load()
   }, [load])
+
+  async function saveMarketingCopy() {
+    if (!shareToken && !releaseId) return
+    setSavingCopy(true)
+    try {
+      const res = await fetch(
+        shareToken
+          ? `/api/promo/${encodeURIComponent(shareToken)}`
+          : `/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ marketing_copy: marketingCopy }),
+        }
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save copy')
+      if (data.marketing_copy && typeof data.marketing_copy === 'object') {
+        setMarketingCopy(data.marketing_copy)
+      }
+      showNotification('Copy saved', 'success')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not save copy'
+      showNotification(message, 'error')
+    } finally {
+      setSavingCopy(false)
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -152,10 +291,11 @@ export default function SocialPromoPanel({
       if (post.asset === 'feed_square') {
         const { blob } = await buildSocialFeedSquareBlob({
           artworkUrl: resolvedArtwork,
-          title,
-          artist: resolvedArtist,
+          title: resolvedTitle,
+          artist: lookArtist,
           badge,
           cta: 'Listen · link in bio',
+          look: storyLook, ...tapeFields,
         })
         setAssetPreview({
           postLabel: post.label,
@@ -169,10 +309,11 @@ export default function SocialPromoPanel({
       if (post.asset === 'story_static') {
         const { blob } = await buildSocialStoryStillBlob({
           artworkUrl: resolvedArtwork,
-          title,
-          artist: resolvedArtist,
+          title: resolvedTitle,
+          artist: lookArtist,
           badge,
           cta: 'Add link sticker',
+          look: storyLook, ...tapeFields,
         })
         setAssetPreview({
           postLabel: post.label,
@@ -189,11 +330,13 @@ export default function SocialPromoPanel({
         }
         const { blob, mimeType } = await buildSocialStoryVideoBlob({
           artworkUrl: resolvedArtwork,
-          title: selectedTrack.title || title,
-          artist: resolvedArtist,
+          title: selectedTrack.title || resolvedTitle,
+          artist: lookArtist,
           audioUrl: selectedTrack.wav_url,
-          startSec: selectedTrack.preview_start_seconds ?? 0,
-          layout: 'vinyl',
+          startSec: clipStartSec,
+          durationSec: clipDurationSec,
+          look: storyLook, ...tapeFields,
+          badge,
           cta:
             post.channel === 'instagram_reel'
               ? 'OUT NOW · link in bio'
@@ -223,7 +366,7 @@ export default function SocialPromoPanel({
   async function generatePlan() {
     setSaving(true)
     try {
-      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/social-promo`, {
+      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -248,7 +391,7 @@ export default function SocialPromoPanel({
   async function patchPost(post: Partial<SocialPromoPost> & { id: string }) {
     setSaving(true)
     try {
-      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/social-promo`, {
+      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post }),
@@ -274,7 +417,7 @@ export default function SocialPromoPanel({
       for (const id of ids) {
         const row = next.posts.find((p) => p.id === id)
         if (!row || row.status !== 'planned') continue
-        const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}/social-promo`, {
+        const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ post: { id, status: 'ready' } }),
@@ -305,8 +448,8 @@ export default function SocialPromoPanel({
 
   function hydrateDesk(post: SocialPromoPost) {
     const detail = buildSocialPromoBrowserHydrate({
-      releaseId,
-      releaseTitle: title,
+      releaseId: releaseId || '',
+      releaseTitle: resolvedTitle,
       post,
     })
     dispatchAdminAiBrowserHydrate(detail)
@@ -320,7 +463,7 @@ export default function SocialPromoPanel({
     setSaving(true)
     try {
       const res = await fetch(
-        `/api/studio/releases/${encodeURIComponent(releaseId)}/social-promo/publish`,
+        `/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo/publish`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -348,108 +491,6 @@ export default function SocialPromoPanel({
     }
   }
 
-  async function downloadKit() {
-    setBusyAsset('kit')
-    setKitProgress('Starting…')
-    try {
-      const result = await downloadSocialPromoAssetZip({
-        title,
-        artist: resolvedArtist,
-        artworkUrl: resolvedArtwork,
-        streetDate: resolvedStreet,
-        plan,
-        audioUrl: selectedTrack?.wav_url || null,
-        audioTitle: selectedTrack?.title || title,
-        startSec: selectedTrack?.preview_start_seconds ?? 0,
-        onProgress: ({ phase, ratio }) => {
-          setKitProgress(`${phase} ${Math.round(ratio * 100)}%`)
-        },
-      })
-      showNotification(
-        [
-          'Social kit downloaded',
-          result.hasVinyl ? 'vinyl' : null,
-          result.hasSpotifyCanvas ? 'Spotify Canvas' : null,
-          'captions',
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        'success'
-      )
-      await markPostsReady(result.readyPostIds)
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Kit download failed'
-      showNotification(message, 'error')
-    } finally {
-      setBusyAsset(null)
-      setKitProgress(null)
-    }
-  }
-
-  async function downloadVinyl(kind: 'story' | 'reel') {
-    const key = `vinyl-${kind}`
-    setBusyAsset(key)
-    try {
-      if (!selectedTrack?.wav_url) {
-        throw new Error('Add a Catalog WAV before exporting vinyl story / reel video')
-      }
-      await downloadSocialStoryVideo({
-        artworkUrl: resolvedArtwork,
-        title: selectedTrack.title || title,
-        artist: resolvedArtist,
-        audioUrl: selectedTrack.wav_url,
-        startSec: selectedTrack.preview_start_seconds ?? 0,
-        layout: 'vinyl',
-        cta: kind === 'reel' ? 'OUT NOW · link in bio' : 'Listen · link sticker',
-      })
-      showNotification(
-        kind === 'reel'
-          ? 'Vinyl Reel video downloaded — upload in IG Reels'
-          : 'Vinyl Story video downloaded — add link sticker in IG',
-        'success'
-      )
-      const videoPosts = (plan?.posts || []).filter(
-        (p) =>
-          p.asset === 'story_video' &&
-          p.status === 'planned' &&
-          (kind === 'reel' ? p.channel === 'instagram_reel' : p.channel !== 'instagram_reel')
-      )
-      await markPostsReady(videoPosts.map((p) => p.id))
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Vinyl export failed'
-      showNotification(message, 'error')
-    } finally {
-      setBusyAsset(null)
-    }
-  }
-
-  async function downloadCanvas() {
-    setBusyAsset('spotify-canvas')
-    setKitProgress('Spotify Canvas…')
-    try {
-      if (!resolvedArtwork) {
-        throw new Error('Add release artwork before exporting Spotify Canvas')
-      }
-      await downloadSpotifyCanvas({
-        artworkUrl: resolvedArtwork,
-        title,
-        onProgress: (phase, ratio) => {
-          setKitProgress(`${phase} ${Math.round((ratio || 0) * 100)}%`)
-        },
-      })
-      showNotification(
-        'Spotify Canvas downloaded — convert to MP4 if needed, upload in Spotify for Artists',
-        'success'
-      )
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Canvas export failed'
-      showNotification(message, 'error')
-    } finally {
-      setBusyAsset(null)
-      setKitProgress(null)
-    }
-  }
-
   async function downloadForPost(post: SocialPromoPost) {
     const key = `${post.id}-dl`
     setBusyAsset(key)
@@ -458,18 +499,20 @@ export default function SocialPromoPanel({
       if (post.asset === 'feed_square') {
         await downloadSocialFeedSquare({
           artworkUrl: resolvedArtwork,
-          title,
-          artist: resolvedArtist,
+          title: resolvedTitle,
+          artist: lookArtist,
           badge,
           cta: 'Listen · link in bio',
+          look: storyLook, ...tapeFields,
         })
       } else if (post.asset === 'story_static') {
         await downloadSocialStoryStill({
           artworkUrl: resolvedArtwork,
-          title,
-          artist: resolvedArtist,
+          title: resolvedTitle,
+          artist: lookArtist,
           badge,
           cta: 'Add link sticker',
+          look: storyLook, ...tapeFields,
         })
       } else if (post.asset === 'story_video') {
         if (!selectedTrack?.wav_url) {
@@ -477,11 +520,13 @@ export default function SocialPromoPanel({
         }
         await downloadSocialStoryVideo({
           artworkUrl: resolvedArtwork,
-          title: selectedTrack.title || title,
-          artist: resolvedArtist,
+          title: selectedTrack.title || resolvedTitle,
+          artist: lookArtist,
           audioUrl: selectedTrack.wav_url,
-          startSec: selectedTrack.preview_start_seconds ?? 0,
-          layout: 'vinyl',
+          startSec: clipStartSec,
+          durationSec: clipDurationSec,
+          look: storyLook, ...tapeFields,
+          badge,
           cta:
             post.channel === 'instagram_reel'
               ? 'OUT NOW · link in bio'
@@ -503,10 +548,61 @@ export default function SocialPromoPanel({
     }
   }
 
+  async function copyText(url: string, okMessage: string) {
+    const write = navigator.clipboard.writeText(url).catch(() => Promise.reject(new Error('clipboard')))
+    const timeout = new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error('clipboard')), 800)
+    })
+    try {
+      await Promise.race([write, timeout])
+      showNotification(okMessage, 'success')
+    } catch {
+      showNotification(url, 'success')
+    }
+  }
+
+  async function copyCollaboratorLink() {
+    if (shared) {
+      await copyText(window.location.href, 'Share link copied')
+      return
+    }
+    if (!releaseId) return
+    setSharing(true)
+    try {
+      const res = await fetch(
+        `/api/studio/releases/${encodeURIComponent(releaseId || '')}/social-promo/share`,
+        { method: 'POST' }
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not create the collaborator link')
+      const path = typeof data.path === 'string' ? data.path : ''
+      if (!path) throw new Error('Could not create the collaborator link')
+      const url = `${window.location.origin}${path}`
+      if (data.plan) setPlan(data.plan)
+      if (data.summary) setSummary(data.summary)
+      await copyText(url, 'Collaborator link copied')
+      setShareCopied(true)
+      window.setTimeout(() => setShareCopied(false), 2000)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not copy the collaborator link'
+      showNotification(message, 'error')
+    } finally {
+      setSharing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-zinc-500 text-sm py-4">
         <FaSpinner className="animate-spin" /> Loading social promo…
+      </div>
+    )
+  }
+
+  if (shareMissing) {
+    return (
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-5 text-sm text-zinc-400">
+        This promo link is no longer available.
       </div>
     )
   }
@@ -518,34 +614,31 @@ export default function SocialPromoPanel({
       className={`rounded-xl border border-zinc-800 bg-zinc-950/60 ${compact ? 'p-4' : 'p-5'}`}
       data-testid="social-promo-panel"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+      {shared ? null : (
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            disabled={sharing || !releaseId}
+            onClick={() => void copyCollaboratorLink()}
+            data-testid="social-promo-share"
+            title="Copy a collaborator link. Meta publish stays in Studio."
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-violet-500/50 text-violet-100 hover:bg-violet-950/40 disabled:opacity-50"
+          >
+            {sharing ? <FaSpinner className="animate-spin" /> : <FaLink />}
+            {shareCopied ? 'Link copied' : 'Share'}
+          </button>
+        </div>
+      )}
+      <div className="mb-4 flex flex-wrap items-center justify-center gap-3 text-center">
         <div>
-          <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h4 className="flex items-center justify-center gap-2 text-sm font-semibold text-white">
             <FaCalendarAlt className="text-violet-400" />
-            Social / Meta promo schedule
+            {PROMO_SHARE_OG_LABEL}
           </h4>
-          <p className="text-xs text-zinc-500 mt-1 max-w-xl">
-            One kit for Meta + Spotify. Ready image slots publish to Instagram and the Facebook Page
-            when they are due. Reels and vinyl videos still upload from the downloaded file. Use{' '}
-            <span className="text-zinc-300">Hydrate desk</span> to stage a slot in the Admin AI
-            browser (Instagram / Facebook HOMES) — caption paste only when you direct it.
-          </p>
-          {summary?.has_plan ? (
-            <p className="text-xs text-zinc-400 mt-2">
-              {summary.posted}/{summary.total} posted · {summary.ready} ready
-              {summary.next_label
-                ? ` · next: ${summary.next_label} (${formatPromoSlotLocal(summary.next_at)})`
-                : ''}
-            </p>
-          ) : null}
-          {kitProgress ? (
-            <p className="text-xs text-violet-300 mt-2" data-testid="social-kit-progress">
-              {kitProgress}
-            </p>
-          ) : null}
         </div>
         <div className="flex flex-col items-stretch sm:items-end gap-2">
-          <div className="flex flex-wrap gap-2 justify-end">
+          <div className="flex flex-wrap justify-center gap-2">
+            {shared ? null : (
             <button
               type="button"
               disabled={saving}
@@ -555,99 +648,29 @@ export default function SocialPromoPanel({
               {saving && !opsBusy ? <FaSpinner className="animate-spin" /> : <FaSync />}
               {posts.length ? 'Regenerate schedule' : 'Generate schedule'}
             </button>
-            <button
-              type="button"
-              disabled={opsBusy}
-              onClick={downloadKit}
-              data-testid="social-download-kit"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-violet-600/90 hover:bg-violet-500 text-white disabled:opacity-50"
-            >
-              {busyAsset === 'kit' ? <FaSpinner className="animate-spin" /> : <FaFileArchive />}
-              Download assets zip
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 justify-end">
-            <button
-              type="button"
-              disabled={opsBusy || !hasAudio}
-              onClick={() => downloadVinyl('story')}
-              title={hasAudio ? '15s spinning vinyl for IG Stories' : 'Needs Catalog WAV'}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
-            >
-              {busyAsset === 'vinyl-story' ? <FaSpinner className="animate-spin" /> : <FaVideo />}
-              Vinyl story
-            </button>
-            <button
-              type="button"
-              disabled={opsBusy || !hasAudio}
-              onClick={() => downloadVinyl('reel')}
-              title={hasAudio ? '15s spinning vinyl for IG Reels' : 'Needs Catalog WAV'}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
-            >
-              {busyAsset === 'vinyl-reel' ? <FaSpinner className="animate-spin" /> : <FaVideo />}
-              Vinyl reel
-            </button>
-            <button
-              type="button"
-              disabled={opsBusy || !resolvedArtwork}
-              onClick={downloadCanvas}
-              data-testid="social-spotify-canvas"
-              title={
-                resolvedArtwork
-                  ? '8s silent Spotify Canvas — cover drift like site backgrounds'
-                  : 'Needs release artwork'
-              }
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
-            >
-              {busyAsset === 'spotify-canvas' ? (
-                <FaSpinner className="animate-spin" />
-              ) : (
-                <FaVideo />
-              )}
-              Spotify Canvas
-            </button>
-            <button
-              type="button"
-              disabled={opsBusy}
-              onClick={() =>
-                downloadSocialFeedSquare({
-                  artworkUrl: resolvedArtwork,
-                  title,
-                  artist: resolvedArtist,
-                  badge: resolvedStreet ? 'New release' : 'Coming soon',
-                }).then(() => showNotification('IG feed preview downloaded', 'success'))
-              }
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-            >
-              <FaDownload /> Feed 1080
-            </button>
-            <button
-              type="button"
-              disabled={opsBusy}
-              onClick={() =>
-                downloadSocialStoryStill({
-                  artworkUrl: resolvedArtwork,
-                  title,
-                  artist: resolvedArtist,
-                }).then(() => showNotification('IG/Meta story still downloaded', 'success'))
-              }
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-            >
-              <FaDownload /> Story still
-            </button>
+            )}
           </div>
         </div>
       </div>
 
-      <MetaPromoConnect
-        releaseId={releaseId}
-        saving={saving}
-        onPublished={(nextPlan, nextSummary) => {
-          setPlan(nextPlan)
-          setSummary(nextSummary)
-          onChanged?.()
-        }}
+      <PromoCardsGallery
+        artworkUrl={resolvedArtwork}
+        title={resolvedTitle}
+        artist={lookArtist}
+        streetDate={resolvedStreet}
       />
+
+      {shared || !releaseId ? null : (
+        <MetaPromoConnect
+          releaseId={releaseId}
+          saving={saving}
+          onPublished={(nextPlan, nextSummary) => {
+            setPlan(nextPlan)
+            setSummary(nextSummary)
+            onChanged?.()
+          }}
+        />
+      )}
 
       {resolvedArtwork ? (
         <div className="flex items-center gap-3 mb-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-2">
@@ -658,7 +681,7 @@ export default function SocialPromoPanel({
             className="h-14 w-14 rounded-md object-cover border border-zinc-700"
           />
           <p className="text-[11px] text-zinc-500">
-            Cover source for feed, story stills, vinyl, and Spotify Canvas exports.
+            Cover source for feed, story stills, the story look, and Spotify Canvas exports.
           </p>
         </div>
       ) : (
@@ -681,28 +704,64 @@ export default function SocialPromoPanel({
         </p>
       ) : null}
 
-      {hasAudio ? (
-        <label className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
-          Vinyl Story / Reel audio
-          <select
-            title="Track for vinyl story / reel export"
-            value={selectedTrackId}
-            onChange={(e) => setSelectedTrackId(e.target.value)}
-            className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
-          >
-            {tracks.map((t) => (
-              <option key={t.id} value={t.id} disabled={!t.wav_url}>
-                {t.title}
-                {!t.wav_url ? ' (no WAV)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <p className="text-xs text-zinc-500 mb-3">
-          Add Catalog WAVs to unlock 15s spinning-vinyl Story / Reel exports (included in the zip).
-        </p>
-      )}
+      <div className="mb-4 space-y-3">
+        <StoryStylePicker
+          artworkUrl={resolvedArtwork}
+          title={selectedTrack?.title || resolvedTitle}
+          artist={lookArtist}
+          value={storyLook}
+          onChange={setStoryLook}
+          peaks={tapePeaks}
+          trackDurationSec={selectedTrack?.duration_seconds}
+          bpm={selectedTrack?.bpm}
+          timeOriginSec={clipStartSec}
+          audioUrl={selectedTrack?.wav_url}
+          durationSec={clipDurationSec}
+          auditionRef={auditionRef}
+          streetDate={resolvedStreet}
+          onShare={copyCollaboratorLink}
+          previewAfter={(actions) =>
+            hasAudio && selectedTrack?.wav_url ? (
+              <VinylSectionPlayer
+                audioUrl={selectedTrack.wav_url}
+                auditionRef={auditionRef}
+                startSec={clipStartSec}
+                durationSec={clipDurationSec}
+                clipLength={clipLength}
+                onStartChange={setClipStartSec}
+                onClipLengthChange={setClipLength}
+                onTrackDuration={setAudioDurationSec}
+                footer={actions}
+                audioControl={
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    Story / Reel audio
+                    <select
+                      title="Track for story / reel export"
+                      value={selectedTrackId}
+                      onChange={(e) => setSelectedTrackId(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+                    >
+                      {tracks.map((t) => (
+                        <option key={t.id} value={t.id} disabled={!t.wav_url}>
+                          {t.title}
+                          {!t.wav_url ? ' (no WAV)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                }
+              />
+            ) : (
+              <>
+                {actions}
+                <p className="text-center text-xs text-zinc-500">
+                  Add Catalog WAVs to export the story and reel.
+                </p>
+              </>
+            )
+          }
+        />
+      </div>
 
       {posts.length === 0 ? (
         <p className="text-sm text-zinc-500 py-6 text-center">
@@ -753,24 +812,30 @@ export default function SocialPromoPanel({
                     <div className="text-[10px] text-zinc-600">{post.asset}</div>
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      title="Post status"
-                      value={post.status}
-                      disabled={saving}
-                      onChange={(e) =>
-                        patchPost({
-                          id: post.id,
-                          status: e.target.value as SocialPromoPost['status'],
-                        })
-                      }
-                      className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1"
-                    >
-                      {SOCIAL_PROMO_STATUSES.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
+                    {shared ? (
+                      <span className="text-zinc-300">
+                        {SOCIAL_PROMO_STATUSES.find((s) => s.id === post.status)?.label || post.status}
+                      </span>
+                    ) : (
+                      <select
+                        title="Post status"
+                        value={post.status}
+                        disabled={saving}
+                        onChange={(e) =>
+                          patchPost({
+                            id: post.id,
+                            status: e.target.value as SocialPromoPost['status'],
+                          })
+                        }
+                        className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1"
+                      >
+                        {SOCIAL_PROMO_STATUSES.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1.5">
@@ -820,16 +885,18 @@ export default function SocialPromoPanel({
                       >
                         <FaCopy /> Caption
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => hydrateDesk(post)}
-                        data-testid={`social-hydrate-desk-${post.id}`}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-amber-800/70 text-amber-200 hover:bg-amber-950/40"
-                        title="Open Admin AI browser on Instagram/Facebook and stage this caption — paste only when you click Paste caption"
-                      >
-                        <FaExternalLinkAlt /> Hydrate desk
-                      </button>
-                      {post.asset !== 'story_video' &&
+                      {shared ? null : (
+                        <button
+                          type="button"
+                          onClick={() => hydrateDesk(post)}
+                          data-testid={`social-hydrate-desk-${post.id}`}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-amber-800/70 text-amber-200 hover:bg-amber-950/40"
+                          title="Open Admin AI browser on Instagram/Facebook and stage this caption — paste only when you click Paste caption"
+                        >
+                          <FaExternalLinkAlt /> Hydrate desk
+                        </button>
+                      )}
+                      {!shared && post.asset !== 'story_video' &&
                       post.asset !== 'caption_only' &&
                       post.channel !== 'instagram_reel' &&
                       post.channel !== 'facebook_story' &&
@@ -844,7 +911,7 @@ export default function SocialPromoPanel({
                           Post to Meta
                         </button>
                       ) : null}
-                      {post.status !== 'posted' ? (
+                      {!shared && post.status !== 'posted' ? (
                         <button
                           type="button"
                           onClick={() => patchPost({ id: post.id, status: 'posted' })}
@@ -861,6 +928,35 @@ export default function SocialPromoPanel({
           </table>
         </div>
       )}
+
+      {shared ? (
+      <div className="mt-8">
+        <CopywritingStudio
+          title={resolvedTitle || 'New release'}
+          type={copyRelease.type}
+          genre={copyRelease.genre}
+          subgenre={copyRelease.subgenre}
+          description={copyRelease.description}
+          releaseId={shared ? undefined : releaseId}
+          albumArtist={lookArtist}
+          labelName={copyRelease.labelName}
+          language={copyRelease.language}
+          streetDate={resolvedStreet}
+          year={resolvedStreet ? Number(resolvedStreet.slice(0, 4)) : null}
+          tracks={tracks.map((track) => ({
+            title: track.title,
+            track_number: track.track_number,
+            duration: track.duration_seconds,
+            contributors: track.contributors,
+          }))}
+          copy={marketingCopy}
+          onChange={setMarketingCopy}
+          onSave={() => void saveMarketingCopy()}
+          saving={savingCopy}
+          adminChrome={false}
+        />
+      </div>
+      ) : null}
 
       {assetPreview ? (
         <div

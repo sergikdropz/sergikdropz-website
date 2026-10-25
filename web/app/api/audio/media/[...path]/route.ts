@@ -3,7 +3,8 @@ import path from 'path'
 import { Readable } from 'stream'
 import { NextResponse } from 'next/server'
 import { orderedVaultCandidates } from '@/lib/audio/vault-object-resolver'
-import { fetchR2Object, getR2MediaConfig } from '@/lib/audio/r2Media'
+import { fetchR2Object, getR2MediaConfig, presignR2ObjectUrl, r2ObjectExists } from '@/lib/audio/r2Media'
+import { playbackPresignSeconds } from '@/lib/audio/playback-grant'
 
 /**
  * Same-origin streaming proxy for vault media.
@@ -214,12 +215,22 @@ async function proxyFromHttp(request: Request, relative: string, method: 'GET' |
   })
 }
 
+function productionR2Only(): boolean {
+  return Boolean(getR2MediaConfig()) && (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production')
+}
+
 async function trySources(
   request: Request,
   relative: string,
   method: 'GET' | 'HEAD',
 ): Promise<NextResponse | null> {
   if (getR2MediaConfig()) {
+    if (productionR2Only()) {
+      if (!(await r2ObjectExists(relative))) return null
+      const signed = await presignR2ObjectUrl(relative, playbackPresignSeconds(relative))
+      if (!signed) return null
+      return NextResponse.redirect(signed, 307)
+    }
     const r2 = await proxyFromR2(request, relative, method)
     // Soft-fail R2 transport errors so local / HTTP / sibling extensions can still hit.
     if (r2 && r2.status !== 502) return r2

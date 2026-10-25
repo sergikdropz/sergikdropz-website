@@ -13,6 +13,7 @@ import {
 } from '@/lib/ai/admin-chat-guards'
 import { getAllowedAdminSkillIds } from '@/lib/ai/skills/registry'
 import { runAdminAiAgentTurn, type AdminAiAgentEvent } from '@/lib/ai/admin-ai-agent-loop'
+import { clipChatHistory } from '@/lib/ai/admin-ai-agent-transcript'
 import { formatAdminAiPageContextForPrompt, type AdminAiPageContext } from '@/lib/ai/admin-ai-page-context'
 import { createAiRun, updateAiRun } from '@/lib/admin-ai'
 import { addAdminAiChatRoutingBreadcrumb } from '@/lib/observability/admin-ai-chat-sentry'
@@ -28,7 +29,7 @@ import { buildPlatformGrowthContextPrompt, isGrowthDeskIntent } from '@/lib/ai/p
 
 export const dynamic = 'force-dynamic'
 /** Allow long provider round-trips on Vercel (override in platform if needed). */
-export const maxDuration = 120
+export const maxDuration = 180
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       stream?: boolean | null
       threadMemory?: unknown
       chatSessionId?: string
+      history?: Array<{ role?: string; content?: string }>
     }
     const trimmed = body.message?.trim() ?? ''
     const { message, truncated: promptTruncated } = clampAdminAiChatPrompt(trimmed)
@@ -141,6 +143,7 @@ export async function POST(request: NextRequest) {
       releaseId: body.pageContext?.studio?.releaseId ?? null,
       releaseTitle: body.pageContext?.studio?.title ?? null,
       threadMemory: body.threadMemory,
+      history: clipChatHistory(Array.isArray(body.history) ? body.history : []),
       chatSessionId: typeof body.chatSessionId === 'string' ? body.chatSessionId : undefined,
     }
 
@@ -276,7 +279,8 @@ export async function POST(request: NextRequest) {
       return new Response(stream, {
         headers: {
           'Content-Type': 'application/x-ndjson; charset=utf-8',
-          'Cache-Control': 'no-store',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no',
         },
       })
     }

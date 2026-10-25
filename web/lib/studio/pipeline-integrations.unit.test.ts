@@ -6,6 +6,7 @@ import {
   nextActionStep,
   summarizePipelineIntegrationAlerts,
 } from '@/lib/studio/pipeline-integrations'
+import { defaultMonetizationEnrollment } from '@/lib/studio/monetization-enrollment'
 import { DEFAULT_UGC_PACK } from '@/lib/studio/ugc-pack'
 
 function baseCopyright(overrides: Partial<CopyrightReadiness> = {}): CopyrightReadiness {
@@ -56,6 +57,7 @@ function baseCopyright(overrides: Partial<CopyrightReadiness> = {}): CopyrightRe
     },
     counsel_audit: null,
     ugc_pack: { ...DEFAULT_UGC_PACK },
+    monetization_enrollment: defaultMonetizationEnrollment(),
     ugc: { eligible: true, warnings: [] },
     ingest: {
       ok: false,

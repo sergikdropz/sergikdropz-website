@@ -6,6 +6,8 @@ import {
   updateAiRun,
 } from '@/lib/admin-ai'
 import { payloadSubmits } from '@/lib/ai/approval-rows'
+import { payloadWithoutStrategyPolish } from '@/lib/ai/product-strategy-pack'
+import { compareWriteToReread, type WriteVerification } from '@/lib/ai/admin-ai-write-verify'
 import type { OrchestratorStep } from '@/lib/ai/orchestrator'
 import {
   initialTimeline,
@@ -124,14 +126,24 @@ export async function executePlanOnRun(params: {
 }): Promise<
   | {
       ok: true
-      executionResults: Array<{ stepId: string; tool: OrchestratorStep['tool']; output: Record<string, unknown> }>
+      executionResults: Array<{
+        stepId: string
+        tool: OrchestratorStep['tool']
+        output: Record<string, unknown>
+        verification?: WriteVerification | null
+      }>
       firstActionId: string | null
       stepTimeline: StepTimelineEntry[]
     }
   | {
       ok: false
       error: string
-      executionResults: Array<{ stepId: string; tool: OrchestratorStep['tool']; output: Record<string, unknown> }>
+      executionResults: Array<{
+        stepId: string
+        tool: OrchestratorStep['tool']
+        output: Record<string, unknown>
+        verification?: WriteVerification | null
+      }>
       stepTimeline: StepTimelineEntry[]
     }
 > {
@@ -142,15 +154,19 @@ export async function executePlanOnRun(params: {
   let stepTimeline =
     idsMatch && params.existingTimeline ? [...params.existingTimeline] : initialTimeline(params.steps)
 
-  const executionResults: Array<{ stepId: string; tool: OrchestratorStep['tool']; output: Record<string, unknown> }> =
-    []
+  const executionResults: Array<{
+    stepId: string
+    tool: OrchestratorStep['tool']
+    output: Record<string, unknown>
+    verification?: WriteVerification | null
+  }> = []
   let firstActionId: string | null = null
 
   for (const step of params.steps) {
     try {
       const toolResult = await runAdminTool({
         tool: step.tool,
-        payload: step.payload,
+        payload: payloadWithoutStrategyPolish(step.payload),
         adminId: params.adminId,
         runId: params.runId,
         dryRun: !payloadSubmits(step.payload),
@@ -182,6 +198,12 @@ export async function executePlanOnRun(params: {
         stepId: step.id,
         tool: step.tool,
         output: toolResult.output,
+        verification: await verifyExecutedWrite({
+          adminId: params.adminId,
+          runId: params.runId,
+          tool: step.tool,
+          payload: step.payload,
+        }),
       })
       stepTimeline = setStepStatus(stepTimeline, step.id, 'executed')
       await patchAiRunResponse(params.runId, { stepTimeline, lastExecutedAt: new Date().toISOString() })
@@ -212,4 +234,63 @@ export async function executePlanOnRun(params: {
   }
 
   return { ok: true, executionResults, firstActionId, stepTimeline }
+}
+
+const SNAPSHOT_WRITES = new Set<string>([
+  'patch_release_marketing_copy',
+  'update_copyright_checklist',
+  'assign_isrcs',
+  'pull_distrokid_isrcs',
+  'create_distribution_release_draft',
+  'run_meta_promo_pipeline',
+  'generate_campaign_draft',
+])
+
+const RELEASE_ID_REQUIRED = new Set<string>([
+  'patch_release_marketing_copy',
+  'update_copyright_checklist',
+  'assign_isrcs',
+  'pull_distrokid_isrcs',
+  'create_distribution_release_draft',
+])
+
+async function verifyExecutedWrite(params: {
+  adminId: string
+  runId: string
+  tool: string
+  payload: Record<string, unknown>
+}): Promise<WriteVerification | null> {
+  if (!payloadSubmits(params.payload) || !SNAPSHOT_WRITES.has(params.tool)) return null
+  const releaseId =
+    params.tool === 'create_distribution_release_draft'
+      ? String(params.payload.id || params.payload.releaseId || '').trim()
+      : String(params.payload.releaseId || '').trim()
+  if (!releaseId) {
+    if (!RELEASE_ID_REQUIRED.has(params.tool)) return null
+    return {
+      matched: false,
+      checks: [],
+      summary: `${params.tool} saved. No release id was on the write, so it was not re-read.`,
+    }
+  }
+  try {
+    const read = await runAdminTool({
+      tool: 'query_release_studio_snapshot',
+      payload: { releaseId },
+      adminId: params.adminId,
+      runId: params.runId,
+      dryRun: true,
+    })
+    return compareWriteToReread({
+      tool: params.tool,
+      payload: params.payload,
+      reread: read.output,
+    })
+  } catch (error: unknown) {
+    return {
+      matched: false,
+      checks: [],
+      summary: `Saved, but the re-read failed: ${getErrorMessage(error)}`,
+    }
+  }
 }

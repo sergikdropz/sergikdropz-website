@@ -24,6 +24,77 @@ export type NormalizedProductStrategyPackInput = ProductStrategyPackParams & {
 
 const ALL_FOCUS: StrategyFocus[] = ['site_audit', 'conversion', 'seo', 'campaign', 'admin_config']
 
+/** True only for real affirmatives. The string "false" stays off. */
+export function parseRefineWithLlmFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true
+  if (typeof value !== 'string') return false
+  const text = value.trim().toLowerCase()
+  return text === 'true' || text === '1' || text === 'yes' || text === 'on'
+}
+
+export function payloadWithoutStrategyPolish(payload: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...payload }
+  delete next.refineWithLlm
+  delete next.refine_with_llm
+  return next
+}
+
+/** The pack-polish switch wins over a flag left on an older payload. */
+export function withStrategyPackPolish<T extends { tool: string; payload: Record<string, unknown> }>(
+  steps: T[],
+  prefer: boolean,
+): T[] {
+  return steps.map((step) => {
+    if (step.tool !== 'draft_product_strategy_pack') return step
+    const payload = payloadWithoutStrategyPolish(step.payload)
+    if (prefer) payload.refineWithLlm = true
+    return { ...step, payload }
+  })
+}
+
+export type StrategyPackPolishMode = 'suggest' | 'auto' | 'always' | 'off'
+
+const POLISH_CUE =
+  /\bdraft_product_strategy_pack\b|strategy pack|site audit|go-to-market|campaign calendar|conversion workflow/i
+
+/** True when a strategy-pack brief is the useful next step. Operational chats stay quiet. */
+export function strategyPackPolishCue(input: {
+  agentMode?: string | null
+  planTools?: string[]
+  texts?: string[]
+}): boolean {
+  if (input.agentMode === 'product_strategy') return true
+  if (input.planTools?.includes('draft_product_strategy_pack')) return true
+  return POLISH_CUE.test((input.texts ?? []).join('\n'))
+}
+
+export type StrategyPackPolishState = 'applied' | 'failed' | 'scaffold'
+
+export function readStrategyPackPolish(output: Record<string, unknown> | null | undefined): {
+  state: StrategyPackPolishState
+  note: string
+} | null {
+  if (!output || typeof output !== 'object') return null
+  const note = typeof output.refinementNote === 'string' ? output.refinementNote.trim() : ''
+  if (output.refinementStatus === 'applied') {
+    const meta = output.refinementMeta as { provider?: string | null } | undefined
+    return {
+      state: 'applied',
+      note: note || (meta?.provider ? `Polished by ${meta.provider}.` : 'Editorial brief is on this preview.'),
+    }
+  }
+  if (output.refinementStatus === 'failed') {
+    return { state: 'failed', note: note || 'The model did not return a brief. Scaffold kept.' }
+  }
+  if (output.refinementStatus === 'skipped') {
+    return { state: 'scaffold', note: note || 'Scaffold only.' }
+  }
+  if (typeof output.refinedMarkdown === 'string' && output.refinedMarkdown.trim()) {
+    return { state: 'applied', note: 'Editorial brief is on this preview.' }
+  }
+  return null
+}
+
 function uniqFocus(areas: unknown): StrategyFocus[] {
   if (!Array.isArray(areas) || areas.length === 0) return ALL_FOCUS.slice()
   const set = new Set<StrategyFocus>()
@@ -46,7 +117,7 @@ export function normalizeProductStrategyPackPayload(payload: Record<string, unkn
   if (!Number.isFinite(timelineWeeks) || timelineWeeks < 1) timelineWeeks = 4
   if (timelineWeeks > 24) timelineWeeks = 24
   const focusAreas = uniqFocus(payload.focusAreas ?? payload.focus_areas)
-  const refineWithLlm = Boolean(payload.refineWithLlm ?? payload.refine_with_llm)
+  const refineWithLlm = parseRefineWithLlmFlag(payload.refineWithLlm ?? payload.refine_with_llm)
   return {
     brandName,
     primaryGoal: primaryGoal || 'Grow qualified traffic and conversions for the next release cycle',

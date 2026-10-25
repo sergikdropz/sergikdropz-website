@@ -4,7 +4,7 @@
       "id": "bundle-all-eps",
       "name": "Complete EP Collection",
       "slug": "complete-ep-collection",
-      "description": "Get every SERGIK EP in one bundle. 11 EPs, all formats included.",
+      "description": "Every SERGIK EP in MP3 and lossless WAV.",
       "productIds": [
         "ep-are-we-awake",
         "ep-vice-and-virtues",
@@ -18,8 +18,8 @@
         "ep-ftp",
         "ep-the-chan-suk-legend"
       ],
-      "originalPrice": 109.89,
-      "bundlePrice": 65.99,
+      "originalPrice": 113.43,
+      "bundlePrice": 68.06,
       "savingsPercent": 40,
       "artwork": "/images/gallery/logo.png",
       "status": "active"
@@ -28,10 +28,10 @@
       "id": "bundle-starter-3",
       "name": "Starter Pack (Any 3 EPs)",
       "slug": "starter-pack",
-      "description": "Pick any 3 EPs from the catalog. Perfect for getting started.",
+      "description": "Three 5-track EPs in MP3 and lossless WAV.",
       "productIds": [],
-      "originalPrice": 29.97,
-      "bundlePrice": 19.99,
+      "originalPrice": 29.85,
+      "bundlePrice": 20,
       "savingsPercent": 33,
       "artwork": "/images/gallery/logo.png",
       "status": "active"

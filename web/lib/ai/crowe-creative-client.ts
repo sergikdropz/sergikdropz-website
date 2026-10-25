@@ -24,7 +24,10 @@ function firstTrimmed(...values: Array<string | undefined>): string {
 export function resolveCroweCreativeEnv(): CroweCreativeEnv {
   let apiKey = ''
   let keySource: string | null = null
-  for (const [name, value] of [['CROWE_API_KEY', process.env.CROWE_API_KEY]] as const) {
+  for (const [name, value] of [
+    ['CROWE_API_KEY', process.env.CROWE_API_KEY],
+    ['CROWELOGIC_API_KEY', process.env.CROWELOGIC_API_KEY],
+  ] as const) {
     const t = value?.trim()
     if (t) {
       apiKey = t

@@ -26,6 +26,9 @@ function breadcrumbSegments(pathname: string): Array<{ label: string; href: stri
 /** Mount target for AdminAiAssistant FAB (leftmost in the shell header). */
 export const ADMIN_AI_FAB_ANCHOR_ID = 'admin-ai-fab-anchor'
 
+/** Center of the shell header. Pages portal a title here. */
+export const APP_SHELL_TITLE_SLOT_ID = 'app-shell-title-slot'
+
 export function AppShell({
   surface,
   title,
@@ -43,6 +46,9 @@ export function AppShell({
 }) {
   const pathname = usePathname() || '/'
   const crumbs = breadcrumbSegments(pathname)
+  const showAdminDashboardTitle = surface === 'admin' && pathname === '/admin'
+  const showMusicVaultTitle = surface === 'admin' && pathname.startsWith('/admin/music-vault')
+  const showMerchDesignerTitle = surface === 'admin' && pathname.startsWith('/admin/merch')
   const envLabel =
     process.env.NEXT_PUBLIC_VERCEL_ENV ||
     process.env.NODE_ENV ||
@@ -50,31 +56,47 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-surface text-ink">
-      {(title || showBreadcrumbs) && (
-        <div className="border-b border-line bg-surface-raised/80">
-          <div className="flex items-start">
-            <div
-              id={ADMIN_AI_FAB_ANCHOR_ID}
-              className="ml-3 mt-4 inline-flex h-11 w-11 shrink-0 items-center justify-center sm:ml-4"
-            />
-            <div className="mx-auto flex min-w-0 flex-1 flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href="/"
-                    className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted transition-colors hover:border-ink-muted hover:text-ink"
-                  >
-                    Home
-                  </Link>
-                  <Badge tone={surface === 'studio' ? 'brand' : 'neutral'}>
-                    {surface === 'studio' ? 'Release Studio' : 'Admin'}
-                  </Badge>
-                  <Badge tone="info">{envLabel}</Badge>
-                </div>
-                {headerAction}
+      <div className="relative border-b border-line bg-surface-raised/80">
+        <div
+          id={APP_SHELL_TITLE_SLOT_ID}
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4 text-center"
+        />
+        <div className="relative flex items-center">
+          <div
+            id={ADMIN_AI_FAB_ANCHOR_ID}
+            className="ml-3 inline-flex h-11 w-11 shrink-0 items-center justify-center sm:ml-4"
+          />
+          <div className="relative flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+            {surface === 'studio' ? (
+              <p className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-center text-3xl font-bold uppercase tracking-tight text-violet-400/90 md:text-4xl">
+                Release Studio
+              </p>
+            ) : showAdminDashboardTitle ? (
+              <h1 className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-center text-4xl font-bold text-ink">
+                Admin Dashboard
+              </h1>
+            ) : showMusicVaultTitle ? (
+              <h1 className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded border border-yellow-400 px-3 py-1 text-center font-six-caps text-3xl font-semibold text-yellow-400 sm:text-4xl">
+                SERGIK Music Vault
+              </h1>
+            ) : showMerchDesignerTitle ? (
+              <h1 className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-center text-2xl font-bold uppercase tracking-wide text-white">
+                MERCH DESIGNER STUDIO
+              </h1>
+            ) : null}
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/"
+                  className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted transition-colors hover:border-ink-muted hover:text-ink"
+                >
+                  Home
+                </Link>
+                <Badge tone={surface === 'studio' ? 'brand' : 'neutral'}>
+                  {surface === 'studio' ? 'Release Studio' : 'Admin'}
+                </Badge>
               </div>
-
-              {showBreadcrumbs && crumbs.length > 0 ? (
+              {showBreadcrumbs && !showAdminDashboardTitle && !showMusicVaultTitle && crumbs.length > 0 ? (
                 <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-ink-subtle">
                   {crumbs.map((crumb, index) => (
                     <span key={crumb.href} className="inline-flex items-center gap-1">
@@ -90,17 +112,16 @@ export function AppShell({
                   ))}
                 </nav>
               ) : null}
-
-              {title ? (
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight text-ink">{title}</h1>
-                  {subtitle ? <p className="mt-0.5 text-sm text-ink-subtle">{subtitle}</p> : null}
-                </div>
-              ) : null}
+              {title ? <h1 className="text-xl font-bold tracking-tight text-ink">{title}</h1> : null}
+              {subtitle ? <p className="text-sm text-ink-subtle">{subtitle}</p> : null}
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <Badge tone="info">{envLabel}</Badge>
+              {headerAction}
             </div>
           </div>
         </div>
-      )}
+      </div>
       {children}
     </div>
   )

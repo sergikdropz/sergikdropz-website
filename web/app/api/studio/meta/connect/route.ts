@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
-import { metaOAuthDialogUrl } from '@/lib/meta/graph'
+import { META_EARNINGS_SCOPES, META_PUBLISH_SCOPES, metaOAuthDialogUrl } from '@/lib/meta/graph'
 import { META_OAUTH_STATE_COOKIE } from '@/lib/meta/connection'
 import { safeInternalPath } from '@/lib/safe-internal-path'
 
@@ -20,8 +20,10 @@ export async function GET(request: NextRequest) {
   }
 
   const nextPath = safeInternalPath(request.nextUrl.searchParams.get('next')) || '/studio/pipeline'
+  const earnings = request.nextUrl.searchParams.get('earnings') === '1'
+  const scopes = earnings ? [...META_PUBLISH_SCOPES, ...META_EARNINGS_SCOPES] : META_PUBLISH_SCOPES
   const state = randomBytes(24).toString('base64url')
-  const dialog = metaOAuthDialogUrl(redirectUri(request), `${state}.${encodeURIComponent(nextPath)}`)
+  const dialog = metaOAuthDialogUrl(redirectUri(request), `${state}.${encodeURIComponent(nextPath)}`, scopes)
   if (!dialog) {
     const back = new URL(nextPath, request.url)
     back.searchParams.set('meta', 'missing_app')

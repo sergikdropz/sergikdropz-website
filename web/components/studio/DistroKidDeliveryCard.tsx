@@ -64,6 +64,8 @@ export default function DistroKidDeliveryCard({ releaseId }: { releaseId: string
   const [data, setData] = useState<Payload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [albumuuid, setAlbumuuid] = useState('')
+  const [artistDraft, setArtistDraft] = useState('')
+  const [labelDraft, setLabelDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -76,6 +78,8 @@ export default function DistroKidDeliveryCard({ releaseId }: { releaseId: string
     }
     setError(null)
     setData(json as Payload)
+    setArtistDraft(String(json.packet?.release?.artist || ''))
+    setLabelDraft(String(json.packet?.release?.label || ''))
     if (json.record?.albumuuid) setAlbumuuid(String(json.record.albumuuid))
   }, [releaseId])
 
@@ -106,6 +110,30 @@ export default function DistroKidDeliveryCard({ releaseId }: { releaseId: string
               ? 'Cleared the DistroKid stamp.'
               : 'Queued for DistroKid.',
       )
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveIdentity() {
+    setBusy(true)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/studio/releases/${encodeURIComponent(releaseId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          album_artist: artistDraft.trim(),
+          label_name: labelDraft.trim(),
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNotice(json.error || 'Could not save artist and label')
+        return
+      }
+      setNotice('Saved artist and label.')
       await load()
     } finally {
       setBusy(false)
@@ -270,11 +298,26 @@ export default function DistroKidDeliveryCard({ releaseId }: { releaseId: string
 
   const revelator = data.pipe.revelatorLive
   const submitted = data.record?.status === 'submitted' || data.distributorStatus === 'live'
+  const identityChanged =
+    artistDraft.trim() !== (data.packet.release.artist || '').trim() ||
+    labelDraft.trim() !== (data.packet.release.label || '').trim()
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-    <div className="p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+    <div className="relative p-6">
+      <div className="absolute right-6 top-6 z-10 flex items-center gap-2">
+          <span className="text-xs px-3 py-1 rounded-full bg-zinc-800 text-zinc-200">{data.window.label}</span>
+          <button
+            type="button"
+            data-testid="distrokid-save-identity"
+            disabled={busy || !identityChanged}
+            onClick={() => void saveIdentity()}
+            className="shrink-0 px-3 py-1.5 rounded-full bg-white text-xs font-semibold text-black disabled:opacity-40"
+          >
+            Save
+          </button>
+      </div>
+      <div className="mb-4 pr-52">
         <div>
           <h3 className="text-lg font-semibold text-white">DistroKid schedule</h3>
           <p className="text-sm text-zinc-500 mt-1">
@@ -284,7 +327,6 @@ export default function DistroKidDeliveryCard({ releaseId }: { releaseId: string
             dsp-masters WAVs). You review and click Continue on DistroKid — this never submits.
           </p>
         </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-zinc-800 text-zinc-200">{data.window.label}</span>
       </div>
 
       {revelator ? (
@@ -295,8 +337,28 @@ export default function DistroKidDeliveryCard({ releaseId }: { releaseId: string
       ) : null}
 
       <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
-        <div><dt className="text-zinc-500">Artist</dt><dd className="text-zinc-100">{data.packet.release.artist}</dd></div>
-        <div><dt className="text-zinc-500">Label</dt><dd className="text-zinc-100">{data.packet.release.label}</dd></div>
+        <div>
+          <dt className="text-zinc-500">Artist</dt>
+          <dd>
+            <input
+              aria-label="Artist"
+              value={artistDraft}
+              onChange={(event) => setArtistDraft(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-100"
+            />
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Label</dt>
+          <dd>
+            <input
+              aria-label="Label"
+              value={labelDraft}
+              onChange={(event) => setLabelDraft(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-100"
+            />
+          </dd>
+        </div>
         <div><dt className="text-zinc-500">Street date</dt><dd className="text-zinc-100">{data.packet.release.release_date || '—'}</dd></div>
         <div><dt className="text-zinc-500">Upload by</dt><dd className="text-zinc-100">{data.window.upload_by || '—'}</dd></div>
         <div><dt className="text-zinc-500">Genre</dt><dd className="text-zinc-100">{data.packet.release.primary_genre || '—'}</dd></div>

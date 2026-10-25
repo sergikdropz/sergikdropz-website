@@ -1,4 +1,4 @@
-import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutBucketCorsCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { createHash } from 'crypto'
 import { createReadStream, statSync } from 'fs'
 import { PassThrough } from 'stream'
@@ -11,6 +11,39 @@ export type R2MediaConfig = {
 }
 
 const DEFAULT_PRESIGN_SEC = 3600
+let corsEnsured = false
+
+/** Allow the site to play signed objects in <audio>. Object-only keys ignore a failed write. */
+async function ensurePlaybackCors(cfg: R2MediaConfig): Promise<void> {
+  if (corsEnsured) return
+  corsEnsured = true
+  const origins = [
+    'https://sergikdropz.com',
+    'https://www.sergikdropz.com',
+    'http://localhost:3001',
+    'http://localhost:3000',
+  ]
+  try {
+    await clientFor(cfg).send(
+      new PutBucketCorsCommand({
+        Bucket: cfg.bucket,
+        CORSConfiguration: {
+          CORSRules: [
+            {
+              AllowedOrigins: origins,
+              AllowedMethods: ['GET', 'HEAD'],
+              AllowedHeaders: ['*'],
+              ExposeHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag'],
+              MaxAgeSeconds: 3600,
+            },
+          ],
+        },
+      }),
+    )
+  } catch (err) {
+    console.warn('[r2] playback CORS not updated (token may be object-scoped):', err)
+  }
+}
 
 export function getR2MediaConfig(): R2MediaConfig | null {
   const accountId = process.env.R2_ACCOUNT_ID?.trim()
@@ -78,6 +111,7 @@ export async function presignR2ObjectUrl(
 ): Promise<string | null> {
   const cfg = getR2MediaConfig()
   if (!cfg) return null
+  await ensurePlaybackCors(cfg)
   const client = clientFor(cfg)
   const Key = r2ObjectKey(relativePath)
   const downloadName = opts?.downloadName?.replace(/["\r\n]/g, '').trim()

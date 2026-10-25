@@ -16,6 +16,7 @@ interface MerchCardProps {
       id: number
       retail_price: number
     }>
+    previewHex?: string | null
   }
 }
 
@@ -31,16 +32,23 @@ export default function MerchCard({ product }: MerchCardProps) {
   return (
     <Link href={`/shop/merch/${product.slug}`} className="group block">
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden transition-all duration-300 hover:border-gray-600">
-        <div className="relative aspect-square overflow-hidden bg-gray-800">
-          {isSafeNextImageSrc(thumbnail) && (
-            <Image
-              src={thumbnail}
-              alt={product.name}
-              fill
-              unoptimized={shouldUnoptimizeImage(thumbnail)}
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            />
+        <div
+          className="relative aspect-square overflow-hidden bg-gray-800"
+          style={product.previewHex ? { background: product.previewHex } : undefined}
+        >
+          {thumbnail.startsWith('/api/') ? (
+            <img src={thumbnail} alt={product.name} className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            isSafeNextImageSrc(thumbnail) && (
+              <Image
+                src={thumbnail}
+                alt={product.name}
+                fill
+                unoptimized={shouldUnoptimizeImage(thumbnail)}
+                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
+            )
           )}
         </div>
         <div className="p-4">

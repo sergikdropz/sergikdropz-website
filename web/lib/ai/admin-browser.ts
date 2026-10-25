@@ -10,6 +10,7 @@ import {
   ADMIN_BROWSER_STUDIO_CHAT_ID,
   ADMIN_BROWSER_VIEWPORT,
   assistantMayRunBrowserAction,
+  ADMIN_BROWSER_READ_ONLY_ACTIONS,
   normalizeAdminBrowserChatId,
   parseBrowserUrl,
   scaleWheel,
@@ -18,6 +19,7 @@ import {
   type AdminBrowserRequest,
   type AdminBrowserSnapshot,
 } from '@/lib/ai/admin-browser-shared'
+import { firstPartyWorkspaceFromUrl } from '@/lib/ai/first-party-workspace'
 import {
   elementPickLabelFromParts,
   formatElementPickSource,
@@ -28,6 +30,20 @@ import {
   type DistroKidPrefillPacket,
 } from '@/lib/ai/distrokid-prefill'
 import { uploadDistroKidAssets } from '@/lib/ai/distrokid-asset-upload'
+import { readDistroKidBankCsv } from '@/lib/ai/distrokid-bank-import'
+import { runMetaEarningsPull } from '@/lib/meta/earnings-desk'
+import { ingestRoyaltyStatement, readRoyaltyStore, writeRoyaltyStore } from '@/lib/studio/royalties'
+import { loadTrackSplitLookup } from '@/lib/studio/royalties/track-lookup'
+import { stageSoundCloudFiles, uploadSoundCloudAssets, type StagedSoundCloudFiles } from '@/lib/ai/soundcloud-asset-upload'
+import { prefillSoundCloudPage } from '@/lib/ai/soundcloud-prefill'
+import { loadSoundCloudUploadPacket } from '@/lib/ai/soundcloud-upload-server'
+import { normalizeSoundCloudPacket, SOUNDCLOUD_UPLOAD_URL, type SoundCloudUploadPacket } from '@/lib/ai/soundcloud-upload'
+import {
+  distrokidCodesFromHtml,
+  distrokidPageKind,
+  formatDistroKidPageCodes,
+  type DistroKidPageCodes,
+} from '@/lib/ai/distrokid-page-codes'
 
 const KEYS = new Set([
   'Enter',
@@ -470,6 +486,61 @@ function pointer(request: AdminBrowserRequest, viewport: { width: number; height
 }
 
 /** Runs inside the live browser page. Must stay free of Node closures. */
+function readPageOutline() {
+  document.querySelectorAll('[data-admin-ai-target]').forEach((node) => {
+    node.removeAttribute('data-admin-ai-target')
+  })
+  const out: Array<{
+    id: string
+    role: string
+    name: string
+    value: string
+    x?: number
+    y?: number
+    w?: number
+    h?: number
+    disabled?: boolean
+    [key: string]: unknown
+  }> = []
+  const nodes = document.querySelectorAll(
+    'h1,h2,h3,a,button,input,textarea,select,[role="button"],[role="link"],[role="textbox"],[role="option"],[role="listbox"]',
+  )
+  for (const el of Array.from(nodes)) {
+    if (out.length >= 60) break
+    const style = window.getComputedStyle(el)
+    const rect = el.getBoundingClientRect()
+    if (style.display === 'none' || style.visibility === 'hidden' || rect.width < 2 || rect.height < 2) continue
+    const input = el as HTMLInputElement
+    if (input.type === 'hidden' || input.type === 'password') continue
+    const role = el.getAttribute('role') || el.tagName.toLowerCase()
+    const name = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || (el as HTMLElement).innerText || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 90)
+    const value = 'value' in el ? String(input.value || '').slice(0, 80) : ''
+    if (!name && !value) continue
+    const id = `c${out.length + 1}`
+    el.setAttribute('data-admin-ai-target', id)
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+    out.push({
+      id,
+      role,
+      name,
+      value,
+      x: Math.round((cx / window.innerWidth) * 1000) / 1000,
+      y: Math.round((cy / window.innerHeight) * 1000) / 1000,
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+      disabled: Boolean(input.disabled || el.getAttribute('aria-disabled') === 'true'),
+      readOnly: Boolean(input.readOnly),
+      active: document.activeElement === el,
+    })
+  }
+  return out
+}
+
+/** Runs inside the live browser page. Must stay free of Node closures. */
 function readElementAtPoint(point: { x: number; y: number }) {
   const x = point.x
   const y = point.y
@@ -565,15 +636,101 @@ function readElementAtPoint(point: { x: number; y: number }) {
   return describe(el)
 }
 
+function distrokidSubmitLabel(label: string): boolean {
+  return /\b(submit|continue|done|finish|checkout|pay now|upload album)\b/i.test(label)
+}
+
+async function locateControl(
+  page: BrowserPageLike,
+  query: string,
+  mode: 'click' | 'field',
+): Promise<{ x: number; y: number; label: string } | null> {
+  return page.evaluate(
+    (input: { query: string; mode: 'click' | 'field' }) => {
+      const q = input.query.trim().toLowerCase()
+      if (!q) return null
+      if (/^c\d+$/.test(q)) {
+        const marked = document.querySelector(`[data-admin-ai-target="${q}"]`)
+        if (marked) {
+          const rect = marked.getBoundingClientRect()
+          if (rect.width >= 2 && rect.height >= 2) {
+            const x = rect.left + rect.width / 2
+            const y = rect.top + rect.height / 2
+            if (input.mode === 'field' && (marked instanceof HTMLInputElement || marked instanceof HTMLTextAreaElement)) {
+              marked.focus()
+              marked.select()
+            }
+            const label = (
+              marked.getAttribute('aria-label') ||
+              marked.getAttribute('placeholder') ||
+              (marked as HTMLElement).innerText ||
+              q
+            )
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 80)
+            return { x, y, label: label || q }
+          }
+        }
+      }
+      const selector =
+        input.mode === 'field'
+          ? 'input, textarea, select, [contenteditable="true"]'
+          : 'a, button, input, textarea, select, label, summary, [role="button"], [role="link"], [role="menuitem"], [role="tab"]'
+      const nodes = Array.from(document.querySelectorAll(selector))
+      let best: { x: number; y: number; label: string; score: number } | null = null
+      for (const el of nodes) {
+        const style = window.getComputedStyle(el)
+        const rect = el.getBoundingClientRect()
+        if (style.display === 'none' || style.visibility === 'hidden' || rect.width < 2 || rect.height < 2) continue
+        const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase()
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase()
+        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase()
+        const name = (el.getAttribute('name') || '').toLowerCase()
+        const id = (el.id || '').toLowerCase()
+        let labelText = ''
+        if (el.id) {
+          const byFor = document.querySelector(`label[for="${CSS.escape(el.id)}"]`)
+          if (byFor) labelText = (byFor.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase()
+        }
+        const blob = `${text} ${aria} ${placeholder} ${name} ${id} ${labelText}`
+        let score = 0
+        if (text === q || aria === q || placeholder === q || labelText === q || name === q) score = 3
+        else if (blob.includes(q)) score = 2
+        if (score < 2) continue
+        if (!best || score > best.score) {
+          best = {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+            label: (aria || labelText || text || placeholder || name).slice(0, 80),
+            score,
+          }
+        }
+      }
+      if (!best) return null
+      const chosen = best
+      if (input.mode === 'field') {
+        const node = document.elementFromPoint(chosen.x, chosen.y) as HTMLElement | null
+        const field =
+          node?.closest?.('input, textarea, select, [contenteditable="true"]') ||
+          (node?.matches?.('input, textarea, select, [contenteditable="true"]') ? node : null)
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.select()
+      }
+      return { x: chosen.x, y: chosen.y, label: chosen.label }
+    },
+    { query, mode },
+  )
+}
+
 async function frame(
   page: BrowserPageLike,
   opts: { image: boolean; text: boolean }
 ): Promise<Pick<AdminBrowserSnapshot, 'url' | 'title' | 'text' | 'imageBase64'>> {
   const url = page.url()
   const title = await page.title().catch(() => '')
-  const text = opts.text
+    const text = opts.text
     ? await page
-        .evaluate(() => (document.body?.innerText || '').replace(/\s+\n/g, '\n').trim().slice(0, 4000))
+        .evaluate(() => (document.body?.innerText || '').replace(/\s+\n/g, '\n').trim().slice(0, 8000))
         .catch(() => '')
     : undefined
   const imageBase64 = opts.image ? (await page.screenshot({ type: 'jpeg', quality: 55 })).toString('base64') : undefined
@@ -590,6 +747,7 @@ function emptySnapshot(partial: Partial<AdminBrowserSnapshot>, viewport = ADMIN_
     title: partial.title ?? '',
     text: partial.text,
     error: partial.error,
+    distrokidCodes: partial.distrokidCodes,
     imageBase64: partial.imageBase64,
     width: partial.width ?? viewport.width,
     height: partial.height ?? viewport.height,
@@ -622,12 +780,20 @@ function describeAction(request: AdminBrowserRequest): string {
       return 'Would reload the page.'
     case 'read':
       return 'Would read the open page.'
+    case 'snapshot':
+      return 'Would list controls on the open page.'
     case 'drive':
       return request.youDrive === false ? 'Would hand the browser to the assistant.' : 'Would keep you driving.'
     case 'distrokid_prefill':
       return 'Would prefill DistroKid /new/ from the Release Studio packet (no submit).'
     case 'distrokid_upload_assets':
       return 'Would upload DSP artwork + WAV masters into the open DistroKid /new/ form.'
+    case 'distrokid_bank_import':
+      return 'Would read a DistroKid bank CSV link and ingest it. Does not click Continue, Submit, or Let\'s do it.'
+    case 'meta_earnings_pull':
+      return 'Would pull Meta ad spend and Facebook creator earnings through the Graph API.'
+    case 'soundcloud_prefill':
+      return 'Would attach this release’s database audio and artwork on SoundCloud upload, then fill the EP. Never clicks Save.'
     case 'probe_fields':
       return 'Would list visible form fields on the open page.'
     case 'inspect':
@@ -702,6 +868,41 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
     return emptySnapshot({ running: false, youDrive: true })
   }
 
+  let soundcloudPrepared: { packet: SoundCloudUploadPacket; staged: StagedSoundCloudFiles } | null = null
+  if (request.action === 'soundcloud_prefill' && !request.dryRun) {
+    let packet = normalizeSoundCloudPacket(request.soundcloudPacket)
+    if (!packet && request.releaseId) {
+      const loaded = await loadSoundCloudUploadPacket(request.releaseId)
+      if (!loaded.packet) {
+        return emptySnapshot({
+          ok: false,
+          running: true,
+          youDrive: true,
+          error: loaded.error || 'Could not read this release’s files from the database.',
+        })
+      }
+      packet = loaded.packet
+    }
+    if (!packet) {
+      return emptySnapshot({
+        ok: false,
+        running: true,
+        youDrive: true,
+        error: 'SoundCloud upload needs the open release so it can read audio files from the database.',
+      })
+    }
+    if (!packet.ok) {
+      return emptySnapshot({
+        ok: false,
+        running: true,
+        youDrive: true,
+        error: packet.blockers[0] || 'Database file URLs are missing for this release.',
+        text: packet.blockers.join('\n'),
+      })
+    }
+    soundcloudPrepared = { packet, staged: await stageSoundCloudFiles(packet) }
+  }
+
   return withLock(chatId, async (state) => {
     try {
     if (state.context && state.launchMode !== 'chrome') {
@@ -735,6 +936,76 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
       )
     }
 
+    if (request.action === 'snapshot') {
+      const page = currentPage()
+      if (!page) {
+        return emptySnapshot({ running: false, youDrive: state.youDrive, text: 'Browser is not open.' })
+      }
+      const blocked = firstPartyWorkspaceFromUrl(page.url())
+      if (blocked) {
+        return emptySnapshot({
+          ok: true,
+          running: true,
+          youDrive: state.youDrive,
+          url: blocked.href,
+          title: blocked.releaseId ? 'Release Studio' : 'Admin',
+          text: blocked.message,
+        })
+      }
+      const outline = await page.evaluate(readPageOutline).catch(() => [])
+      const shot = await frame(page, { image: Boolean(request.includeImage), text: true })
+      return {
+        ...emptySnapshot({
+          running: true,
+          youDrive: state.youDrive,
+          url: shot.url,
+          title: shot.title,
+          text: shot.text,
+          imageBase64: shot.imageBase64,
+        }),
+        pageOutline: Array.isArray(outline) ? outline : [],
+      }
+    }
+
+    if (request.action === 'open' || request.action === 'navigate') {
+      const workspace = firstPartyWorkspaceFromUrl(request.url)
+      if (workspace) {
+        return emptySnapshot({
+          ok: true,
+          running: Boolean(state.context),
+          youDrive: state.youDrive,
+          url: workspace.href,
+          title: workspace.releaseId ? 'Release Studio' : 'Admin',
+          text: workspace.message,
+        })
+      }
+    }
+
+    const openPage = currentPage()
+    let openUrl = ''
+    try {
+      openUrl = openPage?.url() || ''
+    } catch {
+      openUrl = ''
+    }
+    const stuckOnOurAdmin = firstPartyWorkspaceFromUrl(openUrl)
+    if (
+      stuckOnOurAdmin &&
+      request.action !== 'drive' &&
+      request.action !== 'open' &&
+      request.action !== 'navigate' &&
+      request.action !== 'back'
+    ) {
+      return emptySnapshot({
+        ok: true,
+        running: true,
+        youDrive: state.youDrive,
+        url: openUrl,
+        title: 'Admin',
+        text: stuckOnOurAdmin.message,
+      })
+    }
+
     if (!assistantMayRunBrowserAction(state.youDrive, request.actor, request.action)) {
       return emptySnapshot({
         ok: false,
@@ -744,7 +1015,10 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
       })
     }
 
-    if (request.dryRun) {
+    if (
+      request.dryRun &&
+      !ADMIN_BROWSER_READ_ONLY_ACTIONS.has(request.action)
+    ) {
       return emptySnapshot({
         running: Boolean(state.context),
         youDrive: state.youDrive,
@@ -765,11 +1039,29 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
       })
     }
 
+    if (request.action === 'meta_earnings_pull') {
+      const pulled = await runMetaEarningsPull()
+      return {
+        ...emptySnapshot({
+          ok: pulled.ok,
+          running: Boolean(currentPage()),
+          youDrive: state.youDrive,
+          url: 'https://business.facebook.com/',
+          title: 'Meta',
+          text: pulled.note,
+          error: pulled.ok ? undefined : pulled.note,
+        }),
+        metaEarnings: pulled,
+      }
+    }
+
     const createsPage =
       request.action === 'open' ||
       request.action === 'navigate' ||
       request.action === 'distrokid_prefill' ||
-      request.action === 'distrokid_upload_assets'
+      request.action === 'distrokid_upload_assets' ||
+      request.action === 'distrokid_bank_import' ||
+      request.action === 'soundcloud_prefill'
     if (!createsPage && !currentPage()) {
       return emptySnapshot({ running: false, youDrive: state.youDrive })
     }
@@ -825,27 +1117,42 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
       const height = request.viewportHeight ?? state.viewport.height
       await applyViewport(state, context, page, width, height)
     } else if (request.action === 'click') {
-      if (typeof request.x !== 'number' || typeof request.y !== 'number') {
-        return emptySnapshot({ ok: false, running: true, youDrive: state.youDrive, error: 'Click needs x and y.' }, state.viewport)
+      const named = request.target?.trim()
+      const namedHit = named ? await locateControl(page, named, 'click') : null
+      if (named && !namedHit) {
+        return emptySnapshot(
+          { ok: false, running: true, youDrive: state.youDrive, url: page.url(), error: `No visible control matching “${named}”.` },
+          state.viewport,
+        )
       }
-      const point = viewportPoint(request.x, request.y, state.viewport.width, state.viewport.height)
+      const point = namedHit
+        ? { x: namedHit.x, y: namedHit.y }
+        : typeof request.x === 'number' && typeof request.y === 'number'
+          ? viewportPoint(request.x, request.y, state.viewport.width, state.viewport.height)
+          : null
+      if (!point) {
+        return emptySnapshot({ ok: false, running: true, youDrive: state.youDrive, error: 'Click needs a target label, or x and y.' }, state.viewport)
+      }
       if (request.actor === 'assistant' && /distrokid\.com/i.test(page.url())) {
-        const blocked = (await page.evaluate((p: { x: number; y: number }) => {
-          const el = document.elementFromPoint(p.x, p.y) as HTMLElement | null
-          if (!el) return false
-          const blob = [
-            el.tagName,
-            el.id,
-            el.getAttribute('type') || '',
-            el.getAttribute('name') || '',
-            el.getAttribute('aria-label') || '',
-            el.textContent || '',
-          ]
-            .join(' ')
-            .replace(/\s+/g, ' ')
-            .toLowerCase()
-          return /\b(submit|continue|done|finish|checkout|pay now|upload album)\b/.test(blob)
-        }, point)) as boolean
+        const namedBlocked = distrokidSubmitLabel(namedHit?.label || named || '')
+        const blocked =
+          namedBlocked ||
+          ((await page.evaluate((p: { x: number; y: number }) => {
+            const el = document.elementFromPoint(p.x, p.y) as HTMLElement | null
+            if (!el) return false
+            const blob = [
+              el.tagName,
+              el.id,
+              el.getAttribute('type') || '',
+              el.getAttribute('name') || '',
+              el.getAttribute('aria-label') || '',
+              el.textContent || '',
+            ]
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .toLowerCase()
+            return /\b(submit|continue|done|finish|checkout|pay now|upload album)\b/.test(blob)
+          }, point)) as boolean)
         if (blocked) {
           return emptySnapshot({
             ok: false,
@@ -858,6 +1165,40 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
         }
       }
       await page.mouse.click(point.x, point.y)
+    } else if (request.action === 'type') {
+      const text = request.text?.slice(0, 2000) ?? ''
+      if (!text) {
+        return emptySnapshot({ ok: false, running: true, youDrive: state.youDrive, error: 'Nothing to type.' })
+      }
+      const field = request.target?.trim()
+      if (field) {
+        const focused = await locateControl(page, field, 'field')
+        if (!focused) {
+          return emptySnapshot({
+            ok: false,
+            running: true,
+            youDrive: state.youDrive,
+            url: page.url(),
+            error: `No field matching “${field}”.`,
+          })
+        }
+        await page.mouse.click(focused.x, focused.y)
+      }
+      await page.keyboard.type(text)
+    } else if (request.action === 'wheel') {
+      const point = pointer(request, state.viewport)
+      if (point) await page.mouse.move(point.x, point.y)
+      const deltaX = request.deltaX ?? 0
+      const deltaY = request.deltaY ?? (request.deltaX == null ? 720 : 0)
+      const scaled = scaleWheel(
+        deltaX,
+        deltaY,
+        request.viewWidth ?? state.viewport.width,
+        request.viewHeight ?? state.viewport.height,
+        state.viewport.width,
+        state.viewport.height,
+      )
+      await page.mouse.wheel(scaled.deltaX, scaled.deltaY)
     } else if (request.action === 'pointer') {
       const point = pointer(request, state.viewport)
       if (!point) {
@@ -901,24 +1242,6 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
           viewportHeight: state.viewport.height,
         },
       }
-    } else if (request.action === 'wheel') {
-      const point = pointer(request, state.viewport)
-      if (point) await page.mouse.move(point.x, point.y)
-      const scaled = scaleWheel(
-        request.deltaX ?? 0,
-        request.deltaY ?? 0,
-        request.viewWidth ?? state.viewport.width,
-        request.viewHeight ?? state.viewport.height,
-        state.viewport.width,
-        state.viewport.height
-      )
-      await page.mouse.wheel(scaled.deltaX, scaled.deltaY)
-    } else if (request.action === 'type') {
-      const text = request.text?.slice(0, 2000) ?? ''
-      if (!text) {
-        return emptySnapshot({ ok: false, running: true, youDrive: state.youDrive, error: 'Nothing to type.' })
-      }
-      await page.keyboard.type(text)
     } else if (request.action === 'press') {
       const key = request.key?.trim() ?? ''
       if (!KEYS.has(key)) {
@@ -1001,6 +1324,73 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
         }),
         fieldProbe: fields,
       }
+      } else if (request.action === 'distrokid_bank_import') {
+      const read = await readDistroKidBankCsv(page)
+      if (!read.csv) {
+        const shot = await frame(page, { image: Boolean(request.includeImage), text: true })
+        return {
+          ...emptySnapshot({
+            ok: false,
+            running: true,
+            youDrive: state.youDrive,
+            url: shot.url,
+            title: shot.title,
+            text: read.note,
+            error: read.note,
+            imageBase64: request.includeImage ? shot.imageBase64 : undefined,
+          }),
+          distrokidBank: { status: read.status, lineCount: 0, duplicate: false, note: read.note },
+        }
+      }
+      const [store, trackLookup] = await Promise.all([readRoyaltyStore(), loadTrackSplitLookup()])
+      const ingested = ingestRoyaltyStatement({
+        csvText: read.csv,
+        filename: 'distrokid-bank.csv',
+        notes: 'Pulled from the DistroKid bank desk. Amounts stored as reported.',
+        externalKey: 'distrokid:bank',
+        store,
+        trackLookup,
+      })
+      if (!ingested.duplicate && ingested.lineCount > 0) await writeRoyaltyStore(ingested.store)
+      if (ingested.lineCount === 0) {
+        const shot = await frame(page, { image: Boolean(request.includeImage), text: false })
+        const note = 'The bank page opened, but no earnings rows could be read. Download the CSV from DistroKid and ingest that file.'
+        return {
+          ...emptySnapshot({
+            ok: false,
+            running: true,
+            youDrive: true,
+            url: shot.url,
+            title: shot.title,
+            text: note,
+            error: note,
+            imageBase64: request.includeImage ? shot.imageBase64 : undefined,
+          }),
+          distrokidBank: { status: 'empty', lineCount: 0, duplicate: false, note },
+        }
+      }
+      state.youDrive = true
+      const shot = await frame(page, { image: Boolean(request.includeImage), text: false })
+      const note = ingested.duplicate
+        ? 'That bank file is already in the ledger.'
+        : `Ingested ${ingested.lineCount} bank rows.`
+      return {
+        ...emptySnapshot({
+          ok: true,
+          running: true,
+          youDrive: state.youDrive,
+          url: shot.url,
+          title: shot.title,
+          text: note,
+          imageBase64: request.includeImage ? shot.imageBase64 : undefined,
+        }),
+        distrokidBank: {
+          status: read.status,
+          lineCount: ingested.lineCount,
+          duplicate: ingested.duplicate,
+          note,
+        },
+      }
     } else if (
       request.action === 'distrokid_prefill' ||
       request.action === 'distrokid_upload_assets'
@@ -1079,6 +1469,66 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
           errors,
         },
       }
+    } else if (request.action === 'soundcloud_prefill') {
+      const packet = soundcloudPrepared?.packet ?? null
+      if (!packet) {
+        return emptySnapshot({
+          ok: false,
+          running: true,
+          youDrive: state.youDrive,
+          error: 'SoundCloud files were not ready.',
+        })
+      }
+      if (!/soundcloud\.com\/upload/i.test(page.url())) {
+        const navErr = await safeGoto(page, SOUNDCLOUD_UPLOAD_URL)
+        if (navErr) {
+          return emptySnapshot({ ok: false, running: true, youDrive: state.youDrive, error: navErr })
+        }
+        if (state.zoom !== 1) await applyPageZoom(page, state.zoom)
+        await sleep(1500)
+      }
+      if (/soundcloud\.com\/.*(signin|login)/i.test(page.url())) {
+        return emptySnapshot({
+          ok: false,
+          running: true,
+          youDrive: state.youDrive,
+          url: page.url(),
+          error: 'Sign in to SoundCloud in this browser, then fill the EP again.',
+        })
+      }
+
+      const uploads = await uploadSoundCloudAssets(page as never, packet, soundcloudPrepared?.staged)
+      const prefill = await prefillSoundCloudPage(page, packet)
+      const filled = Array.from(new Set([...uploads.filled, ...prefill.filled]))
+      const skipped = Array.from(new Set([...uploads.skipped, ...prefill.skipped]))
+      const errors = Array.from(new Set([...uploads.errors, ...prefill.errors, ...packet.warnings]))
+      state.youDrive = true
+      const shot = await frame(page, { image: Boolean(request.includeImage), text: true })
+      const sources = packet.tracks
+        .filter((track) => track.audio_url)
+        .map((track) => `${track.track_number}. ${track.title} ← ${track.audio_source}`)
+        .join('\n')
+      return {
+        ...emptySnapshot({
+          ok: uploads.filled.length > 0 && !uploads.errors.length,
+          running: true,
+          youDrive: state.youDrive,
+          url: shot.url,
+          title: shot.title,
+          text: [
+            `SoundCloud EP “${packet.title}” — ${filled.length} step(s) from database files.`,
+            sources,
+            skipped.length ? `Skipped: ${skipped.slice(0, 8).join('; ')}` : '',
+            errors.length ? `Errors: ${errors.slice(0, 6).join('; ')}` : '',
+            'Files came from the release rows in the database, not a local folder. Review the form, then you click Save. This never posts.',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+          error: uploads.errors[0] || (!uploads.filled.length ? 'No database audio files attached.' : undefined),
+          imageBase64: request.includeImage ? shot.imageBase64 : undefined,
+        }),
+        soundcloudPrefill: { filled, skipped, errors },
+      }
     }
 
     const live = request.action === 'wheel' || request.action === 'pointer'
@@ -1088,6 +1538,7 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
           running: true,
           youDrive: state.youDrive,
           url: page.url(),
+          text: request.action === 'wheel' ? 'Scrolled the page.' : undefined,
           imageBase64: state.latestFrame || undefined,
         },
         state.viewport,
@@ -1096,15 +1547,36 @@ export async function runAdminBrowserAction(request: AdminBrowserRequest): Promi
 
     const shot = await frame(page, {
       image: Boolean(request.includeImage),
-      text: request.action === 'read',
+      text:
+        request.action === 'read' ||
+        request.action === 'navigate' ||
+        request.action === 'open' ||
+        request.action === 'back' ||
+        request.action === 'reload' ||
+        request.action === 'click' ||
+        request.action === 'type' ||
+        request.action === 'press',
     })
+    const acted =
+      request.action === 'click'
+        ? `Clicked${request.target?.trim() ? ` “${request.target.trim()}”` : ''}.`
+        : request.action === 'type'
+          ? `Typed into${request.target?.trim() ? ` “${request.target.trim()}”` : ' the page'}.`
+          : request.action === 'navigate' || request.action === 'open'
+            ? `Opened ${shot.url}.`
+            : ''
+    const distrokidCodes = await readDistroKidPageCodes(page, shot.url)
+    const pageText = distrokidCodes
+      ? [formatDistroKidPageCodes(distrokidCodes), shot.text].filter(Boolean).join('\n\n')
+      : shot.text
     return emptySnapshot(
       {
         running: true,
         youDrive: state.youDrive,
         url: shot.url,
         title: shot.title,
-        text: request.action === 'read' ? shot.text : undefined,
+        text: [acted, pageText].filter(Boolean).join('\n').slice(0, 8000) || undefined,
+        distrokidCodes: distrokidCodes || undefined,
         imageBase64: request.includeImage ? shot.imageBase64 : undefined,
       },
       state.viewport,
@@ -1133,6 +1605,124 @@ function friendlyBrowserError(error: unknown): string {
     return `${message}. From web/, run: npm run test:e2e:install-browsers`
   }
   return message
+}
+
+async function readDistroKidPageCodes(
+  page: BrowserPageLike,
+  pageUrl: string,
+): Promise<DistroKidPageCodes | null> {
+  const kind = distrokidPageKind(pageUrl)
+  if (!kind || kind === 'upload' || kind === 'other') return null
+  if (kind === 'album') {
+    const started = Date.now()
+    while (Date.now() - started < 4000) {
+      const ready = await page
+        .evaluate(() => Boolean(document.querySelector('.isrc-value, .track-row')))
+        .catch(() => false)
+      if (ready) break
+      await sleep(200)
+    }
+  }
+  const html =
+    kind === 'album'
+      ? await page
+          .evaluate(() => {
+            const chunks: string[] = []
+            const header = document.querySelector('.header-content')
+            if (header) chunks.push(header.outerHTML)
+            const upc = document.querySelector('#js-album-upc')
+            if (upc && !header?.contains(upc)) chunks.push(upc.outerHTML)
+            const section = document.querySelector('.tracks-section')
+            if (section) chunks.push(section.outerHTML)
+            else {
+              document.querySelectorAll('.track-row').forEach((row) => {
+                chunks.push((row as HTMLElement).outerHTML)
+              })
+            }
+            if (!chunks.some((chunk) => /isrc-value/i.test(chunk))) {
+              document.querySelectorAll('.isrc-value').forEach((node) => {
+                chunks.push((node as HTMLElement).outerHTML)
+              })
+            }
+            return chunks.join('\n').slice(0, 300000)
+          })
+          .catch(() => '')
+      : ''
+  return distrokidCodesFromHtml(html, pageUrl)
+}
+
+const DISTROKID_CATALOG_CHAT = 'studio-catalog-pull'
+
+function distrokidLoginWall(url: string): boolean {
+  try {
+    return /signin|login|sign-in/i.test(new URL(url).pathname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Open a DistroKid album (or My Music when the album URL is unknown) in the
+ * admin Chrome profile and return album ISRCs or the listing HTML.
+ */
+export async function fetchDistroKidAlbumPage(input: {
+  albumUrl?: string | null
+}): Promise<{
+  ok: boolean
+  error?: string
+  url: string
+  codes: DistroKidPageCodes | null
+  listingHtml: string
+}> {
+  const host = adminBrowserHostAllowed()
+  if (!host.ok) {
+    return { ok: false, error: host.reason, url: '', codes: null, listingHtml: '' }
+  }
+
+  const albumUrl = input.albumUrl?.trim() || ''
+  const target = albumUrl || 'https://distrokid.com/mymusic/'
+
+  return withLock(DISTROKID_CATALOG_CHAT, async (state) => {
+    try {
+      const context = await ensureContext(state)
+      const page = await ensurePage(context)
+      const navErr = await safeGoto(page, target, 45_000)
+      if (navErr) return { ok: false, error: navErr, url: page.url(), codes: null, listingHtml: '' }
+      if (distrokidLoginWall(page.url())) {
+        return {
+          ok: false,
+          error: 'DistroKid needs a sign-in in the admin browser. Sign in there, then pull again.',
+          url: page.url(),
+          codes: null,
+          listingHtml: '',
+        }
+      }
+
+      if (albumUrl) {
+        const codes = await readDistroKidPageCodes(page, page.url())
+        return { ok: true, url: page.url(), codes, listingHtml: '' }
+      }
+
+      const started = Date.now()
+      let listingHtml = ''
+      while (Date.now() - started < 8000) {
+        listingHtml = await page
+          .evaluate(() => (document.body?.innerHTML || '').slice(0, 400000))
+          .catch(() => '')
+        if (/albumuuid=/i.test(listingHtml)) break
+        await sleep(400)
+      }
+      return { ok: true, url: page.url(), codes: null, listingHtml }
+    } catch (error) {
+      return {
+        ok: false,
+        error: friendlyBrowserError(error),
+        url: '',
+        codes: null,
+        listingHtml: '',
+      }
+    }
+  })
 }
 
 async function safeGoto(page: BrowserPageLike, target: string, timeout = 30_000): Promise<string | null> {

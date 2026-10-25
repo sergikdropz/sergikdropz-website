@@ -63,6 +63,8 @@ export function pickSmartChatModelId(
       }
       return DEFAULT_OLLAMA_MODEL
     }
+    case 'cursor':
+      return process.env.SERGIK_CURSOR_MODEL?.trim() || 'auto'
     case 'crowelogic':
     default: {
       if (exec || fastChat) {

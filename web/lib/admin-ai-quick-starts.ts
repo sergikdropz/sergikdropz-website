@@ -486,6 +486,17 @@ function contextualPrioritySuggestions(ctx: AdminAiPageContext | null | undefine
         nav: { releaseId: rid, step: 'catalog' },
       })
     }
+    rows.push({
+      id: `priority-soundcloud-${rid}`,
+      kind: 'priority',
+      priorityScore: 9,
+      label: `Upload “${title}” to SoundCloud`,
+      detail: 'Database audio and artwork onto soundcloud.com/upload. You click Save.',
+      message: `Upload the "${title}" EP to SoundCloud for release ${rid}. Use the audio and artwork file URLs stored on this release in the database. Fill the EP form and do not click Save.`,
+      skillId: 'studio_release',
+      nav: { releaseId: rid, step: activeStep },
+    })
+
     if (studio.releaseDate) {
       rows.push({
         id: `priority-countdown-${rid}`,

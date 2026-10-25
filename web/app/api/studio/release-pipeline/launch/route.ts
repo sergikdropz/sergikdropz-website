@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
     const bodyKey = normalizeIdempotencyKey(
       typeof body.idempotencyKey === 'string' ? body.idempotencyKey : null
     )
-    const idempotencyKey = headerKey || bodyKey || `launch:${releaseId}`
+    const explicitKey = headerKey || bodyKey
+    const idempotencyKey = explicitKey || `launch:${releaseId}`
 
     if (!releaseId) {
       return NextResponse.json({ error: 'release_id is required' }, { status: 400 })
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       operation: 'studio.release-pipeline.launch',
       key: idempotencyKey,
     })
-    if (existing?.status === 'completed' && existing.response) {
+    if (explicitKey && existing?.status === 'completed' && existing.response) {
       return NextResponse.json(existing.response)
     }
     if (existing?.status === 'pending') {

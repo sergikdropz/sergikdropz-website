@@ -1,10 +1,30 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { FaFacebook, FaInstagram, FaLink, FaTiktok, FaWhatsapp, FaYoutube } from 'react-icons/fa'
+import { FaXTwitter } from 'react-icons/fa6'
 import ShareClipWindowWaveform from '@/components/shares/ShareClipWindowWaveform'
 import type { ShareScrubApi } from '@/components/shares/ShareMiniPlayer'
+import {
+  CLIP_SHARE_TARGETS,
+  clipShareCaption,
+  type ClipPlatformId,
+  type ClipVideoPlatform,
+  socialIntentUrl,
+  timedListenUrl,
+} from '@/lib/shares/clip-share'
 import { clampSnippetWindow, STORY_SNIPPET_DURATION_SEC } from '@/lib/shares/story-snippet'
 import { FloatingMenuPortal } from '@/components/ui/FloatingMenuPortal'
+
+const PLATFORM_ICONS: Record<ClipPlatformId, ReactNode> = {
+  instagram: <FaInstagram />,
+  tiktok: <FaTiktok />,
+  youtube: <FaYoutube />,
+  facebook: <FaFacebook />,
+  x: <FaXTwitter />,
+  whatsapp: <FaWhatsapp />,
+  copy: <FaLink />,
+}
 
 function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00'
@@ -28,8 +48,21 @@ export type ShareStoryClipPickerProps = {
   scrubApiRef?: MutableRefObject<ShareScrubApi | null>
   busy?: boolean
   busyLabel?: string | null
+  /** Listen page for this track. Link icons open that network with a timed link. */
+  listenUrl?: string | null
   onCancel: () => void
   onConfirm: (startSec: number) => void
+  /** Render the clip, then ask for a follow-up tap that hands the file to the app. */
+  onSendVideo?: (platform: ClipVideoPlatform, startSec: number) => void
+  /** Clip is rendered. The next tap on that platform shares it while the browser still has a user gesture. */
+  readyShare?: {
+    platform: ClipVideoPlatform
+    actionLabel: string
+    hint: string
+    onShare: () => void
+  } | null
+  /** Fired when the 15s window moves, so a previously rendered clip is discarded. */
+  onWindowChange?: () => void
 }
 
 /**
@@ -48,8 +81,12 @@ export default function ShareStoryClipPicker({
   scrubApiRef,
   busy = false,
   busyLabel = null,
+  listenUrl = null,
   onCancel,
   onConfirm,
+  onSendVideo,
+  readyShare = null,
+  onWindowChange,
 }: ShareStoryClipPickerProps) {
   const trackDur = Math.max(0, Number(trackDurationSec) || 0)
   const windowSec = Math.min(
@@ -60,6 +97,7 @@ export default function ShareStoryClipPicker({
 
   const [startSec, setStartSec] = useState(0)
   const [previewing, setPreviewing] = useState(false)
+  const [sheetNotice, setSheetNotice] = useState<string | null>(null)
   const previewingRef = useRef(false)
   const startSecRef = useRef(0)
   const progressRef = useRef(0)
@@ -79,9 +117,10 @@ export default function ShareStoryClipPicker({
       if (opts?.seek !== false) {
         scrubApiRef?.current?.seek(next)
       }
+      onWindowChange?.()
       return next
     },
-    [scrubApiRef, trackDur, windowSec],
+    [onWindowChange, scrubApiRef, trackDur, windowSec],
   )
 
   useEffect(() => {
@@ -96,6 +135,7 @@ export default function ShareStoryClipPicker({
     progressRef.current = trackDur > 0 ? clamped.startSec / trackDur : 0
     setPreviewing(false)
     previewingRef.current = false
+    setSheetNotice(null)
   }, [open, initialStartSec, windowSec, trackDur])
 
   useEffect(() => {
@@ -165,6 +205,51 @@ export default function ShareStoryClipPicker({
   }, [busy, scrubApiRef, trackDur])
 
   const canPreview = Boolean(scrubApiRef) && !busy
+  const canRedirect = Boolean(listenUrl) && !busy
+
+  const openPlatform = useCallback(
+    async (platform: ClipPlatformId) => {
+      if (busy) return
+      const target = CLIP_SHARE_TARGETS.find((row) => row.id === platform)
+      if (!target) return
+      if (target.kind === 'video') {
+        if (readyShare && readyShare.platform === platform) {
+          readyShare.onShare()
+          return
+        }
+        if (onSendVideo) onSendVideo(platform as ClipVideoPlatform, startSecRef.current)
+        else onConfirm(startSecRef.current)
+        return
+      }
+      if (!listenUrl) return
+      const url = timedListenUrl(listenUrl, {
+        startSec: startSecRef.current,
+        trackId,
+        platform,
+        campaign: title,
+        base: window.location.origin,
+      })
+      const text = clipShareCaption({
+        title,
+        artist,
+        url,
+        startSec: startSecRef.current,
+      })
+      if (platform === 'copy') {
+        try {
+          await navigator.clipboard.writeText(url)
+          setSheetNotice(`Link copied · starts at ${formatTime(startSecRef.current)}`)
+        } catch {
+          setSheetNotice('Could not copy the link')
+        }
+        return
+      }
+      const intent = socialIntentUrl(platform as 'x' | 'facebook' | 'whatsapp', { text, url })
+      window.open(intent, '_blank', 'noopener,noreferrer')
+      setSheetNotice(`Opened ${target.label} at ${formatTime(startSecRef.current)}`)
+    },
+    [artist, busy, listenUrl, onConfirm, onSendVideo, readyShare, title, trackId],
+  )
 
   if (!open) return null
 
@@ -194,7 +279,7 @@ export default function ShareStoryClipPicker({
           {artist ? <span className="text-zinc-600"> · {artist}</span> : null}
         </p>
         <p className="mt-3 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-          Instagram Story · MPEG-4
+          One moment · send it to the platform
         </p>
 
         <div className="mt-5">
@@ -249,6 +334,14 @@ export default function ShareStoryClipPicker({
           <p className="mt-4 text-center text-xs text-zinc-400" role="status">
             {busyLabel}
           </p>
+        ) : readyShare ? (
+          <p className="mt-4 text-center text-xs text-zinc-300" role="status">
+            {readyShare.hint}
+          </p>
+        ) : sheetNotice ? (
+          <p className="mt-4 text-center text-xs text-zinc-300" role="status">
+            {sheetNotice}
+          </p>
         ) : (
           <p className="mt-4 text-center text-[10px] uppercase tracking-[0.14em] text-zinc-600">
             {canPreview
@@ -257,7 +350,46 @@ export default function ShareStoryClipPicker({
           </p>
         )}
 
-        <div className="mt-5 flex gap-2">
+        {readyShare && !busy ? (
+          <button
+            type="button"
+            onClick={() => readyShare.onShare()}
+            className="mt-4 w-full rounded-full bg-white px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] text-black transition hover:bg-zinc-200"
+          >
+            {readyShare.actionLabel}
+          </button>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap justify-center gap-3" role="group" aria-label="Send this moment">
+          {CLIP_SHARE_TARGETS.map((platform) => {
+            const disabled = busy || (platform.kind === 'redirect' && platform.id !== 'copy' && !canRedirect) || (platform.id === 'copy' && !canRedirect)
+            return (
+              <button
+                key={platform.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => void openPlatform(platform.id)}
+                className="group flex w-14 flex-col items-center gap-1.5 disabled:opacity-40"
+                aria-label={
+                  readyShare && readyShare.platform === platform.id
+                    ? readyShare.actionLabel
+                    : platform.kind === 'video'
+                      ? `Send video to ${platform.label}`
+                      : `Open ${platform.label}`
+                }
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/5 text-lg text-white transition group-hover:border-white/40 group-hover:bg-white group-hover:text-black group-disabled:group-hover:border-white/15 group-disabled:group-hover:bg-white/5 group-disabled:group-hover:text-white">
+                  {PLATFORM_ICONS[platform.id]}
+                </span>
+                <span className="text-[9px] uppercase tracking-[0.12em] text-zinc-400 group-hover:text-white">
+                  {platform.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-4 flex gap-2">
           <button
             type="button"
             disabled={busy}
@@ -265,14 +397,6 @@ export default function ShareStoryClipPicker({
             className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] text-white/70 transition hover:border-white/30 hover:text-white disabled:opacity-40"
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onConfirm(startSec)}
-            className="flex-1 rounded-full border border-white/25 bg-white px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] text-black transition hover:bg-zinc-100 disabled:opacity-40"
-          >
-            {busy ? 'Rendering…' : 'Export MP4'}
           </button>
         </div>
       </div>

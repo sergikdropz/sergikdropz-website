@@ -3,6 +3,7 @@
  */
 
 import { catalogLockFromTrack, readCatalogOverrides } from '@/lib/catalog-lock'
+import { catalogPlaybackSource } from '@/lib/audio/catalog-playback-file'
 import { normalizeVaultAudioUrl } from '@/utils/normalizeVaultAudioUrl'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { createdDateFromTrack, originalDateFromMetadata } from '@/lib/music-library/track-created-date'
@@ -51,6 +52,8 @@ export type TrackListFolder = {
 }
 
 export type TrackListAudio = {
+  file_path?: string | null
+  file_url?: string | null
   duration_seconds?: number | null
   artwork_url?: string | null
   created_at?: string | null
@@ -62,9 +65,57 @@ export type TrackListAudio = {
   energy_level?: number | null
   danceability?: number | null
   sonic_dna?: unknown
+  waveform_json_url?: string | null
+  sonic_dna_json_url?: string | null
 }
 
 /** Keep only admin catalog stamps — never ship sonic_dna blobs in list rows. */
+export const LIST_METADATA_SELECT = [
+  'meta_original_date:metadata->>original_date',
+  'meta_original_date_source:metadata->>original_date_source',
+  'meta_album:metadata->>album',
+  'meta_album_title:metadata->>album_title',
+  'meta_album_type:metadata->>album_type',
+  'meta_release_type:metadata->>release_type',
+  'meta_type_hint:metadata->>type_hint',
+  'meta_catalog_overrides:metadata->catalog_overrides',
+  'meta_distribution:metadata->distribution',
+].join(',')
+
+const LIST_META_KEYS = [
+  'meta_original_date',
+  'meta_original_date_source',
+  'meta_album',
+  'meta_album_title',
+  'meta_album_type',
+  'meta_release_type',
+  'meta_type_hint',
+  'meta_catalog_overrides',
+  'meta_distribution',
+] as const
+
+/** Rebuild the small metadata object from list columns. Drops the raw columns. */
+export function attachLeanListMetadata<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = {}
+  if (row.meta_original_date) out.original_date = row.meta_original_date
+  if (typeof row.meta_original_date_source === 'string') {
+    out.original_date_source = row.meta_original_date_source
+  }
+  if (row.meta_album) out.album = row.meta_album
+  if (row.meta_album_title) out.album_title = row.meta_album_title
+  if (row.meta_album_type) out.album_type = row.meta_album_type
+  if (row.meta_release_type) out.release_type = row.meta_release_type
+  if (row.meta_type_hint) out.type_hint = row.meta_type_hint
+  if (row.meta_catalog_overrides && typeof row.meta_catalog_overrides === 'object') {
+    out.catalog_overrides = row.meta_catalog_overrides
+  }
+  if (row.meta_distribution && typeof row.meta_distribution === 'object') {
+    out.distribution = row.meta_distribution
+  }
+  for (const key of LIST_META_KEYS) delete row[key]
+  if (Object.keys(out).length) (row as Record<string, unknown>).metadata = out
+  return row
+}
 export function leanCatalogMetadata(metadata: unknown): Record<string, unknown> | undefined {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined
   const src = metadata as Record<string, unknown>
@@ -236,13 +287,21 @@ export function mapLibraryTrackToListItem(
     title,
     artist,
     duration: pickDurationSeconds(audio?.duration_seconds, track.duration),
-    file: normalizeVaultAudioUrl(track.file_url || ''),
+    file: normalizeVaultAudioUrl(
+      catalogPlaybackSource({
+        libraryFileUrl: track.file_url,
+        audioFilePath: audio?.file_path,
+        audioFileUrl: audio?.file_url,
+      }) || '',
+    ),
     artwork: artworkRaw ? resolveImageUrl(artworkRaw) : undefined,
     bpm: bpm ?? undefined,
     key_signature,
     energy_level: numOrNull(track.energy_level) ?? numOrNull(audio?.energy_level) ?? undefined,
     danceability: numOrNull(track.danceability) ?? numOrNull(audio?.danceability) ?? undefined,
     sonic_dna_status: audio?.sonic_dna_status || track.sonic_dna_status || null,
+    waveformJsonUrl: clean(audio?.waveform_json_url) || undefined,
+    sonicDnaJsonUrl: clean(audio?.sonic_dna_json_url) || undefined,
     created_at: audio?.created_at || track.created_at || track.created_at_timestamp,
     date: track.date || undefined,
     year,

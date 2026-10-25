@@ -16,7 +16,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { sendEmail } from '@/lib/email'
+import { sendDepartmentEmail } from '@/lib/email/send-department'
 
 let supabaseClient: SupabaseClient | null = null
 
@@ -332,10 +332,17 @@ export async function sendQueuedCampaignEmails(limit = 100) {
           .update({ status: 'queued', queued_at: new Date().toISOString() })
           .eq('id', send.id)
 
-        const result = await sendEmail({
+        const result = await sendDepartmentEmail({
+          department: 'promo',
           to: send.to_email,
           subject: send.rendered_subject,
           html: send.rendered_html,
+          tags: [
+            {
+              name: 'campaign_id',
+              value: String(send.campaign_id ?? 'campaign').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50) || 'campaign',
+            },
+          ],
         })
 
         if (result.messageId) {

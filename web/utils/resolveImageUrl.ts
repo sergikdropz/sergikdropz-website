@@ -103,6 +103,9 @@ function withLocalCacheBust(resolved: string, bust: string): string {
 
 /** Canonical shipped covers — defeat stale mobile caches that still point at retired art. */
 function canonicalFolderCover(pathOnly: string): string | null {
+  // A replace writes `folder-{id}.v{ms}.ext`. Pinning that back to the old master
+  // drops the upload on save and leaves the editor on a missing file.
+  if (/folder-[^/]+\.v\d+\.[a-z0-9]+$/i.test(pathOnly)) return null
   if (pathOnly.includes(DAZE_ASTRONAUT_LEGACY)) return DAZE_COVER
   if (/folder-1787720929879\./i.test(pathOnly)) return HAPPY_CAMPER_COVER
   if (/folder-collection-unreleased-eps-sergik---daze-?\./i.test(pathOnly)) return DAZE_COVER

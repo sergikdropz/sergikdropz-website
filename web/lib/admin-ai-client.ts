@@ -11,6 +11,8 @@ import {
 export type AdminAiPromptDetail = {
   message: string
   agentMode?: string
+  /** Send the message immediately instead of only filling the composer. */
+  submit?: boolean
 }
 
 const PENDING_PROMPT_KEY = '__sergikAdminAiLastPrompt'
@@ -169,10 +171,14 @@ export function dispatchAdminAiApplyField(detail: { fieldId: string; value: stri
 /** Open assistant with a prompt tailored to the currently focused field. */
 export function dispatchAdminAiSuggestForFocus(
   focus: AdminAiFocusContext,
-  mode: 'suggest' | 'improve' | 'fill' = 'suggest'
+  mode: 'suggest' | 'improve' | 'fill' = 'suggest',
+  attached?: string,
 ) {
-  const verb =
-    mode === 'fill'
+  const context = attached?.trim() ?? ''
+  const subjectFromMessage = Boolean(context) && /subject/i.test(`${focus.fieldKey} ${focus.fieldLabel}`)
+  const verb = subjectFromMessage
+    ? 'Draft one email subject line from the attached message'
+    : mode === 'fill'
       ? 'Draft a value for this empty field'
       : mode === 'improve'
         ? 'Improve this field value'
@@ -185,6 +191,8 @@ export function dispatchAdminAiSuggestForFocus(
       : '',
     focus.hint ? `Hint: ${focus.hint}` : '',
     `Current value: ${focus.value ? JSON.stringify(focus.value) : '(empty)'}`,
+    context ? `Attached message:\n${context}` : '',
+    subjectFromMessage ? 'One line, under 70 characters. Use the release title from the message.' : '',
     'Reply with the exact text to use. End with a ```ai-apply {"value":"..."}``` block when ready to paste into the field.',
   ].filter(Boolean)
 

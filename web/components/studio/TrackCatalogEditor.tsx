@@ -418,6 +418,16 @@ export default function TrackCatalogEditor({
     }
   }
 
+  function pullFromDistroKid() {
+    if (!releaseId) return
+    dispatchAdminAiPrompt({
+      agentMode: 'studio_release',
+      submit: true,
+      message: `/exec pull_distrokid_isrcs ${JSON.stringify({ releaseId, dryRun: true })}`,
+    })
+    openAdminAiAssistant()
+  }
+
   function openPressNotesInAdminAi(trackId?: string, trackTitle?: string) {
     dispatchAdminAiPrompt(
       buildPressNotesAdminAiPrompt({
@@ -1104,6 +1114,15 @@ export default function TrackCatalogEditor({
           >
             <FaDownload className="text-[10px]" />
             Export locker CSV
+          </button>
+          <button
+            type="button"
+            onClick={pullFromDistroKid}
+            disabled={!tracks.length}
+            title="Ask Admin AI to pull DistroKid ISRCs onto these tracks"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-zinc-600 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+          >
+            Pull from DistroKid
           </button>
           <button
             type="button"

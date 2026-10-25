@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1)
 
     if (tier) {
-      query = query.eq('tier', tier)
+      query = query.eq('license_tier', tier)
     }
 
     if (customerEmail) {
@@ -69,7 +69,11 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      licenses: data || [],
+      licenses: (data || []).map((row) => ({
+        ...row,
+        tier: row.license_tier || row.tier || '',
+        terms: row.terms ?? row.terms_snapshot ?? null,
+      })),
       pagination: {
         page,
         limit,

@@ -35,7 +35,9 @@ import ReleaseReadinessRing from './ReleaseReadinessRing'
 import TrackCatalogEditor from './TrackCatalogEditor'
 import MetadataPanel from './MetadataPanel'
 import LaunchPanel from './LaunchPanel'
+import SocialPromoPanel from './SocialPromoPanel'
 import StudioContextMenu, { type StudioContextMenuEntry } from './StudioContextMenu'
+import ReleaseAiChatThreadsButton from './ReleaseAiChatThreadsButton'
 import VerifiedStoreIcons from './VerifiedStoreIcons'
 import {
   FaRocket,
@@ -100,6 +102,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
   const [activeStep, setActiveStep] = useState<WorkflowStepId>(
     () => parseStudioWorkflowStep(searchParams.get('step')) ?? 'catalog'
   )
+  const promoOpen = searchParams.get('panel') === 'promo'
   const [actionFocus, setActionFocus] = useState<RightsActionFocus | null>(null)
   const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null)
   const [marketingCopy, setMarketingCopy] = useState<MarketingCopy>({})
@@ -216,6 +219,11 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
     },
     [releaseId, router]
   )
+
+  const openPromo = useCallback(() => {
+    setActionFocus(null)
+    router.replace(`${studioReleaseHref(releaseId, activeStep)}&panel=promo`, { scroll: false })
+  }, [activeStep, releaseId, router])
 
   const applyStudioNavTarget = useCallback(
     (target: AdminAiStudioNavTarget) => {
@@ -624,6 +632,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
             >
               Edit metadata
             </button>
+            <ReleaseAiChatThreadsButton releaseId={releaseId} releaseTitle={release.title} />
             <button
               type="button"
               onClick={async () => {
@@ -664,6 +673,8 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
       <WorkflowStepper
         activeStep={activeStep}
         completedSteps={completedSteps}
+        promoActive={promoOpen}
+        onPromoClick={openPromo}
         onStepClick={goToStep}
         onCompleteWithAi={(step) => {
           goToStep(step)
@@ -675,7 +686,17 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         }}
       />
 
-      {activeStep === 'catalog' && (
+      {promoOpen ? (
+        <SocialPromoPanel
+          releaseId={releaseId}
+          title={release.title}
+          artworkUrl={release.artwork_url}
+          artist={release.album_artist || release.label_name}
+          streetDate={release.release_date}
+        />
+      ) : null}
+
+      {!promoOpen && activeStep === 'catalog' && (
         <TrackCatalogEditor
           tracks={tracks}
           releaseId={releaseId}
@@ -689,7 +710,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         />
       )}
 
-      {activeStep === 'metadata' && (
+      {!promoOpen && activeStep === 'metadata' && (
         <MetadataPanel
           releaseId={releaseId}
           artworkUrl={release.artwork_url}
@@ -726,7 +747,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         />
       )}
 
-      {activeStep === 'rights' && (
+      {!promoOpen && activeStep === 'rights' && (
         <CopyrightPanel
           readiness={copyright}
           releaseId={releaseId}
@@ -750,7 +771,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         />
       )}
 
-      {activeStep === 'copy' && (
+      {!promoOpen && activeStep === 'copy' && (
         <CopywritingStudio
           title={release.title}
           type={release.type}
@@ -783,7 +804,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         />
       )}
 
-      {activeStep === 'delivery' && (
+      {!promoOpen && activeStep === 'delivery' && (
         <DspDeliveryBoard
           releaseId={releaseId}
           title={release.title}
@@ -811,7 +832,7 @@ export default function ReleaseStudioWorkspace({ releaseId }: Props) {
         />
       )}
 
-      {activeStep === 'launch' && (
+      {!promoOpen && activeStep === 'launch' && (
         <LaunchPanel
           releaseId={releaseId}
           title={release.title}

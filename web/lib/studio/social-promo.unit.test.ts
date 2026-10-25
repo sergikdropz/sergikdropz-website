@@ -5,6 +5,8 @@ import {
   generateSocialPromoPlan,
   mergeSocialPromoPlan,
   parseSocialPromoPlan,
+  promoSharePath,
+  readPromoShareToken,
   summarizeSocialPromo,
   zonedDateTimeIso,
 } from '@/lib/studio/social-promo'
@@ -73,6 +75,21 @@ describe('social promo schedule', () => {
     expect(merged.posts.find((p) => p.id === firstId)?.status).toBe('ready')
     expect(merged.posts.find((p) => p.id === firstId)?.channel).toBe(plan.posts[0]!.channel)
     expect(merged.posts).toHaveLength(plan.posts.length)
+  })
+
+  it('keeps a collaborator share token across parse, merge, and regenerate', () => {
+    const token = 'abcdefghij1234567890'
+    const plan = generateSocialPromoPlan({ streetDate: '2026-10-30', title: 'Walk That Walk' })
+    plan.share_token = token
+    const parsed = parseSocialPromoPlan(JSON.parse(JSON.stringify(plan)))
+    expect(parsed.share_token).toBe(token)
+    const merged = mergeSocialPromoPlan(parsed, { posts: [{ id: plan.posts[0]!.id, status: 'ready' }] })
+    expect(merged.share_token).toBe(token)
+    const regenerated = generateSocialPromoPlan({ streetDate: '2026-10-30', title: 'Walk That Walk' })
+    regenerated.share_token = parsed.share_token
+    expect(regenerated.share_token).toBe(token)
+    expect(readPromoShareToken('short')).toBeNull()
+    expect(promoSharePath(token)).toBe(`/promo/${token}`)
   })
 
   it('allows plans without street date (unscheduled slots)', () => {

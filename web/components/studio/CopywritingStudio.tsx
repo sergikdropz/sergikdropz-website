@@ -53,6 +53,8 @@ type Props = {
   onDescriptionDraft?: (description: string) => void
   onSave: () => void
   saving?: boolean
+  /** Catalog draft, save, and the Admin AI desk. Hidden on the public promo link. */
+  adminChrome?: boolean
 }
 
 const FIELD_ORDER = Object.keys(COPY_TEMPLATES) as (keyof MarketingCopy)[]
@@ -118,6 +120,7 @@ export default function CopywritingStudio({
   onDescriptionDraft,
   onSave,
   saving,
+  adminChrome = true,
 }: Props) {
   const [activeField, setActiveField] = useState<keyof MarketingCopy>('elevator_pitch')
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -363,6 +366,7 @@ export default function CopywritingStudio({
         formId: 'release_marketing_copy',
       })}
     >
+      {adminChrome ? (
       <div className="p-5 border-b border-zinc-800 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -444,6 +448,7 @@ export default function CopywritingStudio({
           </div>
         </div>
       </div>
+      ) : null}
 
       <div className="flex flex-col md:flex-row min-h-[320px]">
         <div className="md:w-56 border-b md:border-b-0 md:border-r border-zinc-800 p-2 flex md:flex-col gap-1 overflow-x-auto">

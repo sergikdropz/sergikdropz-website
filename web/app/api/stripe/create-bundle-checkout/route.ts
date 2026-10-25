@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { stripeCheckoutImages } from '@/lib/stripe/checkout-image'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
   apiVersion: '2023-10-16',
 })
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
             product_data: {
               name: bundle.name,
               description: bundle.description,
-              images: bundle.artwork ? [`${baseUrl}${bundle.artwork}`] : [],
+              images: stripeCheckoutImages(baseUrl, bundle.artwork),
             },
             unit_amount: Math.round(bundle.bundlePrice * 100),
           },

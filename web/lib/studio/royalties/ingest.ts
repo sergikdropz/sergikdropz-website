@@ -24,6 +24,8 @@ export type IngestStatementInput = {
   /** Optional ISRC → split sheet lookup from distribution_tracks */
   trackLookup?: TrackSplitLookup[]
   store?: RoyaltyStoreSnapshot
+  /** When set, a later pull with the same key replaces the previous snapshot. */
+  externalKey?: string | null
 }
 
 export type IngestStatementResult = {
@@ -33,6 +35,7 @@ export type IngestStatementResult = {
   ledgerCreated: number
   warnings: string[]
   duplicate: boolean
+  replaced: boolean
 }
 
 function newId(prefix: string): string {
@@ -80,6 +83,31 @@ export function ingestRoyaltyStatement(input: IngestStatementInput): IngestState
       ledgerCreated: 0,
       warnings: ['Statement already ingested (same file hash)'],
       duplicate: true,
+      replaced: false,
+    }
+  }
+
+  const externalKey = input.externalKey?.trim() || null
+  let replaced = false
+  if (externalKey) {
+    const prior = store.statements.find((statement) => statement.externalKey === externalKey)
+    if (prior) {
+      const paid = store.ledger.some((entry) => entry.statementId === prior.id && entry.status === 'paid')
+      if (paid) {
+        return {
+          store,
+          statement: prior,
+          lineCount: prior.lineCount,
+          ledgerCreated: 0,
+          warnings: ['Previous pull has a paid ledger row, so it was left in place.'],
+          duplicate: true,
+          replaced: false,
+        }
+      }
+      store.statements = store.statements.filter((statement) => statement.id !== prior.id)
+      store.lines = store.lines.filter((line) => line.statementId !== prior.id)
+      store.ledger = store.ledger.filter((entry) => entry.statementId !== prior.id)
+      replaced = true
     }
   }
 
@@ -90,6 +118,7 @@ export function ingestRoyaltyStatement(input: IngestStatementInput): IngestState
   const newLines: RoyaltyStatementLine[] = []
   const newLedger: RoyaltyLedgerEntry[] = []
   let payees = store.payees
+  const unmatched = new Set<string>()
 
   for (const line of parsed.lines) {
     const lineId = newId('line')
@@ -97,7 +126,12 @@ export function ingestRoyaltyStatement(input: IngestStatementInput): IngestState
     newLines.push(fullLine)
 
     const hit = line.isrc ? isrcMap.get(line.isrc) : undefined
-    const splits = hit?.splits || null
+    if (parsed.category === 'meta_ad_spend') continue
+    if (parsed.category === 'recording_royalty' && line.isrc && !hit && !unmatched.has(line.isrc)) {
+      unmatched.add(line.isrc)
+      warnings.push(`Unmatched ISRC ${line.isrc} parked with the LLC until Rights links it.`)
+    }
+    const splits = parsed.category === 'meta_creator' ? null : hit?.splits || null
     const alloc = allocateStatementLine({
       statementId,
       statementLineId: lineId,
@@ -131,6 +165,9 @@ export function ingestRoyaltyStatement(input: IngestStatementInput): IngestState
     contentHash,
     ingestedAt: now,
     notes: input.notes ?? null,
+    category: parsed.category,
+    amountBasis: parsed.amountBasis,
+    externalKey,
   }
 
   store = {
@@ -149,5 +186,6 @@ export function ingestRoyaltyStatement(input: IngestStatementInput): IngestState
     ledgerCreated: newLedger.length,
     warnings,
     duplicate: false,
+    replaced,
   }
 }

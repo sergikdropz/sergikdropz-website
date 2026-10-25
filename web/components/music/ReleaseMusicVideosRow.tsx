@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type MutableRefObject,
   type ReactNode,
 } from 'react'
@@ -147,6 +148,55 @@ type ReleaseMusicVideosRowProps = {
   releaseTracks?: ReleaseShareTrack[]
   isAdmin: boolean
   onVideosChange?: (videos: FolderMusicVideo[]) => void
+}
+
+const releaseActionHosts = new Map<string, HTMLElement>()
+const releaseActionClaims = new Set<string>()
+const releaseActionListeners = new Set<() => void>()
+
+function emitReleaseActions() {
+  releaseActionListeners.forEach((listener) => listener())
+}
+
+function subscribeReleaseActions(listener: () => void) {
+  releaseActionListeners.add(listener)
+  return () => {
+    releaseActionListeners.delete(listener)
+  }
+}
+
+export function bindReleaseActionsHost(folderId: string, node: HTMLElement | null) {
+  if (node) {
+    if (releaseActionHosts.get(folderId) === node) return
+    releaseActionHosts.set(folderId, node)
+  } else if (!releaseActionHosts.delete(folderId)) {
+    return
+  }
+  emitReleaseActions()
+}
+
+function setReleaseActionsClaimed(folderId: string, on: boolean) {
+  const has = releaseActionClaims.has(folderId)
+  if (on === has) return
+  if (on) releaseActionClaims.add(folderId)
+  else releaseActionClaims.delete(folderId)
+  emitReleaseActions()
+}
+
+export function useReleaseActionsClaimed(folderId: string | null | undefined) {
+  return useSyncExternalStore(
+    subscribeReleaseActions,
+    () => (folderId ? releaseActionClaims.has(folderId) : false),
+    () => false,
+  )
+}
+
+function useReleaseActionsHost(folderId: string) {
+  return useSyncExternalStore(
+    subscribeReleaseActions,
+    () => releaseActionHosts.get(folderId) ?? null,
+    () => null,
+  )
 }
 
 function VideoThumb({
@@ -649,6 +699,14 @@ export default function ReleaseMusicVideosRow({
     }
   }, [videos])
 
+  useLayoutEffect(() => {
+    if (!isAdmin) return
+    setReleaseActionsClaimed(folderId, true)
+    return () => setReleaseActionsClaimed(folderId, false)
+  }, [isAdmin, folderId])
+
+  const actionsHost = useReleaseActionsHost(isAdmin ? folderId : '')
+
   // Public: hide entirely until at least one video is saved.
   if (!isAdmin && videos.length === 0) return null
 
@@ -675,6 +733,29 @@ export default function ReleaseMusicVideosRow({
       /* ignore */
     }
   }
+
+  const releaseActions = isAdmin ? (
+    <>
+      <button
+        type="button"
+        onClick={toggleVideosExpanded}
+        className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-1.5 self-start rounded-md border border-gray-700 px-2.5 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white sm:self-auto"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        title={expanded ? 'Collapse video previews' : 'Expand video previews'}
+      >
+        {expanded ? <FaChevronUp className="h-3 w-3" aria-hidden /> : <FaChevronDown className="h-3 w-3" aria-hidden />}
+        <span className="hidden sm:inline">{expanded ? 'Collapse' : 'Expand'}</span>
+      </button>
+      <ReleaseAdminShareMenu
+        folderId={folderId}
+        releaseTitle={folderName}
+        videos={videos}
+        tracks={releaseTracks}
+        disabled={busy}
+      />
+    </>
+  ) : null
 
   const sizeToggle =
     expanded && canWatch && videos.length > 0 ? (
@@ -863,18 +944,9 @@ export default function ReleaseMusicVideosRow({
 
       {/* Admin URL strip sits under the video panel, above EpReleaseStage when placed in content */}
       {isAdmin ? (
+        <>
         <div className="flex flex-col gap-1.5 px-3 py-2 sm:flex-row sm:items-center sm:px-5">
-          <button
-            type="button"
-            onClick={toggleVideosExpanded}
-            className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-1.5 self-start rounded-md border border-gray-700 px-2.5 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white sm:self-auto"
-            aria-expanded={expanded}
-            aria-controls={panelId}
-            title={expanded ? 'Collapse video previews' : 'Expand video previews'}
-          >
-            {expanded ? <FaChevronUp className="h-3 w-3" aria-hidden /> : <FaChevronDown className="h-3 w-3" aria-hidden />}
-            <span className="hidden sm:inline">{expanded ? 'Collapse' : 'Expand'}</span>
-          </button>
+          {actionsHost ? null : releaseActions}
           <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-gray-200">
             <FaYoutube className="h-4 w-4 text-red-500" aria-hidden />
             <span>YouTube</span>
@@ -928,14 +1000,9 @@ export default function ReleaseMusicVideosRow({
             Add video
           </button>
           {sizeToggle}
-          <ReleaseAdminShareMenu
-            folderId={folderId}
-            releaseTitle={folderName}
-            videos={videos}
-            tracks={releaseTracks}
-            disabled={busy}
-          />
         </div>
+        {actionsHost && releaseActions ? createPortal(releaseActions, actionsHost) : null}
+        </>
       ) : (
         <div className="flex flex-col items-center gap-2 px-3 py-1.5 sm:px-5">
           <div className="relative flex w-full items-center justify-center">

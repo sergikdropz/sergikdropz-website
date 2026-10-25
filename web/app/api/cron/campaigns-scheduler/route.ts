@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { flushDueDepartmentMail } from '@/lib/email/department-mailbox-store'
 import { scheduleCampaignSends } from '@/lib/supabase/workers/campaign-scheduler'
 
 export async function POST(req: NextRequest) {
@@ -25,9 +26,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await scheduleCampaignSends()
+    let departmentMailSent = 0
+    try {
+      departmentMailSent = await flushDueDepartmentMail()
+    } catch (mailError) {
+      console.error('[Cron] Department mail flush error:', mailError)
+    }
 
     return NextResponse.json({
       ...result,
+      departmentMailSent,
       message: `Processed ${result.campaignsSent} campaign(s), queued ${result.totalSends} send(s)`,
     })
   } catch (error) {

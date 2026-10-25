@@ -50,6 +50,7 @@ describe('mission dock DistroKid delivery actions', () => {
     })
     const labels = dock.menus.flatMap((m) => m.items.map((i) => i.label))
     expect(labels).toContain('Fill DistroKid desk')
+    expect(labels).toContain('Fill SoundCloud EP')
     expect(labels).toContain('Open My Music desk')
     expect(labels).toContain('After upload stamp')
     const fill = dock.menus.flatMap((m) => m.items).find((i) => i.id === 'dk-fill')

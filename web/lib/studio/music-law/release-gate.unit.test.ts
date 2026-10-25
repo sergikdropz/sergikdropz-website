@@ -37,6 +37,21 @@ describe('counsel desk follow-through', () => {
     expect(open.blockers.map((finding) => finding.id)).not.toContain('unfilled-blanks')
   })
 
+  it('replaces a blank that already has stray characters in the underscores', () => {
+    const raw = [
+      '2. Term: __808____ years from release date. Territory: _______global_____________.',
+      '7. Governing law: the laws of ArizonaAZ____________  Forum: ____________________',
+      '8. If points are paid, the base is net receiptspercentage____________ (not an undefined “net”).',
+    ].join('\n')
+    const filled = applySergikStandardTerms(raw)
+    expect(filled.text).not.toMatch(/_{3,}/)
+    expect(filled.text).toMatch(/Term: 5 years/)
+    expect(filled.text).toMatch(/Territory: worldwide/)
+    expect(filled.text).toMatch(/Maricopa County/)
+    const open = counselGateForPacket({ text: filled.text, kind: 'collab_agreement', tracks: [] })
+    expect(open.blockers.map((finding) => finding.id)).not.toContain('unfilled-blanks')
+  })
+
   it('accepts sample clearance only when both licenses are on file', () => {
     const open = auditMusicCounsel({
       dealKind: 'sample',

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
 import { getProducts, getProductDetails } from '@/lib/printful'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 
 export async function POST() {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
   try {
     if (!process.env.PRINTFUL_API_KEY) {
       return NextResponse.json(
@@ -54,6 +58,7 @@ export async function POST() {
         { id: 'tees', label: 'T-Shirts' },
         { id: 'hoodies', label: 'Hoodies' },
         { id: 'hats', label: 'Hats' },
+        { id: 'pants', label: 'Pants' },
         { id: 'accessories', label: 'Accessories' },
       ],
       lastSyncedAt: new Date().toISOString(),
@@ -80,6 +85,7 @@ function categorizeProduct(name: string): string {
   const lower = name.toLowerCase()
   if (lower.includes('hoodie') || lower.includes('sweatshirt')) return 'hoodies'
   if (lower.includes('hat') || lower.includes('cap') || lower.includes('beanie')) return 'hats'
+  if (lower.includes('pant') || lower.includes('jogger') || lower.includes('short')) return 'pants'
   if (lower.includes('tee') || lower.includes('t-shirt') || lower.includes('shirt')) return 'tees'
   return 'accessories'
 }

@@ -35,7 +35,7 @@ describe('edge-playback-url', () => {
     const url =
       'https://sergik-vault.e7b3fe976b079a994da8533ba6274a5d.r2.cloudflarestorage.com/audio/unreleased/a.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256'
     expect(isEdgePlaybackUrl(url)).toBe(true)
-    expect(isDirectPlayableUrl(url)).toBe(false)
+    expect(isDirectPlayableUrl(url)).toBe(true)
     expect(shouldPreferResolveOverProxy(url)).toBe(false)
   })
 
@@ -57,7 +57,7 @@ describe('edge-playback-url', () => {
       'https://sergik-vault.e7b3fe976b079a994da8533ba6274a5d.r2.cloudflarestorage.com/audio/unreleased/a.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256'
     expect(isR2BrowserPlayEnabled()).toBe(false)
     expect(isSignedEdgeUrl(url)).toBe(true)
-    expect(isDirectPlayableUrl(url)).toBe(false)
+    expect(isDirectPlayableUrl(url)).toBe(true)
     process.env.NEXT_PUBLIC_R2_BROWSER_PLAY = '1'
     expect(isR2BrowserPlayEnabled()).toBe(true)
     expect(isDirectPlayableUrl(url)).toBe(true)

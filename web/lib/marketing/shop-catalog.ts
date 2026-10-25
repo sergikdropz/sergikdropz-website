@@ -8,13 +8,17 @@ import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { supabaseIsReachable } from '@/lib/supabaseReachability'
 import { releaseArtworkKey, applyLibraryArtwork } from '@/lib/marketing/release-artwork'
+import { shopFormatPrices, type ShopFormatPrices } from '@/lib/shop/format-prices'
 
 function withLocalArtwork<T extends { artwork?: string }>(item: T): T {
   if (!item.artwork) return item
   return { ...item, artwork: resolveImageUrl(item.artwork) }
 }
 
-export type ShopCatalogProduct = (typeof productsData.products)[number] & { productType: 'ep-bundle' }
+export type ShopCatalogProduct = (typeof productsData.products)[number] & {
+  productType: 'ep-bundle'
+  formatPrices: ShopFormatPrices
+}
 
 export type ShopCatalogTrack = (typeof purchasableTracks.tracks)[number] & { productType: 'track' }
 
@@ -87,10 +91,15 @@ export async function getLibraryReleaseArtwork(): Promise<Map<string, string>> {
 /** Shop catalog for SSR. Live library covers overlay static products.json when present. */
 export async function getShopCatalog(): Promise<ShopCatalogPayload> {
   const liveArtwork = await getLibraryReleaseArtwork()
-  const products = applyLibraryArtwork(productsData.products, liveArtwork).map((p) => ({
-    ...withLocalArtwork(p),
-    productType: 'ep-bundle' as const,
-  }))
+  const products = applyLibraryArtwork(productsData.products, liveArtwork).map((p) => {
+    const formatPrices = shopFormatPrices(p.trackCount)
+    return {
+      ...withLocalArtwork(p),
+      productType: 'ep-bundle' as const,
+      formatPrices,
+      price: formatPrices.MP3,
+    }
+  })
   const tracks = applyLibraryArtwork(
     purchasableTracks.tracks.filter(isPurchasableCatalogTrack),
     liveArtwork,

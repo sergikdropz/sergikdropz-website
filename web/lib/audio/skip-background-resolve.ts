@@ -1,4 +1,5 @@
-import { isDirectPlayableUrl } from '@/lib/audio/edge-playback-url'
+import { isDirectPlayableUrl, isMediaProxyUrl, isSignedEdgeUrl } from '@/lib/audio/edge-playback-url'
+import { signedUrlShouldRefresh } from '@/lib/audio/playback-grant'
 import { normalizeVaultAudioUrl, toSameOriginMediaUrl } from '@/utils/normalizeVaultAudioUrl'
 
 /** Same-origin `/api/audio/media/…` URL when the catalog path normalizes to the proxy. */
@@ -18,6 +19,8 @@ export function shouldSkipBackgroundAudioResolve(
   optimisticUrl: string | null | undefined,
 ): boolean {
   if (!filePath || !optimisticUrl || !isDirectPlayableUrl(optimisticUrl)) return false
+  if (isMediaProxyUrl(optimisticUrl)) return false
+  if (isSignedEdgeUrl(optimisticUrl)) return !signedUrlShouldRefresh(optimisticUrl)
   const proxy = syncMediaProxyPlaybackUrl(filePath)
   if (!proxy) return false
   return optimisticUrl === proxy || optimisticUrl.startsWith('/api/audio/media/')

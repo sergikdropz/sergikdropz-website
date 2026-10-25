@@ -30,6 +30,8 @@ export type FieldCopilotPanelProps = {
   onFocusUpdate: (focus: AdminAiFocusContext) => void
   /** Inline copilot call — should not append to main chat unless user opens in chat. */
   requestCopilot: (prompt: string) => Promise<{ reply: string }>
+  /** Message, files, and links already attached in the composer. */
+  attachedContext?: string
 }
 
 export default function FieldCopilotPanel({
@@ -39,6 +41,7 @@ export default function FieldCopilotPanel({
   onClear,
   onFocusUpdate,
   requestCopilot,
+  attachedContext = '',
 }: FieldCopilotPanelProps) {
   const [liveFocus, setLiveFocus] = useState(focus)
   const [draft, setDraft] = useState<FieldCopilotDraft | null>(null)
@@ -98,7 +101,7 @@ export default function FieldCopilotPanel({
       setError(null)
       setDraft(null)
       try {
-        const prompt = buildFieldCopilotPrompt(liveFocus, intent)
+        const prompt = buildFieldCopilotPrompt(liveFocus, intent, attachedContext)
         const { reply } = await requestCopilot(prompt)
         const applyValue = parseAiApplyBlock(reply)
         setDraft({ actionLabel, reply, applyValue })
@@ -108,14 +111,14 @@ export default function FieldCopilotPanel({
         setLoading(false)
       }
     },
-    [enabled, busy, loading, liveFocus, requestCopilot]
+    [enabled, busy, loading, liveFocus, requestCopilot, attachedContext]
   )
 
   const openInChat = useCallback(
     (mode: 'suggest' | 'improve' | 'fill') => {
-      dispatchAdminAiSuggestForFocus(liveFocus, mode)
+      dispatchAdminAiSuggestForFocus(liveFocus, mode, attachedContext)
     },
-    [liveFocus]
+    [liveFocus, attachedContext]
   )
 
   function handleApply() {

@@ -153,6 +153,7 @@ export async function fetchArtworkJpeg(url: string | null | undefined): Promise<
     if (!res.ok) return null
     const bytes = Buffer.from(await res.arrayBuffer())
     if (!bytes.length || bytes.length > 8_000_000) return null
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return bytes
     return await toJpeg(bytes)
   } catch {
     return null

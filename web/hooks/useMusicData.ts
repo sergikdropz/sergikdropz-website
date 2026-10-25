@@ -78,16 +78,17 @@ async function fetchSonicDna(trackId: string): Promise<any> {
   if (!response.ok) {
     throw new Error('Failed to fetch sonic DNA')
   }
-  return response.json()
+  const body = await response.json()
+  const { sonicDnaFromBody } = await import('@/lib/audio/sonic-dna-body')
+  return sonicDnaFromBody(body) || body
 }
 
 // Fetch waveform data for a track (lazy loaded)
 async function fetchWaveform(trackId: string): Promise<any> {
-  const response = await fetch(`/api/audio/waveform?trackId=${trackId}`)
-  if (!response.ok) {
-    throw new Error('Failed to fetch waveform')
-  }
-  return response.json()
+  const { loadWaveformPeaks } = await import('@/lib/audio/load-waveform-peaks')
+  const peaks = await loadWaveformPeaks({ trackId })
+  if (!peaks?.length) throw new Error('Failed to fetch waveform')
+  return { waveform_data: peaks }
 }
 
 // React Query hooks

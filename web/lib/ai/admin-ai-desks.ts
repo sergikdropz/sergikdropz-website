@@ -20,9 +20,9 @@ export const ADMIN_DESK_CARDS: AdminDeskCard[] = [
     id: 'site',
     label: 'Site',
     hosts: ['sergikdropz.com', 'localhost', '127.0.0.1'],
-    purpose: 'Public SERGIK site and MusicBank.',
+    purpose: 'Public SERGIK site and MusicBank. Admin and Release Studio stay on the signed-in page beside the chat.',
     matchSergik: 'Live routes and copy must match Release Studio and marketing truth.',
-    never: 'Do not invent analytics or claim a store is live without a store link.',
+    never: 'Do not open /admin or /studio in this browser. That profile is not signed in and stops on Admin Login. Do not invent analytics or claim a store is live without a store link.',
     skillHint: 'product_strategy',
   },
   {
@@ -65,9 +65,11 @@ export const ADMIN_DESK_CARDS: AdminDeskCard[] = [
     id: 'soundcloud',
     label: 'SoundCloud',
     hosts: ['soundcloud.com', 'www.soundcloud.com'],
-    purpose: 'Public tracks and Fan Support desk.',
-    matchSergik: 'Collab and Spotlight moves must match the growth scorecard.',
-    never: 'Do not invent plays or claim Spotlight eligibility without the snapshot.',
+    purpose: 'Public tracks, Fan Support, and soundcloud.com/upload for an EP already stored on the release.',
+    matchSergik:
+      'Upload uses database file URLs on the release tracks and the release artwork. Titles and description match Release Studio.',
+    never:
+      'Do not invent plays or claim Spotlight eligibility without the snapshot. Do not attach a local folder. Do not click Save — the user reviews, then saves.',
     skillHint: 'growth_marketing',
   },
   {
@@ -101,11 +103,25 @@ export const ADMIN_DESK_CARDS: AdminDeskCard[] = [
     id: 'distrokid',
     label: 'DistroKid',
     hosts: ['distrokid.com', 'www.distrokid.com'],
-    purpose: 'Delivery form for new uploads (no DistroKid API).',
-    matchSergik: 'Packet from Release Studio: title, label, date, QTA53 ISRCs, artwork, WAVs.',
+    purpose:
+      'New-upload form, the album page that lists the DistroKid UPC and each track ISRC, and the bank page read by distrokid_bank_import.',
+    matchSergik:
+      'New uploads paste QTA53 when Release Studio already minted them. After DistroKid assigns codes, the album-page read field distrokidCodes (each .isrc-value plus the UPC) is authoritative — copy those exact ISRCs. Visible page text truncates before the track list.',
     never:
-      'Fill every packet field and attach files, then stop. You QC and click DistroKid Continue. Never click Continue/Submit. Never invent a UPC — leave blank on new uploads. Never let DistroKid mint ISRCs (paste QTA53). No ASAP date. Social Media Pack off.',
+      'Fill every packet field and attach files, then stop. You QC and click DistroKid Continue. Never click Continue/Submit. Never invent a UPC — leave blank on new uploads. No ASAP date. Social Media Pack off. Do not open /isrc/ for codes — it redirects to My Music.',
     skillHint: 'studio_release',
+  },
+  {
+    id: 'meta',
+    label: 'Meta',
+    hosts: ['business.facebook.com', 'adsmanager.facebook.com'],
+    purpose:
+      'Business Suite and Ads Manager. meta_earnings_pull reads ad spend and Facebook creator earnings through the Graph API. query_meta_business_agent talks to Meta Business Agent through the official test API.',
+    matchSergik:
+      'Amounts land on the royalty desk as reported. Scheduled Page photos stay on run_meta_promo_pipeline. Business Agent questions use query_meta_business_agent.',
+    never:
+      'Do not scrape Ads Manager for money. Do not invent spend, ROAS, or Instagram creator payouts. Do not click Boost. Do not enable Meta Business Agent rollout for customers.',
+    skillHint: 'product_strategy',
   },
   {
     id: 'soundexchange',

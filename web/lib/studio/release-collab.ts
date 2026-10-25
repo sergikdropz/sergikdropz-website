@@ -1,10 +1,11 @@
 import { createShareToken } from '@/lib/shares/types'
+import { departmentAddress, MAIL_DEPARTMENTS } from '@/lib/email/departments'
 import { isValidPartyEmail, parsePartyContacts, type PartyContact } from '@/lib/studio/rights-contract-send'
 import { collabInboundLocalPart, collabReplyToAddress } from '@/lib/studio/collab-inbound'
 
-/** Verified Resend from-address for Release Collab outbound mail. */
-export const RELEASE_COLLAB_FROM_EMAIL = 'release.studio@sergikdropz.com'
-export const RELEASE_COLLAB_FROM_NAME = 'SERGIK Release Studio'
+/** Studio department address. Release Collab replies still route through the inbound domain. */
+export const RELEASE_COLLAB_FROM_EMAIL = departmentAddress('studio')
+export const RELEASE_COLLAB_FROM_NAME = MAIL_DEPARTMENTS.studio.name
 export const RELEASE_COLLAB_REPLY_TO = RELEASE_COLLAB_FROM_EMAIL
 
 export const COLLAB_ROLES = [

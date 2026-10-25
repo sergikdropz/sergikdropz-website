@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { normalizeSupabaseUserIdInput } from '@/lib/stripe/user-metadata'
 import { requireFanAuthWithPassword } from '@/lib/require-fan-membership'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
   apiVersion: '2023-10-16',
 })
 
@@ -17,6 +17,13 @@ export async function POST(request: NextRequest) {
 
     if (!items?.length) {
       return NextResponse.json({ error: 'Items required' }, { status: 400 })
+    }
+
+    if (items.some((item: { printful_variant_id?: number }) => !item?.printful_variant_id)) {
+      return NextResponse.json(
+        { error: 'This piece is not connected to fulfillment yet' },
+        { status: 400 }
+      )
     }
 
     const getBaseUrl = () => {

@@ -15,12 +15,13 @@ type GalleryImage = {
 const fallbackImages = (galleryData.images || []) as GalleryImage[]
 
 export default function Gallery() {
-  const [images, setImages] = useState<GalleryImage[]>(fallbackImages)
+  const [images, setImages] = useState<GalleryImage[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchImages() {
       try {
-        const response = await fetch('/api/gallery/db?active_only=true')
+        const response = await fetch('/api/gallery/db?active_only=true', { cache: 'no-store' })
 
         if (!response.ok) {
           throw new Error('Failed to fetch from database')
@@ -28,12 +29,14 @@ export default function Gallery() {
 
         const data = await response.json()
 
-        if (data.images && data.images.length > 0) {
+        if (Array.isArray(data.images)) {
           setImages(data.images)
         }
       } catch (error) {
         console.error('Error fetching gallery from database:', error)
         setImages(fallbackImages)
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -51,7 +54,11 @@ export default function Gallery() {
             Visual documentation of performances, studio sessions, and moments from the underground scene.
           </p>
         </div>
-        <ImageGallery images={images} />
+        {loading ? (
+          <p className="text-center text-sm text-gray-500">Loading gallery…</p>
+        ) : (
+          <ImageGallery images={images} />
+        )}
       </div>
     </div>
   )

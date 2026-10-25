@@ -158,66 +158,6 @@ export default function CommandCenterPanel() {
 
   return (
     <>
-      <div className="flex items-center justify-end mb-6">
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <Link
-            href={studioCollabHref()}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded text-sm border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 transition"
-          >
-            Release Collab
-            {alerts?.collab_pending_count ? (
-              <span className="text-amber-300 text-xs">{alerts.collab_pending_count}</span>
-            ) : null}
-          </Link>
-          <button
-            type="button"
-            onClick={() =>
-              dispatchAdminAiPrompt({
-                agentMode: 'studio_release',
-                message: COMMAND_CENTER_AI_PROMPT,
-              })
-            }
-            className="inline-flex items-center gap-2 px-3 py-2 rounded text-sm border border-violet-500/50 bg-violet-950/40 text-violet-100 hover:bg-violet-900/50 transition"
-          >
-            <FaBrain />
-            AI weekly priorities
-          </button>
-          <button
-            type="button"
-            onClick={() => setMyQueueOnly((prev) => !prev)}
-            className={`px-3 py-2 rounded text-sm border transition ${
-              myQueueOnly
-                ? 'bg-purple-600/20 border-purple-500 text-purple-200'
-                : 'bg-gray-900 border-gray-700 text-gray-300'
-            }`}
-          >
-            {myQueueOnly ? 'My Queue On' : 'My Queue'}
-          </button>
-          <select
-            title="Sort command center rows"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as typeof sort)}
-            className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
-          >
-            <option value="risk">Sort by risk</option>
-            <option value="eta">Sort by ETA</option>
-            <option value="readiness">Sort by readiness</option>
-          </select>
-          <select
-            title="Filter command center by queue"
-            value={queue}
-            onChange={(event) => setQueue(event.target.value as typeof queue)}
-            className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
-          >
-            {queues.map((q) => (
-              <option key={q.key} value={q.key}>
-                {q.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       {alerts && (
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-5">
           <div className="bg-red-950/30 border border-red-900/60 rounded p-3">
@@ -278,6 +218,66 @@ export default function CommandCenterPanel() {
           </div>
         </div>
       )}
+
+      <div className="mb-6 flex items-center justify-center">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link
+            href={studioCollabHref()}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded text-sm border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 transition"
+          >
+            Release Collab
+            {alerts?.collab_pending_count ? (
+              <span className="text-amber-300 text-xs">{alerts.collab_pending_count}</span>
+            ) : null}
+          </Link>
+          <button
+            type="button"
+            onClick={() =>
+              dispatchAdminAiPrompt({
+                agentMode: 'studio_release',
+                message: COMMAND_CENTER_AI_PROMPT,
+              })
+            }
+            className="inline-flex items-center gap-2 px-3 py-2 rounded text-sm border border-violet-500/50 bg-violet-950/40 text-violet-100 hover:bg-violet-900/50 transition"
+          >
+            <FaBrain />
+            AI weekly priorities
+          </button>
+          <button
+            type="button"
+            onClick={() => setMyQueueOnly((prev) => !prev)}
+            className={`px-3 py-2 rounded text-sm border transition ${
+              myQueueOnly
+                ? 'bg-purple-600/20 border-purple-500 text-purple-200'
+                : 'bg-gray-900 border-gray-700 text-gray-300'
+            }`}
+          >
+            {myQueueOnly ? 'My Queue On' : 'My Queue'}
+          </button>
+          <select
+            title="Sort command center rows"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as typeof sort)}
+            className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
+          >
+            <option value="risk">Sort by risk</option>
+            <option value="eta">Sort by ETA</option>
+            <option value="readiness">Sort by readiness</option>
+          </select>
+          <select
+            title="Filter command center by queue"
+            value={queue}
+            onChange={(event) => setQueue(event.target.value as typeof queue)}
+            className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
+          >
+            {queues.map((q) => (
+              <option key={q.key} value={q.key}>
+                {q.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <div className="overflow-x-auto border border-gray-800 rounded-lg">
         <table className="min-w-full text-sm">

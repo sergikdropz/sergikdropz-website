@@ -4,6 +4,7 @@ import {
   formatUsdCents,
   readRoyaltyStore,
   royaltyOpsSignals,
+  summarizeMonetization,
   summarizePayeeLedger,
   writeRoyaltyStore,
   resolveOrCreatePayee,
@@ -39,6 +40,7 @@ export async function GET() {
           payeeSummary.find((p) => p.isLabelEntity)?.owedCents || 0,
         ),
       },
+      measurement: summarizeMonetization(store),
       updatedAt: store.updatedAt,
     })
   } catch (error) {

@@ -44,7 +44,20 @@ type SupabaseRefreshResponse = {
   user?: unknown
 }
 
-export async function refreshSupabaseSession(refreshToken: string) {
+const REFRESH_REUSE_MS = 30_000
+const inflightRefreshes = new Map<string, Promise<SupabaseRefreshResponse | null>>()
+const recentRefreshes = new Map<string, { value: SupabaseRefreshResponse; expiresAt: number }>()
+
+function rememberRefresh(refreshToken: string, value: SupabaseRefreshResponse) {
+  recentRefreshes.set(refreshToken, { value, expiresAt: Date.now() + REFRESH_REUSE_MS })
+  if (recentRefreshes.size <= 40) return
+  const now = Date.now()
+  for (const [key, entry] of recentRefreshes) {
+    if (entry.expiresAt <= now) recentRefreshes.delete(key)
+  }
+}
+
+async function refreshSupabaseSessionOnce(refreshToken: string): Promise<SupabaseRefreshResponse | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -69,4 +82,29 @@ export async function refreshSupabaseSession(refreshToken: string) {
   } catch {
     return null
   }
+}
+
+/**
+ * Refresh a Supabase session.
+ * Parallel callers that still hold the same refresh cookie share one request.
+ * A short reuse window returns that result again so a late request does not
+ * present the already-rotated token and revoke the whole login.
+ */
+export async function refreshSupabaseSession(refreshToken: string) {
+  const cached = recentRefreshes.get(refreshToken)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+
+  const pending = inflightRefreshes.get(refreshToken)
+  if (pending) return pending
+
+  const promise = refreshSupabaseSessionOnce(refreshToken)
+    .then((value) => {
+      if (value) rememberRefresh(refreshToken, value)
+      return value
+    })
+    .finally(() => {
+      inflightRefreshes.delete(refreshToken)
+    })
+  inflightRefreshes.set(refreshToken, promise)
+  return promise
 }

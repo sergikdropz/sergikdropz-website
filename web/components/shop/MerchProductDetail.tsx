@@ -22,6 +22,7 @@ interface MerchProductDetailProps {
     thumbnail: string
     images: string[]
     variants: Variant[]
+    fulfillmentReady?: boolean
   }
 }
 
@@ -34,6 +35,7 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
   const [activeImage, setActiveImage] = useState(0)
 
   const allImages = [product.thumbnail, ...(product.images || [])].filter(Boolean)
+  const shippable = product.fulfillmentReady !== false && Boolean(selectedVariant?.printful_variant_id)
   const sizes = Array.from(new Set(product.variants.map((v) => v.size).filter(Boolean)))
   const colors = Array.from(new Set(product.variants.map((v) => v.color).filter(Boolean)))
 
@@ -88,16 +90,23 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
         {/* Images */}
         <div className="space-y-3">
           <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-900">
-            {allImages[activeImage] && (
-              <Image
-                src={allImages[activeImage]}
-                alt={product.name}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
-                priority
-              />
-            )}
+            {allImages[activeImage] &&
+              (allImages[activeImage].startsWith('/api/') ? (
+                <img
+                  src={allImages[activeImage]}
+                  alt={product.name}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <Image
+                  src={allImages[activeImage]}
+                  alt={product.name}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  priority
+                />
+              ))}
           </div>
           {allImages.length > 1 && (
             <div className="flex gap-2 overflow-x-auto">
@@ -109,7 +118,11 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
                     activeImage === i ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'
                   }`}
                 >
-                  <Image src={img} alt="" fill className="object-cover" sizes="64px" />
+                  {img.startsWith('/api/') ? (
+                    <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  ) : (
+                    <Image src={img} alt="" fill className="object-cover" sizes="64px" />
+                  )}
                 </button>
               ))}
             </div>
@@ -216,18 +229,22 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
 
           <button
             onClick={handleBuy}
-            disabled={loading || !selectedVariant.in_stock}
+            disabled={loading || !selectedVariant?.in_stock || !shippable}
             className="w-full py-4 bg-white hover:bg-gray-200 disabled:bg-gray-700 disabled:cursor-not-allowed text-black font-bold rounded-lg text-lg transition-all"
           >
             {loading
               ? 'Processing...'
-              : !selectedVariant.in_stock
+              : !shippable
+              ? 'Preview only'
+              : !selectedVariant?.in_stock
               ? 'Out of Stock'
               : `Add to Cart — ${formatPrice(selectedVariant.retail_price * quantity)}`}
           </button>
 
           <p className="text-gray-500 text-xs text-center">
-            Print-on-demand. Ships within 2-5 business days.
+            {shippable
+              ? 'Print-on-demand. Ships within 2-5 business days.'
+              : 'This piece is on the floor as a preview. Buying opens once the printer has it.'}
           </p>
         </div>
       </div>

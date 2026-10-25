@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import {
   CROWELOGIC_CHAT_ACCOUNT,
+  CROWELOGIC_GPT61_BASE_URL,
+  CROWELOGIC_GPT61_MODEL,
   crowelogicChatBlockReason,
+  crowelogicChatHeaders,
   resolveCrowelogicEnv,
   crowelogicOpenAiUrl,
 } from '@/lib/ai/crowelogic-env'
@@ -27,16 +30,14 @@ export async function GET() {
       const t = setTimeout(() => ctrl.abort(), 12_000)
       const res = await fetch(crowelogicOpenAiUrl(env.baseUrl, 'chat/completions'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env.apiKey}`,
-        },
+        headers: crowelogicChatHeaders(env.apiKey),
         signal: ctrl.signal,
         body: JSON.stringify({
           model: env.model,
           messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
           max_tokens: 8,
           temperature: 0,
+          stream: false,
         }),
       })
       clearTimeout(t)
@@ -72,18 +73,15 @@ export async function GET() {
     chatProbe,
     setup: {
       envExample: [
-        'CROWELOGIC_API_KEY=customer-credential',
-        'CROWELOGIC_BASE_URL=http://127.0.0.1:8011',
-        'CROWELOGIC_MODEL=auto',
-        '# Hosted Pro gateway, only after Crowe confirms linkage and the usage cap:',
-        '# CROWELOGIC_BASE_URL=https://gateway.example/v1',
-        '# CROWELOGIC_PRO_LINKED=1',
+        'CROWELOGIC_API_KEY=',
+        `CROWELOGIC_BASE_URL=${CROWELOGIC_GPT61_BASE_URL}`,
+        `CROWELOGIC_MODEL=${CROWELOGIC_GPT61_MODEL}`,
       ],
       notes: [
-        'Uses the existing Crowe ID. No second account. The value in CROWELOGIC_API_KEY is a customer credential, stored only on the server.',
-        'Hosted usage is metered by Crowe against the existing Pro allowance. Chat stays off until CROWELOGIC_PRO_LINKED=1.',
+        'Uses the existing Crowe ID. The GPT-6.1 Sol gateway is live, but the first key was revoked and no replacement is stored.',
+        'When a replacement key arrives, put it only in server env. Each chat request sends Idempotency-Key and stream:false. Balance is GET /v1/usage.',
+        'Included allowance is 3,000 credits per period, 5 per request, through 2026-10-22. Requests stop at zero. No overage.',
         'CROWE_API_KEY is Crowe Creative (image and video) and does not enable this chat provider.',
-        'Local bridge on 127.0.0.1:8011 can be tested without the Pro flag. It is not the Pro bill.',
       ],
     },
   })

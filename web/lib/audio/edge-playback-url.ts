@@ -82,10 +82,9 @@ export function isDirectPlayableUrl(url: string): boolean {
   if (url.startsWith('blob:')) return true
   if (isMediaProxyUrl(url)) return true
   if (process.env.NEXT_PUBLIC_LOCAL_AUDIO === '1' && url.startsWith('/audio/')) return true
-  // Private R2 is only browser-safe after bucket CORS + the play flag.
-  if (isR2BrowserPlayEnabled() && (isSignedEdgeUrl(url) || isEdgePlaybackUrl(url))) {
-    return true
-  }
+  // Signed private-bucket URLs are the production play path. Unsigned CDN still needs the flag.
+  if (isSignedEdgeUrl(url)) return true
+  if (isR2BrowserPlayEnabled() && isEdgePlaybackUrl(url)) return true
   return false
 }
 

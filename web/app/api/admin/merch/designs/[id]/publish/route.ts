@@ -1,0 +1,53 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth/route-policy'
+import { getDesign, saveDesign } from '@/lib/merch/design-store'
+import { publishDesignToPrintful } from '@/lib/merch/publish'
+
+export const dynamic = 'force-dynamic'
+
+type Params = { params: { id: string } }
+
+export async function POST(request: NextRequest, { params }: Params) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
+  const design = await getDesign(params.id)
+  if (!design) return NextResponse.json({ error: 'Design not found' }, { status: 404 })
+  if (design.placements.length === 0) {
+    return NextResponse.json({ error: 'Add art before putting this out' }, { status: 400 })
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const printFiles =
+    body?.printFiles && typeof body.printFiles === 'object' ? body.printFiles : {}
+
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    `${request.nextUrl.protocol}//${request.nextUrl.host}`
+
+  let result
+  try {
+    result = await publishDesignToPrintful(design, origin, printFiles)
+  } catch (error: any) {
+    result = {
+      variants: [],
+      printfulSyncProductId: null,
+      mockupTaskKey: null,
+      wholesaleCost: design.wholesaleCost,
+      note: error?.message || 'Printful could not take this design',
+    }
+  }
+
+  const saved = await saveDesign({
+    ...design,
+    status: 'hidden',
+    variants: result.variants.length > 0 ? result.variants : design.variants,
+    printfulSyncProductId: result.printfulSyncProductId || design.printfulSyncProductId,
+    mockupTaskKey: result.mockupTaskKey || design.mockupTaskKey,
+    wholesaleCost: result.wholesaleCost ?? design.wholesaleCost,
+    publishNote: result.note,
+    updatedAt: new Date().toISOString(),
+  })
+
+  return NextResponse.json(saved)
+}

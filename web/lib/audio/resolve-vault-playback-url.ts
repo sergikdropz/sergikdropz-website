@@ -1,10 +1,9 @@
 import { resolveVaultObjectPath } from '@/lib/audio/vault-object-resolver'
 import { extractVaultRelativePath } from '@/utils/normalizeVaultAudioUrl'
-import { isR2BrowserPlayEnabled } from '@/lib/audio/edge-playback-url'
+import { isProductionMediaHost, playbackPresignSeconds } from '@/lib/audio/playback-grant'
 import {
   getR2MediaConfig,
   presignR2ObjectUrl,
-  publicR2MediaUrl,
 } from '@/lib/audio/r2Media'
 
 export type VaultPlaybackResolution = {
@@ -19,8 +18,9 @@ function proxyUrlFor(rel: string): string {
 }
 
 /**
- * Prefer CDN → (gated) R2 presigned URL → same-origin proxy.
- * `fallbackUrl` is always the proxy so the player can recover if CORS fails.
+ * Private R2: signed URL, short for vault and longer for tracks we sell.
+ * Production does not fall back to the Vercel proxy, local disk, or a tunnel.
+ * Dev still returns the proxy when R2 has no object, so localhost playback works.
  */
 export async function resolveVaultPlaybackUrl(
   filePath: string,
@@ -28,21 +28,26 @@ export async function resolveVaultPlaybackUrl(
   const rel = extractVaultRelativePath(filePath)
   if (!rel) return null
 
-  // Catalog rows say .mp3 for assets stored as .wav/.m4a — point at the real object.
-  const resolvedRel = (await resolveVaultObjectPath(rel)) || rel
-  const fallbackUrl = proxyUrlFor(resolvedRel)
+  const resolvedRel = (await resolveVaultObjectPath(rel)) || null
+  const production = isProductionMediaHost()
+  const r2 = Boolean(getR2MediaConfig())
 
-  const cdnUrl = publicR2MediaUrl(rel)
-  if (cdnUrl) {
-    return { url: cdnUrl, fallbackUrl, source: 'cdn' }
+  if (!resolvedRel) {
+    if (production && r2) return null
+    const fallbackUrl = proxyUrlFor(rel)
+    return { url: fallbackUrl, fallbackUrl, source: 'proxy' }
   }
 
-  if (isR2BrowserPlayEnabled() && getR2MediaConfig()) {
-    const signed = await presignR2ObjectUrl(rel)
+  if (r2) {
+    const expiresIn = playbackPresignSeconds(resolvedRel)
+    const signed = await presignR2ObjectUrl(resolvedRel, expiresIn)
     if (signed) {
-      return { url: signed, fallbackUrl, source: 'presigned', expiresIn: 3600 }
+      const fallbackUrl = production ? signed : proxyUrlFor(resolvedRel)
+      return { url: signed, fallbackUrl, source: 'presigned', expiresIn }
     }
+    if (production) return null
   }
 
+  const fallbackUrl = proxyUrlFor(resolvedRel)
   return { url: fallbackUrl, fallbackUrl, source: 'proxy' }
 }

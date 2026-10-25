@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
+import { transcribeWithLocalWhisper } from '@/lib/ai/local-whisper'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 90
 
 const MAX_BYTES = 24 * 1024 * 1024
 
@@ -17,14 +19,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'OPENAI_API_KEY is not set. Add it to enable audio file transcription (Whisper).' },
-        { status: 503 }
-      )
-    }
-
     const formData = await request.formData()
     const file = formData.get('file')
     if (!(file instanceof Blob)) {
@@ -36,30 +30,40 @@ export async function POST(request: NextRequest) {
     }
 
     const name = (formData.get('filename') as string | null) || 'audio.webm'
-    const upstream = new FormData()
-    upstream.append('model', 'whisper-1')
-    upstream.append('file', file, name)
+    const apiKey = process.env.OPENAI_API_KEY
 
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: upstream,
-    })
+    if (apiKey) {
+      const upstream = new FormData()
+      upstream.append('model', 'whisper-1')
+      upstream.append('file', file, name)
 
-    const body = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } }
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: upstream,
+      })
 
-    if (!res.ok) {
-      const msg = body.error?.message || `OpenAI error (${res.status})`
-      return NextResponse.json({ error: msg }, { status: res.status >= 400 && res.status < 600 ? res.status : 502 })
+      const body = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } }
+
+      if (!res.ok) {
+        const msg = body.error?.message || `OpenAI error (${res.status})`
+        return NextResponse.json({ error: msg }, { status: res.status >= 400 && res.status < 600 ? res.status : 502 })
+      }
+
+      const text = typeof body.text === 'string' ? body.text.trim() : ''
+      if (!text) {
+        return NextResponse.json({ error: 'Empty transcription result' }, { status: 502 })
+      }
+
+      return NextResponse.json({ text })
     }
 
-    const text = typeof body.text === 'string' ? body.text.trim() : ''
-    if (!text) {
-      return NextResponse.json({ error: 'Empty transcription result' }, { status: 502 })
-    }
-
+    const bytes = Buffer.from(await file.arrayBuffer())
+    const text = await transcribeWithLocalWhisper(bytes, name)
     return NextResponse.json({ text })
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 })
+    const message = getErrorMessage(error)
+    const missing = /OPENAI_API_KEY or the local whisper/.test(message)
+    return NextResponse.json({ error: message }, { status: missing ? 503 : 500 })
   }
 }

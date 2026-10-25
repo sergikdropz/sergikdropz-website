@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og'
+import { shareClock } from '@/lib/shares/facebook-card'
 import { resolveShareByToken } from '@/lib/shares/share-service'
 import { DEFAULT_PUBLIC_SITE_ORIGIN, siteOrigin } from '@/lib/shares/types'
 
@@ -7,27 +8,6 @@ export const alt = 'SERGIK'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 export const revalidate = 3600
-
-async function loadSixCapsFont(): Promise<ArrayBuffer | null> {
-  try {
-    const css = await fetch(
-      'https://fonts.googleapis.com/css2?family=Six+Caps&text=SERGIK',
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-        },
-        next: { revalidate: 86400 },
-      },
-    ).then((res) => res.text())
-    const match = css.match(/src:\s*url\(([^)]+)\)\s*format\('truetype'\)/)
-    if (!match?.[1]) return null
-    const fontRes = await fetch(match[1], { next: { revalidate: 86400 } })
-    if (!fontRes.ok) return null
-    return fontRes.arrayBuffer()
-  } catch {
-    return null
-  }
-}
 
 async function fetchCoverBytes(artworkUrl: string | null | undefined): Promise<ArrayBuffer | null> {
   const raw = String(artworkUrl || '').trim()
@@ -113,15 +93,21 @@ export default async function ShareOpenGraphImage({
   let title = 'SERGIK'
   let subtitle = 'Listen on sergikdropz.com'
   let cover: ArrayBuffer | null = null
+  let trackLines: { num: string; name: string; time: string }[] = []
 
   try {
     const payload = await resolveShareByToken(token, { includePlaybackUrls: false })
     if (payload) {
       title = payload.share.title || title
+      const kindLabel = (payload.collection?.type || 'ep').toUpperCase()
       subtitle =
         payload.share.kind === 'folder'
-          ? `${payload.collection?.artist || 'SERGIK'} · ${payload.tracks.length} tracks`
+          ? `${payload.collection?.artist || 'SERGIK'} · ${kindLabel} · ${payload.tracks.length} tracks`
           : `${payload.tracks[0]?.artist || 'SERGIK'}`
+      trackLines = payload.tracks.slice(0, 5).map((track, index) => {
+        const name = track.title.length > 28 ? `${track.title.slice(0, 26)}…` : track.title
+        return { num: String(index + 1), name, time: shareClock(track.duration) }
+      })
       const art =
         payload.collection?.artwork ||
         payload.tracks.find((t) => t.artwork)?.artwork ||
@@ -135,7 +121,6 @@ export default async function ShareOpenGraphImage({
 
   const titleDisplay = title.length > 42 ? `${title.slice(0, 40)}…` : title
   const subtitleDisplay = subtitle.length > 48 ? `${subtitle.slice(0, 46)}…` : subtitle
-  const sixCaps = await loadSixCapsFont()
 
   return new ImageResponse(
     (
@@ -229,7 +214,7 @@ export default async function ShareOpenGraphImage({
                   fontSize: 72,
                   fontWeight: 400,
                   letterSpacing: '0.12em',
-                  fontFamily: sixCaps ? 'Six Caps' : 'system-ui, sans-serif',
+                  fontFamily: 'system-ui, sans-serif',
                   textTransform: 'uppercase',
                 }}
               >
@@ -251,12 +236,12 @@ export default async function ShareOpenGraphImage({
               style={{
                 display: 'flex',
                 color: 'rgba(255,255,255,0.55)',
-                fontSize: sixCaps ? 40 : 28,
+                fontSize: 28,
                 fontWeight: 400,
                 letterSpacing: '0.14em',
                 textTransform: 'uppercase',
                 marginBottom: 18,
-                fontFamily: sixCaps ? 'Six Caps' : 'system-ui, sans-serif',
+                fontFamily: 'system-ui, sans-serif',
               }}
             >
               SERGIK
@@ -265,10 +250,11 @@ export default async function ShareOpenGraphImage({
               style={{
                 display: 'flex',
                 color: '#fff',
-                fontSize: 64,
+                fontSize: trackLines.length ? 52 : 64,
                 fontWeight: 750,
                 lineHeight: 1.1,
-                marginBottom: 16,
+                marginBottom: 12,
+                fontFamily: 'system-ui, sans-serif',
               }}
             >
               {titleDisplay}
@@ -277,32 +263,55 @@ export default async function ShareOpenGraphImage({
               style={{
                 display: 'flex',
                 color: 'rgba(255,255,255,0.72)',
-                fontSize: 30,
+                fontSize: 26,
                 fontWeight: 500,
-                marginBottom: 28,
+                marginBottom: trackLines.length ? 22 : 28,
+                fontFamily: 'system-ui, sans-serif',
               }}
             >
               {subtitleDisplay}
             </div>
-            <div
-              style={{
-                display: 'flex',
-                color: 'rgba(255,255,255,0.45)',
-                fontSize: 24,
-                fontWeight: 500,
-              }}
-            >
-              sergikdropz.com
-            </div>
+            {trackLines.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {trackLines.map((line) => (
+                  <div
+                    key={line.num}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      color: 'rgba(255,255,255,0.88)',
+                      fontSize: 24,
+                      fontWeight: 500,
+                      fontFamily: 'system-ui, sans-serif',
+                    }}
+                  >
+                    <div style={{ display: 'flex', width: 36, color: 'rgba(255,255,255,0.45)' }}>{line.num}</div>
+                    <div style={{ display: 'flex', flex: 1 }}>{line.name}</div>
+                    <div style={{ display: 'flex', color: 'rgba(255,255,255,0.5)', marginLeft: 16 }}>
+                      {line.time}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  color: 'rgba(255,255,255,0.45)',
+                  fontSize: 24,
+                  fontWeight: 500,
+                }}
+              >
+                sergikdropz.com
+              </div>
+            )}
           </div>
         </div>
       </div>
     ),
     {
       ...size,
-      fonts: sixCaps
-        ? [{ name: 'Six Caps', data: sixCaps, style: 'normal', weight: 400 }]
-        : undefined,
     },
   )
 }

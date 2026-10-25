@@ -19,13 +19,18 @@ function subscribeNoop() {
 
 class MusicPlayerChunkBoundary extends Component<
   { children: ReactNode },
-  { failed: boolean }
+  { failed: boolean; chunk: boolean }
 > {
-  state = { failed: false }
+  state = { failed: false, chunk: false }
 
   static getDerivedStateFromError(error: unknown) {
-    if (isLikelyChunkLoadError(error)) return { failed: true }
-    return null
+    // Always stop the subtree. Returning null re-renders the same children and
+    // retries the throw forever, which locks the main thread.
+    return { failed: true, chunk: isLikelyChunkLoadError(error) }
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('[MusicPlayer] render failed', error)
   }
 
   render() {
@@ -35,7 +40,9 @@ class MusicPlayerChunkBoundary extends Component<
           className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-500/40 bg-gray-950/95 px-4 py-3 text-center text-sm text-amber-100"
           role="status"
         >
-          Music player failed to load (stale app bundle).{' '}
+          {this.state.chunk
+            ? 'Music player failed to load (stale app bundle). '
+            : 'Music player hit an error and was stopped so the page stays usable. '}
           <button
             type="button"
             className="underline font-medium text-white hover:text-amber-50"

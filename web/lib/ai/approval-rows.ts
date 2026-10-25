@@ -39,14 +39,18 @@ const TOOL_LABELS: Record<AdminAiTool, string> = {
   patch_release_marketing_copy: 'Marketing copy',
   update_copyright_checklist: 'Copyright checklist',
   assign_isrcs: 'ISRC assignment',
+  pull_distrokid_isrcs: 'Pull DistroKid ISRCs',
   create_distribution_release_draft: 'Release draft',
   query_intelligence_harness: 'Intelligence harness',
   query_sergikai_chat: 'SergikAI chat',
   query_crowe_creative: 'Crowe Creative',
+  query_meta_business_agent: 'Meta Business Agent',
   audit_music_contract: 'Contract audit',
+  audit_music_books: 'Books review',
   run_meta_promo_pipeline: 'Meta promo',
   admin_browser: 'Browser',
   query_platform_growth_snapshot: 'Growth snapshot',
+  read_workspace: 'Workspace source',
 }
 
 const DETAIL_KEYS = ['releaseId', 'action', 'title', 'releaseName', 'primaryGoal', 'focus', 'mode', 'query'] as const
@@ -62,6 +66,22 @@ export function payloadWithoutDryRun(payload: Record<string, unknown>): Record<s
   return next
 }
 
+function releaseBarcode(payload: Record<string, unknown>): string {
+  if (typeof payload.upc === 'string' && payload.upc.trim()) return payload.upc.trim()
+  const copy = payload.marketingCopy
+  if (copy && typeof copy === 'object' && !Array.isArray(copy)) {
+    const upc = (copy as Record<string, unknown>).upc
+    if (typeof upc === 'string' && upc.trim()) return upc.trim()
+  }
+  return ''
+}
+
+export function approvalRowLabel(tool: AdminAiTool, payload: Record<string, unknown>): string {
+  const barcode = releaseBarcode(payload)
+  if (tool === 'patch_release_marketing_copy' && barcode) return `Release UPC ${barcode}`
+  return TOOL_LABELS[tool]
+}
+
 export function approvalRowDetail(payload: Record<string, unknown>): string {
   const parts: string[] = []
   for (const key of DETAIL_KEYS) {
@@ -70,6 +90,8 @@ export function approvalRowDetail(payload: Record<string, unknown>): string {
       parts.push(`${key}: ${value.trim().slice(0, 80)}`)
     }
   }
+  const barcode = releaseBarcode(payload)
+  if (barcode && !parts.some((part) => part.includes(barcode))) parts.push(`upc: ${barcode}`)
   return parts.join(' · ')
 }
 
@@ -78,7 +100,7 @@ export function buildApprovalRows(steps: ApprovalSourceStep[]): ApprovalRow[] {
   for (const step of steps) {
     if (!isAllowedTool(step.tool)) continue
     const tool = step.tool
-    const name = TOOL_LABELS[tool]
+    const name = approvalRowLabel(tool, step.payload ?? {})
     const writes = TOOL_POLICY[tool].writeSideEffect
     const stored = payloadWithoutDryRun(step.payload ?? {})
     if (!writes) {

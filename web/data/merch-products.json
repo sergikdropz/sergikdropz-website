@@ -4,6 +4,7 @@
     { "id": "tees", "label": "T-Shirts" },
     { "id": "hoodies", "label": "Hoodies" },
     { "id": "hats", "label": "Hats" },
+    { "id": "pants", "label": "Pants" },
     { "id": "accessories", "label": "Accessories" }
   ],
   "_note": "Products are synced from Printful via /admin/merch. Run sync to populate.",

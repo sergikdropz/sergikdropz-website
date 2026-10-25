@@ -8,7 +8,7 @@ import StudioPageShell from '@/components/studio/StudioPageShell'
 import StudioReleaseCard from '@/components/studio/StudioReleaseCard'
 import ReleaseCalendarPanel from '@/components/studio/ReleaseCalendarPanel'
 import { useStudioReleases } from '@/lib/api/studio-hooks'
-import { FaPlus, FaSync } from 'react-icons/fa'
+import { FaSync } from 'react-icons/fa'
 import { studioCreateHref } from '@/lib/studio/studio-ia'
 
 type ReleaseFilter = 'pending' | 'all' | 'live' | 'calendar'
@@ -78,32 +78,8 @@ export default function ReleasesPage() {
   ]
 
   return (
-    <StudioPageShell
-      title="Releases"
-      subtitle="Pending drafts through go-live — vault catalog, rights, copy, delivery"
-      actions={
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void migrateLegacy()}
-            disabled={migrating}
-            className="inline-flex items-center gap-2 border border-zinc-700 hover:border-violet-500/50 text-zinc-200 px-4 py-2.5 rounded-full text-sm font-medium transition disabled:opacity-50"
-            title="Import leftover schedule stubs into pending Release Studio packages"
-          >
-            <FaSync className={migrating ? 'animate-spin' : ''} />
-            {migrating ? 'Migrating…' : 'Migrate schedule → pending'}
-          </button>
-          <Link
-            href={studioCreateHref('release')}
-            className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition"
-          >
-            <FaPlus />
-            New release
-          </Link>
-        </div>
-      }
-    >
-      <div className="flex gap-2 mb-6 flex-wrap">
+    <StudioPageShell>
+      <div className="mb-4 flex flex-wrap justify-center gap-2">
         {filters.map((item) => (
           <button
             key={item.id}
@@ -118,6 +94,18 @@ export default function ReleasesPage() {
             {item.label}
           </button>
         ))}
+      </div>
+      <div className="mb-6 flex justify-center">
+        <button
+          type="button"
+          onClick={() => void migrateLegacy()}
+          disabled={migrating}
+          className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-violet-500/50 disabled:opacity-50"
+          title="Import leftover schedule stubs into pending Release Studio packages"
+        >
+          <FaSync className={migrating ? 'animate-spin' : ''} />
+          {migrating ? 'Migrating…' : 'Migrate schedule → pending'}
+        </button>
       </div>
 
       {filter === 'calendar' ? (

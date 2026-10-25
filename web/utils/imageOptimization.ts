@@ -38,7 +38,17 @@ export function isLocalFolderArtworkPath(src: string): boolean {
   )
 }
 
-/** Folder / vault covers that are safe to resize through next/image. */
+/** JPEG/PNG/WebP we host. HEIC is excluded — browsers cannot paint it. */
+function isOwnDisplayableRaster(src: string): boolean {
+  const path = stripUrlQuery(src)
+  if (!/\.(jpe?g|png|webp|gif)$/i.test(path)) return false
+  return (
+    isResizableArtworkPath(src) ||
+    path.includes('/images/') ||
+    /gallery-images/i.test(src) ||
+    /\/audio-files\/artwork\//i.test(src)
+  )
+}
 function isResizableArtworkPath(src: string): boolean {
   return (
     isLocalFolderArtworkPath(src) ||
@@ -59,8 +69,7 @@ function isHeavyUnreleasedMaster(src: string): boolean {
  * (resized, converted to WebP/AVIF, cached). Only URLs from unknown
  * hosts and local paths with special characters need the escape hatch.
  *
- * Folder covers under `/artwork/` are optimized so grid tiles can request
- * small WebP thumbs; full-resolution EP masters stay unoptimized.
+ * Folder covers are served as the file itself. Full-resolution EP masters stay unoptimized too.
  */
 export function shouldUnoptimizeImage(src: string): boolean {
   let decoded = src
@@ -78,9 +87,11 @@ export function shouldUnoptimizeImage(src: string): boolean {
     return true
   }
 
-  // Remote Storage folder covers — still resize through next/image.
-  if (isResizableArtworkPath(src) || isResizableArtworkPath(decoded)) {
-    return false
+  // Our own JPEG/PNG/WebP masters. The browser can show these. Sending them
+  // through /_next/image re-decodes the file on Vercel and swaps srcsets, which
+  // is the cover flash. HEIC still needs the optimizer because browsers cannot show it.
+  if (isOwnDisplayableRaster(decoded) || isOwnDisplayableRaster(src)) {
+    return true
   }
 
   // Multi-MB EP masters under unreleased/ — do not send through the optimizer.

@@ -156,6 +156,10 @@ export function contractEmailSubject(
   return `${labels[kind]} for signing — ${releaseTitle || 'SERGIK release'}`
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export function contractEmailHtml(input: {
   kind: RightsPacketKind
   releaseTitle: string
@@ -163,14 +167,19 @@ export function contractEmailHtml(input: {
   partyName: string
   packetText: string
   packetLabel: string
+  pdfFilename?: string
+  /** True when this send also created or reused a DocuSign envelope. */
+  docusignIncluded?: boolean
 }): string {
   const title = clean(input.releaseTitle) || 'Untitled release'
   const artist = clean(input.albumArtist) || 'SERGIK'
-  const party = clean(input.partyName) || 'Collaborator'
-  const body = clean(input.packetText)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  const party = escapeHtml(clean(input.partyName) || 'Collaborator')
+  const label = escapeHtml(input.packetLabel)
+  const file = escapeHtml(clean(input.pdfFilename) || 'the contract PDF')
+  const body = escapeHtml(clean(input.packetText))
+  const signing = input.docusignIncluded
+    ? 'DocuSign is included: use the DocuSign email sent to this address to sign that same PDF.'
+    : 'Reply to this email with “I agree” (or sign the PDF and return it) to confirm.'
   return `
 <!DOCTYPE html>
 <html>
@@ -178,11 +187,12 @@ export function contractEmailHtml(input: {
   <body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e4e4e7;">
     <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
       <p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#a78bfa;margin:0 0 12px;">SERGIK Studio · Rights</p>
-      <h1 style="margin:0 0 8px;font-size:22px;color:#fff;">${input.packetLabel} for signing</h1>
+      <h1 style="margin:0 0 8px;font-size:22px;color:#fff;">${label} for signing</h1>
       <p style="margin:0 0 20px;color:#a1a1aa;font-size:14px;line-height:1.5;">
-        Hi ${party} — please review the ${input.packetLabel.toLowerCase()} for
-        <strong style="color:#fff;">${title}</strong> (${artist}).
-        Reply to this email with “I agree” (or sign and return) to confirm.
+        Hi ${party} — please review the ${label.toLowerCase()} for
+        <strong style="color:#fff;">${escapeHtml(title)}</strong> (${escapeHtml(artist)}).
+        Download the attached PDF (${file}).
+        ${signing}
       </p>
       <pre style="white-space:pre-wrap;background:#18181b;border:1px solid #27272a;border-radius:12px;padding:16px;font-size:12px;line-height:1.55;color:#d4d4d8;overflow:auto;">${body}</pre>
       <p style="margin:20px 0 0;font-size:12px;color:#71717a;line-height:1.5;">

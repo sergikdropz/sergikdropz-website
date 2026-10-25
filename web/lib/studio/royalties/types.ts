@@ -1,7 +1,22 @@
 /** DSP partner statement → payee ledger → payouts (label royalty ops). */
 
-export const ROYALTY_SOURCES = ['distrokid', 'revelator', 'manual', 'generic'] as const
+export const ROYALTY_SOURCES = [
+  'distrokid',
+  'revelator',
+  'manual',
+  'generic',
+  'meta_creator',
+  'meta_ads',
+] as const
 export type RoyaltySource = (typeof ROYALTY_SOURCES)[number]
+
+/** Recording royalties stay separate from creator payouts and ad spend. */
+export const STATEMENT_CATEGORIES = ['recording_royalty', 'meta_creator', 'meta_ad_spend'] as const
+export type StatementCategory = (typeof STATEMENT_CATEGORIES)[number]
+
+/** Reported as-is. Never apply DistroKid's 20% a second time. */
+export const AMOUNT_BASES = ['net', 'gross', 'unknown'] as const
+export type AmountBasis = (typeof AMOUNT_BASES)[number]
 
 export const LEDGER_STATUSES = ['owed', 'paid', 'voided'] as const
 export type LedgerStatus = (typeof LEDGER_STATUSES)[number]
@@ -45,12 +60,16 @@ export type RoyaltyStatement = {
   filename: string | null
   periodLabel: string | null
   currency: string
-  /** Sum of line amountCents */
+  /** Sum of line amountCents. Name is historical; basis says whether it is net. */
   grossCents: number
   lineCount: number
   contentHash: string
   ingestedAt: string
   notes: string | null
+  category?: StatementCategory
+  amountBasis?: AmountBasis
+  /** Stable id for an API snapshot. A later pull replaces this statement instead of stacking it. */
+  externalKey?: string | null
 }
 
 export type SplitShare = {
@@ -123,6 +142,8 @@ export type RoyaltyOpsSignals = {
 
 export type ParseStatementResult = {
   source: RoyaltySource
+  category: StatementCategory
+  amountBasis: AmountBasis
   currency: string
   periodLabel: string | null
   lines: StatementLineInput[]

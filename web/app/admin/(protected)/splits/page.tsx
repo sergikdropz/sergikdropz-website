@@ -533,8 +533,8 @@ const fetchSplits = useCallback(async () => {
                       ))}
                     </div>
                     <div className="mt-3 text-xs text-gray-500">
-                      Per-track share: $9.99 / {ep.totalTracks} tracks = $
-                      {(9.99 / ep.totalTracks).toFixed(2)} per track
+                      Per track: $1.29 MP3 or $1.99 lossless WAV. Collaborator share is their split of that
+                      track ({ep.totalTracks} tracks on this EP).
                     </div>
                   </div>
                 ))}

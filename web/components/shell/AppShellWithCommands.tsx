@@ -13,12 +13,14 @@ export function AppShellWithCommands({
   subtitle,
   headerAction,
   children,
+  showBreadcrumbs = true,
 }: {
   surface: 'admin' | 'studio'
   title?: string
   subtitle?: string
   headerAction?: ReactNode
   children: ReactNode
+  showBreadcrumbs?: boolean
 }) {
   const [open, setOpen] = useState(false)
 
@@ -40,6 +42,7 @@ export function AppShellWithCommands({
         surface={surface}
         title={title}
         subtitle={subtitle}
+        showBreadcrumbs={showBreadcrumbs}
         headerAction={
           <div className="flex flex-wrap items-center gap-3">
             {headerAction}

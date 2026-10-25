@@ -17,6 +17,9 @@ import { extractMetadataFromBuffer } from './extractMetadataFromBuffer'
 import { generateWaveformFromBuffer } from './generateWaveformFromBuffer'
 import { analyzeComprehensive } from './comprehensiveMusicAnalysis'
 import { buildTrackMetadata } from './trackIndexUtils'
+import { enqueueUploadWithoutDecode } from '@/lib/audio/analysis-queue'
+import { ANALYZER_VERSION, hashAudioBytes } from '@/lib/audio/analysis-job'
+import { persistAudioFileArtifacts } from './analysisArtifacts'
 
 export interface TrackUploadInput {
   file: File | Buffer
@@ -44,6 +47,9 @@ export interface TrackUploadResult {
     sonicDna: any
     waveform: any
   }
+  queued?: boolean
+  reused?: boolean
+  jobId?: string
 }
 
 export interface PipelineProgress {
@@ -164,6 +170,19 @@ export async function runTrackUploadPipeline(
       const arrayBuffer = await (input.file as File).arrayBuffer()
       buffer = Buffer.from(arrayBuffer)
     }
+
+    if (process.env.SERGIK_ANALYSIS_INLINE !== '1') {
+      return enqueueUploadWithoutDecode({
+        buffer,
+        filename: input.filename,
+        title,
+        artist,
+        folderId: input.folderId,
+        existingAudioFileId: input.existingAudioFileId,
+      })
+    }
+
+    const fileHash = buffer.length > 0 ? hashAudioBytes(buffer) : null
 
     // Step 1: Extract metadata
     progress('metadata', 10, 'Extracting metadata...')
@@ -352,9 +371,23 @@ export async function runTrackUploadPipeline(
         waveform_data: waveformData,
         sonic_dna: completeSonicDna,
         sonic_dna_status: 'completed',
-        sonic_dna_analyzed_at: new Date().toISOString()
+        sonic_dna_analyzed_at: new Date().toISOString(),
+        ...(fileHash
+          ? { file_hash: fileHash, analyzer_version: ANALYZER_VERSION }
+          : {}),
       })
       .eq('id', audioFileId)
+
+    if (fileHash && audioFileId && Array.isArray(waveformData) && waveformData.length > 0) {
+      await persistAudioFileArtifacts({
+        audioFileId,
+        filePath: input.filename,
+        artifactKey: `${fileHash}/${ANALYZER_VERSION}`,
+        waveformData,
+        sonicDna: completeSonicDna,
+        force: true,
+      }).catch((err) => console.warn('[Pipeline] artifact persist failed', err))
+    }
 
     // Step 9: Create or update music_library_tracks
     progress('track', 95, 'Creating/updating track record...')

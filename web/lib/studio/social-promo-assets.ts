@@ -10,6 +10,17 @@ import {
   STORY_SNIPPET_DURATION_SEC,
   type StorySnippetLayout,
 } from '@/lib/shares/story-snippet'
+import { paintStoryLookStill } from '@/lib/studio/story-look-paint'
+import { loadServiceIcons } from '@/lib/studio/promo-card-render'
+import {
+  normalizeStoryLook,
+  storyBackgroundLabel,
+  storyLookLabel,
+  storyLookSlug,
+  storyPulsePreviewElapsed,
+  storyTapeWindow,
+  type StoryLook,
+} from '@/lib/studio/story-look'
 import type { SocialPromoAssetKind, SocialPromoPlan, SocialPromoPost } from '@/lib/studio/social-promo'
 import { formatPromoSlotLocal, socialPromoChannelLabel } from '@/lib/studio/social-promo'
 import { renderSpotifyCanvas } from '@/lib/studio/spotify-canvas'
@@ -155,25 +166,101 @@ function drawCoverCard(opts: {
   return canvas
 }
 
+function drawLookCanvas(opts: {
+  width: number
+  height: number
+  artwork: HTMLImageElement | null
+  title: string
+  artist: string
+  badge: string
+  cta: string
+  look: StoryLook
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  timeOriginSec?: number
+}): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.width = opts.width
+  canvas.height = opts.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas unavailable')
+  const look = normalizeStoryLook(opts.look)
+  paintStoryLookStill(ctx, {
+    width: opts.width,
+    height: opts.height,
+    artwork: opts.artwork,
+    title: opts.title,
+    artist: opts.artist,
+    badge: opts.badge,
+    cta: opts.cta,
+    look,
+    progress: 0.42,
+    elapsedSec:
+      look.background === 'album' && look.motion === 'pulse' && !look.motion2
+        ? storyPulsePreviewElapsed(opts.bpm, look.motionSpeed, opts.timeOriginSec)
+        : storyTapeWindow(opts.timeOriginSec || 0, opts.bpm, opts.trackDurationSec).spanSec / 2,
+    peaks: opts.peaks,
+    trackDurationSec: opts.trackDurationSec,
+    bpm: opts.bpm,
+    timeOriginSec: opts.timeOriginSec,
+  })
+  return canvas
+}
+
+function lookFilenameBit(look?: StoryLook | null): string {
+  return look ? `-${storyLookSlug(look)}` : ''
+}
+
 export async function buildSocialFeedSquareBlob(input: {
   artworkUrl?: string | null
   title: string
   artist?: string | null
   badge?: string
   cta?: string
+  look?: StoryLook | null
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  timeOriginSec?: number
 }): Promise<{ blob: Blob; filename: string }> {
   const artwork = await loadCoverArt(input.artworkUrl)
-  const canvas = drawCoverCard({
-    width: 1080,
-    height: 1080,
-    artwork,
-    title: clean(input.title) || 'New release',
-    artist: clean(input.artist) || 'SERGIK',
-    badge: clean(input.badge) || 'Out now',
-    cta: clean(input.cta) || 'Link in bio',
-  })
+  const title = clean(input.title) || 'New release'
+  const artist = clean(input.artist) || 'SERGIK'
+  const badge = clean(input.badge) || 'Out now'
+  const cta = clean(input.cta) || 'Link in bio'
+  if (input.look?.storesOn) {
+    await Promise.all([loadServiceIcons('#fafafa'), loadServiceIcons('#18181b')])
+  }
+  const canvas = input.look
+    ? drawLookCanvas({
+        width: 1080,
+        height: 1080,
+        artwork,
+        title,
+        artist,
+        badge,
+        cta,
+        look: input.look,
+        peaks: input.peaks,
+        trackDurationSec: input.trackDurationSec,
+        bpm: input.bpm,
+        timeOriginSec: input.timeOriginSec,
+      })
+    : drawCoverCard({
+        width: 1080,
+        height: 1080,
+        artwork,
+        title,
+        artist,
+        badge,
+        cta,
+      })
   const blob = await canvasToPngBlob(canvas)
-  return { blob, filename: `${sanitizeSocialFilename(input.title)}-ig-feed-1080.png` }
+  return {
+    blob,
+    filename: `${sanitizeSocialFilename(input.title)}${lookFilenameBit(input.look)}-ig-feed-1080.png`,
+  }
 }
 
 export async function buildSocialStoryStillBlob(input: {
@@ -182,19 +269,49 @@ export async function buildSocialStoryStillBlob(input: {
   artist?: string | null
   badge?: string
   cta?: string
+  look?: StoryLook | null
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  timeOriginSec?: number
 }): Promise<{ blob: Blob; filename: string }> {
   const artwork = await loadCoverArt(input.artworkUrl)
-  const canvas = drawCoverCard({
-    width: 1080,
-    height: 1920,
-    artwork,
-    title: clean(input.title) || 'New release',
-    artist: clean(input.artist) || 'SERGIK',
-    badge: clean(input.badge) || 'New music',
-    cta: clean(input.cta) || 'Swipe up · listen',
-  })
+  const title = clean(input.title) || 'New release'
+  const artist = clean(input.artist) || 'SERGIK'
+  const badge = clean(input.badge) || 'New music'
+  const cta = clean(input.cta) || 'Swipe up · listen'
+  if (input.look?.storesOn) {
+    await Promise.all([loadServiceIcons('#fafafa'), loadServiceIcons('#18181b')])
+  }
+  const canvas = input.look
+    ? drawLookCanvas({
+        width: 1080,
+        height: 1920,
+        artwork,
+        title,
+        artist,
+        badge,
+        cta,
+        look: input.look,
+        peaks: input.peaks,
+        trackDurationSec: input.trackDurationSec,
+        bpm: input.bpm,
+        timeOriginSec: input.timeOriginSec,
+      })
+    : drawCoverCard({
+        width: 1080,
+        height: 1920,
+        artwork,
+        title,
+        artist,
+        badge,
+        cta,
+      })
   const blob = await canvasToPngBlob(canvas)
-  return { blob, filename: `${sanitizeSocialFilename(input.title)}-ig-story-1080x1920.png` }
+  return {
+    blob,
+    filename: `${sanitizeSocialFilename(input.title)}${lookFilenameBit(input.look)}-ig-story-1080x1920.png`,
+  }
 }
 
 export async function buildSocialStoryVideoBlob(input: {
@@ -203,19 +320,41 @@ export async function buildSocialStoryVideoBlob(input: {
   artist?: string | null
   audioUrl: string
   startSec?: number
+  durationSec?: number
   layout?: StorySnippetLayout
+  look?: StoryLook | null
   cta?: string
+  badge?: string
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  width?: number
+  height?: number
   onProgress?: (phase: string, ratio?: number) => void
 }): Promise<{ blob: Blob; filename: string; mimeType: string }> {
+  const look = input.look ? normalizeStoryLook(input.look) : undefined
   const snippet = await renderStorySnippet({
     artworkUrl: input.artworkUrl,
     title: clean(input.title) || 'New release',
     artist: clean(input.artist) || 'SERGIK',
     audioUrl: input.audioUrl,
-    durationSec: STORY_SNIPPET_DURATION_SEC,
+    durationSec: input.durationSec ?? STORY_SNIPPET_DURATION_SEC,
     startSec: input.startSec ?? 0,
-    layout: input.layout === 'cover' ? 'cover' : 'vinyl',
+    layout: look
+      ? look.subject === 'artwork' || look.subject === 'card' || look.subject === 'background'
+        ? 'cover'
+        : 'vinyl'
+      : input.layout === 'cover'
+        ? 'cover'
+        : 'vinyl',
+    look,
     cta: clean(input.cta) || 'Listen · link sticker',
+    badge: clean(input.badge) || undefined,
+    peaks: input.peaks,
+    trackDurationSec: input.trackDurationSec,
+    bpm: input.bpm,
+    width: input.width,
+    height: input.height,
     onProgress: input.onProgress,
   })
   return { blob: snippet.blob, filename: snippet.filename, mimeType: snippet.mimeType }
@@ -227,6 +366,11 @@ export async function downloadSocialFeedSquare(input: {
   artist?: string | null
   badge?: string
   cta?: string
+  look?: StoryLook | null
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  timeOriginSec?: number
 }): Promise<{ filename: string }> {
   const { blob, filename } = await buildSocialFeedSquareBlob(input)
   downloadBlob(blob, filename)
@@ -239,6 +383,11 @@ export async function downloadSocialStoryStill(input: {
   artist?: string | null
   badge?: string
   cta?: string
+  look?: StoryLook | null
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  timeOriginSec?: number
 }): Promise<{ filename: string }> {
   const { blob, filename } = await buildSocialStoryStillBlob(input)
   downloadBlob(blob, filename)
@@ -251,8 +400,16 @@ export async function downloadSocialStoryVideo(input: {
   artist?: string | null
   audioUrl: string
   startSec?: number
+  durationSec?: number
   layout?: StorySnippetLayout
+  look?: StoryLook | null
   cta?: string
+  badge?: string
+  peaks?: number[] | null
+  trackDurationSec?: number | null
+  bpm?: number | null
+  width?: number
+  height?: number
   onProgress?: (phase: string, ratio?: number) => void
 }): Promise<{ filename: string; mimeType: string }> {
   const result = await buildSocialStoryVideoBlob(input)
@@ -306,6 +463,7 @@ function buildSocialKitReadme(input: {
   artist?: string | null
   hasVinyl: boolean
   hasSpotifyCanvas: boolean
+  look?: StoryLook | null
 }): string {
   const title = clean(input.title) || 'Release'
   const artist = clean(input.artist) || 'SERGIK'
@@ -327,8 +485,10 @@ function buildSocialKitReadme(input: {
     '  5. Mark each slot Posted in Studio Social promo.',
     '',
     input.hasVinyl
-      ? 'Vinyl videos are 15s @ 1080×1920 (WebM or MP4). Convert to MP4 in CapCut if Meta rejects WebM.'
-      : 'No Catalog WAV — vinyl story/reel videos were skipped. Add audio and re-download the kit.',
+      ? input.look
+        ? `Story and reel videos are 15s @ 1080×1920 using ${storyLookLabel(input.look)} on a ${storyBackgroundLabel(input.look.background).toLowerCase()} background. Convert to MP4 in CapCut if Meta rejects WebM.`
+        : 'Vinyl videos are 15s @ 1080×1920 (WebM or MP4). Convert to MP4 in CapCut if Meta rejects WebM.'
+      : 'No Catalog WAV — story/reel videos were skipped. Add audio and re-download the kit.',
     input.hasSpotifyCanvas
       ? 'Spotify Canvas is 8s @ 720×1280, silent, rebound Ken Burns loop (same drift as site covers). Convert to H.264 MP4 if Spotify rejects WebM.'
       : 'No cover art — Spotify Canvas was skipped.',
@@ -346,6 +506,8 @@ export type BuildSocialPromoAssetZipInput = {
   audioUrl?: string | null
   audioTitle?: string | null
   startSec?: number
+  durationSec?: number
+  look?: StoryLook | null
   onProgress?: (progress: SocialKitProgress) => void
 }
 
@@ -400,6 +562,7 @@ export async function buildSocialPromoAssetZip(
     artist: input.artist,
     badge: input.streetDate ? 'New release' : 'Coming soon',
     cta: 'Listen · link in bio',
+    look: input.look,
   })
   files[paths.feedPng] = await blobToUint8(feed.blob)
   listed.push(paths.feedPng)
@@ -411,6 +574,7 @@ export async function buildSocialPromoAssetZip(
     artist: input.artist,
     badge: input.streetDate ? 'Out now' : 'Coming soon',
     cta: 'Add link sticker',
+    look: input.look,
   })
   files[paths.storyStillPng] = await blobToUint8(still.blob)
   listed.push(paths.storyStillPng)
@@ -425,7 +589,10 @@ export async function buildSocialPromoAssetZip(
       artist: input.artist,
       audioUrl,
       startSec: input.startSec ?? 0,
+      durationSec: input.durationSec,
       layout: 'vinyl',
+      look: input.look,
+      badge: input.streetDate ? 'Out now' : 'Coming soon',
       cta: 'Listen · link sticker',
       onProgress: (phase, ratio) => {
         const r = typeof ratio === 'number' ? ratio : 0
@@ -481,6 +648,7 @@ export async function buildSocialPromoAssetZip(
       artist: input.artist,
       hasVinyl,
       hasSpotifyCanvas,
+      look: input.look,
     })
   )
   listed.push(paths.readme)

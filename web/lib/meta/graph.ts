@@ -79,7 +79,14 @@ export async function graphPost<T>(
   return json
 }
 
-export function metaOAuthDialogUrl(redirectUri: string, state: string): string | null {
+/** Extra scopes for earnings pulls. Kept off the normal publish connect. */
+export const META_EARNINGS_SCOPES = ['ads_read', 'read_insights', 'instagram_manage_insights'] as const
+
+export function metaOAuthDialogUrl(
+  redirectUri: string,
+  state: string,
+  scopes: readonly string[] = META_PUBLISH_SCOPES,
+): string | null {
   const app = metaAppCredentials()
   if (!app) return null
   const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`)
@@ -87,7 +94,8 @@ export function metaOAuthDialogUrl(redirectUri: string, state: string): string |
   url.searchParams.set('redirect_uri', redirectUri)
   url.searchParams.set('state', state)
   url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', META_PUBLISH_SCOPES.join(','))
+  url.searchParams.set('scope', scopes.join(','))
+  if (scopes.includes('instagram_manage_insights')) url.searchParams.set('auth_type', 'rerequest')
   return url.toString()
 }
 

@@ -22,8 +22,8 @@ export function getStudioStepAiPrompt(
         message: [
           `Help me complete the catalog step for release ${title} (${releaseId}).`,
           `First run: /exec query_release_studio_snapshot ${JSON.stringify({ releaseId })}`,
-          `Then preview ISRC assignment: /exec assign_isrcs ${JSON.stringify({ releaseId, dryRun: true })}`,
-          `If tracks lack ISRCs, propose assign_isrcs (approve to execute). That mints QTA53 and queues SX Direct. DistroKid only pastes those codes.`,
+          `Then preview DistroKid ISRCs with pull_distrokid_isrcs ${JSON.stringify({ releaseId, dryRun: true })}. If DistroKid has no codes yet, preview assign_isrcs ${JSON.stringify({ releaseId, dryRun: true })}.`,
+          `pull_distrokid_isrcs reads the DistroKid album page and writes those codes on approve. assign_isrcs mints QTA53 only when DistroKid has not assigned a code. Do not mint a second ISRC.`,
           'Also check DSP ingest: cover vs original, songwriter legal names, AI declaration, Apple performer+producer, title hygiene (no feat./years/emoji), version/featured radios, and preview-clip start.',
         ].join('\n'),
       }

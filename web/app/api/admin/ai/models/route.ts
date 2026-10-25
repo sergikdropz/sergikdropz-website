@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const raw = request.nextUrl.searchParams.get('provider')?.toLowerCase().trim()
   if (!raw || !(ADMIN_AI_CHAT_PROVIDERS as readonly string[]).includes(raw)) {
     return NextResponse.json(
-      { error: 'provider query must be anthropic, openai, ollama, or crowelogic' },
+      { error: 'provider query must be anthropic, openai, ollama, crowelogic, or cursor' },
       { status: 400 }
     )
   }

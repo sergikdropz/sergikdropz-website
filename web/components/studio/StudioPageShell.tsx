@@ -21,14 +21,17 @@ export default function StudioPageShell({ title, subtitle, children, actions }: 
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <header className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400/90 mb-2">
-            Release Studio
-          </p>
-          {title && <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{title}</h1>}
-          {subtitle && <p className="text-zinc-500 mt-2 max-w-2xl">{subtitle}</p>}
-          {actions && <div className="mt-4 flex flex-wrap gap-3">{actions}</div>}
-        </header>
+        {title || subtitle || actions ? (
+          <header className="mb-6">
+            {title && (
+              <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+                {title}
+              </h1>
+            )}
+            {subtitle && <p className="text-zinc-500 mt-2 max-w-2xl">{subtitle}</p>}
+            {actions && <div className="mt-4 flex flex-wrap gap-3">{actions}</div>}
+          </header>
+        ) : null}
         <StudioNav />
         {children}
       </div>

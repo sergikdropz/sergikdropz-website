@@ -25,6 +25,10 @@
     },
     "Runway": {
       "url": "https://mcp.runwayml.com/mcp"
+    },
+    "sergik-chat": {
+      "command": "bash",
+      "args": ["/Users/machd/Documents/SERGIK Web and app/mcp/sergik-chat/run.sh"]
     }
   }
 }

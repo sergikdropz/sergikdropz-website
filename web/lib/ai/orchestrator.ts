@@ -1,4 +1,5 @@
 import { getSkillById, getSkillByTool, inferSkillFromIntent, validateAgainstSkillSchema } from '@/lib/ai/skills/registry'
+import { isMetaBusinessAgentIntent } from '@/lib/meta/business-agent'
 import { inferMetaPromoAction, isMetaPromoIntent } from '@/lib/meta/promo-workflow'
 import { AdminAiTool, isAdminAiToolExecutionEnabled, isAllowedTool } from '@/lib/admin-ai'
 
@@ -163,6 +164,15 @@ function defaultPayloadForTool(tool: AdminAiTool, message: string): Record<strin
     return { content: content.slice(0, 4000) }
   }
 
+  if (tool === 'query_meta_business_agent') {
+    const body = message.replace(/^\/exec\s+\S+\s*/i, '').trim()
+    const statusOnly = !body || /eligibility|status|connected/i.test(body)
+    return {
+      action: statusOnly ? 'status' : 'test',
+      message: body.slice(0, 2000),
+    }
+  }
+
   if (tool === 'query_crowe_creative') {
     const m = message.toLowerCase()
     let action = 'models'
@@ -215,6 +225,13 @@ function defaultPayloadForTool(tool: AdminAiTool, message: string): Record<strin
     }
   }
 
+  if (tool === 'audit_music_books') {
+    const body = message.replace(/^\/exec\s+\S+\s*/i, '').trim()
+    return {
+      text: body.slice(0, 4000),
+    }
+  }
+
   if (tool === 'update_copyright_checklist') {
     const idMatch = message.match(/release[-_a-z0-9]+/i)
     return {
@@ -227,6 +244,14 @@ function defaultPayloadForTool(tool: AdminAiTool, message: string): Record<strin
     const idMatch = message.match(/release[-_a-z0-9]+/i)
     return {
       releaseId: idMatch?.[0] ?? '',
+    }
+  }
+
+  if (tool === 'pull_distrokid_isrcs') {
+    const idMatch = message.match(/release[-_a-z0-9]+/i)
+    return {
+      releaseId: idMatch?.[0] ?? '',
+      dryRun: true,
     }
   }
 
@@ -282,7 +307,11 @@ export function buildPlanGraphForIntent(
     const forced = getSkillById(options.skillId)
     if (forced) {
       const tool =
-        forced.id === 'product_strategy' && isMetaPromoIntent(message)
+        forced.id === 'studio_release' && /pull the distrokid|distrokid isrc/i.test(message)
+          ? 'pull_distrokid_isrcs'
+          : forced.id === 'sergik_intelligence' && isMetaBusinessAgentIntent(message)
+          ? 'query_meta_business_agent'
+          : forced.id === 'product_strategy' && isMetaPromoIntent(message)
           ? 'run_meta_promo_pipeline'
           : forced.id === 'growth_marketing' &&
               /growth board|weekly growth|platform growth|how do we grow|grow spotify|monthly listeners/i.test(
@@ -364,6 +393,13 @@ export function buildPlanGraphForIntent(
           channels: ['instagram', 'spotify', 'youtube', 'soundcloud'],
         })
       )
+    } else if (isMetaBusinessAgentIntent(lowered)) {
+      steps.push(
+        buildStep(
+          'query_meta_business_agent',
+          defaultPayloadForTool('query_meta_business_agent', message)
+        )
+      )
     } else if (isMetaPromoIntent(lowered)) {
       steps.push(
         buildStep(
@@ -414,7 +450,10 @@ export function validatePlanSteps(steps: OrchestratorStep[]) {
 
     const skill = getSkillByTool(step.tool)
     if (!skill?.inputSchema) continue
-    const validation = validateAgainstSkillSchema(step.payload, skill.inputSchema)
+    const validation = validateAgainstSkillSchema(step.payload, skill.inputSchema, {
+      skillId: skill.id,
+      tool: step.tool,
+    })
     if (!validation.valid) {
       errors.push(`Step ${step.id}: ${validation.errors.join('; ')}`)
     }

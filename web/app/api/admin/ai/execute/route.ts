@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth'
 import { createAiRun, isAdminAiToolExecutionEnabled, isAllowedTool, updateAiRun } from '@/lib/admin-ai'
 import { executePlanOnRun, previewPlanOnRun } from '@/lib/ai/execute-run-plan'
+import { formatExecutionVerification } from '@/lib/ai/admin-ai-write-verify'
 import { OrchestratorStep, validatePlanSteps } from '@/lib/ai/orchestrator'
 import { planGraphPayload, stepsFromPlanGraph } from '@/lib/ai/run-timeline'
 import type { StepTimelineEntry } from '@/lib/ai/run-timeline'
@@ -346,14 +347,19 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const verified = formatExecutionVerification(executionResults)
     const approveResponse = {
       runId: activeRunId,
       actionId: execResult.firstActionId,
       approved: true,
-      message:
+      message: [
         executionResults.length > 1
           ? `${executionResults.length} plan steps executed.`
           : `${executionResults[0]?.tool ?? 'tool'} executed.`,
+        verified,
+      ]
+        .filter(Boolean)
+        .join(' '),
       result: executionResults.length === 1 ? executionResults[0]?.output : undefined,
       results: executionResults,
     }

@@ -119,6 +119,8 @@ export async function persistAudioFileArtifacts(params: {
   sonicDna?: any
   existingMetadata?: any
   force?: boolean
+  /** Stable object key. Includes the file hash so a replaced master cannot reuse old peaks. */
+  artifactKey?: string | null
 }): Promise<{
   waveform_svg_url?: string
   waveform_json_url?: string
@@ -136,9 +138,10 @@ export async function persistAudioFileArtifacts(params: {
     sonicDna,
     existingMetadata,
     force = false,
+    artifactKey = null,
   } = params
 
-  const baseKey = audioFileId || filePath.replace(/[^\w\-/.]+/g, '_')
+  const baseKey = artifactKey || audioFileId || filePath.replace(/[^\w\-/.]+/g, '_')
   const safeBase = baseKey.replace(/^\/+/, '')
 
   const metadataPatch: Record<string, any> = {

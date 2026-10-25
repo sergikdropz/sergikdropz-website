@@ -180,14 +180,80 @@ export function expandAdminAiMentions(input: MentionExpansionInput): {
   }
 }
 
-export const ADMIN_AI_MENTION_SUGGESTIONS: Array<{ id: string; label: string; insert: string }> = [
-  { id: 'release', label: '@release', insert: '@release ' },
-  { id: 'growth', label: '@growth', insert: '@growth ' },
-  { id: 'ops', label: '@ops', insert: '@ops ' },
-  { id: 'due', label: '@due', insert: '@due ' },
-  { id: 'canon', label: '@canon', insert: '@canon ' },
-  { id: 'selection', label: '@selection', insert: '@selection ' },
-  { id: 'desk-dk', label: '@desk:DistroKid', insert: '@desk:DistroKid ' },
-  { id: 'desk-yt', label: '@desk:YouTube Studio', insert: '@desk:YouTube Studio ' },
-  { id: 'desk-s4a', label: '@desk:Spotify Artists', insert: '@desk:Spotify Artists ' },
+export type MentionMenuItem = {
+  id: string
+  label: string
+  insert: string
+  hint: string
+}
+
+const SIMPLE_MENTION_ITEMS: MentionMenuItem[] = [
+  { id: 'release', label: '@release', insert: '@release ', hint: 'Active release snapshot' },
+  { id: 'growth', label: '@growth', insert: '@growth ', hint: 'Platform growth scorecard' },
+  { id: 'ops', label: '@ops', insert: '@ops ', hint: 'Pipeline ops snapshot' },
+  { id: 'due', label: '@due', insert: '@due ', hint: 'Studio due dates' },
+  { id: 'canon', label: '@canon', insert: '@canon ', hint: 'Brand and site truth' },
+  { id: 'selection', label: '@selection', insert: '@selection ', hint: 'Element picks in this message' },
 ]
+
+/** Full @ menu: simple mentions plus every desk card. */
+export function mentionMenuItems(): MentionMenuItem[] {
+  return [
+    ...SIMPLE_MENTION_ITEMS,
+    ...ADMIN_DESK_CARDS.map((card) => ({
+      id: `desk-${card.id}`,
+      label: `@desk:${card.label}`,
+      insert: `@desk:${card.label} `,
+      hint: card.purpose,
+    })),
+  ]
+}
+
+export const ADMIN_AI_MENTION_SUGGESTIONS: Array<{ id: string; label: string; insert: string }> = mentionMenuItems()
+
+export type ActiveComposerMention = {
+  start: number
+  /** Text from the @ through the caret, including the @. */
+  query: string
+}
+
+/**
+ * The @ token the caret is still inside. A finished token (space after a complete mention)
+ * returns null. A space stays open while it is still a prefix of a longer label, such as
+ * `@desk:YouTube Studio`.
+ */
+export function activeComposerMention(text: string, caret: number): ActiveComposerMention | null {
+  if (caret < 0 || caret > text.length) return null
+  const head = text.slice(0, caret)
+  const at = head.lastIndexOf('@')
+  if (at < 0) return null
+  const prev = at > 0 ? head[at - 1] : ''
+  if (prev && !/\s/.test(prev)) return null
+  const query = head.slice(at)
+  if (!query || query.includes('\n')) return null
+  const q = query.toLowerCase()
+  const labels = mentionMenuItems().map((item) => item.label.toLowerCase())
+  const continues = labels.some(
+    (label) =>
+      label.startsWith(q) || (q.endsWith(' ') && label.startsWith(q.trimEnd()) && label.length > q.trimEnd().length),
+  )
+  const loose = !q.endsWith(' ') && filterMentionMenu(query).length > 0
+  if (!continues && !loose) return null
+  return { start: at, query }
+}
+
+/** Prefix matches first, then labels that contain the letters typed after @. */
+export function filterMentionMenu(query: string): MentionMenuItem[] {
+  const items = mentionMenuItems()
+  const q = query.trim().toLowerCase()
+  if (!q || q === '@') return items
+  const prefix: MentionMenuItem[] = []
+  const rest: MentionMenuItem[] = []
+  const needle = q.startsWith('@') ? q.slice(1) : q
+  for (const item of items) {
+    const label = item.label.toLowerCase()
+    if (label.startsWith(q)) prefix.push(item)
+    else if (needle && label.includes(needle)) rest.push(item)
+  }
+  return [...prefix, ...rest]
+}

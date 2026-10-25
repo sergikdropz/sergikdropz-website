@@ -1,10 +1,16 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   chipToken,
   type ComposerChipKind,
 } from '@/lib/ai/admin-ai-composer-chips'
+import {
+  activeComposerMention,
+  filterMentionMenu,
+  type MentionMenuItem,
+} from '@/lib/ai/admin-ai-mentions'
 
 export type ComposerChipView = {
   kind: ComposerChipKind
@@ -209,6 +215,80 @@ function fallbackChip(kind: ComposerChipKind, id: string): ComposerChipView {
   }
 }
 
+function rangeAtOffset(root: HTMLElement, offset: number): Range | null {
+  let remaining = Math.max(0, offset)
+  const collapsed = (node: Node, nodeOffset: number) => {
+    const range = document.createRange()
+    range.setStart(node, nodeOffset)
+    range.collapse(true)
+    return range
+  }
+  const visit = (node: Node): Range | null => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent ?? '').replace(/\u00a0/g, ' ')
+      if (remaining <= text.length) return collapsed(node, remaining)
+      remaining -= text.length
+      return null
+    }
+    if (!(node instanceof HTMLElement)) return null
+    const kind = kindFromDataset(node.dataset.chipKind)
+    if (kind && node.dataset.chipId) {
+      const len = chipToken(kind, node.dataset.chipId).length
+      const parent = node.parentNode ?? root
+      const index = [...parent.childNodes].indexOf(node)
+      if (remaining <= 0) return collapsed(parent, Math.max(0, index))
+      if (remaining < len) return collapsed(parent, index + 1)
+      remaining -= len
+      return null
+    }
+    if (node.tagName === 'BR') {
+      const parent = node.parentNode ?? root
+      const index = [...parent.childNodes].indexOf(node)
+      if (remaining <= 1) return collapsed(parent, index + (remaining === 0 ? 0 : 1))
+      remaining -= 1
+      return null
+    }
+    for (const child of node.childNodes) {
+      const found = visit(child)
+      if (found) return found
+    }
+    return null
+  }
+  return visit(root)
+}
+
+function mentionWordRect(root: HTMLElement, start: number, caret: number): DOMRect | null {
+  const range = rangeAtOffset(root, start)
+  if (!range) return null
+  const end = rangeAtOffset(root, Math.max(start + 1, caret))
+  if (end && end.startContainer === range.startContainer) {
+    try {
+      range.setEnd(end.startContainer, end.startOffset)
+    } catch {
+      /* The @ glyph rect is enough when the end point sits in another node. */
+    }
+  } else if (range.startContainer.nodeType === Node.TEXT_NODE) {
+    const text = range.startContainer.textContent ?? ''
+    if (range.startOffset < text.length) range.setEnd(range.startContainer, range.startOffset + 1)
+  }
+  const rect = range.getBoundingClientRect()
+  if (!rect || (rect.width === 0 && rect.height === 0)) return null
+  return rect
+}
+
+const MENTION_MENU_W = 280
+
+function placeMentionMenu(anchor: DOMRect): { top: number; left: number } {
+  const margin = 8
+  let left = Math.round(anchor.right + margin)
+  const top = Math.round(anchor.top)
+  if (left + MENTION_MENU_W > window.innerWidth - margin) {
+    left = Math.round(anchor.left - MENTION_MENU_W - margin)
+  }
+  if (left < margin) left = margin
+  return { top, left }
+}
+
 function chipElement(view: ComposerChipView, onRemove: (kind: ComposerChipKind, id: string) => void) {
   const span = document.createElement('span')
   span.contentEditable = 'false'
@@ -245,11 +325,15 @@ const AdminAiComposerField = forwardRef<
     chips: ComposerChipView[]
     disabled?: boolean
     placeholder: string
+    suggestion?: string
     framed?: boolean
     onChange: (value: string) => void
     onRemoveChip: (kind: ComposerChipKind, id: string) => void
   }
->(function AdminAiComposerField({ value, chips, disabled, placeholder, framed = true, onChange, onRemoveChip }, ref) {
+>(function AdminAiComposerField(
+  { value, chips, disabled, placeholder, suggestion = '', framed = true, onChange, onRemoveChip },
+  ref,
+) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const savedOffsetRef = useRef<number | null>(null)
   const pendingCaretRef = useRef<number | null>(null)
@@ -259,6 +343,85 @@ const AdminAiComposerField = forwardRef<
   onChangeRef.current = onChange
   onRemoveRef.current = onRemoveChip
   const chipSignature = chips.map((chip) => `${chip.kind}:${chip.id}:${chip.label}:${chip.tone}`).join('|')
+  const suggestionId = useId()
+  const ghost = suggestion.trim()
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const dismissedMentionRef = useRef<string | null>(null)
+  const mentionQueryRef = useRef('')
+  const [mention, setMention] = useState<{
+    start: number
+    caret: number
+    query: string
+    top: number
+    left: number
+  } | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const mentionItems = mention ? filterMentionMenu(mention.query) : []
+  const activeMentionIndex = Math.min(mentionIndex, Math.max(0, mentionItems.length - 1))
+
+  const refreshMention = () => {
+    const root = rootRef.current
+    if (!root || disabled || document.activeElement !== root) {
+      setMention(null)
+      return
+    }
+    const current = serializeComposerDom(root)
+    const caret = caretOffset(root)
+    const active = activeComposerMention(current, caret)
+    if (!active) {
+      dismissedMentionRef.current = null
+      setMention(null)
+      return
+    }
+    if (dismissedMentionRef.current && dismissedMentionRef.current !== active.query) {
+      dismissedMentionRef.current = null
+    }
+    if (dismissedMentionRef.current === active.query) {
+      setMention(null)
+      return
+    }
+    const rect = mentionWordRect(root, active.start, caret)
+    if (!rect) {
+      setMention(null)
+      return
+    }
+    if (mentionQueryRef.current !== active.query) {
+      mentionQueryRef.current = active.query
+      setMentionIndex(0)
+    }
+    const box = placeMentionMenu(rect)
+    setMention((prev) => {
+      const top = prev && prev.query === active.query && prev.left === box.left ? prev.top : box.top
+      if (
+        prev &&
+        prev.start === active.start &&
+        prev.caret === caret &&
+        prev.query === active.query &&
+        prev.top === top &&
+        prev.left === box.left
+      ) {
+        return prev
+      }
+      return { start: active.start, caret, query: active.query, top, left: box.left }
+    })
+  }
+  const refreshMentionRef = useRef(refreshMention)
+  refreshMentionRef.current = refreshMention
+
+  const applyMention = (item: MentionMenuItem) => {
+    const root = rootRef.current
+    if (!root) return
+    const current = serializeComposerDom(root)
+    const caret = caretOffset(root)
+    const active = activeComposerMention(current, caret)
+    if (!active) return
+    const next = `${current.slice(0, active.start)}${item.insert}${current.slice(caret)}`
+    pendingCaretRef.current = active.start + item.insert.length
+    dismissedMentionRef.current = null
+    mentionQueryRef.current = ''
+    setMention(null)
+    onChangeRef.current(next)
+  }
 
   useImperativeHandle(ref, () => ({
     focus: () => rootRef.current?.focus({ preventScroll: true }),
@@ -305,6 +468,7 @@ const AdminAiComposerField = forwardRef<
       placeCaretAt(root, restoreOffset)
     }
     window.scrollTo(scrollX, scrollY)
+    refreshMentionRef.current()
   }, [value, chips, chipSignature])
 
   useEffect(() => {
@@ -312,19 +476,64 @@ const AdminAiComposerField = forwardRef<
       const root = rootRef.current
       if (!root) return
       const sel = window.getSelection()
-      if (!sel?.anchorNode || !root.contains(sel.anchorNode)) return
-      savedOffsetRef.current = caretOffset(root)
+      if (sel?.anchorNode && root.contains(sel.anchorNode)) {
+        savedOffsetRef.current = caretOffset(root)
+      }
+      refreshMentionRef.current()
     }
     document.addEventListener('selectionchange', onSelect)
-    return () => document.removeEventListener('selectionchange', onSelect)
+    window.addEventListener('resize', onSelect)
+    const root = rootRef.current
+    root?.addEventListener('scroll', onSelect, { passive: true })
+    return () => {
+      document.removeEventListener('selectionchange', onSelect)
+      window.removeEventListener('resize', onSelect)
+      root?.removeEventListener('scroll', onSelect)
+    }
   }, [])
 
+  useEffect(() => {
+    const node = menuRef.current
+    if (!node || !mention) return
+    const active = node.querySelector('[data-active="true"]')
+    active?.scrollIntoView({ block: 'nearest' })
+    const rect = node.getBoundingClientRect()
+    const overflow = rect.bottom - (window.innerHeight - 8)
+    if (overflow > 1) {
+      const top = Math.max(8, mention.top - overflow)
+      if (top !== mention.top) setMention((prev) => (prev ? { ...prev, top } : prev))
+    }
+  }, [activeMentionIndex, mention])
+
   const empty = value.length === 0
+  const showGhost = empty && ghost.length > 0 && !disabled
 
   return (
-    <div className="relative">
-      {empty ? (
-        <span className="pointer-events-none absolute left-3 top-2 text-sm text-gray-500" aria-hidden>
+    <div
+      className={`relative ${
+        framed ? 'rounded-lg border border-gray-700 bg-gray-900 focus-within:border-purple-500' : ''
+      }`}
+    >
+      {showGhost ? (
+        <>
+          <span
+            className="pointer-events-none absolute inset-x-3 top-2 bottom-8 z-0 overflow-hidden pr-14 text-sm leading-6 text-gray-400"
+            aria-hidden
+          >
+            {ghost}
+          </span>
+          <span
+            className="pointer-events-none absolute bottom-2 right-3 z-0 rounded border border-gray-600 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-300"
+            aria-hidden
+          >
+            Tab
+          </span>
+          <span id={suggestionId} className="sr-only">
+            Suggestion: {ghost}. Press Tab to insert it, or type a new message.
+          </span>
+        </>
+      ) : empty ? (
+        <span className="pointer-events-none absolute left-3 top-2 z-0 text-sm text-gray-500" aria-hidden>
           {placeholder}
         </span>
       ) : null}
@@ -334,10 +543,42 @@ const AdminAiComposerField = forwardRef<
         aria-multiline="true"
         aria-label="Message"
         aria-disabled={disabled || undefined}
+        aria-describedby={showGhost ? suggestionId : undefined}
         data-testid="admin-ai-composer"
         contentEditable={!disabled}
         suppressContentEditableWarning
         spellCheck
+        onKeyDown={(event) => {
+          if (mention && mentionItems.length > 0) {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              setMentionIndex((current) => (current + 1) % mentionItems.length)
+              return
+            }
+            if (event.key === 'ArrowUp') {
+              event.preventDefault()
+              setMentionIndex((current) => (current - 1 + mentionItems.length) % mentionItems.length)
+              return
+            }
+            if (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey)) {
+              event.preventDefault()
+              const item = mentionItems[activeMentionIndex]
+              if (item) applyMention(item)
+              return
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              dismissedMentionRef.current = mention.query
+              setMention(null)
+              return
+            }
+          }
+          if (event.key !== 'Tab' || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return
+          if (!showGhost) return
+          event.preventDefault()
+          pendingCaretRef.current = ghost.length
+          onChangeRef.current(ghost)
+        }}
         onInput={() => {
           if (paintingRef.current) return
           const root = rootRef.current
@@ -345,6 +586,7 @@ const AdminAiComposerField = forwardRef<
           const next = serializeComposerDom(root)
           savedOffsetRef.current = caretOffset(root)
           if (next !== value) onChangeRef.current(next)
+          refreshMentionRef.current()
         }}
         onPaste={(event) => {
           event.preventDefault()
@@ -367,12 +609,45 @@ const AdminAiComposerField = forwardRef<
           }
           onChangeRef.current(serializeComposerDom(root))
         }}
-        className={`min-h-24 max-h-72 w-full overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-6 text-white focus:outline-none ${
-          framed
-            ? 'rounded-lg border border-gray-700 bg-gray-900 focus:border-purple-500'
-            : 'rounded-b-lg border-0 bg-transparent'
+        className={`relative z-10 ${showGhost ? 'min-h-32' : 'min-h-24'} max-h-72 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-3 py-2 text-sm leading-6 text-white focus:outline-none ${
+          framed ? '' : 'rounded-b-lg border-0'
         }`}
       />
+      {mention && mentionItems.length > 0 && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              aria-label="Mention suggestions"
+              data-testid="admin-ai-mention-menu"
+              className="max-h-56 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-2xl"
+              style={{ position: 'fixed', top: mention.top, left: mention.left, zIndex: 12000 }}
+            >
+              {mentionItems.map((item, index) => {
+                const active = index === activeMentionIndex
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    data-active={active ? 'true' : 'false'}
+                    className={`flex w-full items-baseline gap-2 px-2.5 py-1 text-left text-[12px] ${
+                      active ? 'bg-gray-800 text-white' : 'text-gray-200 hover:bg-gray-900'
+                    }`}
+                    onMouseEnter={() => setMentionIndex(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => applyMention(item)}
+                  >
+                    <span className="shrink-0 font-medium text-purple-200">{item.label}</span>
+                    <span className="min-w-0 truncate text-[10px] text-gray-500">{item.hint}</span>
+                  </button>
+                )
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 })

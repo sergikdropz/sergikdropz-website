@@ -52,6 +52,8 @@ type ShareMiniPlayerProps = {
   onActiveIndexChange?: (index: number) => void
   /** Imperative seek/play bridge for vinyl scrubbing */
   scrubApiRef?: MutableRefObject<ShareScrubApi | null>
+  /** Open the player on this second (shared `?t=` links). Does not autoplay. */
+  cueSec?: number | null
 }
 
 export default function ShareMiniPlayer({
@@ -68,6 +70,7 @@ export default function ShareMiniPlayer({
   activeIndex,
   onActiveIndexChange,
   scrubApiRef,
+  cueSec = null,
 }: ShareMiniPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [internalIndex, setInternalIndex] = useState(0)
@@ -172,6 +175,27 @@ export default function ShareMiniPlayer({
     // intentionally omit `playing` so track changes reload without fighting pause
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, track?.id])
+
+  useEffect(() => {
+    const el = audioRef.current
+    const cue = Number(cueSec)
+    if (!el || !src || !Number.isFinite(cue) || cue <= 0) return
+    const apply = () => {
+      const dur = Number.isFinite(el.duration) ? el.duration : 0
+      const next = dur > 0 ? Math.min(cue, Math.max(0, dur - 0.25)) : cue
+      try {
+        el.currentTime = next
+      } catch {
+        /* metadata not ready */
+      }
+      currentTimeRef.current = next
+      dockProgressRef.current = dur > 0 ? Math.min(1, next / dur) : 0
+      setCurrentTime(next)
+    }
+    if (el.readyState >= 1) apply()
+    else el.addEventListener('loadedmetadata', apply)
+    return () => el.removeEventListener('loadedmetadata', apply)
+  }, [cueSec, src])
 
   const toggle = useCallback(() => {
     const el = audioRef.current

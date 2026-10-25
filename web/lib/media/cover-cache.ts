@@ -6,7 +6,6 @@
 
 import { withArtworkCacheBust, stripArtworkCacheBust } from '@/lib/catalog-sync/artwork'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
-import { isLocalFolderArtworkPath } from '@/utils/imageOptimization'
 
 export const COVER_CACHE_NAME = 'sergik-cover-cache-v1'
 export const COVER_PREFETCH_LIMIT = 32
@@ -77,29 +76,11 @@ export function prefersReducedDataTransfer(): boolean {
   return type === 'slow-2g' || type === '2g'
 }
 
-/** Build a same-origin next/image URL for a busted cover (optional warm). */
-export function nextImageCoverUrl(src: string, width = 256): string | null {
+/** Direct cover URL. Do not send artwork through `/_next/image`. */
+export function nextImageCoverUrl(src: string, _width = 256): string | null {
   const busted = ensureBustedCoverUrl(src)
   if (!busted || !isCacheableCoverUrl(busted)) return null
-  if (/^https?:\/\//i.test(busted) && typeof window !== 'undefined') {
-    try {
-      const u = new URL(busted)
-      if (u.origin !== window.location.origin) {
-        // Remote covers still go through next/image when configured; warm the optimizer URL.
-        return `/_next/image?url=${encodeURIComponent(busted)}&w=${width}&q=75`
-      }
-    } catch {
-      /* fall through */
-    }
-  }
-  if (isLocalFolderArtworkPath(busted)) {
-    return busted
-  }
-  const pathOnly = busted.split('?')[0]
-  if (pathOnly.startsWith('/')) {
-    return `/_next/image?url=${encodeURIComponent(pathOnly)}&w=${width}&q=75`
-  }
-  return `/_next/image?url=${encodeURIComponent(busted)}&w=${width}&q=75`
+  return busted
 }
 
 /** Dedupe + bust a list of cover sources for session warm (prefer next/image thumbs). */

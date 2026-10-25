@@ -63,6 +63,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      queued: result.queued === true,
+      reused: result.reused === true,
+      jobId: result.jobId ?? null,
       trackId: result.trackId,
       audioFileId: result.audioFileId,
       data: result.data

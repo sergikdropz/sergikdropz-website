@@ -31,8 +31,9 @@ export async function generateWaveformFromUrl(
     )
     if (!response.ok) return null
     const data = await response.json().catch(() => null)
-    const peaks = data?.waveform || data?.peaks || data?.data
-    if (!Array.isArray(peaks) || !peaks.length) return null
+    const { peaksFromWaveformBody } = await import('@/lib/audio/waveform-peaks-source')
+    const peaks = peaksFromWaveformBody(data)
+    if (!peaks?.length) return null
     return { peaks, sampleRate: data?.sampleRate }
   } catch {
     return null

@@ -11,6 +11,7 @@ export function getEnvModelIdsFromEnvOnly(): Record<AdminAiChatProvider, string>
     openai: process.env.OPENAI_CHAT_MODEL?.trim() || 'gpt-4o-mini',
     ollama: process.env.OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL,
     crowelogic: process.env.CROWELOGIC_MODEL?.trim() || process.env.CROWE_LOGIC_MODEL?.trim() || CROWELOGIC_DEFAULT_MODEL,
+    cursor: process.env.SERGIK_CURSOR_MODEL?.trim() || 'auto',
   }
 }
 
@@ -24,6 +25,7 @@ export async function getEnvModelIdsResolved(): Promise<Record<AdminAiChatProvid
     openai: process.env.OPENAI_CHAT_MODEL?.trim() || 'gpt-4o-mini',
     ollama: process.env.OLLAMA_MODEL?.trim() || '',
     crowelogic: process.env.CROWELOGIC_MODEL?.trim() || process.env.CROWE_LOGIC_MODEL?.trim() || CROWELOGIC_DEFAULT_MODEL,
+    cursor: process.env.SERGIK_CURSOR_MODEL?.trim() || 'auto',
   } satisfies Record<AdminAiChatProvider, string>
   let ollama = base.ollama
   try {

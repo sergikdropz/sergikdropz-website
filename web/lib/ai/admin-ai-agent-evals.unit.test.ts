@@ -68,7 +68,7 @@ describe('admin-ai-agent-evals', () => {
 
   it('blocks write tools from the agent auto-loop', () => {
     const calls = parseAgentToolCalls(
-      '/tool assign_isrcs {"releaseId":"x"}\n/tool query_ops_snapshot {"focus":"studio"}',
+      '/tool create_release_checklist {"releaseId":"x"}\n/tool run_applescript {"script":"x"}\n/tool query_ops_snapshot {"focus":"studio"}',
     )
     expect(calls.map((c) => c.tool)).toEqual(['query_ops_snapshot'])
   })
