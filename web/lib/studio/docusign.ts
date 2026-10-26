@@ -279,7 +279,8 @@ export async function fetchContractEnvelope(
   }
 }
 
-type ChecklistWriter = {
+/** Structural slice of the Supabase client; callers cast the real client to keep tsc shallow. */
+export type ChecklistWriter = {
   from: (table: string) => {
     select: (columns: string) => {
       eq: (column: string, value: string) => {

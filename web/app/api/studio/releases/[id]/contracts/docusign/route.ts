@@ -16,6 +16,7 @@ import {
   DocuSignError,
   fetchContractEnvelope,
   persistEnvelopeUpdate,
+  type ChecklistWriter,
   readDocuSignConfig,
 } from '@/lib/studio/docusign'
 import {
@@ -153,7 +154,7 @@ export async function GET(
       updatedAt: new Date().toISOString(),
     }
     const statusPatch = remote.status === 'completed' ? statusPatchForEnvelope(kindParam, 'completed') : null
-    envelopes = await persistEnvelopeUpdate(supabase, {
+    envelopes = await persistEnvelopeUpdate(supabase as unknown as ChecklistWriter, {
       releaseId: params.id,
       record,
       statusPatch,
@@ -306,7 +307,7 @@ export async function POST(
     const rightsPackets = textOverride
       ? setRightsPacketDraft(readiness?.rights_packets, kind, packet.text)
       : null
-    const envelopes = await persistEnvelopeUpdate(supabase, {
+    const envelopes = await persistEnvelopeUpdate(supabase as unknown as ChecklistWriter, {
       releaseId: params.id,
       record,
       statusPatch: {

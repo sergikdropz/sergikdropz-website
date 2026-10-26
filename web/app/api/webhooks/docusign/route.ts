@@ -5,6 +5,7 @@ import {
   DocuSignError,
   fetchContractEnvelope,
   persistEnvelopeUpdate,
+  type ChecklistWriter,
   readDocuSignConfig,
   verifyDocuSignHmac,
 } from '@/lib/studio/docusign'
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       sentAt: now,
       updatedAt: now,
     }
-    await persistEnvelopeUpdate(supabase, {
+    await persistEnvelopeUpdate(supabase as unknown as ChecklistWriter, {
       releaseId,
       record,
       statusPatch: remote.status === 'completed' ? statusPatchForEnvelope(kind, 'completed') : null,

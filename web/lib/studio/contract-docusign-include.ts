@@ -6,6 +6,7 @@ import {
   DocuSignError,
   persistEnvelopeUpdate,
   readDocuSignConfig,
+  type ChecklistWriter,
 } from '@/lib/studio/docusign'
 import {
   docuSignRecipients,
@@ -105,7 +106,7 @@ export async function includeDocuSign(input: {
       sentAt: now,
       updatedAt: now,
     }
-    const envelopes = await persistEnvelopeUpdate(input.supabase, {
+    const envelopes = await persistEnvelopeUpdate(input.supabase as unknown as ChecklistWriter, {
       releaseId: input.releaseId,
       record,
       statusPatch: {
