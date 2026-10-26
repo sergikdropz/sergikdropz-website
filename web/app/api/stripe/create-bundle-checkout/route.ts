@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import { stripeCheckoutImages } from '@/lib/stripe/checkout-image'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
-  apiVersion: '2023-10-16',
-})
+import { getStripeServerClient } from '@/lib/stripe/server-client'
 
 export async function POST(request: Request) {
   try {
@@ -29,7 +26,7 @@ export async function POST(request: Request) {
 
     const baseUrl = getBaseUrl()
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripeServerClient().checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {

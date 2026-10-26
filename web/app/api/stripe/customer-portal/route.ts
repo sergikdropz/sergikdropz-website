@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import { getServerSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { findActiveMembershipRow } from '@/lib/membership-queries'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
-  apiVersion: '2023-10-16',
-})
+import { getStripeServerClient } from '@/lib/stripe/server-client'
 
 export async function POST(request: Request) {
   try {
@@ -37,7 +34,7 @@ export async function POST(request: Request) {
       return `${url.protocol}//${url.host}`
     }
 
-    const portalSession = await stripe.billingPortal.sessions.create({
+    const portalSession = await getStripeServerClient().billingPortal.sessions.create({
       customer: membership.stripe_customer_id,
       return_url: `${getBaseUrl()}/shop/membership/manage`,
     })

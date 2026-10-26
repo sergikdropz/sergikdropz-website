@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
-  apiVersion: '2023-10-16',
-})
+import { getStripeServerClient } from '@/lib/stripe/server-client'
 
 /**
  * After Stripe verifies payment, redirect to the asset URL.
@@ -24,7 +21,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const session = await getStripeServerClient().checkout.sessions.retrieve(sessionId)
 
     if (session.payment_status !== 'paid') {
       return NextResponse.json(

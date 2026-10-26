@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import { normalizeSupabaseUserIdInput } from '@/lib/stripe/user-metadata'
 import { requireFanAuthWithPassword } from '@/lib/require-fan-membership'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
-  apiVersion: '2023-10-16',
-})
+import { getStripeServerClient } from '@/lib/stripe/server-client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,7 +44,7 @@ export async function POST(request: NextRequest) {
       quantity: item.quantity,
     }))
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripeServerClient().checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',

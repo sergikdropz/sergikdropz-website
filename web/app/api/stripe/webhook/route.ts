@@ -10,9 +10,7 @@ import { shopSaleTitle } from '@/lib/email/shop-sale-notice'
 import { applyLicensingStripePayment } from '@/lib/licensing/store'
 import { isStripeWebhookEventDuplicate, recordStripeWebhookEventProcessed } from '@/lib/stripe/webhook-idempotency'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
-  apiVersion: '2023-10-16',
-})
+import { getStripeServerClient } from '@/lib/stripe/server-client'
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
@@ -28,7 +26,7 @@ export async function POST(request: Request) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+    event = getStripeServerClient().webhooks.constructEvent(body, signature, webhookSecret)
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message)
     return NextResponse.json(
@@ -219,7 +217,7 @@ export async function POST(request: Request) {
         const subscriptionId = session.subscription as string
 
         if (subscriptionId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+          const subscription = await getStripeServerClient().subscriptions.retrieve(subscriptionId)
 
           await supabase.from('memberships').insert({
             stripe_subscription_id: subscriptionId,
