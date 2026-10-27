@@ -12,7 +12,10 @@ import {
 import { merchArtIdFromUrl, sameMerchArt, withArtVersion } from '@/lib/merch/art-url'
 import MerchMannequin from '@/components/admin/MerchMannequin'
 import type { StudioDockTool } from '@/components/admin/MerchStudioDock'
-import MerchPrintfulCatalog from '@/components/admin/MerchPrintfulCatalog'
+import MerchPrintfulCatalog, {
+  CATALOG_PANEL_COLLAPSED_WIDTH,
+  readCatalogPanelCollapsed,
+} from '@/components/admin/MerchPrintfulCatalog'
 import MerchPrintfulSetupPanel, {
   type PrintfulReadyStatus,
 } from '@/components/admin/MerchPrintfulSetupPanel'
@@ -32,6 +35,7 @@ import {
   type PlacementView,
   type StageView,
 } from '@/components/admin/MerchDesignMaker'
+import { sumCatalogAddOnRows, usedCatalogAddOnRows } from '@/lib/merch/catalog-add-ons'
 import { buildDesignTabs } from '@/lib/merch/design-tabs'
 import { readStudioDesignId, writeStudioDesignId } from '@/lib/merch/studio-session'
 import MerchLeaveDesignDialog from '@/components/admin/MerchLeaveDesignDialog'
@@ -77,6 +81,14 @@ const CATALOG_COLUMN_WIDTH_KEY = 'sergwear-catalog-column-width'
 const CATALOG_COLUMN_DEFAULT = 480
 const CATALOG_COLUMN_MIN = 360
 const CATALOG_COLUMN_MAX = 720
+const DESIGN_PANEL_COLLAPSED_KEY = 'sergwear-design-panel-collapsed'
+const DESIGN_PANEL_COLLAPSED_WIDTH = 44
+const DESIGN_PANEL_WIDTH = 440
+
+function readDesignPanelCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(DESIGN_PANEL_COLLAPSED_KEY) === '1'
+}
 function readStoredNumber(key: string, fallback: number, min: number, max: number): number {
   if (typeof window === 'undefined') return fallback
   const stored = Number(window.localStorage.getItem(key))
@@ -201,6 +213,8 @@ export default function MerchFittingRoom({
   const [printfulReady, setPrintfulReady] = useState<PrintfulReadyStatus | null>(null)
   const [catalogColumnWidth, setCatalogColumnWidth] = useState(CATALOG_COLUMN_DEFAULT)
   const [catalogColumnResizing, setCatalogColumnResizing] = useState(false)
+  const [catalogPanelCollapsed, setCatalogPanelCollapsed] = useState(false)
+  const [designPanelCollapsed, setDesignPanelCollapsed] = useState(false)
   const [designNav, setDesignNav] = useState<DesignNavId>('product')
   const [guidelinesOpen, setGuidelinesOpen] = useState(false)
   const [studioGridXl, setStudioGridXl] = useState(false)
@@ -357,7 +371,16 @@ export default function MerchFittingRoom({
     setCatalogColumnWidth(
       readStoredNumber(CATALOG_COLUMN_WIDTH_KEY, CATALOG_COLUMN_DEFAULT, CATALOG_COLUMN_MIN, CATALOG_COLUMN_MAX)
     )
+    setCatalogPanelCollapsed(readCatalogPanelCollapsed())
+    setDesignPanelCollapsed(readDesignPanelCollapsed())
   }, [])
+
+  const setDesignPanelCollapsedPersist = useCallback((next: boolean) => {
+    setDesignPanelCollapsed(next)
+    window.localStorage.setItem(DESIGN_PANEL_COLLAPSED_KEY, next ? '1' : '0')
+  }, [])
+
+  const expandDesignPanel = useCallback(() => setDesignPanelCollapsedPersist(false), [setDesignPanelCollapsedPersist])
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)')
@@ -1134,15 +1157,14 @@ export default function MerchFittingRoom({
         : 3 / 4
   const sizeOptions = catalogSizes && catalogSizes.length > 0 ? catalogSizes : blank.sizes
 
-  const catalogExtras = useMemo(() => {
-    let extra = 0
-    if (activePrintFile?.additionalPrice) extra += activePrintFile.additionalPrice
-    if (embroideryUnlimitedColor && activePrintFile) {
-      const option = activePrintFile.options.find((row) => row.id === 'full_color')
-      if (option?.additionalPrice) extra += option.additionalPrice
-    }
-    return extra
-  }, [activePrintFile, embroideryUnlimitedColor])
+  const catalogAddOnRows = useMemo(
+    () =>
+      catalogStudio
+        ? usedCatalogAddOnRows(techniquePrintFiles, catalogFileLayers, embroideryUnlimitedColor)
+        : [],
+    [catalogStudio, techniquePrintFiles, catalogFileLayers, embroideryUnlimitedColor],
+  )
+  const catalogExtras = useMemo(() => sumCatalogAddOnRows(catalogAddOnRows), [catalogAddOnRows])
 
   const effectiveWholesale = wholesale + catalogExtras
   const keep = useMemo(() => youKeep(price, effectiveWholesale), [price, effectiveWholesale])
@@ -1856,8 +1878,14 @@ export default function MerchFittingRoom({
       style={
         studioGridXl
           ? {
-              gridTemplateColumns: `${catalogColumnWidth}px minmax(0, 1fr) ${
-                catalogStudio ? 440 : 280
+              gridTemplateColumns: `${
+                catalogPanelCollapsed ? CATALOG_PANEL_COLLAPSED_WIDTH : catalogColumnWidth
+              }px minmax(0, 1fr) ${
+                designPanelCollapsed
+                  ? DESIGN_PANEL_COLLAPSED_WIDTH
+                  : catalogStudio
+                    ? DESIGN_PANEL_WIDTH
+                    : 280
               }px`,
             }
           : undefined
@@ -1870,27 +1898,30 @@ export default function MerchFittingRoom({
           designs={saved}
           onSelect={(product) => void selectCatalogProduct(product)}
           onOpenDesign={(design) => void selectSavedDesign(design)}
+          onCatalogPanelCollapsedChange={setCatalogPanelCollapsed}
         />
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-valuenow={catalogColumnWidth}
-          aria-valuemin={CATALOG_COLUMN_MIN}
-          aria-valuemax={CATALOG_COLUMN_MAX}
-          aria-label="Resize Printful catalog column"
-          title="Drag to resize · double-click to reset"
-          onPointerDown={onCatalogColumnResizeStart}
-          onDoubleClick={resetCatalogColumnWidth}
-          className={`group absolute -right-2 top-0 z-20 hidden h-full w-4 cursor-col-resize touch-none xl:block ${
-            catalogColumnResizing ? 'bg-white/10' : 'hover:bg-white/5'
-          }`}
-        >
-          <span
-            className={`pointer-events-none absolute inset-y-3 left-1/2 w-0.5 -translate-x-1/2 rounded-full transition-colors ${
-              catalogColumnResizing ? 'bg-white/70' : 'bg-gray-600 group-hover:bg-gray-400'
+        {!catalogPanelCollapsed ? (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-valuenow={catalogColumnWidth}
+            aria-valuemin={CATALOG_COLUMN_MIN}
+            aria-valuemax={CATALOG_COLUMN_MAX}
+            aria-label="Resize Printful catalog column"
+            title="Drag to resize · double-click to reset"
+            onPointerDown={onCatalogColumnResizeStart}
+            onDoubleClick={resetCatalogColumnWidth}
+            className={`group absolute -right-2 top-0 z-20 hidden h-full w-4 cursor-col-resize touch-none xl:block ${
+              catalogColumnResizing ? 'bg-white/10' : 'hover:bg-white/5'
             }`}
-          />
-        </div>
+          >
+            <span
+              className={`pointer-events-none absolute inset-y-3 left-1/2 w-0.5 -translate-x-1/2 rounded-full transition-colors ${
+                catalogColumnResizing ? 'bg-white/70' : 'bg-gray-600 group-hover:bg-gray-400'
+              }`}
+            />
+          </div>
+        ) : null}
       </aside>
 
       <section
@@ -2180,11 +2211,62 @@ export default function MerchFittingRoom({
 
       <aside
         className={`relative flex min-h-[360px] flex-col overflow-hidden rounded-2xl border border-white/10 text-white xl:h-full xl:min-h-0 ${
-          catalogStudio ? '' : 'p-4'
+          designPanelCollapsed ? 'cursor-pointer hover:bg-white/[0.03]' : catalogStudio ? '' : 'p-4'
         }`}
         style={studioPanelBg}
+        {...(designPanelCollapsed
+          ? {
+              role: 'button' as const,
+              tabIndex: 0,
+              'aria-label': 'Expand product design panel',
+              title: 'Click to expand product design',
+              onClick: expandDesignPanel,
+              onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  expandDesignPanel()
+                }
+              },
+            }
+          : {})}
       >
         {catalogStudio ? (
+          <>
+            <div className="relative flex h-[45px] shrink-0 items-center justify-center border-b border-white/10 bg-black/30">
+              {!designPanelCollapsed ? (
+                <span className="pointer-events-none min-w-0 truncate px-10 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-white/45">
+                  Product Design
+                </span>
+              ) : null}
+              {designPanelCollapsed ? (
+                <span
+                  aria-hidden
+                  className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-sm text-white/55"
+                >
+                  ◂
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  aria-label="Collapse product design panel"
+                  aria-expanded
+                  onClick={() => setDesignPanelCollapsedPersist(true)}
+                  className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-white/55 hover:bg-white/10 hover:text-white"
+                >
+                  ▸
+                </button>
+              )}
+            </div>
+            {designPanelCollapsed ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden py-6">
+                <span
+                  aria-hidden
+                  className="select-none text-[10px] font-medium uppercase tracking-[0.18em] text-white/45 [writing-mode:vertical-rl] rotate-180"
+                >
+                  Product Design
+                </span>
+              </div>
+            ) : (
           <MerchDesignSidebar
             nav={designNav}
             onNav={setDesignNav}
@@ -2234,6 +2316,7 @@ export default function MerchFittingRoom({
               const design = saved.find((item) => item.id === id)
               if (design) void selectSavedDesign(design)
             }}
+            addOnRows={catalogAddOnRows}
             wholesale={effectiveWholesale}
             costLive={costLive}
             price={price}
@@ -2253,8 +2336,10 @@ export default function MerchFittingRoom({
             guidelinesOpen={guidelinesOpen}
             onToggleGuidelines={() => setGuidelinesOpen((open) => !open)}
           />
+            )}
+          </>
         ) : (
-          <div className="space-y-4 overflow-y-auto">
+          <div className="space-y-4 overflow-y-auto p-4">
             <p className="text-[11px] text-white/50">
               Pick a product in the Printful catalog to load techniques, file placements, and upload tools.
             </p>

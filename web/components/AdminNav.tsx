@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic'
 import GlobalSearch from './GlobalSearch'
 import { adminNavItems, type AdminNavItem } from './admin-nav-items'
 import { prefetchAdminRoute } from '@/lib/admin-nav-prefetch'
+import { Badge } from '@/components/ui/Badge'
 
 const ReactQueryDevtools =
   process.env.NODE_ENV === 'development'
@@ -58,6 +59,9 @@ function hrefIsActive(
 
   return [...expected.keys()].every((key) => searchParams.get(key) === expected.get(key))
 }
+
+const adminEnvLabel =
+  process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV || 'development'
 
 export default function AdminNav() {
   const { user, logout } = useAdminAuth()
@@ -176,6 +180,19 @@ export default function AdminNav() {
                   {child.label}
                 </Link>
               ))}
+              {item.label === 'Settings' && process.env.NODE_ENV === 'development' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    document
+                      .querySelector<HTMLElement>('.admin-sidebar-devtools-anchor .tsqd-open-btn')
+                      ?.click()
+                  }}
+                  className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-gray-400 transition hover:bg-gray-800/40 hover:text-white"
+                >
+                  TanStack
+                </button>
+              ) : null}
             </div>
           )}
         </div>
@@ -227,17 +244,28 @@ export default function AdminNav() {
     <>
       <div
         className={`border-b border-gray-800 ${
-          opts.compact ? 'flex flex-col items-center gap-2 px-1 py-3' : 'flex items-center gap-2 p-4'
+          opts.compact ? 'flex flex-col items-center gap-2 px-1 py-3' : 'flex items-start gap-2 p-4'
         }`}
       >
         {opts.showCollapseToggle ? <CollapseToggle /> : null}
         {!opts.compact ? (
-          <Link
-            href="/admin"
-            className="min-w-0 flex-1 truncate text-lg font-bold text-white transition hover:text-purple-400"
-          >
-            Admin Panel
-          </Link>
+          <div className="min-w-0 flex-1">
+            <Link
+              href="/admin"
+              className="block truncate text-lg font-bold text-white transition hover:text-purple-400"
+            >
+              Admin Panel
+            </Link>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-full border border-gray-700 bg-gray-900/80 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 transition-colors hover:border-gray-500 hover:text-white"
+              >
+                Home
+              </Link>
+              <Badge tone="neutral">Admin</Badge>
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -249,21 +277,11 @@ export default function AdminNav() {
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">{adminNavItems.map(renderNavItem)}</nav>
 
-          <div className="space-y-3 border-t border-gray-800 p-4">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium uppercase tracking-wider text-gray-500">
-              <span className="text-gray-400">TanStack</span>
-              <span className="text-gray-600" aria-hidden>
-                ·
-              </span>
-              <span className="text-gray-400">Query</span>
-              <ReactQueryDevtools
-                initialIsOpen={false}
-                buttonPosition="relative"
-                position="bottom"
-                theme="dark"
-              />
-            </div>
-            {user && <div className="truncate text-xs text-gray-500">{user.email}</div>}
+          <div className="flex flex-col items-center space-y-3 border-t border-gray-800 p-4 text-center">
+            <Badge tone="info">{adminEnvLabel}</Badge>
+            {user && (
+              <div className="w-full truncate text-center text-xs text-gray-500">{user.email}</div>
+            )}
             <button
               onClick={handleLogout}
               className="w-full rounded-md bg-red-600/80 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-600"
@@ -306,6 +324,16 @@ export default function AdminNav() {
 
   return (
     <>
+      {process.env.NODE_ENV === 'development' ? (
+        <div className="admin-sidebar-devtools-anchor pointer-events-none fixed left-0 top-0 h-px w-px overflow-hidden opacity-0">
+          <ReactQueryDevtools
+            initialIsOpen={false}
+            buttonPosition="relative"
+            position="bottom"
+            theme="dark"
+          />
+        </div>
+      ) : null}
       {/* Desktop sidebar */}
       <aside
         className={`admin-sidebar z-40 hidden border-r border-line bg-surface-overlay/95 backdrop-blur-sm transition-[width] duration-ui ease-out md:fixed md:inset-y-0 md:left-0 md:flex md:w-shell-nav md:flex-col ${

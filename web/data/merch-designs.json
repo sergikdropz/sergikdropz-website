@@ -33,7 +33,7 @@
       "sizes": [
         "One size"
       ],
-      "previewColor": "#ffffff",
+      "previewColor": "#f5eee1",
       "retailPrice": 40,
       "wholesaleCost": 15,
       "status": "draft",
@@ -43,7 +43,7 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-27T11:42:55.924Z",
-      "updatedAt": "2026-10-27T19:07:42.366Z"
+      "updatedAt": "2026-10-27T21:54:57.546Z"
     },
     {
       "id": "a8be51ca-66ae-4da1-a8a5-a57130611e36",

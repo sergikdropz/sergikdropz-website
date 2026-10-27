@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   cleanCutoutFringe,
   colorDistance,
+  applyMagicWand,
   crispCutoutEdge,
   estimateBackgroundColor,
+  magicWandMask,
   removeSolidBackground,
   shaveCutout,
   type ImageDataLike,
@@ -123,5 +125,36 @@ describe('remove-background', () => {
     const crisped = crispCutoutEdge(cut, 100)
     expect(crisped.data[edge + 3]).toBe(0)
     expect(alphaAt(crisped, 8, 8)).toBe(255)
+  })
+
+  it('magic wand selects a contiguous background region from a seed', () => {
+    const image = makeImage(16, 4)
+    const loose = { tolerance: 36, edgeGuard: 15 }
+    const mask = magicWandMask(image, 0, 0, loose)
+    expect(mask[0]).toBe(1)
+    expect(mask[8 * 16 + 8]).toBe(0)
+    const cut = removeSolidBackground(image)
+    const cleared = applyMagicWand(cut, image, 2, 2, 36, false, { edgeGuard: 15 })
+    expect(alphaAt(cleared, 2, 2)).toBe(0)
+    expect(alphaAt(cleared, 8, 8)).toBe(255)
+  })
+
+  it('edge guard keeps the wand from crossing a strong colour step', () => {
+    const size = 12
+    const data = new Uint8ClampedArray(size * size * 4)
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4
+        const left = x < size / 2
+        data[i] = left ? 250 : 20
+        data[i + 1] = left ? 250 : 20
+        data[i + 2] = left ? 250 : 20
+        data[i + 3] = 255
+      }
+    }
+    const image = { data, width: size, height: size }
+    const loose = magicWandMask(image, 1, 1, { tolerance: 64, edgeGuard: 10 })
+    const strict = magicWandMask(image, 1, 1, { tolerance: 64, edgeGuard: 85 })
+    expect(loose.reduce((s, v) => s + v, 0)).toBeGreaterThan(strict.reduce((s, v) => s + v, 0))
   })
 })

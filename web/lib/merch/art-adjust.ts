@@ -1,4 +1,16 @@
-import { cleanCutoutFringe, crispCutoutEdge, removeSolidBackground, shaveCutout, type ImageDataLike } from '@/lib/merch/remove-background'
+import {
+  applyMagicWand,
+  cleanCutoutFringe,
+  crispCutoutEdge,
+  fillCutoutHoles,
+  invertCutoutAlpha,
+  magicWandMask,
+  morphCutoutAlpha,
+  polishCutoutMatte,
+  removeSolidBackground,
+  shaveCutout,
+  type ImageDataLike,
+} from '@/lib/merch/remove-background'
 
 export type CurvePoint = { x: number; y: number }
 
@@ -35,6 +47,16 @@ export type EdgeStroke = {
   restore: boolean
 }
 
+export type WandFill = {
+  x: number
+  y: number
+  /** 0–72 perceptual colour distance from seed. */
+  tolerance: number
+  /** 0–100 blocks bleed across edges (higher = tighter). */
+  edgeGuard: number
+  restore: boolean
+}
+
 export type Rgb = [number, number, number]
 
 export type ArtEdit = {
@@ -57,6 +79,11 @@ export type ArtEdit = {
   /** 0–100. Snaps a soft edge and pulls background colour out of the rim. */
   crisp: number
   strokes: EdgeStroke[]
+  wandFills: WandFill[]
+  invertMask: boolean
+  fillHoles: boolean
+  /** Net morphological expand (+) / contract (−) on the matte, in pixels. */
+  maskExpand: number
 }
 
 export const IDENTITY_CURVE: CurvePoint[] = [
@@ -87,6 +114,24 @@ export function identityCurves(): ArtCurves {
   }
 }
 
+export function cloneArtEdit(edit: ArtEdit): ArtEdit {
+  return {
+    ...edit,
+    tone: { ...edit.tone },
+    curves: {
+      rgb: edit.curves.rgb.map((point) => ({ ...point })),
+      r: edit.curves.r.map((point) => ({ ...point })),
+      g: edit.curves.g.map((point) => ({ ...point })),
+      b: edit.curves.b.map((point) => ({ ...point })),
+    },
+    crop: { ...edit.crop },
+    padColor: [...edit.padColor],
+    borderColor: [...edit.borderColor],
+    strokes: edit.strokes.map((stroke) => ({ ...stroke })),
+    wandFills: edit.wandFills.map((fill) => ({ ...fill })),
+  }
+}
+
 export function defaultArtEdit(): ArtEdit {
   return {
     tone: { ...RESET_TONE },
@@ -104,6 +149,10 @@ export function defaultArtEdit(): ArtEdit {
     shave: 0,
     crisp: 0,
     strokes: [],
+    wandFills: [],
+    invertMask: false,
+    fillHoles: false,
+    maskExpand: 0,
   }
 }
 
@@ -337,6 +386,18 @@ function applyStrokes(original: ImageDataLike, current: ImageDataLike, strokes: 
     }
   }
   return { data: out, width, height }
+}
+
+function applyWandFills(original: ImageDataLike, current: ImageDataLike, fills: WandFill[]): ImageDataLike {
+  let out = current
+  for (const fill of fills) {
+    const sx = fill.x * current.width
+    const sy = fill.y * current.height
+    out = applyMagicWand(out, original, sx, sy, fill.tolerance, fill.restore, {
+      edgeGuard: fill.edgeGuard ?? 62,
+    })
+  }
+  return out
 }
 
 function flip(image: ImageDataLike, flipX: boolean, flipY: boolean): ImageDataLike {
@@ -583,15 +644,68 @@ export function applyEffect(edit: ArtEdit, effect: 'none' | 'bw' | 'film' | 'blu
   return { ...edit, tone: { ...edit.tone, blur: 0.012 } }
 }
 
+/** Matte used for brush / magic-wand sampling (source space, before orient). */
+export function cutoutMatteForLocalEdits(image: ImageDataLike, edit: ArtEdit, forceCutout = false): ImageDataLike | null {
+  if (!edit.cutout && !forceCutout) return null
+  const cached = cachedCutout(image)
+  const matte = { data: new Uint8ClampedArray(cached.data), width: cached.width, height: cached.height }
+  let current = cleanCutoutFringe(matte, image, edit.edgeClean)
+  current = shaveCutout(current, ((edit.shave ?? 0) / 100) * 6)
+  current = crispCutoutEdge(current, edit.crisp ?? 0)
+  current = applyStrokes(image, current, edit.strokes)
+  current = applyWandFills(image, current, edit.wandFills)
+  const hasLocalErase =
+    edit.strokes.some((stroke) => !stroke.restore) || edit.wandFills.some((fill) => !fill.restore)
+  if (hasLocalErase) current = polishCutoutMatte(current)
+  return current
+}
+
+/** Map each oriented preview pixel to a source matte pixel index. */
+export function orientedPixelSourceIndexes(
+  sourceWidth: number,
+  sourceHeight: number,
+  orientedWidth: number,
+  orientedHeight: number,
+  flipX: boolean,
+  flipY: boolean,
+  rotate: number,
+): Int32Array {
+  const map = new Int32Array(orientedWidth * orientedHeight)
+  for (let oy = 0; oy < orientedHeight; oy++) {
+    for (let ox = 0; ox < orientedWidth; ox++) {
+      const { x, y } = displayToSource((ox + 0.5) / orientedWidth, (oy + 0.5) / orientedHeight, flipX, flipY, rotate)
+      const sx = Math.min(sourceWidth - 1, Math.max(0, Math.floor(x * sourceWidth)))
+      const sy = Math.min(sourceHeight - 1, Math.max(0, Math.floor(y * sourceHeight)))
+      map[oy * orientedWidth + ox] = sy * sourceWidth + sx
+    }
+  }
+  return map
+}
+
+export function previewMagicWandMask(
+  image: ImageDataLike,
+  edit: ArtEdit,
+  normX: number,
+  normY: number,
+  tolerance: number,
+  edgeGuard: number,
+  forceCutout = false,
+): Uint8Array | null {
+  const matte = cutoutMatteForLocalEdits(image, edit, forceCutout)
+  if (!matte) return null
+  const sx = clamp(normX, 0, 1) * matte.width
+  const sy = clamp(normY, 0, 1) * matte.height
+  return magicWandMask(matte, sx, sy, { tolerance, edgeGuard })
+}
+
 export function applyArtEdit(image: ImageDataLike, edit: ArtEdit, view: ArtView = 'final'): ImageDataLike {
   let current: ImageDataLike = image
   if (edit.cutout) {
-    const cached = cachedCutout(image)
-    const matte = { data: new Uint8ClampedArray(cached.data), width: cached.width, height: cached.height }
-    current = cleanCutoutFringe(matte, image, edit.edgeClean)
-    current = shaveCutout(current, ((edit.shave ?? 0) / 100) * 6)
-    current = crispCutoutEdge(current, edit.crisp ?? 0)
-    current = applyStrokes(image, current, edit.strokes)
+    const matte = cutoutMatteForLocalEdits(image, edit)
+    current = matte ?? image
+    if (edit.fillHoles) current = fillCutoutHoles(current)
+    if (edit.maskExpand) current = morphCutoutAlpha(current, edit.maskExpand)
+    if (edit.invertMask) current = invertCutoutAlpha(current)
   }
   current = applyToneAndCurves(current, edit.tone, edit.curves)
   const radius = Math.round(edit.tone.blur * Math.min(current.width, current.height))

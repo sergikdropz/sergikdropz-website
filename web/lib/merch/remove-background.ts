@@ -24,7 +24,12 @@ export type RemoveBackgroundOptions = {
   feather?: number
 }
 
-/** Perceptual-ish squared RGB distance (cheap, good enough for flat backgrounds). */
+function srgbChannelToLinear(channel: number): number {
+  const v = channel / 255
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+}
+
+/** Fast weighted RGB distance (background flood + fringe). */
 export function colorDistance(
   r1: number,
   g1: number,
@@ -36,8 +41,59 @@ export function colorDistance(
   const dr = r1 - r2
   const dg = g1 - g2
   const db = b1 - b2
-  // Weighted to human luminance sensitivity.
   return Math.sqrt(0.3 * dr * dr + 0.59 * dg * dg + 0.11 * db * db)
+}
+
+/** Stricter perceptual distance for magic-wand matching (sRGB-linear). */
+export function colorDistancePerceptual(
+  r1: number,
+  g1: number,
+  b1: number,
+  r2: number,
+  g2: number,
+  b2: number,
+): number {
+  const lr1 = srgbChannelToLinear(r1) * 255
+  const lg1 = srgbChannelToLinear(g1) * 255
+  const lb1 = srgbChannelToLinear(b1) * 255
+  const lr2 = srgbChannelToLinear(r2) * 255
+  const lg2 = srgbChannelToLinear(g2) * 255
+  const lb2 = srgbChannelToLinear(b2) * 255
+  const dr = lr1 - lr2
+  const dg = lg1 - lg2
+  const db = lb1 - lb2
+  return Math.sqrt(0.3 * dr * dr + 0.59 * dg * dg + 0.11 * db * db)
+}
+
+export type MagicWandOptions = {
+  /** 0–72 typical; perceptual colour distance from seed. */
+  tolerance: number
+  /** 0–100 blocks flood across strong local edges (higher = stricter). Default 62. */
+  edgeGuard?: number
+}
+
+function readRgb(data: Uint8ClampedArray | number[], index: number): [number, number, number] {
+  const i = index * 4
+  return [data[i], data[i + 1], data[i + 2]]
+}
+
+function erodeBinaryMask(mask: Uint8Array, width: number, height: number, steps: number): Uint8Array {
+  let current = mask
+  for (let s = 0; s < steps; s++) {
+    const next = new Uint8Array(current.length)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const p = y * width + x
+        if (!current[p]) continue
+        if (x === 0 || y === 0 || x === width - 1 || y === height - 1) continue
+        const keep =
+          current[p - 1] && current[p + 1] && current[p - width] && current[p + width]
+        if (keep) next[p] = 1
+      }
+    }
+    current = next
+  }
+  return current
 }
 
 /** Estimate the background colour from the four corners (median-ish via average of closest pair). */
@@ -267,4 +323,234 @@ export function crispCutoutEdge(cutout: ImageDataLike, amount: number): ImageDat
     }
   }
   return { data: out, width, height }
+}
+
+function copyImage(image: ImageDataLike): ImageDataLike {
+  return { data: new Uint8ClampedArray(image.data), width: image.width, height: image.height }
+}
+
+/** Contiguous flood selection from a seed pixel (magic wand). Returns a byte mask (1 = selected). */
+export function magicWandMask(
+  image: ImageDataLike,
+  seedX: number,
+  seedY: number,
+  toleranceOrOptions: number | MagicWandOptions,
+): Uint8Array {
+  const options: MagicWandOptions =
+    typeof toleranceOrOptions === 'number' ? { tolerance: toleranceOrOptions } : toleranceOrOptions
+  const { width, height, data } = image
+  const mask = new Uint8Array(width * height)
+  if (width === 0 || height === 0) return mask
+  const sx = Math.min(width - 1, Math.max(0, Math.round(seedX)))
+  const sy = Math.min(height - 1, Math.max(0, Math.round(seedY)))
+  const seedP = sy * width + sx
+  const seed = seedP * 4
+  const sr = data[seed]
+  const sg = data[seed + 1]
+  const sb = data[seed + 2]
+  const sa = data[seed + 3]
+  const matchTransparent = sa < 12
+  const limit = Math.max(0, Math.min(72, options.tolerance))
+  const edgeGuard = Math.max(0, Math.min(100, options.edgeGuard ?? 62))
+  const localEdgeMax = 5 + ((100 - edgeGuard) / 100) * 22
+  const linkRatio = 0.28 + (edgeGuard / 100) * 0.32
+
+  type StackFrame = { p: number; parent: number }
+  const stack: StackFrame[] = [{ p: seedP, parent: seedP }]
+
+  while (stack.length) {
+    const { p, parent } = stack.pop() as StackFrame
+    if (mask[p]) continue
+    const i = p * 4
+    const alpha = data[i + 3]
+
+    if (matchTransparent) {
+      if (alpha >= 12) continue
+    } else {
+      if (alpha < 12) continue
+      const alphaWeight = 0.4 + 0.6 * (alpha / 255)
+      const tol = limit * alphaWeight
+      const distSeed = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], sr, sg, sb)
+      if (distSeed > tol) continue
+
+      if (p !== parent) {
+        const pi = parent * 4
+        const distParent = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], data[pi], data[pi + 1], data[pi + 2])
+        const linkTol = Math.max(5, tol * linkRatio)
+        if (distParent > linkTol) continue
+        const localEdge = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], data[pi], data[pi + 1], data[pi + 2])
+        if (localEdge > localEdgeMax && distSeed > tol * 0.68) continue
+      }
+    }
+
+    mask[p] = 1
+    const x = p % width
+    const y = (p - x) / width
+    if (x > 0) stack.push({ p: p - 1, parent: p })
+    if (x < width - 1) stack.push({ p: p + 1, parent: p })
+    if (y > 0) stack.push({ p: p - width, parent: p })
+    if (y < height - 1) stack.push({ p: p + width, parent: p })
+  }
+
+  const shrink =
+    edgeGuard >= 75 ? 2 : edgeGuard >= 50 ? 1 : limit > 36 ? 1 : 0
+  if (shrink > 0) {
+    return erodeBinaryMask(mask, width, height, shrink)
+  }
+  return mask
+}
+
+/** Snap soft alpha on the matte rim and drop tiny specks. */
+export function polishCutoutMatte(cutout: ImageDataLike): ImageDataLike {
+  const { width, height, data } = cutout
+  const out = copyImage(cutout)
+  const rim = rimDistance(data, width, height, 3)
+  for (let p = 0; p < rim.length; p++) {
+    const i = p * 4
+    const alpha = data[i + 3]
+    if (alpha === 0 || alpha === 255) continue
+    const nearClear = rim[p] <= 2
+    if (!nearClear) continue
+    if (alpha < 48) out.data[i + 3] = 0
+    else if (alpha > 208) out.data[i + 3] = 255
+    else out.data[i + 3] = Math.round(alpha * (rim[p] / 2))
+  }
+  for (let p = 0; p < rim.length; p++) {
+    const i = p * 4
+    if (out.data[i + 3] >= 16) continue
+    let opaqueNeighbors = 0
+    const x = p % width
+    const y = (p - x) / width
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+        if (out.data[(ny * width + nx) * 4 + 3] > 200) opaqueNeighbors++
+      }
+    }
+    if (opaqueNeighbors <= 1) out.data[i + 3] = 0
+  }
+  return out
+}
+
+function defringeWandSelection(
+  image: ImageDataLike,
+  mask: Uint8Array,
+  seedRgb: [number, number, number],
+  fringeLimit: number,
+): void {
+  const { width, height, data } = image
+  for (let p = 0; p < mask.length; p++) {
+    if (!mask[p]) continue
+    const i = p * 4
+    if (data[i + 3] === 0) continue
+    const x = p % width
+    const y = (p - x) / width
+    let touchesOutside = false
+    for (const [dx, dy] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ]) {
+      const nx = x + dx
+      const ny = y + dy
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+        touchesOutside = true
+        break
+      }
+      if (!mask[ny * width + nx]) {
+        touchesOutside = true
+        break
+      }
+    }
+    if (!touchesOutside) continue
+    const dist = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], seedRgb[0], seedRgb[1], seedRgb[2])
+    if (dist <= fringeLimit) data[i + 3] = 0
+  }
+}
+
+/** Clear or restore a magic-wand region on the current cutout. */
+export function applyMagicWand(
+  current: ImageDataLike,
+  original: ImageDataLike,
+  seedX: number,
+  seedY: number,
+  tolerance: number,
+  restore: boolean,
+  wandOptions?: Pick<MagicWandOptions, 'edgeGuard'>,
+): ImageDataLike {
+  const options: MagicWandOptions = { tolerance, edgeGuard: wandOptions?.edgeGuard }
+  const mask = magicWandMask(current, seedX, seedY, options)
+  const out = copyImage(current)
+  const { width, height } = out
+  const sx = Math.min(width - 1, Math.max(0, Math.round(seedX)))
+  const sy = Math.min(height - 1, Math.max(0, Math.round(seedY)))
+  const seedRgb = readRgb(current.data, sy * width + sx)
+
+  for (let p = 0; p < mask.length; p++) {
+    if (!mask[p]) continue
+    const i = p * 4
+    if (restore) {
+      out.data[i] = original.data[i]
+      out.data[i + 1] = original.data[i + 1]
+      out.data[i + 2] = original.data[i + 2]
+      out.data[i + 3] = original.data[i + 3]
+    } else {
+      out.data[i + 3] = 0
+    }
+  }
+  if (!restore) {
+    defringeWandSelection(out, mask, seedRgb, Math.max(8, tolerance * 0.55))
+  }
+  return { data: out.data, width, height }
+}
+
+/** Swap opaque and transparent areas. */
+export function invertCutoutAlpha(image: ImageDataLike): ImageDataLike {
+  const out = copyImage(image)
+  for (let i = 3; i < out.data.length; i += 4) {
+    out.data[i] = out.data[i] > 127 ? 0 : 255
+  }
+  return out
+}
+
+/** Close small transparent holes inside the subject (morphological close on alpha). */
+export function fillCutoutHoles(image: ImageDataLike, radius = 2): ImageDataLike {
+  const steps = Math.max(1, Math.min(4, Math.round(radius)))
+  const dilated = morphCutoutAlpha(image, steps)
+  return morphCutoutAlpha(dilated, -steps)
+}
+
+/** Positive steps dilate opaque; negative steps erode. */
+export function morphCutoutAlpha(image: ImageDataLike, steps: number): ImageDataLike {
+  const n = Math.max(-6, Math.min(6, Math.round(steps)))
+  if (n === 0) return image
+  let current = copyImage(image)
+  const { width, height } = current
+  const applyStep = (dilate: boolean) => {
+    const src = current.data
+    const out = new Uint8ClampedArray(src)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        let best = dilate ? 0 : 255
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx
+            const ny = y + dy
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+            const a = src[(ny * width + nx) * 4 + 3]
+            best = dilate ? Math.max(best, a) : Math.min(best, a)
+          }
+        }
+        out[i + 3] = best
+      }
+    }
+    current = { data: out, width, height }
+  }
+  for (let s = 0; s < Math.abs(n); s++) applyStep(n > 0)
+  return current
 }

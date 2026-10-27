@@ -6,8 +6,11 @@ import {
   applyEffect,
   autoTone,
   clampCrop,
+  cloneArtEdit,
   defaultArtEdit,
   displayToSource,
+  orientedPixelSourceIndexes,
+  previewMagicWandMask,
   scaleImageData,
   type ArtEdit,
   type ArtView,
@@ -23,6 +26,14 @@ import { clampStagePan, clampStageZoom, panForZoom } from '@/lib/editor/stage-vi
 
 type SaveMode = 'replace' | 'copy'
 type ToolId = 'adjust' | 'curves' | 'crop' | 'cutout' | 'fit' | 'effects'
+type EditorHistorySnap = { edit: ArtEdit; effect: EffectName }
+
+const EDITOR_HISTORY_MAX = 60
+const EDITOR_HISTORY_DEBOUNCE_MS = 280
+
+function historySnapKey(snap: EditorHistorySnap): string {
+  return `${snap.effect}:${JSON.stringify(snap.edit)}`
+}
 type CurveChannel = 'rgb' | 'r' | 'g' | 'b'
 type EffectName = 'none' | 'bw' | 'film' | 'blur'
 
@@ -289,6 +300,12 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   const [effect, setEffect] = useState<EffectName>('none')
   const [brushSize, setBrushSize] = useState(0.04)
   const [brushRestore, setBrushRestore] = useState(true)
+  const [cutoutPaintMode, setCutoutPaintMode] = useState<'brush' | 'wand'>('brush')
+  const [wandTolerance, setWandTolerance] = useState(28)
+  const [wandEdgeGuard, setWandEdgeGuard] = useState(62)
+  const [backdropMode, setBackdropMode] = useState<'checkers' | 'solid'>('checkers')
+  const [backdropGray, setBackdropGray] = useState(22)
+  const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [applying, setApplying] = useState<SaveMode | null>(null)
   const [baking, setBaking] = useState(false)
@@ -306,6 +323,11 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [stageNode, setStageNode] = useState<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const wandOverlayRef = useRef<HTMLCanvasElement>(null)
+  const canvasPixelSizeRef = useRef({ orientedW: 0, orientedH: 0, sourceW: 0, sourceH: 0 })
+  const orientIndexRef = useRef<{ key: string; map: Int32Array } | null>(null)
+  const wandHoverRef = useRef<{ x: number; y: number } | null>(null)
+  const wandPreviewRaf = useRef<number | null>(null)
   const resizeDrag = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
   const lastBrush = useRef<{ x: number; y: number } | null>(null)
   const cutoutBeforeClean = useRef<boolean | null>(null)
@@ -316,14 +338,132 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; midX: number; midY: number } | null>(null)
   const panDrag = useRef<{ id: number; x: number; y: number; panX: number; panY: number } | null>(null)
-  const strokeFloor = useRef(0)
+  const cutoutEditFloor = useRef({ strokes: 0, wand: 0 })
+  const undoStackRef = useRef<EditorHistorySnap[]>([])
+  const redoStackRef = useRef<EditorHistorySnap[]>([])
+  const lastCommittedRef = useRef<EditorHistorySnap | null>(null)
+  const applyingHistoryRef = useRef(false)
+  const historyDebounceRef = useRef<number | null>(null)
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
   zoomRef.current = zoom
   panRef.current = pan
   viewSizeRef.current = viewSize
 
+  function syncHistoryButtons() {
+    setCanUndo(undoStackRef.current.length > 0)
+    setCanRedo(redoStackRef.current.length > 0)
+  }
+
+  const editHistoryRef = useRef(edit)
+  const effectHistoryRef = useRef(effect)
+  editHistoryRef.current = edit
+  effectHistoryRef.current = effect
+
+  function snapshotEditorState(): EditorHistorySnap {
+    return { edit: cloneArtEdit(editHistoryRef.current), effect: effectHistoryRef.current }
+  }
+
+  function applyEditorSnapshot(snap: EditorHistorySnap) {
+    applyingHistoryRef.current = true
+    cutoutBeforeClean.current = null
+    lastCommittedRef.current = { edit: cloneArtEdit(snap.edit), effect: snap.effect }
+    setEdit(cloneArtEdit(snap.edit))
+    setEffect(snap.effect)
+    syncHistoryButtons()
+  }
+
+  function undoEditor() {
+    const past = undoStackRef.current
+    if (past.length === 0) return
+    const current = snapshotEditorState()
+    redoStackRef.current.push(current)
+    const previous = past.pop() as EditorHistorySnap
+    applyEditorSnapshot(previous)
+  }
+
+  function redoEditor() {
+    const future = redoStackRef.current
+    if (future.length === 0) return
+    const current = snapshotEditorState()
+    undoStackRef.current.push(current)
+    const next = future.pop() as EditorHistorySnap
+    applyEditorSnapshot(next)
+  }
+
+  function resetEditorHistory(initial?: EditorHistorySnap) {
+    undoStackRef.current = []
+    redoStackRef.current = []
+    lastCommittedRef.current = initial ? { edit: cloneArtEdit(initial.edit), effect: initial.effect } : null
+    syncHistoryButtons()
+  }
+
+  useEffect(() => {
+    if (!fullRef.current || applyingHistoryRef.current) {
+      applyingHistoryRef.current = false
+      return
+    }
+    if (historyDebounceRef.current != null) window.clearTimeout(historyDebounceRef.current)
+    historyDebounceRef.current = window.setTimeout(() => {
+      historyDebounceRef.current = null
+      const current = snapshotEditorState()
+      const last = lastCommittedRef.current
+      if (!last) {
+        lastCommittedRef.current = { edit: cloneArtEdit(current.edit), effect: current.effect }
+        return
+      }
+      if (historySnapKey(last) === historySnapKey(current)) return
+      undoStackRef.current.push(last)
+      if (undoStackRef.current.length > EDITOR_HISTORY_MAX) undoStackRef.current.shift()
+      redoStackRef.current = []
+      lastCommittedRef.current = { edit: cloneArtEdit(current.edit), effect: current.effect }
+      syncHistoryButtons()
+    }, EDITOR_HISTORY_DEBOUNCE_MS)
+    return () => {
+      if (historyDebounceRef.current != null) window.clearTimeout(historyDebounceRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced snapshot of edit + effect
+  }, [edit, effect, ready])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key === 'z' && event.shiftKey) {
+        event.preventDefault()
+        redoEditor()
+      } else if (key === 'z') {
+        event.preventDefault()
+        undoEditor()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable undo/redo handlers
+  }, [])
+
+  useEffect(() => {
+    if (!backdropMenu) return
+    const close = (event: PointerEvent) => {
+      const node = event.target
+      if (node instanceof Element && node.closest('[aria-label="Preview background"]')) return
+      setBackdropMenu(null)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setBackdropMenu(null)
+    }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [backdropMenu])
+
   useEffect(() => {
     const fresh = defaultArtEdit()
     cutoutBeforeClean.current = null
+    resetEditorHistory()
     setEdit(fresh)
     setBaseline(fresh)
     setBaselineEffect('none')
@@ -340,6 +480,8 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
       .then((image) => {
         if (cancelled) return
         fullRef.current = readImage(image)
+        const snap = { edit: cloneArtEdit(fresh), effect: 'none' as EffectName }
+        lastCommittedRef.current = snap
         setReady((value) => value + 1)
       })
       .catch((err) => {
@@ -440,6 +582,13 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
         canvas.height = edited.height
       }
       ctx.putImageData(new ImageData(new Uint8ClampedArray(edited.data), edited.width, edited.height), 0, 0)
+      canvasPixelSizeRef.current = {
+        orientedW: edited.width,
+        orientedH: edited.height,
+        sourceW: scaledRef.current.image.width,
+        sourceH: scaledRef.current.image.height,
+      }
+      orientIndexRef.current = null
       const scale = Math.min(stageBox.width / edited.width, stageBox.height / edited.height)
       const width = Math.max(1, Math.round(edited.width * scale))
       const height = Math.max(1, Math.round(edited.height * scale))
@@ -448,6 +597,15 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
       setError(err instanceof Error ? err.message : 'Could not preview the edit')
     }
   }, [edit, tool, ready, stageBox])
+
+  useEffect(() => {
+    if (tool !== 'cutout' || cutoutPaintMode !== 'wand') {
+      scheduleWandPreview(null)
+      return
+    }
+    if (wandHoverRef.current) scheduleWandPreview(wandHoverRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraw preview when matte inputs change
+  }, [edit, wandTolerance, wandEdgeGuard, brushRestore, cutoutPaintMode, tool])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -499,15 +657,20 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
     }))
   }
 
-  function paintStroke(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!edit.cutout) return
+  function pointerSourcePoint(event: ReactPointerEvent<HTMLDivElement>) {
     const bounds = event.currentTarget.getBoundingClientRect()
-    if (bounds.width === 0 || bounds.height === 0) return
+    if (bounds.width === 0 || bounds.height === 0) return null
     const displayed = {
       x: (event.clientX - bounds.left) / bounds.width,
       y: (event.clientY - bounds.top) / bounds.height,
     }
-    const source = displayToSource(displayed.x, displayed.y, edit.flipX, edit.flipY, edit.rotate)
+    return displayToSource(displayed.x, displayed.y, edit.flipX, edit.flipY, edit.rotate)
+  }
+
+  function paintStroke(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!edit.cutout || cutoutPaintMode !== 'brush') return
+    const source = pointerSourcePoint(event)
+    if (!source) return
     const previous = lastBrush.current
     if (previous && Math.hypot(previous.x - source.x, previous.y - source.y) < brushSize * 0.35) return
     lastBrush.current = source
@@ -515,6 +678,102 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
       ...current,
       strokes: [...current.strokes, { ...source, radius: brushSize, restore: brushRestore }],
     }))
+  }
+
+  function paintWand(event: ReactPointerEvent<HTMLDivElement>) {
+    if (cutoutPaintMode !== 'wand') return
+    const source = pointerSourcePoint(event)
+    if (!source) return
+    setEdit((current) => ({
+      ...current,
+      cutout: true,
+      wandFills: [
+        ...current.wandFills,
+        {
+          x: source.x,
+          y: source.y,
+          tolerance: wandTolerance,
+          edgeGuard: wandEdgeGuard,
+          restore: brushRestore,
+        },
+      ],
+    }))
+    wandHoverRef.current = null
+    clearWandOverlay()
+  }
+
+  function clearWandOverlay() {
+    const overlay = wandOverlayRef.current
+    if (!overlay) return
+    const ctx = overlay.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, overlay.width, overlay.height)
+  }
+
+  function drawWandHoverPreview(source: { x: number; y: number } | null) {
+    wandHoverRef.current = source
+    const overlay = wandOverlayRef.current
+    const scaled = scaledRef.current?.image
+    const { orientedW, orientedH, sourceW, sourceH } = canvasPixelSizeRef.current
+    if (!overlay || !scaled || orientedW < 1 || orientedH < 1) {
+      clearWandOverlay()
+      return
+    }
+    if (!source) {
+      clearWandOverlay()
+      return
+    }
+    const forceCutout = !edit.cutout
+    const mask = previewMagicWandMask(
+      scaled,
+      edit,
+      source.x,
+      source.y,
+      wandTolerance,
+      wandEdgeGuard,
+      forceCutout,
+    )
+    if (!mask) {
+      clearWandOverlay()
+      return
+    }
+    const indexKey = `${ready}-${edit.flipX}-${edit.flipY}-${edit.rotate}-${sourceW}x${sourceH}-${orientedW}x${orientedH}`
+    if (!orientIndexRef.current || orientIndexRef.current.key !== indexKey) {
+      orientIndexRef.current = {
+        key: indexKey,
+        map: orientedPixelSourceIndexes(sourceW, sourceH, orientedW, orientedH, edit.flipX, edit.flipY, edit.rotate),
+      }
+    }
+    const indexMap = orientIndexRef.current.map
+    if (overlay.width !== orientedW || overlay.height !== orientedH) {
+      overlay.width = orientedW
+      overlay.height = orientedH
+    }
+    const ctx = overlay.getContext('2d')
+    if (!ctx) return
+    const tint = brushRestore
+      ? { r: 52, g: 211, b: 153 }
+      : { r: 250, g: 204, b: 21 }
+    const pixels = ctx.createImageData(orientedW, orientedH)
+    for (let p = 0; p < indexMap.length; p++) {
+      const src = indexMap[p]
+      if (src < 0 || !mask[src]) continue
+      const i = p * 4
+      pixels.data[i] = tint.r
+      pixels.data[i + 1] = tint.g
+      pixels.data[i + 2] = tint.b
+      pixels.data[i + 3] = 130
+    }
+    ctx.putImageData(pixels, 0, 0)
+  }
+
+  function scheduleWandPreview(source: { x: number; y: number } | null) {
+    wandHoverRef.current = source
+    if (wandPreviewRaf.current != null) cancelAnimationFrame(wandPreviewRaf.current)
+    wandPreviewRaf.current = requestAnimationFrame(() => {
+      wandPreviewRaf.current = null
+      drawWandHoverPreview(wandHoverRef.current)
+    })
   }
 
   function stageCenter() {
@@ -548,8 +807,38 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
     setPan({ x: 0, y: 0 })
   }
 
+  function pointHitsArtwork(clientX: number, clientY: number) {
+    const canvas = canvasRef.current
+    if (!canvas || canvas.width < 1 || canvas.height < 1) return false
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width < 1 || rect.height < 1) return false
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return false
+    const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * canvas.width)))
+    const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(((clientY - rect.top) / rect.height) * canvas.height)))
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return false
+    return ctx.getImageData(x, y, 1, 1).data[3] > 16
+  }
+
+  function onStageContextMenu(event: React.MouseEvent<HTMLDivElement>) {
+    event.preventDefault()
+    if (pointHitsArtwork(event.clientX, event.clientY)) {
+      setBackdropMenu(null)
+      return
+    }
+    const menuWidth = 220
+    const menuHeight = 148
+    setBackdropMenu({
+      x: Math.min(event.clientX, window.innerWidth - menuWidth - 8),
+      y: Math.min(event.clientY, window.innerHeight - menuHeight - 8),
+    })
+  }
+
   function onStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pointers.current.size === 0) strokeFloor.current = edit.strokes.length
+    if (event.button === 2) return
+    if (pointers.current.size === 0) {
+      cutoutEditFloor.current = { strokes: edit.strokes.length, wand: edit.wandFills.length }
+    }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     if (pointers.current.size >= 2) {
       panDrag.current = null
@@ -568,11 +857,17 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
           /* a pointer can already be captured by the brush */
         }
       }
-      setEdit((current) =>
-        current.strokes.length > strokeFloor.current
-          ? { ...current, strokes: current.strokes.slice(0, strokeFloor.current) }
-          : current,
-      )
+      setEdit((current) => {
+        const floor = cutoutEditFloor.current
+        const trimStrokes = current.strokes.length > floor.strokes
+        const trimWand = current.wandFills.length > floor.wand
+        if (!trimStrokes && !trimWand) return current
+        return {
+          ...current,
+          strokes: trimStrokes ? current.strokes.slice(0, floor.strokes) : current.strokes,
+          wandFills: trimWand ? current.wandFills.slice(0, floor.wand) : current.wandFills,
+        }
+      })
       return
     }
     const painting =
@@ -701,6 +996,9 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
 
   const shortSide = Math.max(1, Math.min(fullRef.current?.width || 1, fullRef.current?.height || 1))
   const borderPx = Math.round(edit.border * shortSide)
+  const checkerContrast = 24
+  const checkerDark = Math.round((backdropGray * (255 - checkerContrast)) / 255)
+  const checkerLight = Math.min(255, checkerDark + checkerContrast)
 
   return (
     <div ref={overlayRef} className={`fixed inset-0 z-[85] flex items-center justify-center overscroll-contain bg-black/75 ${expanded ? 'p-0' : 'p-4'}`}>
@@ -784,11 +1082,19 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
           <div className="flex h-full min-h-0 flex-col">
           <div
             ref={bindStage}
-            className="relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,#2a2a2a_0%,#111_70%)]"
+            className="relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden"
+            style={
+              backdropMode === 'solid'
+                ? { backgroundColor: `rgb(${backdropGray},${backdropGray},${backdropGray})` }
+                : {
+                    background: `radial-gradient(ellipse at center, rgb(${checkerLight},${checkerLight},${checkerLight}) 0%, rgb(${checkerDark},${checkerDark},${checkerDark}) 70%)`,
+                  }
+            }
             onPointerDown={onStagePointerDown}
             onPointerMove={onStagePointerMove}
             onPointerUp={onStagePointerEnd}
             onPointerCancel={onStagePointerEnd}
+            onContextMenu={onStageContextMenu}
           >
             <div
               className="relative"
@@ -798,48 +1104,126 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                       width: viewSize.width,
                       height: viewSize.height,
                       transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                      backgroundColor: '#141414',
-                      backgroundImage:
-                        'linear-gradient(45deg, #2c2c2c 25%, transparent 25%), linear-gradient(-45deg, #2c2c2c 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2c2c2c 75%), linear-gradient(-45deg, transparent 75%, #2c2c2c 75%)',
-                      backgroundSize: '20px 20px',
-                      backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0',
+                      ...(backdropMode === 'solid'
+                        ? { backgroundColor: `rgb(${backdropGray},${backdropGray},${backdropGray})`, backgroundImage: 'none' }
+                        : {
+                            backgroundColor: `rgb(${checkerDark},${checkerDark},${checkerDark})`,
+                            backgroundImage: `linear-gradient(45deg, rgb(${checkerLight},${checkerLight},${checkerLight}) 25%, transparent 25%), linear-gradient(-45deg, rgb(${checkerLight},${checkerLight},${checkerLight}) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgb(${checkerLight},${checkerLight},${checkerLight}) 75%), linear-gradient(-45deg, transparent 75%, rgb(${checkerLight},${checkerLight},${checkerLight}) 75%)`,
+                            backgroundSize: '20px 20px',
+                            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0',
+                          }),
                     }
                   : { width: 1, height: 1 }
               }
             >
               <canvas ref={canvasRef} className="block h-full w-full object-contain" />
+              {tool === 'cutout' && cutoutPaintMode === 'wand' && viewSize.width > 0 ? (
+                <canvas
+                  ref={wandOverlayRef}
+                  className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                  aria-hidden
+                />
+              ) : null}
               {tool === 'crop' && viewSize.width > 0 ? (
                 <CropOverlay crop={edit.crop} onChange={(crop) => setEdit((current) => ({ ...current, crop }))} />
               ) : null}
-              {tool === 'cutout' && edit.cutout && viewSize.width > 0 ? (
+              {tool === 'cutout' && viewSize.width > 0 && (edit.cutout || cutoutPaintMode === 'wand') ? (
                 <div
-                  className="absolute inset-0 cursor-none touch-none"
+                  className={`absolute inset-0 touch-none ${cutoutPaintMode === 'brush' ? 'cursor-none' : 'cursor-crosshair'}`}
                   onPointerDown={(event) => {
-                    if (event.altKey || event.button === 1) return
-                    if (event.pointerType === 'touch') {
-                      event.currentTarget.setPointerCapture(event.pointerId)
-                      return
-                    }
+                    if (event.button === 2 || event.altKey || event.button === 1) return
                     if (pointers.current.size > 0) return
                     lastBrush.current = null
                     event.currentTarget.setPointerCapture(event.pointerId)
+                    if (cutoutPaintMode === 'wand') {
+                      paintWand(event)
+                      return
+                    }
+                    if (!edit.cutout) return
+                    if (event.pointerType === 'touch') return
                     brush.place(event)
                     paintStroke(event)
                   }}
                   onPointerMove={(event) => {
                     if (pointers.current.size > 1) return
+                    if (cutoutPaintMode === 'wand') {
+                      const source = pointerSourcePoint(event)
+                      scheduleWandPreview(source)
+                      return
+                    }
+                    if (!edit.cutout) return
                     brush.place(event)
                     if (event.buttons !== 1) return
                     if (event.pointerType === 'touch' && pointers.current.size !== 1) return
                     paintStroke(event)
                   }}
-                  onPointerLeave={brush.hide}
+                  onPointerLeave={() => {
+                    brush.hide()
+                    scheduleWandPreview(null)
+                  }}
+                  onPointerEnter={(event) => {
+                    if (cutoutPaintMode === 'wand') {
+                      scheduleWandPreview(pointerSourcePoint(event))
+                    }
+                  }}
                 >
-                  <BrushCursor ref={brush.ref} tone={brushRestore ? 'restore' : 'erase'} />
+                  {cutoutPaintMode === 'brush' && edit.cutout ? (
+                    <BrushCursor ref={brush.ref} tone={brushRestore ? 'restore' : 'erase'} />
+                  ) : null}
                 </div>
               ) : null}
             </div>
             {viewSize.width > 0 ? null : <p className="absolute text-sm text-white/45">{error || 'Loading artwork…'}</p>}
+            {backdropMenu ? (
+              <div
+                role="menu"
+                aria-label="Preview background"
+                className="fixed z-[90] w-[220px] space-y-3 rounded-xl border border-white/15 bg-zinc-950 p-3 text-white shadow-2xl"
+                style={{ left: backdropMenu.x, top: backdropMenu.y }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onContextMenu={(event) => event.preventDefault()}
+              >
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={backdropMode === 'checkers'}
+                    onClick={() => setBackdropMode('checkers')}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] ${
+                      backdropMode === 'checkers' ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'
+                    }`}
+                  >
+                    Checkers
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={backdropMode === 'solid'}
+                    onClick={() => setBackdropMode('solid')}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] ${
+                      backdropMode === 'solid' ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'
+                    }`}
+                  >
+                    Solid
+                  </button>
+                </div>
+                <label className="block space-y-1">
+                  <span className="flex items-center justify-between text-[11px] text-white/70">
+                    Tone
+                    <span className="tabular-nums text-white/40">{backdropGray}</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={255}
+                    aria-label="Background tone from black to white"
+                    value={backdropGray}
+                    onChange={(event) => setBackdropGray(Number(event.target.value))}
+                    className="w-full accent-white"
+                  />
+                </label>
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-3 border-t border-white/10 px-4 py-2">
             <span
@@ -1015,6 +1399,10 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                       shave: baseline.shave,
                       crisp: baseline.crisp,
                       strokes: baseline.strokes.map((stroke) => ({ ...stroke })),
+                      wandFills: baseline.wandFills.map((fill) => ({ ...fill })),
+                      invertMask: baseline.invertMask,
+                      fillHoles: baseline.fillHoles,
+                      maskExpand: baseline.maskExpand,
                     }))
                   }}
                   className={`w-full rounded-lg border px-3 py-2 text-xs ${
@@ -1047,6 +1435,23 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                   onChange={(crisp) => setMatte({ crisp })}
                   onReset={() => setMatte({ crisp: baseline.crisp })}
                 />
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Local edits</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCutoutPaintMode('brush')}
+                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${cutoutPaintMode === 'brush' ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                  >
+                    Brush
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCutoutPaintMode('wand')}
+                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${cutoutPaintMode === 'wand' ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                  >
+                    Magic wand
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -1063,23 +1468,96 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                     Erase
                   </button>
                 </div>
-                <BrushSizeControl
-                  label="Brush"
-                  radius={brushSize}
-                  surfaceWidth={viewSize.width}
-                  tone={brushRestore ? 'restore' : 'erase'}
-                  onChange={setBrushSize}
-                  onReset={() => setBrushSize(baselineBrush)}
-                />
+                {cutoutPaintMode === 'brush' ? (
+                  <BrushSizeControl
+                    label="Brush"
+                    radius={brushSize}
+                    surfaceWidth={viewSize.width}
+                    tone={brushRestore ? 'restore' : 'erase'}
+                    onChange={setBrushSize}
+                    onReset={() => setBrushSize(baselineBrush)}
+                  />
+                ) : (
+                  <>
+                    <Slider
+                      label="Wand tolerance"
+                      min={4}
+                      max={72}
+                      value={wandTolerance}
+                      onChange={setWandTolerance}
+                      onReset={() => setWandTolerance(28)}
+                    />
+                    <Slider
+                      label="Edge guard"
+                      min={0}
+                      max={100}
+                      value={wandEdgeGuard}
+                      onChange={setWandEdgeGuard}
+                      onReset={() => setWandEdgeGuard(62)}
+                    />
+                  </>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEdit((current) => ({ ...current, fillHoles: !current.fillHoles }))}
+                    className={`rounded-lg border px-2 py-1.5 text-[11px] ${edit.fillHoles ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                  >
+                    Fill holes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEdit((current) => ({ ...current, invertMask: !current.invertMask }))}
+                    className={`rounded-lg border px-2 py-1.5 text-[11px] ${edit.invertMask ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                  >
+                    Invert mask
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEdit((current) => ({
+                        ...current,
+                        maskExpand: Math.max(-6, (current.maskExpand ?? 0) - 1),
+                      }))
+                    }
+                    className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] hover:bg-white/10"
+                  >
+                    Contract −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEdit((current) => ({
+                        ...current,
+                        maskExpand: Math.min(6, (current.maskExpand ?? 0) + 1),
+                      }))
+                    }
+                    className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] hover:bg-white/10"
+                  >
+                    Expand +
+                  </button>
+                </div>
+                {(edit.maskExpand ?? 0) !== 0 ? (
+                  <p className="text-[10px] text-white/45">
+                    Mask {edit.maskExpand > 0 ? 'expanded' : 'contracted'} {Math.abs(edit.maskExpand)} px
+                    <button
+                      type="button"
+                      onClick={() => setEdit((current) => ({ ...current, maskExpand: 0 }))}
+                      className="ml-2 underline hover:text-white"
+                    >
+                      Reset
+                    </button>
+                  </p>
+                ) : null}
                 <button
                   type="button"
-                  onClick={() => setEdit((current) => ({ ...current, strokes: [] }))}
+                  onClick={() => setEdit((current) => ({ ...current, strokes: [], wandFills: [] }))}
                   className="text-xs text-white/55 hover:text-white"
                 >
-                  Clear brush
+                  Clear brush &amp; wand
                 </button>
                 <p className="text-[11px] text-white/45">
-                  Shave peels leftover pixels off the cut. Crisp snaps a soft edge and pulls background colour out of the rim. Paint to bring an edge back.
+                  Lower tolerance selects less; higher edge guard stops bleed into nearby colours. Edge clean, shave, and crisp remove leftover fringe after the automatic cut.
                 </p>
               </div>
             ) : null}
@@ -1175,27 +1653,40 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
 
             {error ? <p className="text-xs text-amber-300">{error}</p> : null}
           </div>
+          <div className="flex shrink-0 gap-2 border-t border-white/10 px-4 py-2">
+            <button
+              type="button"
+              disabled={!canUndo || baking || Boolean(applying)}
+              onClick={undoEditor}
+              title="Undo (⌘Z)"
+              className="flex-1 rounded-lg border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:border-white/5 disabled:text-white/30"
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              disabled={!canRedo || baking || Boolean(applying)}
+              onClick={redoEditor}
+              title="Redo (⌘⇧Z)"
+              className="flex-1 rounded-lg border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:border-white/5 disabled:text-white/30"
+            >
+              Redo
+            </button>
+          </div>
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/10 px-4 py-3">
             <button
               type="button"
               onClick={() => {
                 cutoutBeforeClean.current = null
-                setEdit({
-                  ...baseline,
-                  tone: { ...baseline.tone },
-                  curves: {
-                    rgb: baseline.curves.rgb.map((point) => ({ ...point })),
-                    r: baseline.curves.r.map((point) => ({ ...point })),
-                    g: baseline.curves.g.map((point) => ({ ...point })),
-                    b: baseline.curves.b.map((point) => ({ ...point })),
-                  },
-                  crop: { ...baseline.crop },
-                  padColor: [...baseline.padColor],
-                  borderColor: [...baseline.borderColor],
-                  strokes: baseline.strokes.map((stroke) => ({ ...stroke })),
-                })
+                const nextEdit = cloneArtEdit(baseline)
+                applyingHistoryRef.current = true
+                setEdit(nextEdit)
                 setEffect(baselineEffect)
                 setBrushSize(baselineBrush)
+                setWandTolerance(28)
+                setWandEdgeGuard(62)
+                setCutoutPaintMode('brush')
+                resetEditorHistory({ edit: nextEdit, effect: baselineEffect })
               }}
               className="rounded-lg px-3 py-2 text-sm text-white/70 hover:text-white"
             >

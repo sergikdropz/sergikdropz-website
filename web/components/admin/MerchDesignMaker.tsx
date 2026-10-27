@@ -14,6 +14,7 @@ import {
 } from 'react'
 import type { BlankColor, BlankPlacement, GarmentFamily } from '@/lib/merch/blanks'
 import { sameMerchArt } from '@/lib/merch/art-url'
+import type { CatalogAddOnRow } from '@/lib/merch/catalog-add-ons'
 import type { CatalogProductDetail, CatalogTechnique } from '@/lib/merch/printful-catalog-types'
 import { scalePlacementAboutCenter, type ArtPlacement, type DesignStatus } from '@/lib/merch/design'
 import { dpiGradeRingClass, type DpiGrade } from '@/lib/merch/design'
@@ -225,6 +226,91 @@ const NAV: Array<{ id: DesignNavId; label: string }> = [
   { id: 'layers', label: 'Layers' },
   { id: 'help', label: 'Help' },
 ]
+
+const DESIGN_NAV_SCROLL =
+  'overflow-x-auto [scrollbar-width:thin] [scrollbar-color:transparent_transparent] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-transparent'
+
+function DesignMakerNavBar({ nav, onNav }: { nav: DesignNavId; onNav: (id: DesignNavId) => void }) {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [scrollEdges, setScrollEdges] = useState({ left: false, right: false })
+
+  const updateScrollEdges = useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const maxScroll = el.scrollWidth - el.clientWidth
+    setScrollEdges({
+      left: el.scrollLeft > 2,
+      right: maxScroll > 2 && el.scrollLeft < maxScroll - 2,
+    })
+  }, [])
+
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    updateScrollEdges()
+    el.addEventListener('scroll', updateScrollEdges, { passive: true })
+    const observer = new ResizeObserver(updateScrollEdges)
+    observer.observe(el)
+    return () => {
+      el.removeEventListener('scroll', updateScrollEdges)
+      observer.disconnect()
+    }
+  }, [updateScrollEdges])
+
+  const scrollNav = (direction: -1 | 1) => {
+    const el = scrollerRef.current
+    if (!el) return
+    el.scrollBy({ left: direction * Math.max(120, el.clientWidth * 0.55), behavior: 'smooth' })
+  }
+
+  return (
+    <nav aria-label="Design Maker sidebar" className="relative flex h-[45px] shrink-0 items-center border-b border-white/10 bg-black/30">
+      {scrollEdges.left ? (
+        <button
+          type="button"
+          aria-label="Show earlier tools"
+          onClick={() => scrollNav(-1)}
+          className="absolute left-0 top-0 z-10 flex h-full w-8 items-center justify-center bg-gradient-to-r from-[#141414] via-[#141414]/90 to-transparent text-lg leading-none text-white/80 hover:text-white"
+        >
+          ‹
+        </button>
+      ) : null}
+      {scrollEdges.right ? (
+        <button
+          type="button"
+          aria-label="Show more tools"
+          onClick={() => scrollNav(1)}
+          className="absolute right-0 top-0 z-10 flex h-full w-8 items-center justify-center bg-gradient-to-l from-[#141414] via-[#141414]/90 to-transparent text-lg leading-none text-white/80 hover:text-white"
+        >
+          ›
+        </button>
+      ) : null}
+      <div
+        ref={scrollerRef}
+        className={`flex gap-1 px-2 ${DESIGN_NAV_SCROLL} ${scrollEdges.left ? 'pl-7' : ''} ${scrollEdges.right ? 'pr-7' : ''}`}
+      >
+        {NAV.map((item) => {
+          const active = nav === item.id
+          return (
+            <button
+              key={item.id}
+              type="button"
+              title={item.label}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => onNav(item.id)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left ${
+                active ? 'bg-white text-black' : 'text-white/70 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <NavIcon id={item.id} />
+              <span className="whitespace-nowrap text-[11px] font-medium leading-none">{item.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
 
 export function StageModeSwitch({
   view,
@@ -768,6 +854,7 @@ export function MerchDesignSidebar({
   onFocusLayer,
   saved,
   onOpenSaved,
+  addOnRows,
   wholesale,
   costLive,
   price,
@@ -784,6 +871,7 @@ export function MerchDesignSidebar({
   guidelinesOpen,
   onToggleGuidelines,
 }: {
+  addOnRows: CatalogAddOnRow[]
   nav: DesignNavId
   onNav: (id: DesignNavId) => void
   detail: CatalogProductDetail
@@ -842,7 +930,7 @@ export function MerchDesignSidebar({
   const { dragOver, dropHint, dropZoneProps } = useMerchArtDropUpload(onUploadFile)
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <input
         ref={uploadInputRef as Ref<HTMLInputElement>}
         type="file"
@@ -854,6 +942,7 @@ export function MerchDesignSidebar({
           event.target.value = ''
         }}
       />
+      <DesignMakerNavBar nav={nav} onNav={onNav} />
       <div
         className={`flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 transition-colors ${
           dragOver ? 'bg-white/[0.06] ring-2 ring-inset ring-white/35' : ''
@@ -973,6 +1062,7 @@ export function MerchDesignSidebar({
               ) : null}
             </SizesBlock>
             <PublishBlock
+              addOnRows={addOnRows}
               wholesale={wholesale}
               costLive={costLive}
               price={price}
@@ -1079,29 +1169,6 @@ export function MerchDesignSidebar({
           />
         )}
       </div>
-      <aside
-        aria-label="Design Maker sidebar"
-        className="flex w-[84px] shrink-0 flex-col gap-0.5 overflow-y-auto border-l border-white/10 bg-black/30 py-2"
-      >
-        {NAV.map((item) => {
-          const active = nav === item.id
-          return (
-            <button
-              key={item.id}
-              type="button"
-              title={item.label}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => onNav(item.id)}
-              className={`mx-1 flex shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-center ${
-                active ? 'bg-white text-black' : 'text-white/70 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <NavIcon id={item.id} />
-              <span className="line-clamp-2 text-[9px] font-medium leading-[1.05]">{item.label}</span>
-            </button>
-          )
-        })}
-      </aside>
     </div>
   )
 }
@@ -1207,6 +1274,7 @@ function SizesBlock({
 }
 
 function PublishBlock({
+  addOnRows,
   wholesale,
   costLive,
   price,
@@ -1221,6 +1289,7 @@ function PublishBlock({
   onSaveDraft,
   onVisibility,
 }: {
+  addOnRows: CatalogAddOnRow[]
   wholesale: number
   costLive: boolean
   price: number
@@ -1237,6 +1306,19 @@ function PublishBlock({
 }) {
   return (
     <div className="space-y-2 border-t border-white/10 pt-3">
+      {addOnRows.length > 0 ? (
+        <div className="space-y-1.5 pb-1">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Add-ons</p>
+          <ul className="space-y-1">
+            {addOnRows.map((row) => (
+              <li key={row.id} className="flex justify-between gap-3 text-xs text-white/55">
+                <span className="min-w-0 leading-snug">{row.label}</span>
+                <span className="shrink-0 tabular-nums text-white/75">+${row.price.toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="flex justify-between text-xs text-white/50">
         <span>{costLive ? 'Printful cost' : 'Blank estimate'}</span>
         <span>${wholesale.toFixed(2)}</span>

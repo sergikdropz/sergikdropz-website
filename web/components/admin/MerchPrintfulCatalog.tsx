@@ -1,12 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import MerchDesignPreviewThumb from '@/components/admin/MerchDesignPreviewThumb'
 import type { DesignStatus, MerchDesign } from '@/lib/merch/design'
 import type { PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import type { CatalogNavItem, PrintfulCategoryNode } from '@/lib/merch/printful-categories'
 
 const FAVORITES_KEY = 'sergwear-catalog-favorites'
+export const CATALOG_PANEL_COLLAPSED_KEY = 'sergwear-catalog-nav-collapsed'
+/** Grid column width when the full catalog panel is collapsed (header + expand control only). */
+export const CATALOG_PANEL_COLLAPSED_WIDTH = 44
+
+export function readCatalogPanelCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(CATALOG_PANEL_COLLAPSED_KEY) === '1'
+}
 
 const PROMO_WIDGETS = [
   {
@@ -45,6 +53,7 @@ type Props = {
   designs?: MerchDesign[]
   onSelect: (product: PrintfulCatalogProduct) => void
   onOpenDesign?: (design: MerchDesign) => void
+  onCatalogPanelCollapsedChange?: (collapsed: boolean) => void
 }
 
 function readFavorites(): number[] {
@@ -131,6 +140,7 @@ export default function MerchPrintfulCatalog({
   designs = [],
   onSelect,
   onOpenDesign,
+  onCatalogPanelCollapsedChange,
 }: Props) {
   const [q, setQ] = useState('')
   const [syncedAt, setSyncedAt] = useState<string | null>(null)
@@ -147,8 +157,21 @@ export default function MerchPrintfulCatalog({
   const [favorites, setFavorites] = useState<number[]>([])
   const [productsOpen, setProductsOpen] = useState(true)
   const [productFolder, setProductFolder] = useState<ProductFolder | null>('all')
+  const [catalogPanelCollapsed, setCatalogPanelCollapsed] = useState(false)
+
+  const setPanelCollapsed = useCallback(
+    (next: boolean) => {
+      setCatalogPanelCollapsed(next)
+      window.localStorage.setItem(CATALOG_PANEL_COLLAPSED_KEY, next ? '1' : '0')
+      onCatalogPanelCollapsedChange?.(next)
+    },
+    [onCatalogPanelCollapsedChange]
+  )
 
   useEffect(() => {
+    const collapsed = readCatalogPanelCollapsed()
+    setCatalogPanelCollapsed(collapsed)
+    onCatalogPanelCollapsedChange?.(collapsed)
     setFavorites(readFavorites())
     fetch('/api/admin/merch/catalog/categories')
       .then((res) => (res.ok ? res.json() : null))
@@ -281,15 +304,73 @@ export default function MerchPrintfulCatalog({
 
   const studioBg = { background: 'radial-gradient(ellipse at 50% 38%, #2c2c2c 0%, #141414 68%)' }
 
+  const expandPanel = () => setPanelCollapsed(false)
+
   return (
     <div
-      className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 text-white"
+      className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 text-white ${
+        catalogPanelCollapsed ? 'cursor-pointer hover:bg-white/[0.03]' : ''
+      }`}
       style={studioBg}
+      {...(catalogPanelCollapsed
+        ? {
+            role: 'button' as const,
+            tabIndex: 0,
+            'aria-label': 'Expand catalog panel',
+            title: 'Click to expand catalog',
+            onClick: expandPanel,
+            onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                expandPanel()
+              }
+            },
+          }
+        : {})}
     >
-      <nav
-        className="hidden w-[158px] shrink-0 overflow-y-auto border-r border-white/10 bg-black/20 py-2 pl-1.5 pr-1 sm:block"
-        aria-label="Printful catalog categories"
-      >
+      <div className="relative flex h-[45px] shrink-0 items-center justify-center border-b border-white/10 bg-black/30">
+        {catalogPanelCollapsed ? (
+          <span
+            aria-hidden
+            className="flex h-7 w-7 items-center justify-center text-sm text-white/55"
+          >
+            ▸
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label="Collapse catalog panel"
+            aria-expanded
+            onClick={() => setPanelCollapsed(true)}
+            className="absolute left-1.5 top-1/2 flex h-7 w-7 shrink-0 -translate-y-1/2 items-center justify-center rounded-md text-sm text-white/55 hover:bg-white/10 hover:text-white"
+          >
+            ◂
+          </button>
+        )}
+        {!catalogPanelCollapsed ? (
+          <span className="pointer-events-none min-w-0 truncate px-10 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-white/45">
+            Catalog
+          </span>
+        ) : null}
+      </div>
+
+      {catalogPanelCollapsed ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden py-6">
+          <span
+            aria-hidden
+            className="select-none text-[10px] font-medium uppercase tracking-[0.18em] text-white/45 [writing-mode:vertical-rl] rotate-180"
+          >
+            Product Catalog
+          </span>
+        </div>
+      ) : null}
+
+      {!catalogPanelCollapsed ? (
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <nav
+            className="hidden w-[158px] shrink-0 overflow-y-auto border-r border-white/10 bg-black/20 py-2 pl-1.5 pr-1 sm:block"
+            aria-label="Printful catalog categories"
+          >
         <ul className="space-y-0.5 pb-2 border-b border-white/10 mb-2">
           <li>
             <div className="flex items-start gap-0.5">
@@ -551,6 +632,8 @@ export default function MerchPrintfulCatalog({
           )}
         </div>
       </div>
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -84,39 +84,43 @@ export function AppShell({
                 MERCH DESIGNER STUDIO
               </h1>
             ) : null}
-            <div className="flex min-w-0 flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href="/"
-                  className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted transition-colors hover:border-ink-muted hover:text-ink"
-                >
-                  Home
-                </Link>
-                <Badge tone={surface === 'studio' ? 'brand' : 'neutral'}>
-                  {surface === 'studio' ? 'Release Studio' : 'Admin'}
-                </Badge>
+            {surface !== 'admin' ? (
+              <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/"
+                    className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted transition-colors hover:border-ink-muted hover:text-ink"
+                  >
+                    Home
+                  </Link>
+                  <Badge tone={surface === 'studio' ? 'brand' : 'neutral'}>
+                    {surface === 'studio' ? 'Release Studio' : 'Admin'}
+                  </Badge>
+                </div>
+                {showBreadcrumbs && !showAdminDashboardTitle && !showMusicVaultTitle && crumbs.length > 0 ? (
+                  <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-ink-subtle">
+                    {crumbs.map((crumb, index) => (
+                      <span key={crumb.href} className="inline-flex items-center gap-1">
+                        {index > 0 ? <span aria-hidden>/</span> : null}
+                        {index === crumbs.length - 1 ? (
+                          <span className="text-ink-muted">{crumb.label}</span>
+                        ) : (
+                          <Link href={crumb.href} className="hover:text-ink">
+                            {crumb.label}
+                          </Link>
+                        )}
+                      </span>
+                    ))}
+                  </nav>
+                ) : null}
+                {title ? <h1 className="text-xl font-bold tracking-tight text-ink">{title}</h1> : null}
+                {subtitle ? <p className="text-sm text-ink-subtle">{subtitle}</p> : null}
               </div>
-              {showBreadcrumbs && !showAdminDashboardTitle && !showMusicVaultTitle && crumbs.length > 0 ? (
-                <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-ink-subtle">
-                  {crumbs.map((crumb, index) => (
-                    <span key={crumb.href} className="inline-flex items-center gap-1">
-                      {index > 0 ? <span aria-hidden>/</span> : null}
-                      {index === crumbs.length - 1 ? (
-                        <span className="text-ink-muted">{crumb.label}</span>
-                      ) : (
-                        <Link href={crumb.href} className="hover:text-ink">
-                          {crumb.label}
-                        </Link>
-                      )}
-                    </span>
-                  ))}
-                </nav>
-              ) : null}
-              {title ? <h1 className="text-xl font-bold tracking-tight text-ink">{title}</h1> : null}
-              {subtitle ? <p className="text-sm text-ink-subtle">{subtitle}</p> : null}
-            </div>
+            ) : (
+              <div className="min-w-0 flex-1" aria-hidden />
+            )}
             <div className="flex shrink-0 flex-col items-end gap-1">
-              <Badge tone="info">{envLabel}</Badge>
+              {surface !== 'admin' ? <Badge tone="info">{envLabel}</Badge> : null}
               {headerAction}
             </div>
           </div>

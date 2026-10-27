@@ -44,8 +44,8 @@ export function useBrushCursor(diameter: number) {
   return {
     ref,
     place: (event: ReactPointerEvent<HTMLElement>) => placeBrushCursor(ref.current, event, diameter),
-    hide: (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.buttons === 1) return
+    hide: (event?: ReactPointerEvent<HTMLElement>) => {
+      if (event && event.buttons === 1) return
       hideBrushCursor(ref.current)
     },
   }
