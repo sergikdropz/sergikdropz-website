@@ -81,22 +81,46 @@ CREATE POLICY "Public can view active gallery images"
   FOR SELECT
   USING (is_active = true);
 
--- Policy: Only authenticated admins can insert
--- Note: This assumes you have an admin_users table or similar
--- Adjust the policy based on your auth setup
+-- Writes are for signed-in admins. The service role bypasses RLS for API routes.
 CREATE POLICY "Admins can insert gallery images"
   ON gallery_images
   FOR INSERT
-  WITH CHECK (true); -- Adjust based on your auth setup
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM admins
+      WHERE admins.user_id = auth.uid()
+        AND admins.active = true
+    )
+  );
 
--- Policy: Only authenticated admins can update
 CREATE POLICY "Admins can update gallery images"
   ON gallery_images
   FOR UPDATE
-  USING (true); -- Adjust based on your auth setup
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admins
+      WHERE admins.user_id = auth.uid()
+        AND admins.active = true
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM admins
+      WHERE admins.user_id = auth.uid()
+        AND admins.active = true
+    )
+  );
 
--- Policy: Only authenticated admins can delete
 CREATE POLICY "Admins can delete gallery images"
   ON gallery_images
   FOR DELETE
-  USING (true); -- Adjust based on your auth setup
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admins
+      WHERE admins.user_id = auth.uid()
+        AND admins.active = true
+    )
+  );

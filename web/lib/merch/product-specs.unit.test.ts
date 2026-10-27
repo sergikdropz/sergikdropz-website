@@ -6,6 +6,7 @@ import {
   guidelinesForTypes,
   splitDescription,
   templateForPlacement,
+  variantTemplateAssets,
 } from '@/lib/merch/product-specs'
 
 const files: CatalogPrintFile[] = [
@@ -119,6 +120,25 @@ describe('product specs', () => {
     })
     const body = grouped.find((row) => row.types.includes('front'))
     expect(body?.maxPrintArea).toBe('12″ × 16″')
+  })
+
+  it('keeps a template photo and garment color for each variant of a placement', () => {
+    const assets = variantTemplateAssets(
+      [
+        { templateId: 1, printfileId: 1, placement: 'front', imageUrl: 'https://files.example/base.png', backgroundColor: '#2a2a2a', printAreaWidth: null, printAreaHeight: null, printAreaTop: null, printAreaLeft: null, templateWidth: null, templateHeight: null },
+        { templateId: 2, printfileId: 1, placement: 'front', imageUrl: 'https://files.example/base.png', backgroundColor: '#dd0b2e', printAreaWidth: null, printAreaHeight: null, printAreaTop: null, printAreaLeft: null, templateWidth: null, templateHeight: null },
+      ],
+      [
+        { variantId: 10, placement: 'front', templateId: 1 },
+        { variantId: 11, placement: 'front', templateId: 2 },
+        { variantId: 10, placement: 'back', templateId: 2 },
+      ],
+      'front',
+    )
+    expect(assets).toEqual({
+      '10': { imageUrl: 'https://files.example/base.png', backgroundColor: '#2a2a2a' },
+      '11': { imageUrl: 'https://files.example/base.png', backgroundColor: '#dd0b2e' },
+    })
   })
 
   it('uses the placement template from variant mapping when printfiles are shared', () => {

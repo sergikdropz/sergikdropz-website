@@ -1,10 +1,23 @@
 'use client'
 
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent, type Ref, type RefObject, type WheelEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  type WheelEvent,
+} from 'react'
 import type { BlankColor, BlankPlacement, GarmentFamily } from '@/lib/merch/blanks'
+import { sameMerchArt } from '@/lib/merch/art-url'
 import type { CatalogProductDetail, CatalogTechnique } from '@/lib/merch/printful-catalog-types'
-import type { ArtPlacement, DesignStatus } from '@/lib/merch/design'
+import { scalePlacementAboutCenter, type ArtPlacement, type DesignStatus } from '@/lib/merch/design'
 import { dpiGradeRingClass, type DpiGrade } from '@/lib/merch/design'
+import { MERCH_ART_ACCEPT, useMerchArtDropUpload } from '@/lib/merch/art-upload-drop'
 
 export function PrintAreaSnapGuides({ vertical, horizontal }: { vertical: number[]; horizontal: number[] }) {
   if (vertical.length === 0 && horizontal.length === 0) return null
@@ -67,40 +80,132 @@ export type DesignNavId =
 
 export type DesignTab = { id: string; label: string }
 
+export type DesignStageToolbarProps = {
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
+  busy: string | null
+  onSaveDesign: () => void
+  onSaveHidden: () => void
+}
+
+function StageIconButton({
+  label,
+  title,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  title: string
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/30 text-sm text-white/80 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+    >
+      {children}
+    </button>
+  )
+}
+
+export function DesignSaveRow({ toolbar }: { toolbar: DesignStageToolbarProps }) {
+  const saving = Boolean(toolbar.busy)
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={toolbar.onSaveHidden}
+        disabled={saving}
+        className="rounded-lg border border-white/15 bg-white/5 py-2 text-xs text-white/85 hover:bg-white/10 disabled:text-white/35"
+      >
+        {saving && toolbar.busy === 'Saving hidden' ? 'Saving…' : 'Save hidden'}
+      </button>
+      <button
+        type="button"
+        onClick={toolbar.onSaveDesign}
+        disabled={saving}
+        className="rounded-lg border border-white/15 bg-white/5 py-2 text-xs text-white/85 hover:bg-white/10 disabled:text-white/35"
+      >
+        {saving && toolbar.busy === 'Saving' ? 'Saving…' : 'Save design'}
+      </button>
+    </div>
+  )
+}
+
 export function PlacementViewTabs({
   tabs,
   activeTabId,
   onTab,
+  toolbar,
+  underTabs,
 }: {
   tabs: DesignTab[]
   activeTabId: string
   onTab: (id: string) => void
+  toolbar?: DesignStageToolbarProps
+  underTabs?: ReactNode
 }) {
   if (tabs.length === 0) return null
+  const saving = Boolean(toolbar?.busy)
   return (
     <nav aria-label="Placements" className="relative z-20 shrink-0 px-4 pb-3 pt-4">
-      {/* `w-max mx-auto` centers when the bar fits and keeps the first tab reachable when it scrolls. */}
-      <div className="overflow-x-auto">
-        <div className="mx-auto flex w-max gap-1">
-        {tabs.map((tab) => {
-          const active = tab.id === activeTabId
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onTab(tab.id)}
-              className={`relative shrink-0 px-4 py-2 text-sm ${
-                active
-                  ? 'bg-white/10 text-white after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-x-[7px] after:border-t-[7px] after:border-x-transparent after:border-t-white/10'
-                  : 'text-white/55 hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
+      <div className="flex items-center gap-2">
+        {toolbar ? (
+          <StageIconButton
+            label="Undo"
+            title="Undo (⌘Z)"
+            disabled={!toolbar.canUndo || saving}
+            onClick={toolbar.onUndo}
+          >
+            ↶
+          </StageIconButton>
+        ) : (
+          <span className="w-9 shrink-0" aria-hidden />
+        )}
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <div className="mx-auto flex w-max gap-1">
+            {tabs.map((tab) => {
+              const active = tab.id === activeTabId
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => onTab(tab.id)}
+                  className={`relative shrink-0 px-4 py-2 text-sm ${
+                    active
+                      ? 'bg-white/10 text-white after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-x-[7px] after:border-t-[7px] after:border-x-transparent after:border-t-white/10'
+                      : 'text-white/55 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
+        {toolbar ? (
+          <StageIconButton
+            label="Redo"
+            title="Redo (⇧⌘Z)"
+            disabled={!toolbar.canRedo || saving}
+            onClick={toolbar.onRedo}
+          >
+            ↷
+          </StageIconButton>
+        ) : (
+          <span className="w-9 shrink-0" aria-hidden />
+        )}
       </div>
+      {underTabs ? <div className="mt-2">{underTabs}</div> : null}
     </nav>
   )
 }
@@ -130,11 +235,11 @@ export function StageModeSwitch({
 }) {
   return (
     <div className="flex justify-center gap-2">
-      <ModeButton active={view === 'preview'} onClick={() => onChange('preview')}>
-        Preview
-      </ModeButton>
       <ModeButton active={view === 'design'} onClick={() => onChange('design')}>
         Design
+      </ModeButton>
+      <ModeButton active={view === 'preview'} onClick={() => onChange('preview')}>
+        Preview
       </ModeButton>
     </div>
   )
@@ -179,6 +284,224 @@ function artHeightFraction(layer: ArtPlacement | undefined, area: BlankPlacement
   return (layer.scale * area.printWidth * (layer.assetHeight / layer.assetWidth)) / area.printHeight
 }
 
+function normalizeRotation(degrees: number): number {
+  let rotation = degrees
+  while (rotation > 180) rotation -= 360
+  while (rotation < -180) rotation += 360
+  return rotation
+}
+
+function pointerAngleDeg(clientX: number, clientY: number, originX: number, originY: number): number {
+  return (Math.atan2(clientY - originY, clientX - originX) * 180) / Math.PI
+}
+
+function primaryPointerHeld(event: { buttons: number }): boolean {
+  return (event.buttons & 1) === 1
+}
+
+const ART_HANDLE_BASE =
+  'absolute z-10 flex h-5 w-5 touch-none select-none items-center justify-center rounded-full border border-white/85 bg-black/75 text-[10px] font-bold text-white shadow-[0_0_0_1px_rgba(0,0,0,0.45)] hover:bg-black/90'
+
+export function PlacedArtLayer({
+  layer,
+  heightFraction,
+  activeDpiGrade,
+  onMovePointerDown,
+  onMovePointerMove,
+  onMovePointerUp,
+  onWheel,
+  onContextMenu,
+  onAdjust,
+  onAdjustStart,
+  onAdjustEnd,
+}: {
+  layer: ArtPlacement
+  heightFraction: number
+  activeDpiGrade: DpiGrade | null
+  onMovePointerDown: (event: PointerEvent<HTMLImageElement>) => void
+  onMovePointerMove: (event: PointerEvent<HTMLImageElement>) => void
+  onMovePointerUp: (event: PointerEvent<HTMLImageElement>) => void
+  onWheel: (event: WheelEvent<HTMLImageElement>) => void
+  onContextMenu: (event: MouseEvent) => void
+  onAdjust: (patch: Partial<ArtPlacement>) => void
+  onAdjustStart: () => void
+  onAdjustEnd: () => void
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const transformModeRef = useRef<'rotate' | 'scale' | null>(null)
+  const rotateSnapRef = useRef<{ startRotation: number; startPointerAngle: number } | null>(null)
+  const scaleSnapRef = useRef<{
+    start: { x: number; y: number; scale: number }
+    startHeight: number
+    startDistance: number
+    anchorX: number
+    anchorY: number
+  } | null>(null)
+  const transformSessionRef = useRef(false)
+  const onAdjustRef = useRef(onAdjust)
+  onAdjustRef.current = onAdjust
+  const onAdjustEndRef = useRef(onAdjustEnd)
+  onAdjustEndRef.current = onAdjustEnd
+  const [activeHandle, setActiveHandle] = useState<'rotate' | 'scale' | null>(null)
+
+  const endTransform = useCallback(() => {
+    const hadSession = transformSessionRef.current
+    transformModeRef.current = null
+    rotateSnapRef.current = null
+    scaleSnapRef.current = null
+    transformSessionRef.current = false
+    setActiveHandle(null)
+    if (hadSession) onAdjustEndRef.current()
+  }, [])
+
+  useEffect(() => {
+    if (activeHandle === null) return
+
+    const onWindowMove = (event: globalThis.PointerEvent) => {
+      if (!primaryPointerHeld(event)) {
+        endTransform()
+        return
+      }
+      const mode = transformModeRef.current
+      if (mode === 'rotate' && rotateSnapRef.current) {
+        const box = boxRef.current?.getBoundingClientRect()
+        if (!box) return
+        const cx = box.left + box.width / 2
+        const cy = box.top + box.height / 2
+        const angle = pointerAngleDeg(event.clientX, event.clientY, cx, cy)
+        const delta = angle - rotateSnapRef.current.startPointerAngle
+        onAdjustRef.current({
+          rotation: normalizeRotation(rotateSnapRef.current.startRotation + delta),
+        })
+        return
+      }
+      if (mode === 'scale' && scaleSnapRef.current) {
+        const snap = scaleSnapRef.current
+        const distance = Math.hypot(event.clientX - snap.anchorX, event.clientY - snap.anchorY)
+        const ratio = distance / snap.startDistance
+        onAdjustRef.current(scalePlacementAboutCenter(snap.start, snap.startHeight, snap.start.scale * ratio))
+      }
+    }
+
+    const onWindowEnd = () => endTransform()
+
+    window.addEventListener('pointermove', onWindowMove)
+    window.addEventListener('pointerup', onWindowEnd)
+    window.addEventListener('pointercancel', onWindowEnd)
+    return () => {
+      window.removeEventListener('pointermove', onWindowMove)
+      window.removeEventListener('pointerup', onWindowEnd)
+      window.removeEventListener('pointercancel', onWindowEnd)
+    }
+  }, [activeHandle, endTransform])
+
+  const onRotatePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    event.preventDefault()
+    if (event.button !== 0) return
+    const box = boxRef.current?.getBoundingClientRect()
+    if (!box) return
+    onAdjustStart()
+    transformSessionRef.current = true
+    const cx = box.left + box.width / 2
+    const cy = box.top + box.height / 2
+    rotateSnapRef.current = {
+      startRotation: layer.rotation,
+      startPointerAngle: pointerAngleDeg(event.clientX, event.clientY, cx, cy),
+    }
+    transformModeRef.current = 'rotate'
+    setActiveHandle('rotate')
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // Window listeners still end the gesture if capture fails.
+    }
+  }
+
+  const onScalePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    event.preventDefault()
+    if (event.button !== 0) return
+    const box = boxRef.current?.getBoundingClientRect()
+    if (!box) return
+    const anchorX = box.left + box.width / 2
+    const anchorY = box.top + box.height / 2
+    const startDistance = Math.hypot(event.clientX - anchorX, event.clientY - anchorY)
+    if (startDistance < 4) return
+    onAdjustStart()
+    transformSessionRef.current = true
+    scaleSnapRef.current = {
+      start: { x: layer.x, y: layer.y, scale: layer.scale },
+      startHeight: heightFraction,
+      startDistance,
+      anchorX,
+      anchorY,
+    }
+    transformModeRef.current = 'scale'
+    setActiveHandle('scale')
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // Window listeners still end the gesture if capture fails.
+    }
+  }
+
+  return (
+    <div
+      ref={boxRef}
+      className="absolute touch-none select-none"
+      style={{
+        left: `${layer.x * 100}%`,
+        top: `${layer.y * 100}%`,
+        width: `${layer.scale * 100}%`,
+        height: `${heightFraction * 100}%`,
+        transform: `rotate(${layer.rotation}deg)`,
+        transformOrigin: 'center',
+      }}
+    >
+      <img
+        src={layer.assetUrl}
+        alt=""
+        draggable={false}
+        title="Drag to move. Right-click for options."
+        onPointerDown={onMovePointerDown}
+        onPointerMove={onMovePointerMove}
+        onPointerUp={onMovePointerUp}
+        onPointerCancel={onMovePointerUp}
+        onWheel={onWheel}
+        onContextMenu={onContextMenu}
+        className={`absolute inset-0 h-full w-full cursor-grab active:cursor-grabbing ${
+          activeDpiGrade ? dpiGradeRingClass(activeDpiGrade) : ''
+        }`}
+      />
+      <button
+        type="button"
+        aria-label="Drag to rotate"
+        title="Click and drag to rotate"
+        onPointerDown={onRotatePointerDown}
+        onLostPointerCapture={endTransform}
+        className={`${ART_HANDLE_BASE} -right-2.5 -top-2.5 cursor-grab ${
+          activeHandle === 'rotate' ? 'bg-white/25 ring-1 ring-white/50' : ''
+        }`}
+      >
+        ↻
+      </button>
+      <button
+        type="button"
+        aria-label="Drag to resize"
+        title="Click and drag to resize"
+        onPointerDown={onScalePointerDown}
+        onLostPointerCapture={endTransform}
+        className={`${ART_HANDLE_BASE} -bottom-2.5 -right-2.5 cursor-nwse-resize ${
+          activeHandle === 'scale' ? 'bg-white/25 ring-1 ring-white/50' : ''
+        }`}
+      >
+        ⤡
+      </button>
+    </div>
+  )
+}
+
 export function MerchDesignCanvas({
   tabs,
   activeTabId,
@@ -186,6 +509,7 @@ export function MerchDesignCanvas({
   colorName,
   colorHex,
   garmentUrl,
+  garmentBackground = null,
   useTemplateMockup = false,
   garmentAspect = null,
   family,
@@ -201,18 +525,27 @@ export function MerchDesignCanvas({
   onArtPointerUp,
   onArtWheel,
   onArtContextMenu,
+  onArtAdjust,
+  onArtAdjustStart,
+  onArtAdjustEnd,
   showPrintGuide,
   printInsetX,
   printInsetY,
   activeDpiGrade,
   snapGuides,
+  stageToolbar,
+  underTabs,
 }: {
   tabs: DesignTab[]
   activeTabId: string
   onTab: (id: string) => void
+  stageToolbar?: DesignStageToolbarProps
+  underTabs?: ReactNode
   colorName: string
   colorHex: string
   garmentUrl: string | null
+  /** Printful `background_color` for a transparent ghost template. */
+  garmentBackground?: string | null
   /** Printful positioning template — skip 3D back flip; placement is per template. */
   useTemplateMockup?: boolean
   /** Width / height of the garment image, known before it loads (template_width / template_height). */
@@ -230,6 +563,9 @@ export function MerchDesignCanvas({
   onArtPointerUp: (event: PointerEvent<HTMLImageElement>) => void
   onArtWheel: (event: WheelEvent<HTMLImageElement>) => void
   onArtContextMenu: (event: MouseEvent) => void
+  onArtAdjust: (patch: Partial<ArtPlacement>) => void
+  onArtAdjustStart: () => void
+  onArtAdjustEnd: () => void
   showPrintGuide: boolean
   printInsetX: number
   printInsetY: number
@@ -265,8 +601,14 @@ export function MerchDesignCanvas({
   }, [frameAspect])
 
   return (
-    <div className="relative flex min-h-[680px] flex-1 flex-col">
-      <PlacementViewTabs tabs={tabs} activeTabId={activeTabId} onTab={onTab} />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <PlacementViewTabs
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTab={onTab}
+        toolbar={stageToolbar}
+        underTabs={underTabs}
+      />
       <div
         ref={viewportRef}
         className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-4"
@@ -288,11 +630,12 @@ export function MerchDesignCanvas({
         >
           <div
             className="relative h-full w-full"
-            style={
-              showBackGarment
-                ? { transformStyle: 'preserve-3d', transform: 'rotateY(180deg)' }
-                : undefined
-            }
+            style={{
+              ...(showBackGarment
+                ? { transformStyle: 'preserve-3d' as const, transform: 'rotateY(180deg)' }
+                : {}),
+              backgroundColor: garmentBackground || undefined,
+            }}
           >
             {garmentUrl ? (
               <img
@@ -357,28 +700,18 @@ export function MerchDesignCanvas({
                 <PrintAreaSnapGuides vertical={snapGuides.vertical} horizontal={snapGuides.horizontal} />
               ) : null}
               {layer?.assetUrl ? (
-                <img
-                  src={layer.assetUrl}
-                  alt=""
-                  draggable={false}
-                  title="Drag to move. Right-click for options."
-                  onPointerDown={onArtPointerDown}
-                  onPointerMove={onArtPointerMove}
-                  onPointerUp={onArtPointerUp}
-                  onPointerCancel={onArtPointerUp}
+                <PlacedArtLayer
+                  layer={layer}
+                  heightFraction={height}
+                  activeDpiGrade={activeDpiGrade}
+                  onMovePointerDown={onArtPointerDown}
+                  onMovePointerMove={onArtPointerMove}
+                  onMovePointerUp={onArtPointerUp}
                   onWheel={onArtWheel}
                   onContextMenu={onArtContextMenu}
-                  className={`absolute cursor-grab touch-none select-none active:cursor-grabbing ${
-                    activeDpiGrade ? dpiGradeRingClass(activeDpiGrade) : ''
-                  }`}
-                  style={{
-                    left: `${layer.x * 100}%`,
-                    top: `${layer.y * 100}%`,
-                    width: `${layer.scale * 100}%`,
-                    height: `${height * 100}%`,
-                    transform: `rotate(${layer.rotation}deg)`,
-                    transformOrigin: 'center',
-                  }}
+                  onAdjust={onArtAdjust}
+                  onAdjustStart={onArtAdjustStart}
+                  onAdjustEnd={onArtAdjustEnd}
                 />
               ) : (
                 <button
@@ -410,6 +743,11 @@ export function MerchDesignSidebar({
   techniques,
   onTechnique,
   printFiles,
+  activePrintFileType,
+  embroideryUnlimitedColor,
+  onEmbroideryUnlimitedColor,
+  productName,
+  onProductName,
   previewColorName,
   swatchColors,
   onPreviewColor,
@@ -453,6 +791,11 @@ export function MerchDesignSidebar({
   techniques: CatalogTechnique[]
   onTechnique: (key: string) => void
   printFiles: CatalogProductDetail['printFiles']
+  activePrintFileType?: string
+  embroideryUnlimitedColor: boolean
+  onEmbroideryUnlimitedColor: (value: boolean) => void
+  productName: string
+  onProductName: (value: string) => void
   previewColorName: string
   swatchColors: BlankColor[]
   onPreviewColor: (hex: string, name: string) => void
@@ -494,13 +837,16 @@ export function MerchDesignSidebar({
 }) {
   const { product } = detail
   const techniqueLabel = techniques.find((item) => item.key === technique)?.label || technique
+  const activeFile = printFiles.find((file) => file.type === activePrintFileType) || printFiles[0]
+  const embroideryOption = activeFile?.options.find((option) => option.id === 'full_color')
+  const { dragOver, dropHint, dropZoneProps } = useMerchArtDropUpload(onUploadFile)
 
   return (
     <div className="flex min-h-0 flex-1">
       <input
         ref={uploadInputRef as Ref<HTMLInputElement>}
         type="file"
-        accept="image/png,image/jpeg"
+        accept={MERCH_ART_ACCEPT}
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0]
@@ -508,22 +854,27 @@ export function MerchDesignSidebar({
           event.target.value = ''
         }}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div
+        className={`flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 transition-colors ${
+          dragOver ? 'bg-white/[0.06] ring-2 ring-inset ring-white/35' : ''
+        }`}
+        {...dropZoneProps}
+      >
+        {dropHint ? <p className="text-[11px] text-amber-300/90">{dropHint}</p> : null}
         {nav === 'product' && (
           <>
             <div>
               <p className="text-sm font-semibold leading-snug">{product.title}</p>
-              <button
-                type="button"
-                onClick={onToggleGuidelines}
-                className="mt-2 text-xs text-white/70 underline-offset-2 hover:text-white hover:underline"
-              >
-                Pricing & file guidelines
-              </button>
+              <label className="mt-3 block text-xs text-white/55">
+                Product name
+                <input
+                  value={productName}
+                  onChange={(event) => onProductName(event.target.value)}
+                  placeholder={product.title}
+                  className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/35"
+                />
+              </label>
             </div>
-            {guidelinesOpen && (
-              <MerchProductSpecs detail={detail} printFiles={printFiles} technique={technique} layout="rail" />
-            )}
             <div>
               <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Technique</p>
               <p className="text-sm">{techniqueLabel}</p>
@@ -544,6 +895,39 @@ export function MerchDesignSidebar({
                 </div>
               )}
             </div>
+            {embroideryOption ? (
+              <div className="rounded-xl border border-white/10 bg-black/25 p-3 space-y-2">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Embroidery color option</p>
+                <p className="text-[11px] text-white/55">Which embroidery color option to choose?</p>
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onEmbroideryUnlimitedColor(false)}
+                    className={`rounded-lg border px-2.5 py-2 text-left text-[11px] ${
+                      !embroideryUnlimitedColor
+                        ? 'border-white bg-white text-black'
+                        : 'border-white/15 text-white/75 hover:border-white/30'
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEmbroideryUnlimitedColor(true)}
+                    className={`rounded-lg border px-2.5 py-2 text-left text-[11px] ${
+                      embroideryUnlimitedColor
+                        ? 'border-white bg-white text-black'
+                        : 'border-white/15 text-white/75 hover:border-white/30'
+                    }`}
+                  >
+                    {embroideryOption.title}
+                    {embroideryOption.additionalPrice != null && embroideryOption.additionalPrice > 0
+                      ? ` (+$${embroideryOption.additionalPrice.toFixed(2)})`
+                      : ''}
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div>
               <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Color</p>
               <p className="mb-2 text-sm">{previewColorName}</p>
@@ -553,11 +937,16 @@ export function MerchDesignSidebar({
                     key={color.name}
                     type="button"
                     title={color.name}
+                    aria-pressed={previewColorName === color.name}
                     onClick={() => onPreviewColor(color.hex, color.name)}
                     className={`h-7 w-7 rounded-full border ${
                       previewColorName === color.name ? 'border-white ring-2 ring-white/50' : 'border-white/20'
                     }`}
-                    style={{ backgroundColor: color.hex }}
+                    style={{
+                      background: color.hex2
+                        ? `linear-gradient(135deg, ${color.hex} 50%, ${color.hex2} 50%)`
+                        : color.hex,
+                    }}
                   />
                 ))}
               </div>
@@ -569,7 +958,20 @@ export function MerchDesignSidebar({
               onSetSizes={onSetSizes}
               previewSize={previewSize}
               onPreviewSize={onPreviewSize}
-            />
+            >
+              <button
+                type="button"
+                onClick={onToggleGuidelines}
+                className="mt-3 text-xs text-white/70 underline-offset-2 hover:text-white hover:underline"
+              >
+                Pricing & file guidelines
+              </button>
+              {guidelinesOpen ? (
+                <div className="mt-3">
+                  <MerchProductSpecs detail={detail} printFiles={printFiles} technique={technique} layout="rail" />
+                </div>
+              ) : null}
+            </SizesBlock>
             <PublishBlock
               wholesale={wholesale}
               costLive={costLive}
@@ -593,9 +995,14 @@ export function MerchDesignSidebar({
             <button
               type="button"
               onClick={() => uploadInputRef.current?.click()}
-              className="block w-full rounded-xl border border-dashed border-white/25 bg-black/25 py-3.5 text-center text-sm font-medium hover:border-white/40"
+              className={`block w-full rounded-xl border border-dashed py-3.5 text-center text-sm font-medium transition-colors ${
+                dragOver
+                  ? 'border-white/55 bg-white/10 text-white'
+                  : 'border-white/25 bg-black/25 hover:border-white/40'
+              }`}
             >
-              Upload design
+              <span className="block">Upload design</span>
+              <span className="mt-1 block text-[11px] font-normal text-white/50">Click or drop PNG / JPEG anywhere in this panel</span>
             </button>
             {uploads.length > 0 ? (
               <div className="mt-3 grid grid-cols-3 gap-1.5">
@@ -607,7 +1014,7 @@ export function MerchDesignSidebar({
                     onContextMenu={(event) => onUploadContextMenu(event, item)}
                     title="Place on the active area"
                     className={`aspect-square overflow-hidden rounded bg-black/40 hover:ring-1 hover:ring-white/40 ${
-                      activeLayerUrl === item.url ? 'ring-1 ring-white' : ''
+                      activeLayerUrl && sameMerchArt(activeLayerUrl, item.url) ? 'ring-1 ring-white' : ''
                     }`}
                   >
                     <img src={item.url} alt="" className="h-full w-full object-cover" />
@@ -711,6 +1118,7 @@ function SizesBlock({
   onSetSizes,
   previewSize,
   onPreviewSize,
+  children,
 }: {
   options: string[]
   selling: string[]
@@ -718,6 +1126,7 @@ function SizesBlock({
   onSetSizes?: (sizes: string[]) => void
   previewSize: string
   onPreviewSize: (size: string) => void
+  children?: ReactNode
 }) {
   const ordered = sortSizes(options)
   const sellingSet = new Set(selling)
@@ -792,6 +1201,7 @@ function SizesBlock({
           </label>
         )}
       </div>
+      {children}
     </div>
   )
 }

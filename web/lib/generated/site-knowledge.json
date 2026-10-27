@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-25T16:35:39.793Z",
+    "generatedAt": "2026-10-27T09:58:30.148Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,10 +15,10 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 99,
-      "appRouterRouteHandlers": 345,
-      "componentsTsx": 222,
-      "libTs": 926
+      "appRouterPages": 100,
+      "appRouterRouteHandlers": 348,
+      "componentsTsx": 231,
+      "libTs": 951
     },
     "pagesByCategory": {
       "fan": 5,
@@ -26,11 +26,11 @@
       "public": 26,
       "debug": 1,
       "tooling": 1,
-      "shop": 9,
+      "shop": 10,
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "9234fbeeaf71e26a"
+    "contentHash": "e07cc3468eb776d1"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -55,12 +55,10 @@
   "e2e": {
     "playwrightConfig": "web/playwright.config.ts",
     "adminCrawlListFile": "web/e2e/admin-ui-paths.ts",
-    "adminCrawlPathCount": 43,
+    "adminCrawlPathCount": 44,
     "drift": {
       "crawlPathsMissingMatchingAdminPage": [],
-      "adminPagesNotInCrawlList": [
-        "/admin/email"
-      ]
+      "adminPagesNotInCrawlList": []
     },
     "suites": {
       "guest": "admin-guest, admin-api, admin-audit, admin-a11y, fan-public",
@@ -227,6 +225,11 @@
       {
         "urlPath": "/shop/merch",
         "file": "web/app/(marketing)/shop/merch/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/music",
+        "file": "web/app/(marketing)/shop/music/page.tsx",
         "category": "shop"
       },
       {
@@ -1482,6 +1485,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/merch/catalog/[id]/garment",
+        "file": "web/app/api/merch/catalog/[id]/garment/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/merch/products",
         "file": "web/app/api/merch/products/route.ts",
         "category": "api"
@@ -1779,6 +1787,16 @@
       {
         "urlPath": "/api/shop/bundles",
         "file": "web/app/api/shop/bundles/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shop/entitlements",
+        "file": "web/app/api/shop/entitlements/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/shop/member-download",
+        "file": "web/app/api/shop/member-download/route.ts",
         "category": "api"
       },
       {

@@ -33,3 +33,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS audio_analysis_jobs_audio_file_version_uidx
 CREATE INDEX IF NOT EXISTS audio_analysis_jobs_pending_idx
   ON public.audio_analysis_jobs (created_at)
   WHERE status = 'pending';
+
+-- Service role only. See lock_down_exposed_public_tables.sql.
+ALTER TABLE public.audio_analysis_jobs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.audio_analysis_jobs FROM PUBLIC, anon, authenticated;

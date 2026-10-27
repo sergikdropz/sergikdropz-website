@@ -1,6 +1,38 @@
 {
   "releases": [
     {
+      "id": "hold-up",
+      "title": "Hold Up",
+      "type": "Single",
+      "year": 2026,
+      "release_date": "2026-10-20",
+      "platforms": [
+        "Spotify",
+        "Apple Music",
+        "SoundCloud"
+      ],
+      "spotify_url": "",
+      "soundcloud_url": "",
+      "image": "",
+      "fetch_from_spotify": false
+    },
+    {
+      "id": "staying-a-vibe",
+      "title": "Staying A Vibe",
+      "type": "EP",
+      "year": 2026,
+      "release_date": "2026-10-08",
+      "platforms": [
+        "Spotify",
+        "Apple Music",
+        "SoundCloud"
+      ],
+      "spotify_url": "",
+      "soundcloud_url": "",
+      "image": "/images/audio/unreleased/eps/SERGIK - Staying A Vibe/staying-a-vibe-cover.jpg",
+      "fetch_from_spotify": false
+    },
+    {
       "id": "the-chan-suk-legend",
       "title": "The Chan Suk Legend",
       "type": "EP",

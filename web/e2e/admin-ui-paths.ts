@@ -9,6 +9,7 @@ export const ADMIN_UI_CRAWL_PATHS: readonly string[] = [
   '/admin/bundles',
   '/admin/content',
   '/admin/database',
+  '/admin/email',
   '/admin/events',
   '/admin/gallery',
   '/admin/instagram',

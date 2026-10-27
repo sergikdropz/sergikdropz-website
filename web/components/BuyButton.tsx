@@ -86,9 +86,9 @@ export default function BuyButton({
           throw new Error(data.error || 'Failed to create checkout session')
         }
 
-        const { url } = await res.json()
-        if (url) {
-          window.location.href = url
+        const data = await res.json()
+        if (data.url) {
+          window.location.href = data.url
         }
       }
     } catch (err: any) {

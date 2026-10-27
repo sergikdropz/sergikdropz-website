@@ -11,6 +11,7 @@ export type CatalogVariantRow = {
   price?: string | number | null
   in_stock?: boolean
   color_code?: string | null
+  color_code2?: string | null
   image?: string | null
   availabilityRegions?: Record<string, string>
   availabilityStatus?: Array<{ region: string; status: string }>
@@ -42,6 +43,8 @@ export type CatalogPrintFile = {
   /** Printful mockup-generator template id resolved for this placement. */
   templateId?: number | null
   templateUrl?: string | null
+  /** Printful template photo and garment color for each variant, keyed by variant id. */
+  variantTemplates?: Record<string, { imageUrl: string; backgroundColor: string | null }>
   /** Normalized print drop zone from Printful positioning template (0–1). */
   mockupStage?: { x: number; y: number; w: number; h: number } | null
   /** Width / height of the template image so the stage can keep its true shape. */

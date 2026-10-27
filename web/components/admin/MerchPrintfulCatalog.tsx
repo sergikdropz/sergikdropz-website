@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import MerchDesignPreviewThumb from '@/components/admin/MerchDesignPreviewThumb'
 import type { DesignStatus, MerchDesign } from '@/lib/merch/design'
 import type { PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import type { CatalogNavItem, PrintfulCategoryNode } from '@/lib/merch/printful-categories'
@@ -141,11 +142,11 @@ export default function MerchPrintfulCatalog({
   const [roots, setRoots] = useState<PrintfulCategoryNode[]>([])
   const [activeNavId, setActiveNavId] = useState('cat-277')
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(277)
-  const [sectionTitle, setSectionTitle] = useState('All products')
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set([1, 2, 3, 93, 116, 159]))
+  const [sectionTitle, setSectionTitle] = useState('My Products')
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   const [favorites, setFavorites] = useState<number[]>([])
   const [productsOpen, setProductsOpen] = useState(true)
-  const [productFolder, setProductFolder] = useState<ProductFolder | null>(null)
+  const [productFolder, setProductFolder] = useState<ProductFolder | null>('all')
 
   useEffect(() => {
     setFavorites(readFavorites())
@@ -186,7 +187,17 @@ export default function MerchPrintfulCatalog({
     }
   }, [q, activeNavId, activeCategoryId, favorites])
 
+  const autoSynced = useRef(false)
   useEffect(() => {
+    if (autoSynced.current) return
+    autoSynced.current = true
+    void syncCatalog()
+    // Restore the last catalog view, then refresh Printful once per page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!autoSynced.current) return
     const timer = window.setTimeout(() => load(), q ? 280 : 0)
     return () => window.clearTimeout(timer)
   }, [load, q])
@@ -438,7 +449,6 @@ export default function MerchPrintfulCatalog({
               )}
               <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                 {visibleDesigns.map((design) => {
-                  const image = design.mockupUrls[0] || design.placements[0]?.assetUrl
                   const statusLabel = FOLDER_LABEL[design.status]
                   return (
                     <button
@@ -448,13 +458,7 @@ export default function MerchPrintfulCatalog({
                       className="overflow-hidden rounded-xl border border-white/10 bg-black/25 text-left transition hover:border-white/25"
                     >
                       <span className="relative block aspect-square bg-[#2a2a2a]">
-                        {image ? (
-                          <img src={image} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="flex h-full items-center justify-center text-[10px] text-white/35">
-                            No image
-                          </span>
-                        )}
+                        <MerchDesignPreviewThumb design={design} />
                       </span>
                       <span className="block p-2">
                         <span className="line-clamp-2 text-[11px] font-medium leading-snug text-white">

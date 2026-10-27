@@ -50,3 +50,7 @@ COMMENT ON COLUMN instagram_media.media_url IS 'Direct URL to image or video (pr
 COMMENT ON COLUMN instagram_media.video_url IS 'Direct video URL for video posts (used for playback)';
 COMMENT ON COLUMN instagram_media.thumbnail_url IS 'Thumbnail image URL for video posts';
 
+-- Service role only. See lock_down_exposed_public_tables.sql.
+ALTER TABLE instagram_media ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE instagram_media FROM PUBLIC, anon, authenticated;
+

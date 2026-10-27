@@ -12,3 +12,6 @@ CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_received_at
   ON public.stripe_webhook_events (received_at DESC);
 
 COMMENT ON TABLE public.stripe_webhook_events IS 'Records processed Stripe webhook event ids for idempotency (service role only).';
+
+ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.stripe_webhook_events FROM PUBLIC, anon, authenticated;

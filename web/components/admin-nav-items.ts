@@ -35,6 +35,7 @@ export const adminNavItems: AdminNavItem[] = [
   },
   { type: 'link', label: 'Videos', href: '/admin/videos-manager' },
   { type: 'link', label: 'Gallery', href: '/admin/gallery' },
+  { type: 'link', label: 'Merch Design Studio', href: '/admin/merch' },
   {
     type: 'group',
     label: 'Shop',
@@ -46,7 +47,6 @@ export const adminNavItems: AdminNavItem[] = [
       { type: 'link', label: 'Sync licensing', href: '/admin/licensing' },
       { type: 'link', label: 'Bundles', href: '/admin/bundles' },
       { type: 'link', label: 'Memberships', href: '/admin/memberships' },
-      { type: 'link', label: 'Merch', href: '/admin/merch' },
       { type: 'link', label: 'Splits', href: '/admin/splits' },
       { type: 'link', label: 'Subscribers', href: '/admin/subscribers' },
     ],

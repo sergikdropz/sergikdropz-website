@@ -100,3 +100,15 @@ COMMENT ON TABLE release_collaborators IS 'Per-release collab contacts for Relea
 COMMENT ON TABLE release_collab_messages IS 'In-app thread; email is notify channel via release_collab_email_sends';
 COMMENT ON TABLE release_collab_invites IS 'Magic-link tokens for listen + approve portal (/collab/[token])';
 COMMENT ON TABLE release_collab_email_sends IS 'Outbound Resend log; webhooks update delivery/open/bounce status';
+
+-- Service role only. Invite tokens and collaborator emails stay off the Data API.
+ALTER TABLE release_collaborators ENABLE ROW LEVEL SECURITY;
+ALTER TABLE release_collab_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE release_collab_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE release_collab_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE release_collab_email_sends ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE release_collaborators FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE release_collab_messages FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE release_collab_invites FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE release_collab_reviews FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE release_collab_email_sends FROM PUBLIC, anon, authenticated;

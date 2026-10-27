@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
+  cleanCutoutFringe,
   colorDistance,
+  crispCutoutEdge,
   estimateBackgroundColor,
   removeSolidBackground,
+  shaveCutout,
   type ImageDataLike,
 } from './remove-background'
 
@@ -80,5 +83,45 @@ describe('remove-background', () => {
       tolerance: 10,
     })
     expect(alphaAt(out, 4, 4)).toBe(0)
+  })
+
+  it('clears a leftover background speck on the cut edge and keeps the subject', () => {
+    const size = 16
+    const image = makeImage(size, 5)
+    const speck = (8 * size + 4) * 4
+    image.data[speck] = 180
+    image.data[speck + 1] = 180
+    image.data[speck + 2] = 180
+    const cut = removeSolidBackground(image)
+    expect(alphaAt(cut, 4, 8)).toBe(255)
+    const cleaned = cleanCutoutFringe(cut, image, 100)
+    expect(alphaAt(cleaned, 4, 8)).toBe(0)
+    expect(alphaAt(cleaned, 8, 8)).toBe(255)
+  })
+
+  it('shaves a leftover speck off the cut and keeps the inside', () => {
+    const size = 16
+    const image = makeImage(size, 4)
+    const speck = (8 * size + 3) * 4
+    image.data[speck] = 40
+    image.data[speck + 1] = 40
+    image.data[speck + 2] = 40
+    const cut = removeSolidBackground(image)
+    expect(alphaAt(cut, 3, 8)).toBe(255)
+    const partial = shaveCutout(cut, 0.35)
+    expect(alphaAt(partial, 3, 8)).toBeGreaterThan(0)
+    expect(alphaAt(partial, 3, 8)).toBeLessThan(255)
+    const shaved = shaveCutout(cut, 1)
+    expect(alphaAt(shaved, 3, 8)).toBe(0)
+    expect(alphaAt(shaved, 8, 8)).toBe(255)
+  })
+
+  it('snaps a soft fringe pixel when the edge is crisped', () => {
+    const cut = removeSolidBackground(makeImage(16, 4))
+    const edge = (4 * 16 + 8) * 4
+    cut.data[edge + 3] = 30
+    const crisped = crispCutoutEdge(cut, 100)
+    expect(crisped.data[edge + 3]).toBe(0)
+    expect(alphaAt(crisped, 8, 8)).toBe(255)
   })
 })

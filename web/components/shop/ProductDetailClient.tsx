@@ -28,8 +28,8 @@ export default function ProductDetailClient({ product, licenseTiers }: ProductDe
     <div className="min-h-screen pt-24 pb-16 px-4">
       <div className="max-w-4xl mx-auto">
         <nav className="mb-8">
-          <Link href="/shop" className="text-gray-400 hover:text-white text-sm transition-colors">
-            ← Back to Shop
+          <Link href="/shop/music" className="text-gray-400 hover:text-white text-sm transition-colors">
+            ← Music Shop
           </Link>
         </nav>
 

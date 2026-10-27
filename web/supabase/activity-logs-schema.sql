@@ -47,9 +47,10 @@ CREATE POLICY "Admins can insert activity logs"
     )
   );
 
--- Policy: Service role can do everything (for API routes)
+-- Service role bypasses RLS. This policy does not grant the Data API roles access.
 CREATE POLICY "Service role full access to activity logs"
   ON activity_logs
   FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);

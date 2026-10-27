@@ -100,6 +100,7 @@ BEGIN
     CREATE POLICY "Service role full access to campaigns"
       ON campaigns
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;
@@ -134,6 +135,7 @@ BEGIN
     CREATE POLICY "Service role full access to smartlinks"
       ON smartlinks
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;

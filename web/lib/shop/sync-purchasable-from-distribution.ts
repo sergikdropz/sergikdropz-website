@@ -65,7 +65,7 @@ function slugifyTitle(value: string): string {
     .slice(0, 72)
 }
 
-function parseTargetStores(raw: unknown): DspStoreId[] {
+export function parseTargetStores(raw: unknown): DspStoreId[] {
   if (!Array.isArray(raw)) return []
   return orderDspStoreIds(raw.map((v) => String(v || '').trim()).filter(isDspStoreId))
 }

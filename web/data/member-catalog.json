@@ -1,0 +1,30 @@
+{
+  "memberIncluded": [
+    {
+      "productId": "single-funky-bounce",
+      "note": "Vault favorite — included for Supporter+ monthly downloads"
+    },
+    {
+      "productId": "single-feeling-lit",
+      "note": "Included MP3/WAV pick"
+    },
+    {
+      "productId": "single-have-to-dance",
+      "note": "Included MP3/WAV pick"
+    }
+  ],
+  "exclusive": [
+    {
+      "productId": "ep-are-we-awake",
+      "note": "Pre-release EP — Inner Circle purchase with credits or card"
+    },
+    {
+      "productId": "ep-vice-and-virtues",
+      "note": "Unreleased EP — Inner Circle only"
+    },
+    {
+      "productId": "ep-in-the-streets",
+      "note": "Unreleased EP — Inner Circle only"
+    }
+  ]
+}

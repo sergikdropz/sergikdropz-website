@@ -43,6 +43,38 @@ export function previewGarmentImage(
   return detail.product.image
 }
 
+export type GarmentTemplate = {
+  imageUrl: string
+  /** Drawn behind a transparent Printful ghost template. Opaque photos hide it. */
+  backgroundColor: string | null
+}
+
+/**
+ * Printful's mockup for this color. Ghost templates are a shading PNG plus
+ * `background_color`; full-color photos already include the garment.
+ */
+export function coloredTemplate(
+  detail: CatalogProductDetail | null,
+  file: CatalogPrintFile | undefined | null,
+  colorName: string | null,
+  size: string | null,
+): GarmentTemplate | null {
+  if (!file?.templateUrl) return null
+  const variant = detail ? pickPreviewVariant(detail.variants, colorName, size) : null
+  const specific = variant ? file.variantTemplates?.[String(variant.id)] : undefined
+  if (specific?.imageUrl) return specific
+  return { imageUrl: file.templateUrl, backgroundColor: null }
+}
+
+export function coloredTemplateUrl(
+  detail: CatalogProductDetail | null,
+  file: CatalogPrintFile | undefined | null,
+  colorName: string | null,
+  size: string | null,
+): string | null {
+  return coloredTemplate(detail, file, colorName, size)?.imageUrl ?? null
+}
+
 /** Prefer Printful positioning template when drop zone is template-calibrated. */
 export function designGarmentImage(
   detail: CatalogProductDetail | null,
@@ -50,7 +82,9 @@ export function designGarmentImage(
   colorName: string | null,
   size: string | null
 ): string | null {
-  if (activeFile?.templateUrl && activeFile.mockupStage) return activeFile.templateUrl
+  if (activeFile?.templateUrl && activeFile.mockupStage) {
+    return coloredTemplate(detail, activeFile, colorName, size)?.imageUrl ?? activeFile.templateUrl
+  }
   return previewGarmentImage(detail, colorName, size)
 }
 

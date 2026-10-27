@@ -38,6 +38,9 @@ deploy/migrate/.env
 # Vercel
 .vercel
 
+# Printful catalog JSON cache (regenerated when a product is opened)
+web/data/printful-product-cache/
+
 # Uploaded merch print files (served from disk in local dev)
 web/data/merch-art/*
 !web/data/merch-art/.gitkeep

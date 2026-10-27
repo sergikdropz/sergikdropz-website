@@ -313,26 +313,33 @@ export function shopOrderTags(track: ShopOrderTrack, trackCount: number, fromLib
   return merged
 }
 
-export async function resolveShopOrderDownload(sessionId: string): Promise<ShopOrderResult> {
+async function resolveShopOrderFromPurchase(sessionId: string): Promise<ShopOrderResult | null> {
   const id = sessionId.trim()
-  if (!id.startsWith('cs_')) {
-    return { ok: false, status: 400, message: 'This download link is incomplete.' }
-  }
-  const stripe = stripeClient()
-  if (!stripe) return { ok: false, status: 503, message: 'Downloads are not available right now.' }
+  if (!id.startsWith('mq_') && !id.startsWith('cr_')) return null
 
-  let session: Stripe.Checkout.Session
-  try {
-    session = await stripe.checkout.sessions.retrieve(id)
-  } catch (error) {
-    console.error('Order download session failed:', error)
+  const supabase = createSupabaseServerClient()
+  const { data: purchase } = await supabase
+    .from('purchases')
+    .select('track_id, format, product_type')
+    .eq('stripe_session_id', id)
+    .maybeSingle()
+
+  if (!purchase?.track_id) {
     return { ok: false, status: 404, message: 'This download link could not be opened.' }
   }
-  if (session.payment_status !== 'paid' && session.status !== 'complete') {
-    return { ok: false, status: 403, message: 'This payment is not complete yet.' }
-  }
 
-  const meta = session.metadata || {}
+  const meta = {
+    productType: purchase.product_type === 'member-quota' ? 'ep-bundle' : purchase.product_type || 'ep-bundle',
+    productId: String(purchase.track_id),
+    format: String(purchase.format || 'MP3'),
+  }
+  return await buildShopOrderFromMetadata(id, meta)
+}
+
+async function buildShopOrderFromMetadata(
+  sessionId: string,
+  meta: { productType?: string; productId?: string; format?: string; releaseId?: string; bundleId?: string; trackId?: string; fileName?: string },
+): Promise<ShopOrderResult> {
   const productType = String(meta.productType || 'track')
   const formatLabel = String(meta.format || '').trim().toUpperCase()
 
@@ -347,7 +354,7 @@ export async function resolveShopOrderDownload(sessionId: string): Promise<ShopO
     return {
       ok: true,
       order: {
-        sessionId: session.id,
+        sessionId,
         title,
         artist: 'SERGIK',
         artwork: artworkUrl(catalog.artwork),
@@ -380,6 +387,16 @@ export async function resolveShopOrderDownload(sessionId: string): Promise<ShopO
       ? bundlesData.bundles.find((row) => row.id === meta.bundleId)?.productIds || []
       : [String(meta.productId || '')].filter(Boolean)
 
+  return await resolveShopOrderFromProductIds(sessionId, productIds, meta, formatLabel, productType)
+}
+
+async function resolveShopOrderFromProductIds(
+  sessionId: string,
+  productIds: string[],
+  meta: { productId?: string; releaseId?: string },
+  formatLabel: string,
+  productType: string,
+): Promise<ShopOrderResult> {
   const tracks: ShopOrderTrack[] = []
   let title = 'Download'
   let artist = 'SERGIK'
@@ -420,7 +437,7 @@ export async function resolveShopOrderDownload(sessionId: string): Promise<ShopO
   return {
     ok: true,
     order: {
-      sessionId: session.id,
+      sessionId,
       title,
       artist,
       artwork,
@@ -429,4 +446,29 @@ export async function resolveShopOrderDownload(sessionId: string): Promise<ShopO
       tracks,
     },
   }
+}
+
+export async function resolveShopOrderDownload(sessionId: string): Promise<ShopOrderResult> {
+  const id = sessionId.trim()
+  const fromPurchase = await resolveShopOrderFromPurchase(id)
+  if (fromPurchase) return fromPurchase
+
+  if (!id.startsWith('cs_')) {
+    return { ok: false, status: 400, message: 'This download link is incomplete.' }
+  }
+  const stripe = stripeClient()
+  if (!stripe) return { ok: false, status: 503, message: 'Downloads are not available right now.' }
+
+  let session: Stripe.Checkout.Session
+  try {
+    session = await stripe.checkout.sessions.retrieve(id)
+  } catch (error) {
+    console.error('Order download session failed:', error)
+    return { ok: false, status: 404, message: 'This download link could not be opened.' }
+  }
+  if (session.payment_status !== 'paid' && session.status !== 'complete') {
+    return { ok: false, status: 403, message: 'This payment is not complete yet.' }
+  }
+
+  return buildShopOrderFromMetadata(session.id, session.metadata || {})
 }

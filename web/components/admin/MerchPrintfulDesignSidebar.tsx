@@ -1,9 +1,11 @@
 'use client'
 
 import type { Ref, RefObject } from 'react'
+import { MERCH_ART_ACCEPT, useMerchArtDropUpload } from '@/lib/merch/art-upload-drop'
 import type { BlankColor } from '@/lib/merch/blanks'
 import type { CatalogPrintFile, CatalogProductDetail } from '@/lib/merch/printful-catalog-types'
 import type { ArtPlacement, DesignStatus } from '@/lib/merch/design'
+import { sameMerchArt } from '@/lib/merch/art-url'
 import { printfulProductUrl } from '@/lib/merch/catalog-studio'
 import { sortSizes } from '@/lib/merch/sizes'
 import MerchProductSpecs from '@/components/admin/MerchProductSpecs'
@@ -98,15 +100,29 @@ export default function MerchPrintfulDesignSidebar({
   const variantLabel =
     product.variantCount > 0 ? `${product.variantCount} variant${product.variantCount === 1 ? '' : 's'}` : null
 
+  const { dragOver, dropHint, dropZoneProps } = useMerchArtDropUpload(onUploadFile)
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-0.5">
+    <div
+      className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-0.5 transition-colors ${
+        dragOver ? 'bg-white/[0.06] ring-2 ring-inset ring-white/35' : ''
+      }`}
+      {...dropZoneProps}
+    >
       <div>
-        <label className="block w-full cursor-pointer rounded-xl border border-dashed border-white/25 bg-black/25 py-3.5 text-center text-sm font-medium text-white hover:border-white/40">
-          Upload design
+        <label
+          className={`block w-full cursor-pointer rounded-xl border border-dashed py-3.5 text-center text-sm font-medium text-white transition-colors ${
+            dragOver
+              ? 'border-white/55 bg-white/10'
+              : 'border-white/25 bg-black/25 hover:border-white/40'
+          }`}
+        >
+          <span className="block">Upload design</span>
+          <span className="mt-1 block text-[11px] font-normal text-white/50">Click or drop PNG / JPEG</span>
           <input
             ref={uploadInputRef as Ref<HTMLInputElement>}
             type="file"
-            accept="image/png,image/jpeg"
+            accept={MERCH_ART_ACCEPT}
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0]
@@ -115,6 +131,7 @@ export default function MerchPrintfulDesignSidebar({
             }}
           />
         </label>
+        {dropHint ? <p className="mt-2 text-[11px] text-amber-300/90">{dropHint}</p> : null}
         {uploads.length > 0 ? (
           <div className="mt-3 grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto">
             {uploads.map((item) => (
@@ -125,7 +142,7 @@ export default function MerchPrintfulDesignSidebar({
                 onContextMenu={(event) => onUploadContextMenu(event, item)}
                 title="Click to place on the active file area."
                 className={`aspect-square overflow-hidden rounded bg-black/40 hover:ring-1 hover:ring-white/40 ${
-                  activeLayer?.assetUrl === item.url ? 'ring-1 ring-white' : ''
+                  activeLayer?.assetUrl && sameMerchArt(activeLayer.assetUrl, item.url) ? 'ring-1 ring-white' : ''
                 }`}
               >
                 <img src={item.url} alt="" className="h-full w-full object-cover" />
@@ -135,6 +152,9 @@ export default function MerchPrintfulDesignSidebar({
         ) : (
           <p className="mt-2 text-[11px] text-white/45">PNG or JPEG artwork for this placement.</p>
         )}
+        <div className="mt-3">
+          <MerchProductSpecs detail={detail} printFiles={printFiles} technique={technique} layout="rail" />
+        </div>
       </div>
 
       <div className="space-y-1 border-b border-white/10 pb-3">
@@ -210,8 +230,6 @@ export default function MerchPrintfulDesignSidebar({
           </div>
         </div>
       )}
-
-      <MerchProductSpecs detail={detail} printFiles={printFiles} technique={technique} layout="rail" />
 
       {embroideryOption && (
         <div className="rounded-xl border border-white/10 bg-black/25 p-3 space-y-2">

@@ -1,3 +1,92 @@
 {
-  "designs": []
+  "designs": [
+    {
+      "id": "58008953-5db7-4be2-9c90-7f26b9b58eda",
+      "name": "Ollin Logo Snapback",
+      "slug": "ollin-logo-snapback",
+      "blankId": "hat-dad",
+      "catalogProductId": 99,
+      "family": "hat",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-27T16%3A44%3A19.078Z",
+          "assetWidth": 720,
+          "assetHeight": 737,
+          "x": 0.00926269907528443,
+          "y": -0.0023241538632157166,
+          "scale": 0.9814746018494311,
+          "rotation": 0,
+          "fileType": "addon_embroidery_front"
+        }
+      ],
+      "colors": [
+        "Black",
+        "Black/ Neon Pink",
+        "Red",
+        "Royal Blue",
+        "Black/ Red",
+        "Navy",
+        "Navy/ Red",
+        "Silver"
+      ],
+      "sizes": [
+        "One size"
+      ],
+      "previewColor": "#ffffff",
+      "retailPrice": 40,
+      "wholesaleCost": 15,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-27T11:42:55.924Z",
+      "updatedAt": "2026-10-27T19:07:42.366Z"
+    },
+    {
+      "id": "a8be51ca-66ae-4da1-a8a5-a57130611e36",
+      "name": "Unisex Staple T-Shirt | Bella + Canvas 3001",
+      "slug": "unisex-staple-t-shirt-bella-canvas-3001",
+      "blankId": "tee-staple",
+      "catalogProductId": 1626,
+      "family": "tee",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/81845825-e781-4c2d-960b-f23347eef613.png",
+          "assetWidth": 1254,
+          "assetHeight": 1254,
+          "x": 0.05832409567362762,
+          "y": 0.026211394276955166,
+          "scale": 0.8833518086527448,
+          "rotation": -0.1975301590673979,
+          "fileType": "front"
+        }
+      ],
+      "colors": [
+        "Black",
+        "Cream"
+      ],
+      "sizes": [
+        "2XL",
+        "L",
+        "M",
+        "S",
+        "XL"
+      ],
+      "previewColor": "#000000",
+      "retailPrice": 40,
+      "wholesaleCost": 13,
+      "status": "hidden",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "createdAt": "2026-10-27T07:02:04.222Z",
+      "updatedAt": "2026-10-27T10:07:05.908Z"
+    }
+  ]
 }

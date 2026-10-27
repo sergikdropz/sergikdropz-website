@@ -52,6 +52,7 @@ BEGIN
     CREATE POLICY "Service role full access to admin_ai_digest_sends"
       ON admin_ai_digest_sends
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;

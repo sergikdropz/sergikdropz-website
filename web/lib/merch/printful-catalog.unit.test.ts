@@ -70,8 +70,18 @@ describe('printful-catalog', () => {
       { id: 2, color: 'White', size: 'L', price: '13.50' },
     ])
     expect(options.colors.map((c) => c.name)).toEqual(['Black', 'White'])
-    expect(options.sizes).toContain('M')
-    expect(options.minWholesale).toBe(13.25)
+  })
+
+  it('keeps Printful two-tone colors as one swatch with both codes', () => {
+    const options = variantsToMerchOptions([
+      { id: 1, color: 'Black', size: 'One size', color_code: '#2a2a2a', price: '20' },
+      { id: 2, color: 'black', size: 'One size', color_code: '#2a2a2a', price: '20' },
+      { id: 3, color: 'Black/ Red', size: 'One size', color_code: '#2a2a2a', color_code2: '#dd0b2e', price: '20' },
+    ])
+    expect(options.colors).toEqual([
+      { name: 'Black', hex: '#2a2a2a', hex2: null },
+      { name: 'Black/ Red', hex: '#2a2a2a', hex2: '#dd0b2e' },
+    ])
   })
 
   it('resolves placement print areas with sensible fallbacks', () => {

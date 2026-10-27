@@ -1,16 +1,14 @@
 import type { Metadata } from 'next'
-import { getShopCatalog } from '@/lib/marketing/shop-catalog'
-import ShopPageClient from './ShopPageClient'
+import ShopHubClient from './ShopHubClient'
 
 export const revalidate = 300
 
 export const metadata: Metadata = {
   title: 'Shop | SERGIK',
   description:
-    'Buy EP downloads, beats, and tools directly from SERGIK. Secure checkout, fan membership, bundles, and optional tips.',
+    'SERGIK shops — Music downloads and membership, Merch print-on-demand, and future Software and Hardware stores.',
 }
 
-export default async function ShopPage() {
-  const catalog = await getShopCatalog()
-  return <ShopPageClient {...catalog} />
+export default function ShopPage() {
+  return <ShopHubClient />
 }

@@ -9,6 +9,11 @@ import { createSupabaseServerClient } from '@/lib/supabase'
 import { supabaseIsReachable } from '@/lib/supabaseReachability'
 import { releaseArtworkKey, applyLibraryArtwork } from '@/lib/marketing/release-artwork'
 import { shopFormatPrices, type ShopFormatPrices } from '@/lib/shop/format-prices'
+import {
+  buildStoreCatalogFromProducts,
+  categoriesForStoreCatalog,
+  loadStreamingStoreRefs,
+} from '@/lib/marketing/shop-store-catalog'
 
 function withLocalArtwork<T extends { artwork?: string }>(item: T): T {
   if (!item.artwork) return item
@@ -38,6 +43,8 @@ export type ShopCatalogPayload = {
     tracks: ShopCatalogTrack[]
     licenseTiers: typeof licenseTiers.tiers
     categories: typeof productsData.categories
+    storeCatalog: ShopCatalogProduct[]
+    storeCatalogCategories: { id: string; label: string }[]
   }
   bundles: typeof bundlesData.bundles
   membershipPlans: (typeof membershipPlansData.plans)[number][]
@@ -109,6 +116,9 @@ export async function getShopCatalog(): Promise<ShopCatalogPayload> {
   }))
 
   const bundles = bundlesData.bundles.filter((b) => b.status === 'active').map(withLocalArtwork)
+  const streamingRefs = await loadStreamingStoreRefs()
+  const storeCatalog = buildStoreCatalogFromProducts(products, streamingRefs)
+  const storeCatalogCategories = categoriesForStoreCatalog(storeCatalog)
 
   return {
     data: {
@@ -116,6 +126,8 @@ export async function getShopCatalog(): Promise<ShopCatalogPayload> {
       tracks,
       licenseTiers: licenseTiers.tiers,
       categories: productsData.categories,
+      storeCatalog,
+      storeCatalogCategories,
     },
     bundles,
     membershipPlans: membershipPlansData.plans ?? [],

@@ -167,6 +167,8 @@ $$;
 -- ============================================
 
 -- Enable RLS on all tables
+ALTER TABLE isrc_counters ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE isrc_counters FROM PUBLIC, anon, authenticated;
 ALTER TABLE distribution_releases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE distribution_tracks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE distribution_store_links ENABLE ROW LEVEL SECURITY;

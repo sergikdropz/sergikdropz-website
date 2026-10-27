@@ -36,6 +36,8 @@ export type TemplateRecord = {
   printfileId: number | null
   placement: string | null
   imageUrl: string | null
+  /** Printful garment color drawn behind a transparent ghost template. */
+  backgroundColor?: string | null
   printAreaWidth: number | null
   printAreaHeight: number | null
   printAreaTop: number | null
@@ -191,6 +193,37 @@ function dimensionLabel(width: number | null, height: number | null, dpi: number
   if (!width || !height) return null
   if (!dpi) return `${width} × ${height} px`
   return `${formatInches(width, dpi)} × ${formatInches(height, dpi)}`
+}
+
+export type VariantTemplateAsset = {
+  imageUrl: string
+  backgroundColor: string | null
+}
+
+/** Template photo and garment color for each variant of one placement. */
+export function variantTemplateAssets(
+  templates: TemplateRecord[],
+  links: TemplateVariantLink[],
+  placement: string,
+): Record<string, VariantTemplateAsset> {
+  const byId = new Map<number, TemplateRecord>()
+  for (const template of templates) {
+    if (template.templateId != null) byId.set(template.templateId, template)
+  }
+  const assets: Record<string, VariantTemplateAsset> = {}
+  for (const link of links) {
+    if (link.placement !== placement) continue
+    const template = byId.get(link.templateId)
+    if (!template?.imageUrl) continue
+    const key = String(link.variantId)
+    const next: VariantTemplateAsset = {
+      imageUrl: template.imageUrl,
+      backgroundColor: template.backgroundColor || null,
+    }
+    const current = assets[key]
+    if (!current || (!current.backgroundColor && next.backgroundColor)) assets[key] = next
+  }
+  return assets
 }
 
 /** Printful lists placement on variant_mapping, not on the template row. */
@@ -408,6 +441,7 @@ export function parseTemplatesPayload(payload: unknown): TemplateRecord[] {
         placement?: string
         image_url?: string
         template_url?: string
+        background_color?: string | null
         print_area_width?: number
         print_area_height?: number
         print_area_top?: number
@@ -423,6 +457,10 @@ export function parseTemplatesPayload(payload: unknown): TemplateRecord[] {
         printfileId: row.printfile_id != null ? Number(row.printfile_id) : null,
         placement: row.placement || null,
         imageUrl: row.image_url || row.template_url || null,
+        backgroundColor:
+          typeof row.background_color === 'string' && /^#[0-9a-f]{3,8}$/i.test(row.background_color)
+            ? row.background_color
+            : null,
         printAreaWidth: numberOrNull(row.print_area_width),
         printAreaHeight: numberOrNull(row.print_area_height),
         printAreaTop: coordinateOrNull(row.print_area_top),

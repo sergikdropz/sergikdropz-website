@@ -6,12 +6,14 @@
       "price": 4.99,
       "interval": "month",
       "stripePriceId": "",
-      "description": "Show your support and get exclusive perks",
+      "description": "Support the project and unlock member shop benefits",
       "features": [
         "Early access to new releases (48 hours)",
         "Supporter badge on profile",
         "Monthly exclusive behind-the-scenes content",
-        "10% discount on all shop purchases",
+        "75% of membership (pre-tax) as shop credits each billing cycle — digital only, 12-month expiry",
+        "4 MP3 + 2 WAV member vault downloads per month (separate counters)",
+        "Exclusive releases teaser (full access on Inner Circle)",
         "Access to supporters-only Discord channel"
       ],
       "color": "purple"
@@ -23,19 +25,19 @@
       "interval": "month",
       "stripePriceId": "",
       "popular": true,
-      "description": "The ultimate fan experience",
+      "description": "Full fan experience with maximum shop value",
       "features": [
         "Everything in Supporter tier",
-        "1 free beat lease per month",
+        "90% of membership (pre-tax) as shop credits each billing cycle — digital only, 12-month expiry",
+        "8 MP3 + 4 WAV member vault downloads per month",
+        "Browse and purchase exclusive / pre-release catalog (card or credits)",
         "Stems access for select tracks",
         "Monthly 1-on-1 production feedback session",
         "Free merch item on sign-up",
-        "Name in album credits",
-        "Exclusive unreleased tracks and demos",
-        "25% discount on all shop purchases"
+        "Exclusive unreleased tracks and demos"
       ],
       "color": "gold"
     }
   ],
-  "_note": "You must create Stripe Price IDs for each plan in your Stripe Dashboard (Products > Create Product > Recurring) and add the IDs to stripePriceId fields above."
+  "_note": "Create Stripe Price IDs for each plan in your Stripe Dashboard and set stripePriceId. Shop credits replace legacy percentage discounts on digital purchases."
 }

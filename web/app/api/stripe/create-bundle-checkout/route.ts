@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       ],
       mode: 'payment',
       success_url: `${baseUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}&type=bundle`,
-      cancel_url: `${baseUrl}/shop?purchase=cancelled`,
+      cancel_url: `${baseUrl}/shop/music?purchase=cancelled`,
       metadata: {
         bundleId: bundle.id,
         bundleName: bundle.name,

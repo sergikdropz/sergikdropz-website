@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import BackgroundImages from '@/components/BackgroundImages'
 import ConditionalHeader from '@/components/ConditionalHeader'
 import ConditionalFooter from '@/components/ConditionalFooter'
-import ConditionalNavigationButtons from '@/components/ConditionalNavigationButtons'
 import LazyGlobalMusicPlayer from '@/components/LazyGlobalMusicPlayer'
 
 /**
@@ -50,7 +49,6 @@ export default function AppPublicChrome({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <ConditionalNavigationButtons />
       <ConditionalFooter />
       <LazyGlobalMusicPlayer />
     </>

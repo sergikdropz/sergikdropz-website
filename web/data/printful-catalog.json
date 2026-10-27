@@ -1,6 +1,6 @@
 {
-  "syncedAt": "2026-10-25T16:17:26.130Z",
-  "productCount": 576,
+  "syncedAt": "2026-10-27T18:55:57.632Z",
+  "productCount": 571,
   "products": [
     {
       "id": 1677,
@@ -4923,29 +4923,6 @@
       "avgFulfillmentDays": null
     },
     {
-      "id": 1729,
-      "title": "Crystal Glass Ornament",
-      "type": "DECOR",
-      "typeName": "Crystal Glass Ornament",
-      "brand": null,
-      "model": "Crystal Glass Ornament",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/37/374c87749ebfff486b7f6b1cf4f354fe_l",
-      "variantCount": 6,
-      "fileTypes": [
-        "front",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "UV"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 254,
-      "avgFulfillmentDays": null
-    },
-    {
       "id": 266,
       "title": "Cuffed Beanie | Yupoong 1501KC",
       "type": "EMBROIDERY",
@@ -5872,29 +5849,6 @@
       "avgFulfillmentDays": null
     },
     {
-      "id": 1664,
-      "title": "Glass Ornaments",
-      "type": "DECOR",
-      "typeName": "Glass Ornaments",
-      "brand": null,
-      "model": "Glass Ornaments",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/d3/d33096f41d60f7f8db1dbefbf149227b_l",
-      "variantCount": 2,
-      "fileTypes": [
-        "front",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "UV"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 254,
-      "avgFulfillmentDays": null
-    },
-    {
       "id": 588,
       "title": "Glossy Metal Print (in)",
       "type": "SUBLIMATION",
@@ -5941,29 +5895,6 @@
       "studioBlankId": "hat-dad",
       "category": "hats",
       "mainCategoryId": 41,
-      "avgFulfillmentDays": null
-    },
-    {
-      "id": 1423,
-      "title": "Golf Towel",
-      "type": "SUBLIMATION",
-      "typeName": "Towel | Golf",
-      "brand": null,
-      "model": "Towel | Golf",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/c1/c19e718a50e66cbac9e9f9ea35f2fe3f_l",
-      "variantCount": 1,
-      "fileTypes": [
-        "front",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "SUBLIMATION"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 22,
       "avgFulfillmentDays": null
     },
     {
@@ -6735,29 +6666,6 @@
       "studioBlankId": "tee-staple",
       "category": "accessories",
       "mainCategoryId": 244,
-      "avgFulfillmentDays": null
-    },
-    {
-      "id": 1708,
-      "title": "Matte Colored Frame Posters",
-      "type": "FRAMED-POSTER",
-      "typeName": "Matte Colored Frame Posters",
-      "brand": null,
-      "model": "Matte Colored Frame Posters",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/9c/9ceac088df57a8c9bd2017b88c11c654_l",
-      "variantCount": 96,
-      "fileTypes": [
-        "default",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "DIGITAL"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 56,
       "avgFulfillmentDays": null
     },
     {
@@ -8003,29 +7911,6 @@
       "avgFulfillmentDays": null
     },
     {
-      "id": 922,
-      "title": "Outdoor Rug",
-      "type": "SUBLIMATION",
-      "typeName": "Rug | Outdoor",
-      "brand": null,
-      "model": "Rug | Outdoor",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/a0/a07dda8beaf65deccc36d05d86f22486_l",
-      "variantCount": 4,
-      "fileTypes": [
-        "front",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "SUBLIMATION"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 230,
-      "avgFulfillmentDays": null
-    },
-    {
       "id": 1466,
       "title": "Paper Gift Bag",
       "type": "POSTCARD",
@@ -8820,29 +8705,6 @@
       "studioBlankId": "tee-staple",
       "category": "accessories",
       "mainCategoryId": 252,
-      "avgFulfillmentDays": null
-    },
-    {
-      "id": 1712,
-      "title": "Signature Heavy Twill Bib Apron | Port Authority A900",
-      "type": "DTFILM",
-      "typeName": "Signature Heavy Twill Bib Apron | Port Authority A900",
-      "brand": "Port Authority",
-      "model": "A900",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/9b/9b614fa3b0b6ba5006a7bd71fa23a464_l",
-      "variantCount": 12,
-      "fileTypes": [
-        "front_dtf",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "DTFILM"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 88,
       "avgFulfillmentDays": null
     },
     {
@@ -9726,29 +9588,6 @@
       "avgFulfillmentDays": null
     },
     {
-      "id": 1651,
-      "title": "Uncoined Napkins set of 50",
-      "type": "POSTCARD",
-      "typeName": "Uncoined Napkins set of 50",
-      "brand": null,
-      "model": "Uncoined Napkins set of 50",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/ee/eeff4a1f1275d46986b0035df140798d_l",
-      "variantCount": 4,
-      "fileTypes": [
-        "front",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "DIGITAL"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 274,
-      "avgFulfillmentDays": null
-    },
-    {
       "id": 847,
       "title": "Under Armour Backpack",
       "type": "EMBROIDERY",
@@ -10168,6 +10007,39 @@
       "studioBlankId": "tee-staple",
       "category": "tees",
       "mainCategoryId": 6,
+      "avgFulfillmentDays": null
+    },
+    {
+      "id": 841,
+      "title": "Unisex College Hoodie | AWDIS JHA001",
+      "type": "T-SHIRT",
+      "typeName": "AWDis JHA001 | College Hoodie",
+      "brand": "AWDis",
+      "model": "JHA001",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/ec/ecff9c1db7a198fc4cb22e68adbb8aa0_l",
+      "variantCount": 20,
+      "fileTypes": [
+        "embroidery_chest_left",
+        "embroidery_chest_center",
+        "embroidery_wrist_left",
+        "embroidery_wrist_right",
+        "front",
+        "back",
+        "back_large",
+        "sleeve_left",
+        "sleeve_right",
+        "label_outside",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "EMBROIDERY",
+        "DTG"
+      ],
+      "studioFamily": "hoodie",
+      "studioBlankId": "hoodie-fleece",
+      "category": "hoodies",
+      "mainCategoryId": 7,
       "avgFulfillmentDays": null
     },
     {
@@ -11767,6 +11639,33 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 1699,
+      "title": "Unisex Knitted Hoodie",
+      "type": "KNITWEAR",
+      "typeName": "Unisex Knitted Hoodie",
+      "brand": null,
+      "model": "Unisex Knitted Hoodie",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/62/62375a043f732af947189f9f3c0f03fd_l",
+      "variantCount": 8,
+      "fileTypes": [
+        "front",
+        "back",
+        "sleeve_right",
+        "sleeve_left",
+        "hood",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "KNITWEAR"
+      ],
+      "studioFamily": "hoodie",
+      "studioBlankId": "hoodie-fleece",
+      "category": "hoodies",
+      "mainCategoryId": 7,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 1703,
       "title": "Unisex Knitted Quarter Zip Sweater",
       "type": "KNITWEAR",
@@ -11825,7 +11724,7 @@
       "typeName": "Unisex Knitted V Neck Classic Fit Sweater",
       "brand": null,
       "model": "Unisex Knitted V Neck Classic Fit Sweater",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/94/94896cc5cc6fa645efa07c938ec6aac0_l",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/64/6480464ae8bc2759acad9b296d064dfc_l",
       "variantCount": 8,
       "fileTypes": [
         "front",

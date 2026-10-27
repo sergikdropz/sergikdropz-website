@@ -216,3 +216,7 @@ CREATE TRIGGER update_instagram_media_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_instagram_media_updated_at();
 
+-- Service role only. See migrations/lock_down_exposed_public_tables.sql.
+ALTER TABLE instagram_media ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE instagram_media FROM PUBLIC, anon, authenticated;
+

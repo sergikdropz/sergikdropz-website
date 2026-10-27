@@ -9,33 +9,39 @@ import {
   type MerchBlank,
   type PlacementId,
 } from '@/lib/merch/blanks'
+import { merchArtIdFromUrl, sameMerchArt, withArtVersion } from '@/lib/merch/art-url'
 import MerchMannequin from '@/components/admin/MerchMannequin'
 import type { StudioDockTool } from '@/components/admin/MerchStudioDock'
 import MerchPrintfulCatalog from '@/components/admin/MerchPrintfulCatalog'
 import MerchPrintfulSetupPanel, {
   type PrintfulReadyStatus,
 } from '@/components/admin/MerchPrintfulSetupPanel'
-import MerchPrintfulDesignSidebar from '@/components/admin/MerchPrintfulDesignSidebar'
 import MerchProductSpecs from '@/components/admin/MerchProductSpecs'
 import {
+  DesignSaveRow,
   MerchDesignCanvas,
   MerchDesignSidebar,
   DpiQualityHint,
   PrintAreaSnapGuides,
   PlacementViewTabs,
+  type DesignStageToolbarProps,
   StageModeSwitch,
   placementTabLabel,
   placementViewName,
-  PLACEMENT_VIEWS,
   type DesignNavId,
   type PlacementView,
   type StageView,
 } from '@/components/admin/MerchDesignMaker'
+import { buildDesignTabs } from '@/lib/merch/design-tabs'
+import { readStudioDesignId, writeStudioDesignId } from '@/lib/merch/studio-session'
+import MerchLeaveDesignDialog from '@/components/admin/MerchLeaveDesignDialog'
+import MerchArtEditor from '@/components/admin/MerchArtEditor'
 import StudioContextMenu, {
   type StudioContextMenuEntry,
 } from '@/components/studio/StudioContextMenu'
 import type { CatalogProductDetail, PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import {
+  coloredTemplate,
   designGarmentImage,
   filterPrintFilesForTechnique,
   hasTemplateStage,
@@ -52,7 +58,6 @@ import {
   artOutside,
   designPlacementIssues,
   dpiGrade,
-  dpiGradeRingClass,
   effectiveDpi,
   placementKey,
   suggestRetail,
@@ -72,12 +77,6 @@ const CATALOG_COLUMN_WIDTH_KEY = 'sergwear-catalog-column-width'
 const CATALOG_COLUMN_DEFAULT = 480
 const CATALOG_COLUMN_MIN = 360
 const CATALOG_COLUMN_MAX = 720
-const DESIGN_SIDEBAR_WIDTH = 320
-const STAGE_HEIGHT_KEY = 'sergwear-stage-height'
-const STAGE_HEIGHT_DEFAULT = 420
-const STAGE_HEIGHT_MIN = 280
-const STAGE_HEIGHT_MAX = 960
-
 function readStoredNumber(key: string, fallback: number, min: number, max: number): number {
   if (typeof window === 'undefined') return fallback
   const stored = Number(window.localStorage.getItem(key))
@@ -138,14 +137,6 @@ function loadImage(url: string, cors = false): Promise<HTMLImageElement> {
   })
 }
 
-function placementFileScore(file: { type: string; title: string; additionalPrice: number | null }): number {
-  const text = `${file.type} ${file.title}`.toLowerCase()
-  let score = 0
-  if (text.includes('large')) score += 2
-  if ((file.additionalPrice ?? 0) > 0) score += 1
-  return score
-}
-
 export default function MerchFittingRoom({
   stageView,
   onStageViewChange,
@@ -160,6 +151,7 @@ export default function MerchFittingRoom({
   const [colors, setColors] = useState<string[]>(blank.defaultColors)
   const [sizes, setSizes] = useState<string[]>(blank.defaultSizes)
   const [previewColor, setPreviewColor] = useState(blank.colors[0]?.hex || '#1a1a1a')
+  const [pickedColorName, setPickedColorName] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [price, setPrice] = useState(suggestRetail(blank.estimatedCost))
   const [priceTouched, setPriceTouched] = useState(false)
@@ -169,6 +161,14 @@ export default function MerchFittingRoom({
   const [busy, setBusy] = useState<string | null>(null)
   const [uploads, setUploads] = useState<ArtUpload[]>([])
   const [saved, setSaved] = useState<MerchDesign[]>([])
+  const [savedReady, setSavedReady] = useState(false)
+  const [guardOn, setGuardOn] = useState(false)
+  const [baselineTick, setBaselineTick] = useState(0)
+  const [cleanSnapshot, setCleanSnapshot] = useState<string | null>(null)
+  const [leavePrompt, setLeavePrompt] = useState<{
+    detail: string
+    run: () => Promise<void>
+  } | null>(null)
   const [mockupUrls, setMockupUrls] = useState<string[]>([])
   const [standIn, setStandIn] = useState(true)
   const [photoPick, setPhotoPick] = useState<number | null>(null)
@@ -201,17 +201,16 @@ export default function MerchFittingRoom({
   const [printfulReady, setPrintfulReady] = useState<PrintfulReadyStatus | null>(null)
   const [catalogColumnWidth, setCatalogColumnWidth] = useState(CATALOG_COLUMN_DEFAULT)
   const [catalogColumnResizing, setCatalogColumnResizing] = useState(false)
-  const [stageHeight, setStageHeight] = useState(STAGE_HEIGHT_DEFAULT)
-  const [stageResizing, setStageResizing] = useState(false)
   const [designNav, setDesignNav] = useState<DesignNavId>('product')
   const [guidelinesOpen, setGuidelinesOpen] = useState(false)
   const [studioGridXl, setStudioGridXl] = useState(false)
   const catalogColumnResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
-  const stageResizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const [cardRotate, setCardRotate] = useState(0)
   const [spinTransition, setSpinTransition] = useState(true)
   const [isSpinning, setIsSpinning] = useState(false)
   const [artMenu, setArtMenu] = useState<ArtContextMenu | null>(null)
+  const [viewingArt, setViewingArt] = useState<string | null>(null)
+  const [editingArt, setEditingArt] = useState<string | null>(null)
   const layersRef = useRef(layers)
   layersRef.current = layers
   const catalogFileLayersRef = useRef(catalogFileLayers)
@@ -231,41 +230,10 @@ export default function MerchFittingRoom({
     [catalogStudio, blank, catalogTechnique]
   )
 
-  const designTabs = useMemo(() => {
-    if (techniquePrintFiles.length === 0) {
-      return garmentPlacements.map((item) => ({
-        id: item.id,
-        label: item.id === 'back' ? 'Back' : 'Front',
-      }))
-    }
-    const chosen = new Map<string, (typeof techniquePrintFiles)[number]>()
-    for (const file of techniquePrintFiles) {
-      const view = placementViewName(file.type, file.title || file.type)
-      if (!view) continue
-      const current = chosen.get(view)
-      if (!current || placementFileScore(file) < placementFileScore(current)) chosen.set(view, file)
-    }
-    const tabs = PLACEMENT_VIEWS.flatMap((view) => {
-      const file = chosen.get(view)
-      if (!file) return []
-      // Embroidery placements are specific spots (Left chest, Sleeve top…); keep Printful's title.
-      const label = /embroidery/i.test(file.type) ? placementTabLabel(file.title || file.type) : (view as string)
-      return [{ id: file.type, label }]
-    })
-    // Every other print file (front large, inside/outside label…) gets its own tab so
-    // no placement is unreachable from the designer.
-    const covered = new Set(tabs.map((tab) => tab.id))
-    for (const file of techniquePrintFiles) {
-      if (covered.has(file.type)) continue
-      covered.add(file.type)
-      tabs.push({ id: file.type, label: placementTabLabel(file.title || file.type) })
-    }
-    if (tabs.length > 0) return tabs
-    return garmentPlacements.map((item) => ({
-      id: item.id,
-      label: item.id === 'back' ? 'Back' : 'Front',
-    }))
-  }, [techniquePrintFiles, garmentPlacements])
+  const designTabs = useMemo(
+    () => buildDesignTabs(techniquePrintFiles, garmentPlacements),
+    [techniquePrintFiles, garmentPlacements],
+  )
 
   const activePrintFile =
     techniquePrintFiles.find((file) => file.type === activePrintFileType) || techniquePrintFiles[0]
@@ -301,6 +269,7 @@ export default function MerchFittingRoom({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setSaved(data?.designs || []))
       .catch(() => undefined)
+      .finally(() => setSavedReady(true))
   }, [])
 
   const refreshPrintfulStatus = useCallback((): Promise<void> => {
@@ -349,7 +318,10 @@ export default function MerchFittingRoom({
     const hasCalibratedStage = catalogStudio?.printFiles.some(
       (file) => file.mockupStage || file.templateUrl
     )
-    if (hasCalibratedStage) return
+    const needsVariantTemplates = catalogStudio?.printFiles.some(
+      (file) => file.templateUrl && !file.variantTemplates
+    )
+    if (hasCalibratedStage && !needsVariantTemplates) return
     if (templateRefetchDone.current.has(catalogProductId)) return
     templateRefetchDone.current.add(catalogProductId)
     let cancelled = false
@@ -368,20 +340,23 @@ export default function MerchFittingRoom({
   useEffect(() => {
     if (!catalogStudio) return
     const swatches = catalogColors && catalogColors.length > 0 ? catalogColors : blank.colors
-    const colorName = swatches.find((color) => color.hex === previewColor)?.name || colors[0] || ''
+    const colorName =
+      (pickedColorName && swatches.some((color) => color.name === pickedColorName) && pickedColorName) ||
+      swatches.find((color) => color.hex.toLowerCase() === previewColor.toLowerCase())?.name ||
+      colors[0] ||
+      ''
     const variant = pickPreviewVariant(catalogStudio.variants, colorName, previewSize)
     const variantCost = Number(variant?.price)
     if (Number.isFinite(variantCost) && variantCost > 0) {
       setWholesale(variantCost)
       setCostLive(true)
     }
-  }, [catalogStudio, catalogColors, blank.colors, previewColor, colors, previewSize])
+  }, [catalogStudio, catalogColors, blank.colors, pickedColorName, previewColor, colors, previewSize])
 
   useEffect(() => {
     setCatalogColumnWidth(
       readStoredNumber(CATALOG_COLUMN_WIDTH_KEY, CATALOG_COLUMN_DEFAULT, CATALOG_COLUMN_MIN, CATALOG_COLUMN_MAX)
     )
-    setStageHeight(readStoredNumber(STAGE_HEIGHT_KEY, STAGE_HEIGHT_DEFAULT, STAGE_HEIGHT_MIN, STAGE_HEIGHT_MAX))
   }, [])
 
   useEffect(() => {
@@ -443,62 +418,6 @@ export default function MerchFittingRoom({
   const resetCatalogColumnWidth = () => {
     setCatalogColumnWidth(CATALOG_COLUMN_DEFAULT)
     window.localStorage.setItem(CATALOG_COLUMN_WIDTH_KEY, String(CATALOG_COLUMN_DEFAULT))
-  }
-
-  useEffect(() => {
-    if (!stageResizing) return
-    const onMove = (event: PointerEvent) => {
-      const snap = stageResizeRef.current
-      if (!snap) return
-      const next = Math.round(
-        Math.min(STAGE_HEIGHT_MAX, Math.max(STAGE_HEIGHT_MIN, snap.startHeight + (event.clientY - snap.startY)))
-      )
-      setStageHeight(next)
-    }
-    const onUp = () => {
-      stageResizeRef.current = null
-      setStageResizing(false)
-      setStageHeight((height) => {
-        window.localStorage.setItem(STAGE_HEIGHT_KEY, String(height))
-        return height
-      })
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
-    }
-  }, [stageResizing])
-
-  useEffect(() => {
-    if (!stageResizing) return
-    const prevCursor = document.body.style.cursor
-    const prevSelect = document.body.style.userSelect
-    document.body.style.cursor = 'row-resize'
-    document.body.style.userSelect = 'none'
-    return () => {
-      document.body.style.cursor = prevCursor
-      document.body.style.userSelect = prevSelect
-    }
-  }, [stageResizing])
-
-  const onStageResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    stageResizeRef.current = { startY: event.clientY, startHeight: stageHeight }
-    setStageResizing(true)
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // Window listeners still follow the pointer if capture is unavailable.
-    }
-  }
-
-  const resetStageHeight = () => {
-    setStageHeight(STAGE_HEIGHT_DEFAULT)
-    window.localStorage.setItem(STAGE_HEIGHT_KEY, String(STAGE_HEIGHT_DEFAULT))
   }
 
   const restoreStudioSnapshot = useCallback((snapshot: StudioSnapshot) => {
@@ -642,7 +561,20 @@ export default function MerchFittingRoom({
     setDragging(true)
   }
 
+  const endArtMove = useCallback(() => {
+    if (!dragRef.current && !dragSnapshotRef.current) return
+    if (dragSnapshotRef.current) pushStudioUndoSnapshot(dragSnapshotRef.current)
+    dragSnapshotRef.current = null
+    dragRef.current = null
+    setDragging(false)
+    clearSnapGuidesSoon(420)
+  }, [clearSnapGuidesSoon, pushStudioUndoSnapshot])
+
   const onPointerMove = (event: React.PointerEvent) => {
+    if ((event.buttons & 1) === 0) {
+      endArtMove()
+      return
+    }
     const drag = dragRef.current
     const rect = areaRef.current?.getBoundingClientRect()
     if (!drag || !rect || !layer) return
@@ -652,11 +584,32 @@ export default function MerchFittingRoom({
   }
 
   const onPointerUp = () => {
+    endArtMove()
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+    const onWindowEnd = () => endArtMove()
+    window.addEventListener('pointerup', onWindowEnd)
+    window.addEventListener('pointercancel', onWindowEnd)
+    return () => {
+      window.removeEventListener('pointerup', onWindowEnd)
+      window.removeEventListener('pointercancel', onWindowEnd)
+    }
+  }, [dragging, endArtMove])
+
+  const onArtAdjustStart = () => {
+    dragSnapshotRef.current = studioSnapshotFrom(layersRef.current, catalogFileLayersRef.current)
+  }
+
+  const onArtAdjustEnd = () => {
     if (dragSnapshotRef.current) pushStudioUndoSnapshot(dragSnapshotRef.current)
     dragSnapshotRef.current = null
-    dragRef.current = null
-    setDragging(false)
-    clearSnapGuidesSoon(420)
+    flashGuide()
+  }
+
+  const onArtAdjust = (patch: Partial<ArtPlacement>) => {
+    updateLayer(patch)
   }
 
   const finishSliderEdit = () => {
@@ -872,8 +825,17 @@ export default function MerchFittingRoom({
   }
 
   const openArt = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    setViewingArt(url)
   }
+
+  useEffect(() => {
+    if (!viewingArt) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setViewingArt(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewingArt])
 
   const copyArtLink = async (url: string) => {
     try {
@@ -904,7 +866,7 @@ export default function MerchFittingRoom({
 
   const uploadUsedBySaved = (upload: ArtUpload) =>
     saved.find((design) =>
-      design.placements.some((placement) => placement.assetUrl.endsWith(`/${upload.id}`))
+      design.placements.some((placement) => merchArtIdFromUrl(placement.assetUrl)?.toLowerCase() === upload.id.toLowerCase())
     )?.name || null
 
   const removeUpload = async (upload: ArtUpload) => {
@@ -916,21 +878,23 @@ export default function MerchFittingRoom({
       return
     }
     const usedOnGarment =
-      Object.values(layersRef.current).some((item) => item?.assetUrl === upload.url) ||
-      Object.values(catalogFileLayersRef.current).some((item) => item?.assetUrl === upload.url)
+      Object.values(layersRef.current).some((item) => item?.assetUrl && sameMerchArt(item.assetUrl, upload.url)) ||
+      Object.values(catalogFileLayersRef.current).some((item) => item?.assetUrl && sameMerchArt(item.assetUrl, upload.url))
     if (usedOnGarment) {
       pushStudioUndo()
       setLayers((current) => {
         const next = { ...current }
         for (const key of Object.keys(next) as PlacementId[]) {
-          if (next[key]?.assetUrl === upload.url) delete next[key]
+          const art = next[key]
+          if (art?.assetUrl && sameMerchArt(art.assetUrl, upload.url)) delete next[key]
         }
         return next
       })
       setCatalogFileLayers((current) => {
         const next = { ...current }
         for (const key of Object.keys(next)) {
-          if (next[key]?.assetUrl === upload.url) delete next[key]
+          const art = next[key]
+          if (art?.assetUrl && sameMerchArt(art.assetUrl, upload.url)) delete next[key]
         }
         return next
       })
@@ -939,15 +903,23 @@ export default function MerchFittingRoom({
     setNote('Removed from the art library.')
   }
 
-  const applyCatalogProduct = async (product: PrintfulCatalogProduct) => {
+  const markCleanRef = useRef<() => void>(() => {})
+
+  const applyCatalogProduct = async (
+    product: PrintfulCatalogProduct,
+    options?: { baseline?: boolean; fresh?: boolean },
+  ) => {
     const template = resolveBlankForCatalogProduct(product)
-    if (template.id !== blank.id) {
+    const keepPrice = !options?.fresh && priceTouched
+    if (options?.fresh || template.id !== blank.id) {
       setBlankId(template.id)
       setDesignId(null)
       setStatus('draft')
       setMockupUrls([])
       setCostLive(false)
-      if (!priceTouched) setPrice(suggestRetail(template.estimatedCost))
+      setPriceTouched(false)
+      setName(product.title.slice(0, 80))
+      if (!keepPrice) setPrice(suggestRetail(template.estimatedCost))
     }
     setCatalogProductId(product.id)
     setCatalogFileLayers({})
@@ -983,6 +955,7 @@ export default function MerchFittingRoom({
         )
         const firstHex = detail.colors[0]?.hex
         if (firstHex) setPreviewColor(firstHex)
+        setPickedColorName(detail.colors[0]?.name || null)
       }
       if (Array.isArray(detail.sizes) && detail.sizes.length > 0) {
         setCatalogSizes(detail.sizes)
@@ -990,12 +963,13 @@ export default function MerchFittingRoom({
       }
       if (detail.minWholesale && Number.isFinite(detail.minWholesale)) {
         setWholesale(detail.minWholesale)
-        if (!priceTouched) setPrice(suggestRetail(detail.minWholesale))
+        if (!keepPrice) setPrice(suggestRetail(detail.minWholesale))
       }
       if (!firstFile) {
         setPlacementId(studioPlacementsForTechnique(detail, template, nextTechnique)[0]?.id || 'front')
       }
       setNote(null)
+      if (options?.baseline !== false) markCleanRef.current()
     } catch (error: unknown) {
       setNote(error instanceof Error ? error.message : 'Could not load Printful product')
     }
@@ -1009,7 +983,7 @@ export default function MerchFittingRoom({
         const res = await fetch(`/api/admin/merch/catalog/${design.catalogProductId}`)
         const detail = (await res.json()) as CatalogProductDetail & { error?: string }
         if (res.ok && detail.product) {
-          await applyCatalogProduct(detail.product)
+          await applyCatalogProduct(detail.product, { baseline: false })
           const technique =
             detail.techniques?.find((row) => row.isDefault)?.key || detail.techniques?.[0]?.key || 'DTG'
           const files = filterPrintFilesForTechnique(detail.printFiles, technique)
@@ -1037,27 +1011,15 @@ export default function MerchFittingRoom({
     setColors(design.colors.length ? design.colors : template.defaultColors)
     setSizes(design.sizes.length ? design.sizes : template.defaultSizes)
     setPreviewColor(design.previewColor || template.colors[0]?.hex || '#1a1a1a')
+    setPickedColorName(null)
     setMockupUrls(design.mockupUrls || [])
     setStandIn(design.mockupUrls.length === 0)
     setNote(null)
+    writeStudioDesignId(design.id)
+    markCleanRef.current()
   }
 
-  useEffect(() => {
-    if (catalogStudio || !catalogProductId) return
-    let cancelled = false
-    fetch(`/api/admin/merch/catalog/${catalogProductId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((detail: (CatalogProductDetail & { error?: string }) | null) => {
-        if (cancelled || !detail?.product) return
-        void applyCatalogProduct(detail.product)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-    // Hydrate the studio when the page opens with a catalog hint id only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const bootedStudio = useRef(false)
 
   const toggleDockTool = (tool: StudioDockTool) => {
     if (tool === 'guide') {
@@ -1072,8 +1034,9 @@ export default function MerchFittingRoom({
   }
 
   const pickPreviewColor = (hex: string, colorName: string) => {
-    const alreadyPreview = hex === previewColor
+    const alreadyPreview = colorName === previewColorName
     setPreviewColor(hex)
+    setPickedColorName(colorName)
     setColors((current) => {
       if (!current.includes(colorName)) return [...current, colorName]
       if (alreadyPreview && current.length > 1) return current.filter((item) => item !== colorName)
@@ -1129,22 +1092,38 @@ export default function MerchFittingRoom({
   const canUndo = undoRef.current.length > 0
   const canRedo = redoRef.current.length > 0
   void historyTick
+  const stageToolbar: DesignStageToolbarProps = {
+    canUndo,
+    canRedo,
+    onUndo: undoLayers,
+    onRedo: redoLayers,
+    busy,
+    onSaveDesign: () => void saveDraft(),
+    onSaveHidden: () => void saveHidden(),
+  }
   const safePx = 0.25 * 150
   const insetX = area.printWidth > 0 ? safePx / area.printWidth : 0
   const insetY = area.printHeight > 0 ? safePx / area.printHeight : 0
   const swatchColors = catalogColors && catalogColors.length > 0 ? catalogColors : blank.colors
-  const previewColorName = swatchColors.find((color) => color.hex === previewColor)?.name || colors[0] || ''
+  const previewColorName =
+    (pickedColorName && swatchColors.some((color) => color.name === pickedColorName) && pickedColorName) ||
+    swatchColors.find((color) => color.hex.toLowerCase() === previewColor.toLowerCase())?.name ||
+    colors[0] ||
+    ''
   const catalogGarmentUrl = useMemo(
     () => (catalogStudio ? previewGarmentImage(catalogStudio, previewColorName, previewSize) : null),
     [catalogStudio, previewColorName, previewSize]
   )
-  const designGarmentUrl = useMemo(
-    () =>
-      catalogStudio
-        ? designGarmentImage(catalogStudio, activePrintFile, previewColorName, previewSize)
-        : null,
-    [catalogStudio, activePrintFile, previewColorName, previewSize]
-  )
+  const designGarment = useMemo(() => {
+    if (!catalogStudio) return null
+    return (
+      coloredTemplate(catalogStudio, activePrintFile, previewColorName, previewSize) || {
+        imageUrl: designGarmentImage(catalogStudio, activePrintFile, previewColorName, previewSize) || '',
+        backgroundColor: null,
+      }
+    )
+  }, [catalogStudio, activePrintFile, previewColorName, previewSize])
+  const designGarmentUrl = designGarment?.imageUrl || null
   const designUsesTemplateMockup = hasTemplateStage(activePrintFile)
   /** Preview card keeps the template image's real shape; studio blanks stay 3:4. */
   const previewCardAspect =
@@ -1184,6 +1163,111 @@ export default function MerchFittingRoom({
           .map((item) => layers[item.id])
           .filter((item): item is ArtPlacement => Boolean(item?.assetUrl))
           .map(({ fileType: _ignored, ...art }): ArtPlacement => art)
+
+  const studioSnapshot = JSON.stringify({
+    designId,
+    catalogProductId,
+    name,
+    price,
+    colors,
+    sizes,
+    previewColor,
+    catalogTechnique,
+    placements: activePlacements.map((placement) => [
+      placement.fileType || placement.placement,
+      placement.assetUrl,
+      Math.round(placement.x * 1000) / 1000,
+      Math.round(placement.y * 1000) / 1000,
+      Math.round(placement.scale * 1000) / 1000,
+      Math.round(placement.rotation * 1000) / 1000,
+    ]),
+  })
+  const studioSnapshotRef = useRef(studioSnapshot)
+  studioSnapshotRef.current = studioSnapshot
+  markCleanRef.current = () => {
+    setGuardOn(true)
+    setBaselineTick((tick) => tick + 1)
+  }
+  useEffect(() => {
+    if (!guardOn) return
+    setCleanSnapshot(studioSnapshotRef.current)
+  }, [baselineTick, guardOn])
+  const designDirty = guardOn && cleanSnapshot !== null && studioSnapshot !== cleanSnapshot
+
+  const openSavedDesignRef = useRef(openSavedDesign)
+  openSavedDesignRef.current = openSavedDesign
+  const applyCatalogProductRef = useRef(applyCatalogProduct)
+  applyCatalogProductRef.current = applyCatalogProduct
+
+  useEffect(() => {
+    if (!savedReady || bootedStudio.current) return
+    bootedStudio.current = true
+    const lastId = readStudioDesignId()
+    const last = saved.find((design) => design.id === lastId)
+    const newestDraft = [...saved]
+      .filter((design) => design.status === 'draft')
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+    const pick = last || newestDraft
+    if (pick) {
+      void openSavedDesignRef.current(pick)
+      return
+    }
+    if (!catalogProductId) {
+      markCleanRef.current()
+      return
+    }
+    void fetch(`/api/admin/merch/catalog/${catalogProductId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((detail: (CatalogProductDetail & { product?: PrintfulCatalogProduct }) | null) => {
+        if (detail?.product) return applyCatalogProductRef.current(detail.product)
+        markCleanRef.current()
+      })
+      .catch(() => markCleanRef.current())
+  }, [savedReady, saved, catalogProductId])
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!designDirty) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [designDirty])
+
+  async function confirmLeave(detail: string, run: () => Promise<void>) {
+    if (!designDirty) {
+      await run()
+      return
+    }
+    if (designId) {
+      try {
+        await persist(status)
+        setNote('Saved. Opening the next project.')
+        await run()
+      } catch (error: unknown) {
+        setNote(error instanceof Error ? error.message : 'Could not save before switching')
+      }
+      return
+    }
+    setLeavePrompt({ detail, run })
+  }
+
+  async function selectCatalogProduct(product: PrintfulCatalogProduct) {
+    if (product.id === catalogProductId && (designId || !designDirty)) return
+    await confirmLeave(
+      `You’re starting ${product.title}. Save this design as a draft, discard it, or keep working.`,
+      () => applyCatalogProduct(product, { fresh: true }),
+    )
+  }
+
+  async function selectSavedDesign(design: MerchDesign) {
+    if (design.id === designId) return
+    await confirmLeave(
+      `You’re opening “${design.name}”. Save this design as a draft, discard it, or keep working.`,
+      () => openSavedDesign(design),
+    )
+  }
 
   const placedDesignChecks = useMemo(() => {
     if (catalogStudio && techniquePrintFiles.length > 0) {
@@ -1281,6 +1365,14 @@ export default function MerchFittingRoom({
           },
           {
             type: 'command',
+            command: {
+              id: 'edit-artwork',
+              label: 'Edit artwork',
+              onSelect: () => setEditingArt(layer.assetUrl),
+            },
+          },
+          {
+            type: 'command',
             command: { id: 'link', label: 'Copy link', onSelect: () => void copyArtLink(layer.assetUrl) },
           },
           {
@@ -1307,7 +1399,7 @@ export default function MerchFittingRoom({
             ...(catalogStudio && designTabs.length > 0
               ? designTabs.map((tab): StudioContextMenuEntry => {
                   const existing = catalogFileLayers[tab.id]
-                  const same = existing?.assetUrl === artMenu.upload.url
+                  const same = Boolean(existing?.assetUrl && sameMerchArt(existing.assetUrl, artMenu.upload.url))
                   const areaLabel = tab.label.toLowerCase()
                   const label = same
                     ? `Refit on ${areaLabel}`
@@ -1325,7 +1417,7 @@ export default function MerchFittingRoom({
                 })
               : garmentPlacements.map((target): StudioContextMenuEntry => {
                   const existing = layers[target.id]
-                  const same = existing?.assetUrl === artMenu.upload.url
+                  const same = Boolean(existing?.assetUrl && sameMerchArt(existing.assetUrl, artMenu.upload.url))
                   const label = same
                     ? `Refit on ${target.label.toLowerCase()}`
                     : existing
@@ -1344,6 +1436,14 @@ export default function MerchFittingRoom({
             {
               type: 'command',
               command: { id: 'open', label: 'Open artwork', onSelect: () => openArt(artMenu.upload.url) },
+            },
+            {
+              type: 'command',
+              command: {
+                id: 'edit-artwork',
+                label: 'Edit artwork',
+                onSelect: () => setEditingArt(artMenu.upload.url),
+              },
             },
             {
               type: 'command',
@@ -1395,6 +1495,58 @@ export default function MerchFittingRoom({
     if (!res.ok) throw new Error(data.error || 'Upload failed')
     refreshUploads()
     await placeArt(data.url)
+  }
+
+  async function applyEditedArt(previousUrl: string, blob: Blob, mode: 'replace' | 'copy') {
+    setBusy(mode === 'copy' ? 'Saving new art' : 'Saving edit')
+    setNote(null)
+    try {
+      const body = new FormData()
+      body.set('file', new File([blob], mode === 'copy' ? 'edited-copy.png' : 'edited.png', { type: 'image/png' }))
+      if (mode === 'replace') body.set('replaceUrl', previousUrl)
+      const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save the edit')
+      const savedUrl = String(data.url || '')
+      if (!savedUrl) throw new Error('Could not save the edit')
+      if (mode === 'replace') {
+        const nextUrl = withArtVersion(savedUrl, Date.now())
+        const image = await loadImage(nextUrl)
+        pushStudioUndo()
+        const swap = (art: ArtPlacement): ArtPlacement =>
+          sameMerchArt(art.assetUrl, previousUrl)
+            ? {
+                ...art,
+                assetUrl: nextUrl,
+                assetWidth: image.naturalWidth || art.assetWidth,
+                assetHeight: image.naturalHeight || art.assetHeight,
+              }
+            : art
+        setLayers((current) => {
+          const next = { ...current }
+          for (const key of Object.keys(next) as PlacementId[]) {
+            const art = next[key]
+            if (art) next[key] = swap(art)
+          }
+          return next
+        })
+        setCatalogFileLayers((current) => {
+          const next = { ...current }
+          for (const key of Object.keys(next)) {
+            const art = next[key]
+            if (art) next[key] = swap(art)
+          }
+          return next
+        })
+      }
+      refreshUploads()
+      setNote(mode === 'copy' ? 'Saved as new art in the library.' : 'Edit replaced the original artwork.')
+    } catch (error: unknown) {
+      setNote(error instanceof Error ? error.message : 'Could not save the edit')
+      throw error
+    } finally {
+      setBusy(null)
+    }
   }
 
   async function removeBackgroundArt(url: string) {
@@ -1456,7 +1608,9 @@ export default function MerchFittingRoom({
     setDesignId(design.id)
     setStatus(design.status)
     setName(design.name)
+    writeStudioDesignId(design.id)
     refreshSaved()
+    markCleanRef.current()
     return design
   }
 
@@ -1489,7 +1643,19 @@ export default function MerchFittingRoom({
     setBusy('Saving')
     try {
       const design = await persist('draft')
-      setNote(design.publishNote || 'Draft saved in this room.')
+      setNote(design.publishNote || 'Draft saved — listed under Drafts in the catalog.')
+    } catch (error: any) {
+      setNote(error.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function saveHidden() {
+    setBusy('Saving hidden')
+    try {
+      const design = await persist('hidden')
+      setNote(design.publishNote || 'Saved as hidden — listed under Hidden in the catalog.')
     } catch (error: any) {
       setNote(error.message)
     } finally {
@@ -1630,13 +1796,68 @@ export default function MerchFittingRoom({
 
   return (
     <div className="space-y-3">
+    {editingArt ? (
+      <MerchArtEditor
+        url={editingArt}
+        busy={busy === 'Saving edit' || busy === 'Saving new art'}
+        onClose={() => setEditingArt(null)}
+        onApply={(blob, mode) => applyEditedArt(editingArt, blob, mode)}
+      />
+    ) : null}
+    {viewingArt ? (
+      <div
+        className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-16"
+        onClick={() => setViewingArt(null)}
+      >
+        <div className="relative" onClick={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            aria-label="Close image"
+            onClick={() => setViewingArt(null)}
+            className="absolute -right-12 -top-12 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-zinc-950 text-xl leading-none text-white hover:bg-white hover:text-black"
+          >
+            ×
+          </button>
+          <img
+            src={viewingArt}
+            alt=""
+            className="max-h-[80vh] max-w-[80vw] object-contain"
+          />
+        </div>
+      </div>
+    ) : null}
+    <MerchLeaveDesignDialog
+      open={Boolean(leavePrompt)}
+      detail={leavePrompt?.detail || ''}
+      busy={busy === 'Saving'}
+      onKeepWorking={() => setLeavePrompt(null)}
+      onDiscard={() => {
+        const pending = leavePrompt
+        setLeavePrompt(null)
+        if (pending) void pending.run()
+      }}
+      onSaveAndContinue={() => {
+        const pending = leavePrompt
+        if (!pending) return
+        void (async () => {
+          try {
+            await persist('draft')
+            setLeavePrompt(null)
+            setNote('Draft saved. Opening the next project.')
+            await pending.run()
+          } catch (error: unknown) {
+            setNote(error instanceof Error ? error.message : 'Could not save this draft')
+          }
+        })()
+      }}
+    />
     <div
-      className={`grid grid-cols-1 gap-4 min-h-[780px] xl:h-[max(780px,calc(100vh-10rem))] xl:min-h-0 ${catalogColumnResizing || stageResizing ? 'select-none' : ''}`}
+      className={`grid grid-cols-1 gap-4 min-h-[780px] xl:h-[max(780px,calc(100vh-10rem))] xl:min-h-0 ${catalogColumnResizing ? 'select-none' : ''}`}
       style={
         studioGridXl
           ? {
               gridTemplateColumns: `${catalogColumnWidth}px minmax(0, 1fr) ${
-                stageView === 'design' && catalogStudio ? 440 : catalogStudio ? DESIGN_SIDEBAR_WIDTH : 280
+                catalogStudio ? 440 : 280
               }px`,
             }
           : undefined
@@ -1647,8 +1868,8 @@ export default function MerchFittingRoom({
         <MerchPrintfulCatalog
           activeCatalogId={catalogProductId}
           designs={saved}
-          onSelect={applyCatalogProduct}
-          onOpenDesign={(design) => void openSavedDesign(design)}
+          onSelect={(product) => void selectCatalogProduct(product)}
+          onOpenDesign={(design) => void selectSavedDesign(design)}
         />
         <div
           role="separator"
@@ -1673,7 +1894,7 @@ export default function MerchFittingRoom({
       </aside>
 
       <section
-        className="relative flex min-h-[680px] flex-col overflow-y-auto overscroll-contain rounded-2xl border border-white/10 text-white xl:h-full xl:min-h-0"
+        className="relative flex min-h-[680px] flex-col overflow-hidden rounded-2xl border border-white/10 text-white xl:h-full xl:min-h-0"
         style={studioPanelBg}
       >
         {stageView === 'design' ? (
@@ -1684,6 +1905,7 @@ export default function MerchFittingRoom({
             colorName={previewColorName}
             colorHex={previewColor}
             garmentUrl={designGarmentUrl}
+            garmentBackground={designGarment?.backgroundColor ?? null}
             useTemplateMockup={designUsesTemplateMockup}
             garmentAspect={designUsesTemplateMockup ? activePrintFile?.templateAspect ?? null : null}
             family={blank.family}
@@ -1702,11 +1924,16 @@ export default function MerchFittingRoom({
               event.preventDefault()
               setArtMenu({ target: 'stage', x: event.clientX, y: event.clientY })
             }}
+            onArtAdjust={onArtAdjust}
+            onArtAdjustStart={onArtAdjustStart}
+            onArtAdjustEnd={onArtAdjustEnd}
             showPrintGuide={showGuide}
             printInsetX={insetX}
             printInsetY={insetY}
             activeDpiGrade={activeDpiGrade}
             snapGuides={snapGuides}
+            stageToolbar={stageToolbar}
+            underTabs={<StageModeSwitch view={stageView} onChange={onStageViewChange} />}
           />
         ) : (
         <>
@@ -1715,11 +1942,16 @@ export default function MerchFittingRoom({
             tabs={designTabs}
             activeTabId={activeDesignTabId}
             onTab={selectDesignTab}
+            toolbar={stageToolbar}
+            underTabs={<StageModeSwitch view={stageView} onChange={onStageViewChange} />}
           />
-        ) : null}
+        ) : (
+          <div className="shrink-0 px-4 pb-3 pt-4">
+            <StageModeSwitch view={stageView} onChange={onStageViewChange} />
+          </div>
+        )}
         <div
-          className="relative shrink-0"
-          style={{ height: stageHeight }}
+          className="relative min-h-[280px] flex-1"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault()
@@ -1730,7 +1962,7 @@ export default function MerchFittingRoom({
           {standIn || !activePhoto ? (
             <>
               <div
-                className="absolute inset-0 flex items-center justify-center pb-6"
+                className="absolute inset-0 flex items-center justify-center pb-14"
                 style={{ perspective: '1280px' }}
               >
                 <div
@@ -1738,7 +1970,7 @@ export default function MerchFittingRoom({
                   style={{
                     aspectRatio: String(previewCardAspect),
                     transformStyle: 'preserve-3d',
-                    transform: `rotateY(${cardRotate}deg)`,
+                    transform: `rotateY(${(placementId === 'back' ? 180 : 0) + cardRotate}deg)`,
                     transition: spinTransition
                       ? 'transform 0.55s cubic-bezier(0.4, 0, 0.2, 1)'
                       : 'none',
@@ -1764,8 +1996,11 @@ export default function MerchFittingRoom({
                     })()
                     // Template-calibrated faces draw the Printful template so the drop zone lines up;
                     // otherwise the variant photo with the studio blank's zone.
-                    const faceTemplateUrl =
-                      catalogStudio && faceFile && hasTemplateStage(faceFile) ? faceFile.templateUrl! : null
+                    const faceTemplate =
+                      catalogStudio && faceFile && hasTemplateStage(faceFile)
+                        ? coloredTemplate(catalogStudio, faceFile, previewColorName, previewSize)
+                        : null
+                    const faceTemplateUrl = faceTemplate?.imageUrl ?? null
                     const faceGuideArea =
                       catalogStudio && faceFile
                         ? placementForPrintFile(faceFile, blank, {
@@ -1775,10 +2010,6 @@ export default function MerchFittingRoom({
                     const faceImageUrl = faceTemplateUrl || (standIn ? catalogGarmentUrl : null)
                     const faceHeight = layerHeightFraction(faceLayer, faceGuideArea)
                     const faceRotateY = faceArea.id === 'back' ? 180 : 0
-                    const faceDpiGrade =
-                      isActive && faceLayer
-                        ? dpiGrade(effectiveDpi(faceLayer, faceGuideArea))
-                        : null
                     return (
                       <div
                         key={faceArea.id}
@@ -1788,6 +2019,7 @@ export default function MerchFittingRoom({
                           backfaceVisibility: 'hidden',
                           WebkitBackfaceVisibility: 'hidden',
                           pointerEvents: isActive ? 'auto' : 'none',
+                          backgroundColor: faceTemplate?.backgroundColor || undefined,
                         }}
                       >
                         {faceImageUrl ? (
@@ -1820,50 +2052,12 @@ export default function MerchFittingRoom({
                             height: `${faceGuideArea.stage.h * 100}%`,
                           }}
                         >
-                          {isActive && showGuide && (
-                            <div className="pointer-events-none absolute inset-0">
-                              <div
-                                className={`absolute inset-0 border border-dashed ${outside ? 'border-red-400/90' : 'border-white/40'}`}
-                              />
-                              <div
-                                className="absolute border border-dashed border-white/25"
-                                style={{
-                                  left: `${insetX * 100}%`,
-                                  top: `${insetY * 100}%`,
-                                  right: `${insetX * 100}%`,
-                                  bottom: `${insetY * 100}%`,
-                                }}
-                              />
-                            </div>
-                          )}
-                          {isActive ? (
-                            <PrintAreaSnapGuides
-                              vertical={snapGuides.vertical}
-                              horizontal={snapGuides.horizontal}
-                            />
-                          ) : null}
-                          {faceLayer && (
+                          {faceLayer ? (
                             <img
                               src={faceLayer.assetUrl}
                               alt=""
                               draggable={false}
-                              title={isActive ? 'Drag to move. Right-click for options.' : undefined}
-                              onPointerDown={isActive ? onPointerDown : undefined}
-                              onPointerMove={isActive ? onPointerMove : undefined}
-                              onPointerUp={isActive ? onPointerUp : undefined}
-                              onPointerCancel={isActive ? onPointerUp : undefined}
-                              onWheel={isActive ? onWheel : undefined}
-                              onContextMenu={
-                                isActive
-                                  ? (event) => {
-                                      event.preventDefault()
-                                      setArtMenu({ target: 'stage', x: event.clientX, y: event.clientY })
-                                    }
-                                  : undefined
-                              }
-                              className={`absolute touch-none select-none ${
-                                isActive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
-                              } ${faceDpiGrade && isActive ? dpiGradeRingClass(faceDpiGrade) : ''}`}
+                              className="pointer-events-none absolute touch-none select-none"
                               style={{
                                 left: `${faceLayer.x * 100}%`,
                                 top: `${faceLayer.y * 100}%`,
@@ -1873,7 +2067,7 @@ export default function MerchFittingRoom({
                                 transformOrigin: 'center',
                               }}
                             />
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     )
@@ -1975,44 +2169,22 @@ export default function MerchFittingRoom({
               )}
             </>
           )}
-          <div
-            role="separator"
-            aria-orientation="horizontal"
-            aria-valuenow={stageHeight}
-            aria-valuemin={STAGE_HEIGHT_MIN}
-            aria-valuemax={STAGE_HEIGHT_MAX}
-            aria-label="Resize preview"
-            title="Drag to resize · double-click to reset"
-            onPointerDown={onStageResizeStart}
-            onDoubleClick={resetStageHeight}
-            className={`group absolute inset-x-0 bottom-0 z-30 h-4 cursor-row-resize touch-none ${
-              stageResizing ? 'bg-white/10' : 'hover:bg-white/5'
-            }`}
-          >
-            <span
-              className={`pointer-events-none absolute inset-x-10 top-1/2 h-0.5 -translate-y-1/2 rounded-full transition-colors ${
-                stageResizing ? 'bg-white/70' : 'bg-gray-600 group-hover:bg-gray-400'
-              }`}
-            />
-          </div>
         </div>
 
-        {activeDpiGrade && layer ? <DpiQualityHint grade={activeDpiGrade} /> : null}
         </>
         )}
-
+        <div className="shrink-0 px-4 pb-3 pt-1">
+          <DesignSaveRow toolbar={stageToolbar} />
+        </div>
       </section>
 
       <aside
         className={`relative flex min-h-[360px] flex-col overflow-hidden rounded-2xl border border-white/10 text-white xl:h-full xl:min-h-0 ${
-          stageView === 'design' && catalogStudio ? '' : 'p-4'
+          catalogStudio ? '' : 'p-4'
         }`}
         style={studioPanelBg}
       >
-        <div className={`shrink-0 ${stageView === 'design' && catalogStudio ? 'border-b border-white/10 px-3 py-2' : 'mb-3'}`}>
-          <StageModeSwitch view={stageView} onChange={onStageViewChange} />
-        </div>
-        {stageView === 'design' && catalogStudio ? (
+        {catalogStudio ? (
           <MerchDesignSidebar
             nav={designNav}
             onNav={setDesignNav}
@@ -2021,6 +2193,11 @@ export default function MerchFittingRoom({
             techniques={catalogStudio.techniques}
             onTechnique={pickCatalogTechnique}
             printFiles={techniquePrintFiles}
+            activePrintFileType={activePrintFile?.type || activePrintFileType}
+            embroideryUnlimitedColor={embroideryUnlimitedColor}
+            onEmbroideryUnlimitedColor={setEmbroideryUnlimitedColor}
+            productName={name}
+            onProductName={setName}
             previewColorName={previewColorName}
             swatchColors={swatchColors}
             onPreviewColor={pickPreviewColor}
@@ -2055,7 +2232,7 @@ export default function MerchFittingRoom({
             saved={saved.map((item) => ({ id: item.id, name: item.name, status: item.status }))}
             onOpenSaved={(id) => {
               const design = saved.find((item) => item.id === id)
-              if (design) void openSavedDesign(design)
+              if (design) void selectSavedDesign(design)
             }}
             wholesale={effectiveWholesale}
             costLive={costLive}
@@ -2075,60 +2252,6 @@ export default function MerchFittingRoom({
             onVisibility={() => void setVisibility(status === 'live' ? 'hidden' : 'live')}
             guidelinesOpen={guidelinesOpen}
             onToggleGuidelines={() => setGuidelinesOpen((open) => !open)}
-          />
-        ) : catalogStudio ? (
-          <MerchPrintfulDesignSidebar
-            detail={catalogStudio}
-            technique={catalogTechnique}
-            onTechnique={pickCatalogTechnique}
-            printFiles={techniquePrintFiles}
-            activePrintFileType={activePrintFile?.type || activePrintFileType}
-            onPrintFileType={selectPlacementTab}
-            usePlacementViewTabs={designTabs.length > 0}
-            embroideryUnlimitedColor={embroideryUnlimitedColor}
-            onEmbroideryUnlimitedColor={setEmbroideryUnlimitedColor}
-            previewSize={previewSize}
-            onPreviewSize={setPreviewSize}
-            previewColorName={previewColorName}
-            swatchColors={swatchColors}
-            onPreviewColor={pickPreviewColor}
-            uploadInputRef={uploadInputRef}
-            onUploadFile={(file) => uploadFile(file).catch((error) => setNote(error.message))}
-            uploads={uploads}
-            activeLayer={layer}
-            onPlaceArt={(url) => void placeArt(url)}
-            onUploadContextMenu={(event, upload) => {
-              event.preventDefault()
-              setArtMenu({ target: 'upload', x: event.clientX, y: event.clientY, upload })
-            }}
-            sizes={sizes}
-            sizeOptions={sizeOptions}
-            onToggleSize={(size) =>
-              setSizes((current) => {
-                if (current.includes(size)) {
-                  return current.length === 1 ? current : current.filter((item) => item !== size)
-                }
-                return [...current, size]
-              })
-            }
-            name={name}
-            onName={setName}
-            wholesale={effectiveWholesale}
-            costLive={costLive}
-            price={price}
-            onPrice={(value) => {
-              setPriceTouched(true)
-              setPrice(value)
-            }}
-            keep={keep}
-            note={note}
-            busy={busy}
-            status={status}
-            designId={designId}
-            canPutOut={canPutOutDesign}
-            onPutItOut={() => void putItOut()}
-            onSaveDraft={() => void saveDraft()}
-            onVisibility={() => void setVisibility(status === 'live' ? 'hidden' : 'live')}
           />
         ) : (
           <div className="space-y-4 overflow-y-auto">

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (!member.ok) return member.response
 
     const body = await request.json()
-    const { trackId, format, licenseTier, productId, productType, supabaseUserId } = body
+    const { trackId, format, licenseTier, productId, productType, supabaseUserId, applyShopCredits } = body
     const metaUserId = normalizeSupabaseUserIdInput(supabaseUserId)
 
     // Get base URL
@@ -41,55 +41,30 @@ export async function POST(request: NextRequest) {
 
     // Handle EP bundle / product purchases
     if (productType === 'ep-bundle' && productId) {
-      const productsData = await import('@/data/products.json')
-      const product = productsData.products.find((p: any) => p.id === productId)
-
-      if (!product) {
-        return NextResponse.json({ error: 'Product not found' }, { status: 404 })
-      }
-
-      const audioFormat = normalizeShopAudioFormat(format)
-      if (!audioFormat) {
-        return NextResponse.json({ error: 'Choose MP3 or lossless WAV' }, { status: 400 })
-      }
-
-      const trackCount = Number(product.trackCount)
-      if (!Number.isFinite(trackCount) || trackCount < 1) {
-        return NextResponse.json({ error: 'This release has no track count' }, { status: 400 })
-      }
-
-      const unitAmount = shopReleasePriceCents(trackCount, audioFormat)
-      const formatLabel = audioFormat === 'WAV' ? 'Lossless WAV' : 'MP3'
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: `${product.title} (${formatLabel})`,
-                description: product.description,
-                images: stripeCheckoutImages(baseUrl, product.artwork),
-              },
-              unit_amount: unitAmount,
-            },
-            quantity: 1,
-          },
-        ],
-        mode: 'payment',
-        success_url: `${baseUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}&type=ep-bundle`,
-        cancel_url: `${baseUrl}/shop?purchase=cancelled`,
-        metadata: {
-          productId: product.id,
-          productType: 'ep-bundle',
-          format: audioFormat,
-          releaseId: product.release_id || '',
-          ...(metaUserId ? { supabaseUserId: metaUserId } : {}),
-        },
+      const { createSupabaseServerClient } = await import('@/lib/supabase')
+      const { prepareEpBundleCheckout } = await import('@/lib/shop/ep-bundle-checkout')
+      const supabase = createSupabaseServerClient()
+      const prepared = await prepareEpBundleCheckout(supabase, stripe, {
+        productId: String(productId),
+        formatRaw: format,
+        applyShopCredits: applyShopCredits !== false,
+        userId: member.session.user.id,
+        userEmail: member.session.user.email ?? null,
+        baseUrl,
+        metaUserId: metaUserId || member.session.user.id,
       })
-
-      return NextResponse.json({ sessionId: session.id, url: session.url })
+      if (prepared.error) {
+        return NextResponse.json({ error: prepared.error }, { status: prepared.status || 400 })
+      }
+      const result = prepared.result!
+      if (result.kind === 'credit_only') {
+        return NextResponse.json({
+          creditOnly: true,
+          sessionId: result.sessionId,
+          url: result.url,
+        })
+      }
+      return NextResponse.json({ sessionId: result.session.id, url: result.session.url })
     }
 
     // Handle licensed beat purchases
@@ -126,7 +101,7 @@ export async function POST(request: NextRequest) {
         ],
         mode: 'payment',
         success_url: `${baseUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}&type=license&tier=${licenseTier}`,
-        cancel_url: `${baseUrl}/shop?purchase=cancelled`,
+        cancel_url: `${baseUrl}/shop/music?purchase=cancelled`,
         metadata: {
           trackId,
           licenseTier,
@@ -177,7 +152,7 @@ export async function POST(request: NextRequest) {
       ],
       mode: 'payment',
       success_url: `${baseUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}&type=track`,
-      cancel_url: `${baseUrl}/shop?purchase=cancelled`,
+      cancel_url: `${baseUrl}/shop/music?purchase=cancelled`,
       metadata: {
         trackId,
         format,

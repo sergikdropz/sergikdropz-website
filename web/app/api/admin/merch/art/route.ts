@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { listDesigns } from '@/lib/merch/design-store'
-import { deleteMerchArt, isMerchArtId, listMerchArtUploads, storeMerchArt } from '@/lib/merch/art-store'
+import { deleteMerchArt, isMerchArtId, listMerchArtUploads, replaceMerchArt, storeMerchArt } from '@/lib/merch/art-store'
+import { merchArtIdFromUrl } from '@/lib/merch/art-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,24 @@ export async function POST(request: NextRequest) {
   }
 
   const bytes = Buffer.from(await file.arrayBuffer())
+  const replaceUrl = String(form.get('replaceUrl') || '')
+  if (replaceUrl) {
+    const id = merchArtIdFromUrl(replaceUrl)
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Save edit can only replace a library file. Use Save as new art for other images.' },
+        { status: 400 },
+      )
+    }
+    try {
+      const stored = await replaceMerchArt(id, bytes, type)
+      return NextResponse.json(stored)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not replace that artwork'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
+
   const stored = await storeMerchArt(bytes, type)
   return NextResponse.json(stored)
 }
@@ -48,7 +67,7 @@ export async function DELETE(request: NextRequest) {
 
   const designs = await listDesigns()
   const usedBy = designs.find((design) =>
-    design.placements.some((placement) => placement.assetUrl.endsWith(`/${id}`))
+    design.placements.some((placement) => merchArtIdFromUrl(placement.assetUrl)?.toLowerCase() === id.toLowerCase()),
   )
   if (usedBy) {
     return NextResponse.json(

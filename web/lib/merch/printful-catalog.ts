@@ -30,6 +30,7 @@ import {
   parsePrintfilesPayload,
   parseTemplateVariantLinks,
   parseTemplatesPayload,
+  variantTemplateAssets,
   type PrintfileRecord,
   type ProductSpecs,
   type TemplateRecord,
@@ -124,6 +125,10 @@ export async function readPrintfulCatalogCache(): Promise<PrintfulCatalogSnapsho
   }
 }
 
+function isPrintfulHex(value: string | null | undefined): value is string {
+  return Boolean(value && /^#[0-9a-f]{3,8}$/i.test(value))
+}
+
 export function variantsToMerchOptions(variants: CatalogVariantRow[]): {
   colors: import('@/lib/merch/blanks').BlankColor[] // eslint-friendly re-export shape
   sizes: string[]
@@ -131,17 +136,23 @@ export function variantsToMerchOptions(variants: CatalogVariantRow[]): {
   defaultSizes: string[]
   minWholesale: number | null
 } {
-  const colorMap = new Map<string, string>()
+  const colorMap = new Map<string, { name: string; hex: string; hex2: string | null }>()
   const sizes = new Set<string>()
   const prices: number[] = []
 
   for (const variant of variants) {
-    if (variant.color) {
-      const hex =
-        variant.color_code && /^#[0-9a-f]{3,8}$/i.test(variant.color_code)
-          ? variant.color_code
-          : colorNameToHex(variant.color)
-      colorMap.set(variant.color, hex)
+    const name = variant.color?.trim()
+    if (name) {
+      const key = name.toLowerCase()
+      if (!colorMap.has(key)) {
+        const hex = isPrintfulHex(variant.color_code) ? variant.color_code : colorNameToHex(name)
+        const hex2 = isPrintfulHex(variant.color_code2) ? variant.color_code2 : null
+        colorMap.set(key, {
+          name,
+          hex,
+          hex2: hex2 && hex2.toLowerCase() !== hex.toLowerCase() ? hex2 : null,
+        })
+      }
     }
     const size = (variant.size || 'One size').trim()
     if (size) sizes.add(size)
@@ -149,7 +160,11 @@ export function variantsToMerchOptions(variants: CatalogVariantRow[]): {
     if (Number.isFinite(price) && price > 0) prices.push(price)
   }
 
-  const colors = [...colorMap.entries()].map(([name, hex]) => ({ name, hex }))
+  const colors = [...colorMap.values()].map((color) => ({
+    name: color.name,
+    hex: color.hex,
+    hex2: color.hex2,
+  }))
   const sizeList = [...sizes].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
   const defaultColors = colors.slice(0, 2).map((c) => c.name)
   const defaultSizes = sizeList.filter((s) => !/^2?xl/i.test(s) || sizeList.length <= 5).slice(0, 5)
@@ -244,7 +259,44 @@ export function mergePlacementGeometry(parts: PlacementGeometry[]): PlacementGeo
   }
 }
 
-export async function fetchCatalogProductDetail(productId: number): Promise<CatalogProductDetail | null> {
+const CATALOG_CACHE_VERSION = 2
+const CATALOG_CACHE_TTL_MS = 12 * 60 * 60 * 1000
+const catalogMemory = new Map<number, { savedAt: number; detail: CatalogProductDetail }>()
+
+function catalogCachePath(productId: number) {
+  return join(process.cwd(), 'data', 'printful-product-cache', `${productId}.json`)
+}
+
+async function readCatalogCache(productId: number): Promise<CatalogProductDetail | null> {
+  const memory = catalogMemory.get(productId)
+  if (memory && Date.now() - memory.savedAt < CATALOG_CACHE_TTL_MS) return memory.detail
+  try {
+    const raw = await readFile(catalogCachePath(productId), 'utf8')
+    const parsed = JSON.parse(raw) as { version?: number; savedAt?: number; detail?: CatalogProductDetail }
+    if (parsed.version !== CATALOG_CACHE_VERSION || !parsed.detail || !parsed.savedAt) return null
+    if (Date.now() - parsed.savedAt > CATALOG_CACHE_TTL_MS) return null
+    const templated = parsed.detail.printFiles.filter((file) => file.templateUrl)
+    if (templated.some((file) => !file.variantTemplates)) return null
+    catalogMemory.set(productId, { savedAt: parsed.savedAt, detail: parsed.detail })
+    return parsed.detail
+  } catch {
+    return null
+  }
+}
+
+async function writeCatalogCache(productId: number, detail: CatalogProductDetail) {
+  const savedAt = Date.now()
+  catalogMemory.set(productId, { savedAt, detail })
+  try {
+    const path = catalogCachePath(productId)
+    await mkdir(join(path, '..'), { recursive: true })
+    await writeFile(path, JSON.stringify({ version: CATALOG_CACHE_VERSION, savedAt, detail }))
+  } catch (error) {
+    console.error('printful catalog cache:', error)
+  }
+}
+
+async function loadCatalogProductDetail(productId: number): Promise<CatalogProductDetail | null> {
   const data = await printfulCatalogFetch(`/products/${productId}`).catch(() => null)
   const rawProduct = data?.result?.product as RawProduct | undefined
   if (!rawProduct) return null
@@ -260,6 +312,7 @@ export async function fetchCatalogProductDetail(productId: number): Promise<Cata
     price: row.price ?? null,
     in_stock: row.in_stock,
     color_code: row.color_code ?? null,
+    color_code2: row.color_code2 ?? null,
     image: row.image ?? null,
     availabilityRegions: row.availability_regions || row.availabilityRegions,
     availabilityStatus: (row.availability_status || row.availabilityStatus || [])
@@ -333,6 +386,7 @@ export async function fetchCatalogProductDetail(productId: number): Promise<Cata
       dpi: guide?.dpi ?? null,
       templateId: guide?.templateId ?? null,
       templateUrl: guide?.templateUrl ?? null,
+      variantTemplates: variantTemplateAssets(geometry.templates, geometry.templateLinks, file.type),
       mockupStage: guide?.templateStage ?? null,
       templateAspect: guide?.templateAspect ?? null,
       mockupSupported: Boolean(guide?.printWidth || guide?.templateUrl),
@@ -353,6 +407,15 @@ export async function fetchCatalogProductDetail(productId: number): Promise<Cata
     description: specs.lead || null,
     specs,
   }
+}
+
+/** Catalog JSON only. Template photos stay on Printful's CDN. */
+export async function fetchCatalogProductDetail(productId: number): Promise<CatalogProductDetail | null> {
+  const cached = await readCatalogCache(productId)
+  if (cached) return cached
+  const detail = await loadCatalogProductDetail(productId)
+  if (detail) await writeCatalogCache(productId, detail)
+  return detail
 }
 
 export type PlacementPrintArea = { width: number; height: number; dpi: number }

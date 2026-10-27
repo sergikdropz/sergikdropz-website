@@ -14,7 +14,7 @@
         "MP3"
       ],
       "release_id": "are-we-awake",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 5
     },
     {
@@ -31,7 +31,7 @@
         "MP3"
       ],
       "release_id": "vice-and-virtues",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 5
     },
     {
@@ -48,7 +48,7 @@
         "MP3"
       ],
       "release_id": "in-the-streets",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 5
     },
     {
@@ -65,7 +65,7 @@
         "MP3"
       ],
       "release_id": "inspire",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 5
     },
     {
@@ -82,7 +82,7 @@
         "MP3"
       ],
       "release_id": "the-world-dont-stop",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 5
     },
     {
@@ -99,7 +99,7 @@
         "MP3"
       ],
       "release_id": "utopia",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 5
     },
     {
@@ -116,7 +116,7 @@
         "MP3"
       ],
       "release_id": "daze",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 6
     },
     {
@@ -171,6 +171,229 @@
       "trackCount": 5
     },
     {
+      "id": "ep-24-7",
+      "title": "24/7 (Digital Download)",
+      "slug": "24-7-ep",
+      "category": "ep-bundles",
+      "description": "2-track EP. MP3 $1.29 per track or lossless WAV $1.99 per track.",
+      "price": 2.58,
+      "checkout_method": "stripe",
+      "artwork": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D51B93D0A%2DE2D9%2D4A79%2DAEB95524583F052C%2D%2D0%2D%2D5288351%2D%2DEE5BFC3BE9BA419DA633DB63F3F66687%2Ejpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "24-7",
+      "status": "active",
+      "trackCount": 2
+    },
+    {
+      "id": "single-heartbeat-devotion",
+      "title": "HeartBeat (feat. Devotion) (Digital Download)",
+      "slug": "heartbeat-devotion-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D69B4E190%2DEB80%2D416A%2D8910F976ED612AAB%2D%2D0%2D%2D573680%2D%2D7E09035226704B25B938BB7C5EB56F98%2Ejpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "heartbeat-devotion",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-dumb",
+      "title": "Dumb (Digital Download)",
+      "slug": "dumb-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2DF658D645%2DDB7E%2D47E6%2D8F0FC160C723DB60%2D%2D1632205703454%2D%2D450AB27E13854F44BAB4CB73B76A4BE8%2Ejpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "dumb",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-recouperate",
+      "title": "Recouperate (Digital Download)",
+      "slug": "recouperate-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D52EE15F0%2D3D9E%2D49EB%2D9BE0F5B4419DDF67%2D%2D1630677668040%2D%2DC8253F68A2AF42349368F7B571AA82C7%2Ejpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "recouperate",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-get-on-my-vibe",
+      "title": "Get on my vibe (Digital Download)",
+      "slug": "get-on-my-vibe-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2D8ADB9193%2DC5BC%2D4613%2DBA8430328D609D00%2D%2D1627306102409%2D%2Dsl1600%2Ejpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "get-on-my-vibe",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-this-is-the-sound",
+      "title": "This is the sound (Digital Download)",
+      "slug": "this-is-the-sound-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://s3.amazonaws.com/gather.fandalism.com/800x800%2D3199426%2D%2DC8BA9C3D%2D1C32%2D4F7B%2DB18CF01E76CE3450%2D%2D1627305764346%2D%2D07788faddd968a8d1ac4f01452b63a3f%2Ejpg",
+      "formats": ["WAV", "MP3"],
+      "release_id": "this-is-the-sound",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-hold-up",
+      "title": "Hold Up (Digital Download)",
+      "slug": "hold-up-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99 — same per-song tier as Apple Music.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "formats": ["WAV", "MP3"],
+      "release_id": "hold-up",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "ep-roos-va",
+      "title": "ROOS VA (Digital Download)",
+      "slug": "roos-va-ep",
+      "category": "ep-bundles",
+      "description": "EP. MP3 $1.29 per track or lossless WAV $1.99 per track — priced to match Apple Music.",
+      "price": 6.45,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e02a73f9f212c566649ea8073e5",
+      "formats": ["WAV", "MP3"],
+      "release_id": "roos-va",
+      "status": "active",
+      "trackCount": 5
+    },
+    {
+      "id": "single-a-good-day",
+      "title": "A Good Day (feat. Be Janis) (Digital Download)",
+      "slug": "a-good-day-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e02492ca92f6379ce246b39c4dd",
+      "formats": ["WAV", "MP3"],
+      "release_id": "a-good-day",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-repeat-cozy-catz",
+      "title": "Repeat / Cozy Catz (feat. DiscoFlip) (Digital Download)",
+      "slug": "repeat-cozy-catz-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e029664440b471868861507ad53",
+      "formats": ["WAV", "MP3"],
+      "release_id": "repeat-cozy-catz",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-say-yeah-remix",
+      "title": "Say Yeah (Sergik Remix) (Digital Download)",
+      "slug": "say-yeah-remix-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e02dde99d9c2e4918d1049ffb34",
+      "formats": ["WAV", "MP3"],
+      "release_id": "say-yeah-remix",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-have-to-dance",
+      "title": "Have To Dance (Digital Download)",
+      "slug": "have-to-dance-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e0205c868e4c3fc0f3328a1ade1",
+      "formats": ["WAV", "MP3"],
+      "release_id": "have-to-dance",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-you-cant",
+      "title": "You Can't (Digital Download)",
+      "slug": "you-cant-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e02de3c7ee86cf046c553459652",
+      "formats": ["WAV", "MP3"],
+      "release_id": "you-cant",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-feeling-lit",
+      "title": "Feeling Lit (Digital Download)",
+      "slug": "feeling-lit-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e02fec444732b7bb667291a195d",
+      "formats": ["WAV", "MP3"],
+      "release_id": "feeling-lit",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-music-is-my-drug",
+      "title": "Music Is My Drug (Digital Download)",
+      "slug": "music-is-my-drug-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e0273bfb86b058bc177b8e9d961",
+      "formats": ["WAV", "MP3"],
+      "release_id": "music-is-my-drug",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
+      "id": "single-funky-bounce",
+      "title": "Funky Bounce (Digital Download)",
+      "slug": "funky-bounce-single",
+      "category": "singles",
+      "description": "Single. MP3 $1.29 or lossless WAV $1.99.",
+      "price": 1.29,
+      "checkout_method": "stripe",
+      "artwork": "https://i.scdn.co/image/ab67616d00001e02d17dbd4eae325eec9f74a0de",
+      "formats": ["WAV", "MP3"],
+      "release_id": "funky-bounce",
+      "status": "active",
+      "trackCount": 1
+    },
+    {
       "id": "ep-the-chan-suk-legend",
       "title": "The Chan Suk Legend EP (Digital Download)",
       "slug": "the-chan-suk-legend-ep",
@@ -184,30 +407,18 @@
         "MP3"
       ],
       "release_id": "the-chan-suk-legend",
-      "status": "active",
+      "status": "inactive",
       "trackCount": 6
     }
   ],
   "categories": [
     {
-      "id": "sample-packs",
-      "label": "Sample Packs"
-    },
-    {
-      "id": "templates",
-      "label": "Ableton Templates"
-    },
-    {
-      "id": "m4l-devices",
-      "label": "M4L Devices"
-    },
-    {
-      "id": "tracks",
-      "label": "Individual Tracks"
-    },
-    {
       "id": "ep-bundles",
       "label": "EP Downloads"
+    },
+    {
+      "id": "singles",
+      "label": "Singles"
     }
   ]
 }

@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
+import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
 
 interface MerchCardProps {
   product: {
@@ -17,6 +18,7 @@ interface MerchCardProps {
       retail_price: number
     }>
     previewHex?: string | null
+    designPreview?: MerchGarmentPreviewDesign
   }
 }
 
@@ -36,7 +38,12 @@ export default function MerchCard({ product }: MerchCardProps) {
           className="relative aspect-square overflow-hidden bg-gray-800"
           style={product.previewHex ? { background: product.previewHex } : undefined}
         >
-          {thumbnail.startsWith('/api/') ? (
+          {product.designPreview ? (
+            <MerchGarmentPreview
+              design={product.designPreview}
+              className="transition-transform duration-300 group-hover:scale-[1.02]"
+            />
+          ) : thumbnail.startsWith('/api/') ? (
             <img src={thumbnail} alt={product.name} className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             isSafeNextImageSrc(thumbnail) && (

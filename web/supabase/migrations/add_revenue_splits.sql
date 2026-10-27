@@ -27,7 +27,9 @@ CREATE INDEX idx_revenue_splits_stripe_session ON revenue_splits(stripe_session_
 -- RLS
 ALTER TABLE revenue_splits ENABLE ROW LEVEL SECURITY;
 
+-- Service role bypasses RLS. The publishable key must not read collaborator splits.
 CREATE POLICY "Admin full access on revenue_splits"
   ON revenue_splits FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);

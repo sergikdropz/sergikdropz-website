@@ -36,3 +36,9 @@ CREATE INDEX IF NOT EXISTS admin_background_jobs_admin_status_idx
 
 CREATE INDEX IF NOT EXISTS admin_background_jobs_type_idx
   ON public.admin_background_jobs (type);
+
+-- Service role only. See lock_down_exposed_public_tables.sql.
+ALTER TABLE public.admin_idempotency_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_background_jobs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.admin_idempotency_keys FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.admin_background_jobs FROM PUBLIC, anon, authenticated;

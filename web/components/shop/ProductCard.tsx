@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 
+/** Site logo when a release has no cover art yet */
+const SHOP_COVER_PLACEHOLDER = '/images/logo.png'
+
 interface ProductCardProps {
   id: string
   title: string
@@ -16,6 +19,15 @@ interface ProductCardProps {
   productType?: string
   licensingEnabled?: boolean
   formatPrices?: { MP3: number; WAV: number }
+  fanFree?: boolean
+  href?: string
+}
+
+function releaseTypeLabel(category: string): string {
+  if (category === 'ep') return 'EP'
+  if (category === 'album') return 'Album'
+  if (category === 'single') return 'Single'
+  return category
 }
 
 export default function ProductCard({
@@ -29,8 +41,10 @@ export default function ProductCard({
   productType,
   licensingEnabled,
   formatPrices,
+  fanFree,
+  href: hrefOverride,
 }: ProductCardProps) {
-  const href = slug ? `/shop/${slug}` : `/shop/${id}`
+  const href = hrefOverride || (slug ? `/shop/${slug}` : `/shop/${id}`)
 
   const money = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -54,6 +68,15 @@ export default function ProductCard({
               className="object-cover transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />
+          ) : isSafeNextImageSrc(SHOP_COVER_PLACEHOLDER) ? (
+            <Image
+              src={SHOP_COVER_PLACEHOLDER}
+              alt="SERGIK"
+              fill
+              unoptimized={shouldUnoptimizeImage(SHOP_COVER_PLACEHOLDER)}
+              className="object-contain p-10 opacity-90 transition-transform duration-300 group-hover:scale-105"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-xs uppercase tracking-wider text-gray-600">
               SERGIK
@@ -71,7 +94,9 @@ export default function ProductCard({
           </h3>
           <p className="text-gray-400 text-xs mt-1 line-clamp-2">{description}</p>
           <div className="flex items-end justify-between mt-3 gap-3">
-            {formatPrices ? (
+            {fanFree ? (
+              <span className="text-sm font-semibold text-emerald-300">Free · fan account</span>
+            ) : formatPrices ? (
               <div className="text-sm leading-snug">
                 <p className="text-white font-bold">MP3 {money(formatPrices.MP3)}</p>
                 <p className="text-gray-300">WAV {money(formatPrices.WAV)}</p>
@@ -83,7 +108,7 @@ export default function ProductCard({
             )}
             {category && (
               <span className="text-gray-500 text-xs uppercase tracking-wide">
-                {category}
+                {fanFree ? releaseTypeLabel(category) : category}
               </span>
             )}
           </div>

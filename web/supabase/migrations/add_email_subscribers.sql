@@ -15,3 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_email_subscribers_email ON email_subscribers(emai
 CREATE INDEX IF NOT EXISTS idx_email_subscribers_source ON email_subscribers(source);
 CREATE INDEX IF NOT EXISTS idx_email_subscribers_active ON email_subscribers(is_active);
 CREATE INDEX IF NOT EXISTS idx_email_subscribers_unsubscribe ON email_subscribers(unsubscribe_token);
+
+-- Service role only. Unsubscribe tokens and emails must not be readable via the Data API.
+ALTER TABLE email_subscribers ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE email_subscribers FROM PUBLIC, anon, authenticated;

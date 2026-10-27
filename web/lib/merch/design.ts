@@ -64,6 +64,14 @@ export function youKeep(retail: number, cost: number): number {
   return Math.round((retail - cost - fee) * 100) / 100
 }
 
+/** Art height as a fraction of the print-area height (matches the fitting-room stage). */
+export function artHeightInPrintArea(placement: ArtPlacement, area: BlankPlacement): number {
+  if (area.printWidth <= 0 || placement.assetWidth <= 0) return placement.scale
+  return (
+    (placement.scale * area.printWidth * (placement.assetHeight / placement.assetWidth)) / area.printHeight
+  )
+}
+
 export function placementPixelSize(placement: ArtPlacement, area: BlankPlacement): {
   width: number
   height: number
@@ -173,6 +181,20 @@ export function clampScale(scale: number): number {
   return Math.min(1, Math.max(0.15, scale))
 }
 
+/** Resize from the corner while the artwork's center stays put. */
+export function scalePlacementAboutCenter(
+  placement: Pick<ArtPlacement, 'x' | 'y' | 'scale'>,
+  heightFraction: number,
+  nextScale: number,
+): { x: number; y: number; scale: number } {
+  const scale = clampScale(nextScale)
+  const startScale = placement.scale > 0 ? placement.scale : scale
+  const centerX = placement.x + placement.scale / 2
+  const centerY = placement.y + heightFraction / 2
+  const nextHeight = scale * (heightFraction / startScale)
+  return { scale, x: centerX - scale / 2, y: centerY - nextHeight / 2 }
+}
+
 export function slugify(name: string): string {
   const slug = name
     .toLowerCase()
@@ -200,6 +222,19 @@ export function absoluteUrl(pathOrUrl: string, origin: string): string {
   return `${base}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`
 }
 
+export type MerchDesignPreviewPayload = Pick<
+  MerchDesign,
+  | 'id'
+  | 'blankId'
+  | 'catalogProductId'
+  | 'family'
+  | 'previewColor'
+  | 'colors'
+  | 'sizes'
+  | 'placements'
+  | 'mockupUrls'
+>
+
 export type ShopMerchProduct = {
   id: string
   name: string
@@ -208,6 +243,7 @@ export type ShopMerchProduct = {
   images: string[]
   category: string
   previewHex: string | null
+  designPreview?: MerchDesignPreviewPayload
   fulfillmentReady: boolean
   variants: Array<{
     id: number
@@ -250,8 +286,7 @@ export function designToShopProduct(design: MerchDesign): ShopMerchProduct | nul
 
   if (variants.length === 0) return null
   const images = design.mockupUrls.filter(Boolean)
-  const art = design.placements[0]?.assetUrl || ''
-  const thumbnail = images[0] || art
+  const thumbnail = images[0] || ''
   const ready = variants.some((variant) => variant.printful_variant_id > 0)
 
   return {
@@ -259,7 +294,18 @@ export function designToShopProduct(design: MerchDesign): ShopMerchProduct | nul
     name: design.name,
     slug: design.slug,
     thumbnail,
-    images: images.length > 0 ? images : art ? [art] : [],
+    images,
+    designPreview: {
+      id: design.id,
+      blankId: design.blankId,
+      catalogProductId: design.catalogProductId,
+      family: design.family,
+      previewColor: design.previewColor,
+      colors: design.colors,
+      sizes: design.sizes,
+      placements: design.placements,
+      mockupUrls: design.mockupUrls,
+    },
     category: blank?.category || 'tees',
     previewHex: design.previewColor || null,
     fulfillmentReady: ready,

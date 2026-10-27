@@ -11,6 +11,8 @@ export type PlacementId = 'front' | 'back'
 export type BlankColor = {
   name: string
   hex: string
+  /** Printful `color_code2` for two-tone variants such as Black/Red. */
+  hex2?: string | null
 }
 
 export type BlankPlacement = {

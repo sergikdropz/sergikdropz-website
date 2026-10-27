@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ensureShopCheckoutAuth } from '@/lib/checkoutActor'
 import Image from 'next/image'
 import SizeGuide from './SizeGuide'
+import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
 
 interface Variant {
   id: number
@@ -23,6 +24,7 @@ interface MerchProductDetailProps {
     images: string[]
     variants: Variant[]
     fulfillmentReady?: boolean
+    designPreview?: MerchGarmentPreviewDesign
   }
 }
 
@@ -34,7 +36,11 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
   const [showSizeGuide, setShowSizeGuide] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
 
-  const allImages = [product.thumbnail, ...(product.images || [])].filter(Boolean)
+  const allImages = product.designPreview
+    ? (product.images || []).filter(Boolean)
+    : [product.thumbnail, ...(product.images || [])].filter(Boolean)
+  const showGarmentPreview =
+    Boolean(product.designPreview) && (allImages.length === 0 ? true : activeImage === 0)
   const shippable = product.fulfillmentReady !== false && Boolean(selectedVariant?.printful_variant_id)
   const sizes = Array.from(new Set(product.variants.map((v) => v.size).filter(Boolean)))
   const colors = Array.from(new Set(product.variants.map((v) => v.color).filter(Boolean)))
@@ -90,7 +96,9 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
         {/* Images */}
         <div className="space-y-3">
           <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-900">
-            {allImages[activeImage] &&
+            {showGarmentPreview && product.designPreview ? (
+              <MerchGarmentPreview design={product.designPreview} />
+            ) : allImages[activeImage] &&
               (allImages[activeImage].startsWith('/api/') ? (
                 <img
                   src={allImages[activeImage]}

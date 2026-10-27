@@ -17,3 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_memberships_email ON memberships(customer_email);
 CREATE INDEX IF NOT EXISTS idx_memberships_status ON memberships(status);
 CREATE INDEX IF NOT EXISTS idx_memberships_stripe_sub ON memberships(stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_customer ON memberships(stripe_customer_id);
+
+-- Service role only. Stripe customer ids and emails stay off the Data API.
+ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE memberships FROM PUBLIC, anon, authenticated;

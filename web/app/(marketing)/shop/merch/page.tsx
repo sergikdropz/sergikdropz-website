@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import MerchGrid from '@/components/shop/MerchGrid'
+import ShopSubshopNav from '@/components/shop/ShopSubshopNav'
 
 export default function MerchPage() {
   const [products, setProducts] = useState<any[]>([])
@@ -26,19 +27,19 @@ export default function MerchPage() {
   }, [])
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-4">
+    <div className="min-h-screen pt-20 pb-16 px-4">
       <div className="max-w-7xl mx-auto">
-        <nav className="mb-8">
-          <Link href="/shop" className="text-gray-400 hover:text-white text-sm transition-colors">
-            ← Back to Shop
-          </Link>
-        </nav>
+        <ShopSubshopNav active="merch" />
 
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white font-six-caps tracking-wide">MERCH</h1>
-          <p className="text-gray-400 mt-2">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/90">Merch Shop</p>
+          <h1 className="font-six-caps text-5xl font-bold tracking-[0.12em] text-white sm:text-6xl">Merch</h1>
+          <p className="mx-auto mt-3 max-w-xl text-gray-400">
             Rep the sound. Print-on-demand, shipped worldwide.
           </p>
+          <Link href="/shop" className="mt-4 inline-block text-sm text-gray-500 transition hover:text-gray-300">
+            ← All shops
+          </Link>
         </div>
 
         {loading ? (

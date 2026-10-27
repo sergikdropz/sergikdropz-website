@@ -5,6 +5,7 @@ import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useRouter } from 'next/navigation'
 import MerchFittingRoom from '@/components/admin/MerchFittingRoom'
 import type { StageView } from '@/components/admin/MerchDesignMaker'
+import { readStageView, writeStageView } from '@/lib/merch/studio-session'
 
 interface MerchOrder {
   id: string
@@ -34,6 +35,18 @@ export default function AdminMerchPage() {
   const [trackingEdit, setTrackingEdit] = useState('')
   const [desk, setDesk] = useState<'design' | 'store'>('design')
   const [stageView, setStageView] = useState<StageView>('design')
+  const [stageReady, setStageReady] = useState(false)
+
+  useEffect(() => {
+    const stored = readStageView()
+    if (stored) setStageView(stored)
+    setStageReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!stageReady) return
+    writeStageView(stageView)
+  }, [stageReady, stageView])
 useEffect(() => {
     if (isAdmin) loadData()
   }, [isAdmin])

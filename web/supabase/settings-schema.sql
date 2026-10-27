@@ -72,10 +72,11 @@ CREATE POLICY "Admins can delete settings"
     )
   );
 
--- Policy: Service role can do everything (for API routes)
+-- Service role bypasses RLS. This policy does not grant the Data API roles access.
 CREATE POLICY "Service role full access to settings"
   ON settings
   FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);
 

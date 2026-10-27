@@ -41,9 +41,10 @@ CREATE POLICY "Admins can view analytics events"
     )
   );
 
--- Policy: Service role can do everything (for API routes)
+-- Service role bypasses RLS. Public inserts stay on the separate insert policy.
 CREATE POLICY "Service role full access to analytics"
   ON analytics_events
   FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);

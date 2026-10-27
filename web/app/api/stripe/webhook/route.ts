@@ -313,6 +313,21 @@ export async function POST(request: Request) {
 
       // --- EP Bundle purchase ---
       else if (productType === 'ep-bundle') {
+        const creditApplied = Number(session.metadata?.creditAppliedCents || 0)
+        if (linkedUserId && creditApplied > 0) {
+          try {
+            const { applyCheckoutCreditSpendFromMetadata } = await import('@/lib/shop/ep-bundle-checkout')
+            await applyCheckoutCreditSpendFromMetadata(supabase, {
+              userId: linkedUserId,
+              sessionId: session.id,
+              creditAppliedCents: creditApplied,
+              note: `ep-bundle:${session.metadata?.productId || ''}`,
+            })
+          } catch (creditErr) {
+            console.error('Shop credit spend skipped:', creditErr)
+          }
+        }
+
         const { data: purchaseRecord } = await supabase.from('purchases').insert({
           stripe_session_id: session.id,
           track_id: session.metadata?.productId || session.metadata?.trackId,
@@ -467,6 +482,32 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_subscription_id', invoice.subscription as string)
+
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('user_id, plan_id')
+          .eq('stripe_subscription_id', invoice.subscription as string)
+          .maybeSingle()
+
+        const planId = membership?.plan_id
+        const userId = membership?.user_id
+        if (
+          userId &&
+          (planId === 'supporter' || planId === 'inner-circle') &&
+          invoice.id
+        ) {
+          const subtotalExTax =
+            typeof invoice.subtotal_excluding_tax === 'number'
+              ? invoice.subtotal_excluding_tax
+              : invoice.subtotal || 0
+          const { grantSubscriptionShopCredits } = await import('@/lib/shop/shop-credits')
+          await grantSubscriptionShopCredits(supabase, {
+            userId,
+            planId,
+            stripeInvoiceId: invoice.id,
+            subtotalExTaxCents: subtotalExTax,
+          })
+        }
 
         console.log('Subscription renewed:', invoice.subscription)
       } catch (error: any) {

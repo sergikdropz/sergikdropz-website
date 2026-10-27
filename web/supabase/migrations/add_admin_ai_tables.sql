@@ -79,6 +79,7 @@ BEGIN
     CREATE POLICY "Service role full access to ai_runs"
       ON ai_runs
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;
@@ -117,6 +118,7 @@ BEGIN
     CREATE POLICY "Service role full access to ai_actions"
       ON ai_actions
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;
@@ -155,6 +157,7 @@ BEGIN
     CREATE POLICY "Service role full access to ai_approvals"
       ON ai_approvals
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;

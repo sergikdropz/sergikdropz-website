@@ -20,6 +20,10 @@ CREATE INDEX IF NOT EXISTS idx_licenses_customer_email ON licenses(customer_emai
 CREATE INDEX IF NOT EXISTS idx_licenses_track_id ON licenses(track_id);
 CREATE INDEX IF NOT EXISTS idx_licenses_status ON licenses(status);
 
+-- Service role only. Customer emails and payment amounts stay off the Data API.
+ALTER TABLE licenses ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE licenses FROM PUBLIC, anon, authenticated;
+
 -- Add license_tier and product_type columns to purchases table
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS license_tier TEXT;
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'track';

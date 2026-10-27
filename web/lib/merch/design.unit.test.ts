@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MERCH_BLANKS } from '@/lib/merch/blanks'
 import {
   artOutside,
+  scalePlacementAboutCenter,
   designPlacementIssues,
   designToShopProduct,
   dpiGrade,
@@ -30,6 +31,14 @@ function placement(overrides: Partial<Parameters<typeof artOutside>[0]> = {}) {
 }
 
 describe('merch design math', () => {
+  it('keeps the artwork center fixed while the corner resize changes its size', () => {
+    const start = { x: 0.2, y: 0.3, scale: 0.4 }
+    const height = 0.5
+    const next = scalePlacementAboutCenter(start, height, 0.6)
+    expect(next.x + next.scale / 2).toBeCloseTo(start.x + start.scale / 2)
+    expect(next.y + (0.6 * (height / start.scale)) / 2).toBeCloseTo(start.y + height / 2)
+  })
+
   it('rounds a retail price up to a clean dollar above cost and a 2.2× mark', () => {
     expect(suggestRetail(13)).toBe(29)
     expect(suggestRetail(8)).toBe(20)

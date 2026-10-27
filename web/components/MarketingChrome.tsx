@@ -4,8 +4,6 @@ import type { ReactNode } from 'react'
 import BackgroundImages from '@/components/BackgroundImages'
 import ConditionalHeader from '@/components/ConditionalHeader'
 import ConditionalFooter from '@/components/ConditionalFooter'
-import ConditionalNavigationButtons from '@/components/ConditionalNavigationButtons'
-
 /**
  * Public marketing shell — no global player, no catalog polling, no player padding.
  */
@@ -26,7 +24,6 @@ export default function MarketingChrome({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <ConditionalNavigationButtons />
       <ConditionalFooter />
     </>
   )

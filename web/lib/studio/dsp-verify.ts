@@ -555,6 +555,15 @@ export function formatDspVerifySummary(summary: DspVerifySummary): string {
   return `${summary.live} live · ${summary.reachable} reachable · ${summary.artist_only} artist · ${summary.failed} failed · ${summary.b2b} B2B`
 }
 
+export function asDspVerificationStatus(
+  status: string | null | undefined,
+): DspVerificationStatus | null | undefined {
+  if (status == null) return status
+  return (DSP_VERIFICATION_STATUSES as readonly string[]).includes(status)
+    ? (status as DspVerificationStatus)
+    : null
+}
+
 /** True when the link counts as release-live for ops / marketing. */
 export function isReleaseLiveOnStore(status: DspVerificationStatus | null | undefined): boolean {
   return status === 'live' || status === 'reachable'

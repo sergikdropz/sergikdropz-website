@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { withArtVersion } from '@/lib/merch/art-url'
 
 const BUCKET = 'gallery-images'
 
@@ -40,6 +41,49 @@ export async function storeMerchArt(
   return { id, url: `/api/merch/art/${id}` }
 }
 
+/** Overwrites one library file. The id and public path stay the same. */
+export async function replaceMerchArt(
+  id: string,
+  bytes: Buffer,
+  contentType: string,
+): Promise<{ id: string; url: string }> {
+  if (!isMerchArtId(id)) throw new Error('Save edit can only replace a library file')
+
+  try {
+    const supabase = createSupabaseServerClient()
+    const path = `merch-designs/${id}`
+    const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
+      contentType,
+      upsert: true,
+    })
+    if (!error) {
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+      if (data.publicUrl) {
+        try {
+          await mkdir(artDir(), { recursive: true })
+          await writeFile(artFilePath(id), bytes)
+        } catch {
+          /* local copy is optional */
+        }
+        return { id, url: data.publicUrl }
+      }
+    } else {
+      console.error('merch art storage replace:', error.message)
+    }
+  } catch (error) {
+    console.error('merch art storage replace:', error)
+  }
+
+  try {
+    await mkdir(artDir(), { recursive: true })
+    await writeFile(artFilePath(id), bytes)
+    return { id, url: `/api/merch/art/${id}` }
+  } catch (error) {
+    console.error('merch art local replace:', error)
+    throw new Error('Could not replace that artwork')
+  }
+}
+
 const UPLOAD_ID = /^[0-9a-f-]{36}\.(png|jpg)$/i
 
 export function isMerchArtId(id: string): boolean {
@@ -67,11 +111,12 @@ export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]>
         if (!item.name || !UPLOAD_ID.test(item.name)) continue
         const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(`merch-designs/${item.name}`)
         if (!pub.publicUrl) continue
+        const createdAt = item.updated_at || item.created_at || new Date(0).toISOString()
         byId.set(item.name, {
           id: item.name,
-          url: pub.publicUrl,
+          url: withArtVersion(pub.publicUrl, createdAt),
           label: item.name.slice(0, 8),
-          createdAt: item.created_at || item.updated_at || new Date(0).toISOString(),
+          createdAt,
         })
       }
     }
@@ -91,7 +136,7 @@ export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]>
       if (existing && existing.createdAt >= createdAt) continue
       byId.set(name, {
         id: name,
-        url: `/api/merch/art/${name}`,
+        url: withArtVersion(`/api/merch/art/${name}`, createdAt),
         label: name.slice(0, 8),
         createdAt,
       })

@@ -159,6 +159,12 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/admin/merch/printful-status', method: 'GET', access: 'admin_read', reason: 'Printful env and catalog readiness for SERGWEAR' },
   { path: '/api/admin/merch/sync', method: 'POST', access: 'admin_write', reason: 'Sync Printful store products to merch-products.json' },
   { path: '/api/merch/art/[id]', method: 'GET', access: 'public', reason: 'Public merch print file' },
+  {
+    path: '/api/merch/catalog/[id]/garment',
+    method: 'GET',
+    access: 'public',
+    reason: 'Printful garment photos and placement templates for shop previews',
+  },
   { path: '/api/admin/ai/browser', method: 'POST', access: 'admin_write', reason: 'Drive the Admin browser, or mint a pass for the Mac dev server' },
   { path: '/api/local/admin-browser', method: 'POST', access: 'admin_write', reason: 'Loopback Admin browser. Requires a pass minted by a signed-in admin. Refused on Vercel.' },
 ] as const

@@ -20,3 +20,7 @@ CREATE TABLE IF NOT EXISTS merch_orders (
 CREATE INDEX IF NOT EXISTS idx_merch_orders_email ON merch_orders(customer_email);
 CREATE INDEX IF NOT EXISTS idx_merch_orders_status ON merch_orders(status);
 CREATE INDEX IF NOT EXISTS idx_merch_orders_printful ON merch_orders(printful_order_id);
+
+-- Service role only. Shipping addresses and customer emails stay off the Data API.
+ALTER TABLE merch_orders ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE merch_orders FROM PUBLIC, anon, authenticated;

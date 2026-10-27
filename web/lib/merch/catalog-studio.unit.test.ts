@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  coloredTemplate,
+  designGarmentImage,
   filterPrintFilesForTechnique,
   isAllOverCatalogProduct,
   studioPlacementsForProduct,
@@ -57,6 +59,37 @@ describe('catalog-studio', () => {
     const placements = studioPlacementsForProduct(detail, MERCH_BLANKS[0])
     expect(placements.some((p) => p.id === 'front')).toBe(true)
     expect(placements.some((p) => p.id === 'back')).toBe(false)
+  })
+
+  it('uses the selected variant template on the design stage', () => {
+    const detail = mockDetail({
+      variants: [
+        { id: 10, color: 'Black', size: 'One size', image: 'https://files.example/catalog-black.jpg' },
+        { id: 11, color: 'White', size: 'One size', image: 'https://files.example/catalog-white.jpg' },
+      ],
+      printFiles: [
+        {
+          fileId: 'front',
+          type: 'front',
+          title: 'Front',
+          additionalPrice: null,
+          options: [],
+          templateUrl: 'https://files.example/base.png',
+          variantTemplates: {
+            '10': { imageUrl: 'https://files.example/base.png', backgroundColor: '#2a2a2a' },
+            '11': { imageUrl: 'https://files.example/base.png', backgroundColor: '#ffffff' },
+          },
+          mockupStage: { x: 0.2, y: 0.2, w: 0.4, h: 0.4 },
+        },
+      ],
+    })
+    const file = detail.printFiles[0]
+    expect(designGarmentImage(detail, file, 'White', 'One size')).toBe('https://files.example/base.png')
+    expect(coloredTemplate(detail, file, 'White', 'One size')).toEqual({
+      imageUrl: 'https://files.example/base.png',
+      backgroundColor: '#ffffff',
+    })
+    expect(coloredTemplate(detail, file, 'Black', 'One size')?.backgroundColor).toBe('#2a2a2a')
   })
 
   it('filters dad hat files by embroidery vs dtf technique', () => {

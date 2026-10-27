@@ -69,6 +69,7 @@ BEGIN
     CREATE POLICY "Service role full access to admin_tasks"
       ON admin_tasks
       FOR ALL
+      TO service_role
       USING (true)
       WITH CHECK (true);
   END IF;

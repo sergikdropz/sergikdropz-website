@@ -61,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_track_plays_source ON track_plays(source);
 ALTER TABLE track_plays ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Service role full access to track_plays"
-  ON track_plays FOR ALL USING (true) WITH CHECK (true);
+  ON track_plays FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Fans can view own plays"
   ON track_plays FOR SELECT
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_smart_playlists_system ON smart_playlists(is_syst
 ALTER TABLE smart_playlists ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Service role full access to smart_playlists"
-  ON smart_playlists FOR ALL USING (true) WITH CHECK (true);
+  ON smart_playlists FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Public can view admin smart playlists"
   ON smart_playlists FOR SELECT
