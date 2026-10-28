@@ -1669,6 +1669,132 @@ export default function MerchFittingRoom({
     }
   }
 
+  /**
+   * Raise the active placement's art past the 150 DPI print threshold, keeping its
+   * current size and position. Prefers Picsart's AI upscaler (real detail) and
+   * falls back to a local high-quality canvas resample when no key is configured.
+   */
+  async function optimizePrintQuality() {
+    if (!layer?.assetUrl) {
+      setNote('Place some art first, then optimize it.')
+      return
+    }
+    const currentDpi = effectiveDpi(layer, area)
+    if (!Number.isFinite(currentDpi) || currentDpi <= 0) {
+      setNote('Place some art first, then optimize it.')
+      return
+    }
+    if (dpiGrade(currentDpi) === 'good') {
+      setNote('Print quality is already at 150+ DPI.')
+      return
+    }
+
+    setBusy('Optimizing print quality')
+    setNote(null)
+    const previousUrl = layer.assetUrl
+    const sourceW = layer.assetWidth
+    // Aim a little past 150 DPI for margin.
+    const TARGET_DPI = 165
+    const neededFactor = Math.min(8, Math.max(2, Math.ceil(TARGET_DPI / currentDpi)))
+
+    // Swap the upscaled art into every placement that references the old art,
+    // keeping scale/position/rotation so only the resolution changes.
+    const swapLayer = (nextUrl: string, nextW: number, nextH: number) => {
+      pushStudioUndo()
+      const swap = (art: ArtPlacement): ArtPlacement =>
+        sameMerchArt(art.assetUrl, previousUrl)
+          ? { ...art, assetUrl: nextUrl, assetWidth: nextW, assetHeight: nextH }
+          : art
+      setLayers((current) => {
+        const next = { ...current }
+        for (const key of Object.keys(next) as PlacementId[]) {
+          const art = next[key]
+          if (art) next[key] = swap(art)
+        }
+        return next
+      })
+      setCatalogFileLayers((current) => {
+        const next = { ...current }
+        for (const key of Object.keys(next)) {
+          const art = next[key]
+          if (art) next[key] = swap(art)
+        }
+        return next
+      })
+    }
+
+    const reportDpi = (nextW: number) =>
+      sourceW > 0 && nextW > 0
+        ? Math.round(currentDpi * (nextW / sourceW))
+        : Math.round(currentDpi * neededFactor)
+
+    try {
+      // 1) Try Picsart AI upscaling (best quality) when the key is configured.
+      try {
+        const res = await fetch('/api/admin/merch/art/upscale', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: previousUrl, factor: neededFactor }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.url) {
+            const nextUrl = withArtVersion(String(data.url), Date.now())
+            const image = await loadImage(nextUrl, true)
+            const nextW = image.naturalWidth || Math.round(sourceW * neededFactor)
+            const nextH = image.naturalHeight || Math.round(layer.assetHeight * neededFactor)
+            swapLayer(nextUrl, nextW, nextH)
+            refreshUploads()
+            setNote(`Print quality optimized with Picsart to about ${reportDpi(nextW)} DPI.`)
+            return
+          }
+        } else if (res.status !== 503) {
+          const data = await res.json().catch(() => null)
+          console.error('picsart upscale:', data?.error)
+        }
+      } catch (error) {
+        console.error('picsart upscale request failed:', error)
+      }
+
+      // 2) Local high-quality canvas resample fallback.
+      const image = await loadImage(previousUrl, true)
+      const srcW = image.naturalWidth || sourceW
+      const srcH = image.naturalHeight || layer.assetHeight
+      if (srcW <= 0 || srcH <= 0) throw new Error('Could not read that image')
+      const MAX_EDGE = 4500
+      const factor = Math.min(TARGET_DPI / currentDpi, MAX_EDGE / Math.max(srcW, srcH), 4)
+      if (factor <= 1.01) {
+        setNote('This art is already at the maximum useful print resolution.')
+        return
+      }
+      const nextW = Math.round(srcW * factor)
+      const nextH = Math.round(srcH * factor)
+      const canvas = document.createElement('canvas')
+      canvas.width = nextW
+      canvas.height = nextH
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('Could not prepare the canvas')
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(image, 0, 0, nextW, nextH)
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (!blob) throw new Error('Could not export the optimized art')
+      const fd = new FormData()
+      fd.set('file', new File([blob], 'optimized.png', { type: 'image/png' }))
+      const storeRes = await fetch('/api/admin/merch/art', { method: 'POST', body: fd })
+      const storeData = await storeRes.json()
+      if (!storeRes.ok || !storeData.url) throw new Error(storeData.error || 'Could not store the optimized art')
+      const nextUrl = withArtVersion(String(storeData.url), Date.now())
+      swapLayer(nextUrl, nextW, nextH)
+      refreshUploads()
+      setNote(`Print quality optimized to about ${reportDpi(nextW)} DPI.`)
+    } catch (error: unknown) {
+      setNote(error instanceof Error ? error.message : 'Could not optimize print quality')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function persist(nextStatus?: DesignStatus): Promise<MerchDesign> {
     const res = await fetch('/api/admin/merch/designs', {
       method: 'POST',
@@ -2380,6 +2506,8 @@ export default function MerchFittingRoom({
           <MerchDesignSidebar
             nav={designNav}
             onNav={setDesignNav}
+            activeDpiGrade={activeDpiGrade}
+            onOptimizeQuality={optimizePrintQuality}
             detail={catalogStudio}
             technique={catalogTechnique}
             techniques={catalogStudio.techniques}

@@ -826,11 +826,6 @@ export function MerchDesignCanvas({
             </div>
           </div>
         </div>
-        {activeDpiGrade ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-            <DpiQualityHint grade={activeDpiGrade} />
-          </div>
-        ) : null}
       </div>
     </div>
   )
@@ -885,6 +880,8 @@ export function MerchDesignSidebar({
   onVisibility,
   guidelinesOpen,
   onToggleGuidelines,
+  activeDpiGrade,
+  onOptimizeQuality,
 }: {
   addOnRows: CatalogAddOnRow[]
   nav: DesignNavId
@@ -937,6 +934,10 @@ export function MerchDesignSidebar({
   onVisibility: () => void
   guidelinesOpen: boolean
   onToggleGuidelines: () => void
+  /** DPI grade of the active placement's art, shown at the bottom of the panel. */
+  activeDpiGrade?: DpiGrade | null
+  /** Upscale the active art so it clears the 150 DPI print threshold. */
+  onOptimizeQuality?: () => void | Promise<void>
 }) {
   const { product } = detail
   const techniqueLabel = techniques.find((item) => item.key === technique)?.label || technique
@@ -1186,6 +1187,23 @@ export function MerchDesignSidebar({
             productId={product.id}
           />
         )}
+
+        {activeDpiGrade ? (
+          <div className="mt-auto border-t border-white/10 pt-3">
+            {activeDpiGrade !== 'good' && onOptimizeQuality ? (
+              <button
+                type="button"
+                onClick={() => void onOptimizeQuality()}
+                disabled={Boolean(busy)}
+                className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-200 transition-colors hover:border-sky-300/70 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span aria-hidden>✦</span>
+                Optimize print quality
+              </button>
+            ) : null}
+            <DpiQualityHint grade={activeDpiGrade} />
+          </div>
+        ) : null}
       </div>
     </div>
   )

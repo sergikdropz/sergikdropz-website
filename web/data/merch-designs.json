@@ -61,7 +61,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-28T07%3A12%3A16.893Z",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
           "assetWidth": 1376,
           "assetHeight": 1442,
           "x": 0.026454499310222868,
@@ -190,7 +190,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-28T07%3A12%3A16.893Z",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
           "assetWidth": 1376,
           "assetHeight": 1442,
           "x": 0.3337568905794319,

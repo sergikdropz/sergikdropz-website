@@ -506,8 +506,14 @@ export async function syncPrintfulCatalogFromApi(): Promise<PrintfulCatalogSnaps
     productCount: products.length,
     products,
   }
-  await mkdir(join(process.cwd(), 'data'), { recursive: true })
-  await writeFile(catalogPath(), JSON.stringify(payload, null, 2))
+  // Persisting the cache is best-effort: the serverless filesystem is read-only,
+  // so a failed write must not abort the sync. The fresh payload is still returned.
+  try {
+    await mkdir(join(process.cwd(), 'data'), { recursive: true })
+    await writeFile(catalogPath(), JSON.stringify(payload, null, 2))
+  } catch (error) {
+    console.error('printful catalog cache write:', error)
+  }
   return payload
 }
 

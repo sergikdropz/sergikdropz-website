@@ -87,8 +87,14 @@ export async function syncPrintfulCategoriesFromApi(): Promise<PrintfulCategoryS
     roots,
     flat: rows.map((row) => ({ id: row.id, parentId: row.parent_id, title: row.title })),
   }
-  await mkdir(join(process.cwd(), 'data'), { recursive: true })
-  await writeFile(categoriesPath(), JSON.stringify(payload, null, 2))
+  // Best-effort cache write: the serverless filesystem is read-only, so a failed
+  // write must not abort the sync. The fresh payload is still returned.
+  try {
+    await mkdir(join(process.cwd(), 'data'), { recursive: true })
+    await writeFile(categoriesPath(), JSON.stringify(payload, null, 2))
+  } catch (error) {
+    console.error('printful categories cache write:', error)
+  }
   return payload
 }
 
