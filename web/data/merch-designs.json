@@ -2,8 +2,8 @@
   "designs": [
     {
       "id": "68b08f8b-b11b-4899-8f8d-621f520ca3a4",
-      "name": "Classic Snapback | Yupoong 6089M",
-      "slug": "classic-snapback-yupoong-6089m",
+      "name": "OLLIN Logo Black Snapback",
+      "slug": "ollin-logo-black-snapback",
       "blankId": "hat-dad",
       "catalogProductId": 99,
       "family": "hat",
@@ -50,12 +50,12 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-28T02:44:04.032Z",
-      "updatedAt": "2026-10-28T03:57:09.243Z"
+      "updatedAt": "2026-10-28T03:59:29.180Z"
     },
     {
       "id": "58008953-5db7-4be2-9c90-7f26b9b58eda",
-      "name": "SERGIKfont Snapback",
-      "slug": "sergikfont-snapback",
+      "name": "SERGIK Stone Font Snapback",
+      "slug": "sergik-stone-font-snapback",
       "blankId": "hat-dad",
       "catalogProductId": 99,
       "family": "hat",
@@ -96,7 +96,7 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-27T11:42:55.924Z",
-      "updatedAt": "2026-10-28T03:56:58.028Z"
+      "updatedAt": "2026-10-28T03:59:57.519Z"
     },
     {
       "id": "a8be51ca-66ae-4da1-a8a5-a57130611e36",
