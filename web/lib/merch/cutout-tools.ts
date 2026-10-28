@@ -198,7 +198,7 @@ export function refineCutoutEdge(image: ImageDataLike, refine: RefineEdge): Imag
   const shift = Math.max(-8, Math.min(8, Math.round(refine.shift)))
   if (radius === 0 && smooth === 0 && feather === 0 && contrast === 0 && shift === 0) return image
 
-  let current = shift === 0 ? image : morphCutoutAlpha(image, shift)
+  const current = shift === 0 ? image : morphCutoutAlpha(image, shift)
   const { width, height } = current
   const original = alphaOf(current)
   const blurRadius = Math.round(smooth / 28 + feather / 18)

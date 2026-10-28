@@ -666,8 +666,8 @@ export function sourceToDisplay(
   flipY: boolean,
   rotate: number,
 ): { x: number; y: number } {
-  let sx = flipX ? 1 - x : x
-  let sy = flipY ? 1 - y : y
+  const sx = flipX ? 1 - x : x
+  const sy = flipY ? 1 - y : y
   const steps = Math.round((((rotate % 360) + 360) % 360) / 90) % 4
   if (steps === 1) return { x: clamp(1 - sy, 0, 1), y: clamp(sx, 0, 1) }
   if (steps === 2) return { x: clamp(1 - sx, 0, 1), y: clamp(1 - sy, 0, 1) }
