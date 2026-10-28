@@ -1,7 +1,22 @@
 import {
+  applyMaskToMatte,
+  applySampleDabs,
+  defringeRimColor,
+  DEFAULT_REFINE,
+  inpaintStamps,
+  polygonMask,
+  refineCutoutEdge,
+  type InpaintStamp,
+  type NormPoint,
+  type RefineEdge,
+  type SampleDab,
+} from '@/lib/merch/cutout-tools'
+import {
   applyMagicWand,
   cleanCutoutFringe,
+  colorRangeMask,
   crispCutoutEdge,
+  edgeSubjectCutout,
   fillCutoutHoles,
   invertCutoutAlpha,
   magicWandMask,
@@ -57,6 +72,21 @@ export type WandFill = {
   restore: boolean
 }
 
+export type RangeFill = {
+  x: number
+  y: number
+  tolerance: number
+  contiguous: boolean
+  restore: boolean
+}
+
+export type LassoRegion = {
+  points: NormPoint[]
+  restore: boolean
+}
+
+export type { InpaintStamp, RefineEdge, SampleDab }
+
 export type Rgb = [number, number, number]
 
 export type ArtEdit = {
@@ -78,8 +108,17 @@ export type ArtEdit = {
   shave: number
   /** 0–100. Snaps a soft edge and pulls background colour out of the rim. */
   crisp: number
+  /** Edge-aware border cut. Keeps strokes that a loose colour flood would eat. */
+  subjectCutout: boolean
   strokes: EdgeStroke[]
   wandFills: WandFill[]
+  rangeFills: RangeFill[]
+  lassos: LassoRegion[]
+  sampleDabs: SampleDab[]
+  inpaints: InpaintStamp[]
+  refine: RefineEdge
+  defringe: 'off' | 'white' | 'black'
+  defringeAmount: number
   invertMask: boolean
   fillHoles: boolean
   /** Net morphological expand (+) / contract (−) on the matte, in pixels. */
@@ -129,6 +168,14 @@ export function cloneArtEdit(edit: ArtEdit): ArtEdit {
     borderColor: [...edit.borderColor],
     strokes: edit.strokes.map((stroke) => ({ ...stroke })),
     wandFills: edit.wandFills.map((fill) => ({ ...fill })),
+    rangeFills: edit.rangeFills.map((fill) => ({ ...fill })),
+    lassos: edit.lassos.map((region) => ({
+      restore: region.restore,
+      points: region.points.map((point) => ({ ...point })),
+    })),
+    sampleDabs: edit.sampleDabs.map((dab) => ({ ...dab })),
+    inpaints: edit.inpaints.map((stamp) => ({ ...stamp })),
+    refine: { ...edit.refine },
   }
 }
 
@@ -148,8 +195,16 @@ export function defaultArtEdit(): ArtEdit {
     edgeClean: 0,
     shave: 0,
     crisp: 0,
+    subjectCutout: false,
     strokes: [],
     wandFills: [],
+    rangeFills: [],
+    lassos: [],
+    sampleDabs: [],
+    inpaints: [],
+    refine: { ...DEFAULT_REFINE },
+    defringe: 'off',
+    defringeAmount: 60,
     invertMask: false,
     fillHoles: false,
     maskExpand: 0,
@@ -346,12 +401,14 @@ function boxBlur(image: ImageDataLike, radius: number): ImageDataLike {
 }
 
 const cutoutCache = new WeakMap<Uint8ClampedArray | number[], ImageDataLike>()
+const subjectCache = new WeakMap<Uint8ClampedArray | number[], ImageDataLike>()
 
-function cachedCutout(image: ImageDataLike): ImageDataLike {
-  const hit = cutoutCache.get(image.data)
+function cachedCutout(image: ImageDataLike, subject: boolean): ImageDataLike {
+  const cache = subject ? subjectCache : cutoutCache
+  const hit = cache.get(image.data)
   if (hit && hit.width === image.width && hit.height === image.height) return hit
-  const next = removeSolidBackground(image)
-  cutoutCache.set(image.data, next)
+  const next = subject ? edgeSubjectCutout(image) : removeSolidBackground(image)
+  cache.set(image.data, next)
   return next
 }
 
@@ -396,6 +453,24 @@ function applyWandFills(original: ImageDataLike, current: ImageDataLike, fills: 
     out = applyMagicWand(out, original, sx, sy, fill.tolerance, fill.restore, {
       edgeGuard: fill.edgeGuard ?? 62,
     })
+  }
+  return out
+}
+
+function applyRangeFills(original: ImageDataLike, current: ImageDataLike, fills: RangeFill[]): ImageDataLike {
+  let out = current
+  for (const fill of fills) {
+    const mask = colorRangeMask(out, fill.x * out.width, fill.y * out.height, fill.tolerance, fill.contiguous, 62)
+    out = applyMaskToMatte(out, original, mask, fill.restore)
+  }
+  return out
+}
+
+function applyLassos(original: ImageDataLike, current: ImageDataLike, regions: LassoRegion[]): ImageDataLike {
+  let out = current
+  for (const region of regions) {
+    const mask = polygonMask(out.width, out.height, region.points)
+    out = applyMaskToMatte(out, original, mask, region.restore)
   }
   return out
 }
@@ -584,6 +659,22 @@ export function displayToSource(
   }
 }
 
+export function sourceToDisplay(
+  x: number,
+  y: number,
+  flipX: boolean,
+  flipY: boolean,
+  rotate: number,
+): { x: number; y: number } {
+  let sx = flipX ? 1 - x : x
+  let sy = flipY ? 1 - y : y
+  const steps = Math.round((((rotate % 360) + 360) % 360) / 90) % 4
+  if (steps === 1) return { x: clamp(1 - sy, 0, 1), y: clamp(sx, 0, 1) }
+  if (steps === 2) return { x: clamp(1 - sx, 0, 1), y: clamp(1 - sy, 0, 1) }
+  if (steps === 3) return { x: clamp(sy, 0, 1), y: clamp(1 - sx, 0, 1) }
+  return { x: clamp(sx, 0, 1), y: clamp(sy, 0, 1) }
+}
+
 export function autoTone(image: ImageDataLike): Pick<ArtTone, 'brightness' | 'contrast'> {
   const { data } = image
   const hist = new Uint32Array(256)
@@ -647,16 +738,25 @@ export function applyEffect(edit: ArtEdit, effect: 'none' | 'bw' | 'film' | 'blu
 /** Matte used for brush / magic-wand sampling (source space, before orient). */
 export function cutoutMatteForLocalEdits(image: ImageDataLike, edit: ArtEdit, forceCutout = false): ImageDataLike | null {
   if (!edit.cutout && !forceCutout) return null
-  const cached = cachedCutout(image)
+  const cached = cachedCutout(image, edit.subjectCutout)
   const matte = { data: new Uint8ClampedArray(cached.data), width: cached.width, height: cached.height }
   let current = cleanCutoutFringe(matte, image, edit.edgeClean)
   current = shaveCutout(current, ((edit.shave ?? 0) / 100) * 6)
   current = crispCutoutEdge(current, edit.crisp ?? 0)
   current = applyStrokes(image, current, edit.strokes)
   current = applyWandFills(image, current, edit.wandFills)
+  current = applyRangeFills(image, current, edit.rangeFills)
+  current = applyLassos(image, current, edit.lassos)
   const hasLocalErase =
-    edit.strokes.some((stroke) => !stroke.restore) || edit.wandFills.some((fill) => !fill.restore)
+    edit.strokes.some((stroke) => !stroke.restore) ||
+    edit.wandFills.some((fill) => !fill.restore) ||
+    edit.rangeFills.some((fill) => !fill.restore) ||
+    edit.lassos.some((region) => !region.restore)
   if (hasLocalErase) current = polishCutoutMatte(current)
+  if (edit.defringe !== 'off') current = defringeRimColor(current, edit.defringe, edit.defringeAmount)
+  current = refineCutoutEdge(current, edit.refine)
+  current = applySampleDabs(current, edit.sampleDabs)
+  current = inpaintStamps(current, edit.inpaints)
   return current
 }
 
@@ -698,6 +798,22 @@ export function previewMagicWandMask(
   return magicWandMask(matte, sx, sy, { tolerance, edgeGuard })
 }
 
+export function previewColorRangeMask(
+  image: ImageDataLike,
+  edit: ArtEdit,
+  normX: number,
+  normY: number,
+  tolerance: number,
+  contiguous: boolean,
+  forceCutout = false,
+): Uint8Array | null {
+  const matte = cutoutMatteForLocalEdits(image, edit, forceCutout)
+  if (!matte) return null
+  const sx = clamp(normX, 0, 1) * matte.width
+  const sy = clamp(normY, 0, 1) * matte.height
+  return colorRangeMask(matte, sx, sy, tolerance, contiguous, 62)
+}
+
 export function applyArtEdit(image: ImageDataLike, edit: ArtEdit, view: ArtView = 'final'): ImageDataLike {
   let current: ImageDataLike = image
   if (edit.cutout) {
@@ -706,6 +822,9 @@ export function applyArtEdit(image: ImageDataLike, edit: ArtEdit, view: ArtView 
     if (edit.fillHoles) current = fillCutoutHoles(current)
     if (edit.maskExpand) current = morphCutoutAlpha(current, edit.maskExpand)
     if (edit.invertMask) current = invertCutoutAlpha(current)
+  } else if (edit.sampleDabs.length || edit.inpaints.length) {
+    current = applySampleDabs(current, edit.sampleDabs)
+    current = inpaintStamps(current, edit.inpaints)
   }
   current = applyToneAndCurves(current, edit.tone, edit.curves)
   const radius = Math.round(edit.tone.blur * Math.min(current.width, current.height))

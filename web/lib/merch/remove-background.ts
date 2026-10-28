@@ -77,23 +77,63 @@ function readRgb(data: Uint8ClampedArray | number[], index: number): [number, nu
   return [data[i], data[i + 1], data[i + 2]]
 }
 
-function erodeBinaryMask(mask: Uint8Array, width: number, height: number, steps: number): Uint8Array {
-  let current = mask
-  for (let s = 0; s < steps; s++) {
-    const next = new Uint8Array(current.length)
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const p = y * width + x
-        if (!current[p]) continue
-        if (x === 0 || y === 0 || x === width - 1 || y === height - 1) continue
-        const keep =
-          current[p - 1] && current[p + 1] && current[p - width] && current[p + width]
-        if (keep) next[p] = 1
-      }
-    }
-    current = next
+function pixelLuma(data: Uint8ClampedArray | number[], p: number): number {
+  const i = p * 4
+  return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+}
+
+function gradientAt(data: Uint8ClampedArray | number[], width: number, height: number, p: number): number {
+  const x = p % width
+  const y = (p - x) / width
+  if (x < 1 || y < 1 || x >= width - 1 || y >= height - 1) return 0
+  const l = (px: number, py: number) => pixelLuma(data, py * width + px)
+  const gx =
+    -l(x - 1, y - 1) +
+    l(x + 1, y - 1) -
+    2 * l(x - 1, y) +
+    2 * l(x + 1, y) -
+    l(x - 1, y + 1) +
+    l(x + 1, y + 1)
+  const gy =
+    -l(x - 1, y - 1) -
+    2 * l(x, y - 1) -
+    l(x + 1, y - 1) +
+    l(x - 1, y + 1) +
+    2 * l(x, y + 1) +
+    l(x + 1, y + 1)
+  return Math.hypot(gx, gy)
+}
+
+function wandThresholds(tolerance: number, edgeGuard: number) {
+  const limit = Math.max(0, Math.min(72, tolerance))
+  const guard = Math.max(0, Math.min(100, edgeGuard)) / 100
+  return {
+    deltaLimit: (12 + limit) * (4.2 - guard * 3.6),
+    lightWindow: 36 + (1 - guard) * 230,
+    gradStop: 24 + (1 - guard) * 1400,
   }
-  return current
+}
+
+function pixelMatchesSeed(
+  data: Uint8ClampedArray | number[],
+  width: number,
+  height: number,
+  p: number,
+  seedP: number,
+  seedRgb: [number, number, number],
+  seedLuma: number,
+  thresholds: { deltaLimit: number; lightWindow: number; gradStop: number },
+  stopOnGradient: boolean,
+): boolean {
+  const i = p * 4
+  if (data[i + 3] < 12) return false
+  const dist = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], seedRgb[0], seedRgb[1], seedRgb[2])
+  if (dist > thresholds.deltaLimit) return false
+  if (Math.abs(pixelLuma(data, p) - seedLuma) > thresholds.lightWindow) return false
+  if (stopOnGradient && p !== seedP && gradientAt(data, width, height, p) > thresholds.gradStop && dist > thresholds.deltaLimit * 0.35) {
+    return false
+  }
+  return true
 }
 
 /** Estimate the background colour from the four corners (median-ish via average of closest pair). */
@@ -329,7 +369,7 @@ function copyImage(image: ImageDataLike): ImageDataLike {
   return { data: new Uint8ClampedArray(image.data), width: image.width, height: image.height }
 }
 
-/** Contiguous flood selection from a seed pixel (magic wand). Returns a byte mask (1 = selected). */
+/** Contiguous flood that stops at a lightness jump or a hard edge. Returns a byte mask (1 = selected). */
 export function magicWandMask(
   image: ImageDataLike,
   seedX: number,
@@ -344,60 +384,110 @@ export function magicWandMask(
   const sx = Math.min(width - 1, Math.max(0, Math.round(seedX)))
   const sy = Math.min(height - 1, Math.max(0, Math.round(seedY)))
   const seedP = sy * width + sx
-  const seed = seedP * 4
-  const sr = data[seed]
-  const sg = data[seed + 1]
-  const sb = data[seed + 2]
-  const sa = data[seed + 3]
-  const matchTransparent = sa < 12
-  const limit = Math.max(0, Math.min(72, options.tolerance))
-  const edgeGuard = Math.max(0, Math.min(100, options.edgeGuard ?? 62))
-  const localEdgeMax = 5 + ((100 - edgeGuard) / 100) * 22
-  const linkRatio = 0.28 + (edgeGuard / 100) * 0.32
-
-  type StackFrame = { p: number; parent: number }
-  const stack: StackFrame[] = [{ p: seedP, parent: seedP }]
+  const seedRgb = readRgb(data, seedP)
+  const seedLuma = pixelLuma(data, seedP)
+  const matchTransparent = data[seedP * 4 + 3] < 12
+  const thresholds = wandThresholds(options.tolerance, options.edgeGuard ?? 62)
+  const stack = [seedP]
 
   while (stack.length) {
-    const { p, parent } = stack.pop() as StackFrame
+    const p = stack.pop() as number
     if (mask[p]) continue
     const i = p * 4
-    const alpha = data[i + 3]
-
     if (matchTransparent) {
-      if (alpha >= 12) continue
-    } else {
-      if (alpha < 12) continue
-      const alphaWeight = 0.4 + 0.6 * (alpha / 255)
-      const tol = limit * alphaWeight
-      const distSeed = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], sr, sg, sb)
-      if (distSeed > tol) continue
-
-      if (p !== parent) {
-        const pi = parent * 4
-        const distParent = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], data[pi], data[pi + 1], data[pi + 2])
-        const linkTol = Math.max(5, tol * linkRatio)
-        if (distParent > linkTol) continue
-        const localEdge = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], data[pi], data[pi + 1], data[pi + 2])
-        if (localEdge > localEdgeMax && distSeed > tol * 0.68) continue
-      }
+      if (data[i + 3] >= 12) continue
+    } else if (!pixelMatchesSeed(data, width, height, p, seedP, seedRgb, seedLuma, thresholds, true)) {
+      continue
     }
-
     mask[p] = 1
     const x = p % width
     const y = (p - x) / width
-    if (x > 0) stack.push({ p: p - 1, parent: p })
-    if (x < width - 1) stack.push({ p: p + 1, parent: p })
-    if (y > 0) stack.push({ p: p - width, parent: p })
-    if (y < height - 1) stack.push({ p: p + width, parent: p })
-  }
-
-  const shrink =
-    edgeGuard >= 75 ? 2 : edgeGuard >= 50 ? 1 : limit > 36 ? 1 : 0
-  if (shrink > 0) {
-    return erodeBinaryMask(mask, width, height, shrink)
+    if (x > 0) stack.push(p - 1)
+    if (x < width - 1) stack.push(p + 1)
+    if (y > 0) stack.push(p - width)
+    if (y < height - 1) stack.push(p + width)
   }
   return mask
+}
+
+/**
+ * Select a colour. Contiguous walks only the connected region and stops at edges.
+ * Global selects the same colour anywhere, still excluding a lightness jump such as a black stroke.
+ */
+export function colorRangeMask(
+  image: ImageDataLike,
+  seedX: number,
+  seedY: number,
+  tolerance: number,
+  contiguous: boolean,
+  edgeGuard = 62,
+): Uint8Array {
+  if (contiguous) return magicWandMask(image, seedX, seedY, { tolerance, edgeGuard })
+  const { width, height, data } = image
+  const mask = new Uint8Array(width * height)
+  if (width === 0 || height === 0) return mask
+  const sx = Math.min(width - 1, Math.max(0, Math.round(seedX)))
+  const sy = Math.min(height - 1, Math.max(0, Math.round(seedY)))
+  const seedP = sy * width + sx
+  const seedRgb = readRgb(data, seedP)
+  const seedLuma = pixelLuma(data, seedP)
+  if (data[seedP * 4 + 3] < 12) return mask
+  const thresholds = wandThresholds(tolerance, edgeGuard)
+  for (let p = 0; p < mask.length; p++) {
+    if (pixelMatchesSeed(data, width, height, p, seedP, seedRgb, seedLuma, thresholds, false)) mask[p] = 1
+  }
+  return mask
+}
+
+/** Border flood that stops at an outline. Logos on a flat field keep their strokes. */
+export function edgeSubjectCutout(image: ImageDataLike): ImageDataLike {
+  const { width, height, data } = image
+  const out = copyImage(image)
+  if (width < 2 || height < 2) return out
+  const corners = [0, width - 1, (height - 1) * width, height * width - 1]
+  let br = 0
+  let bg = 0
+  let bb = 0
+  for (const p of corners) {
+    const rgb = readRgb(data, p)
+    br += rgb[0]
+    bg += rgb[1]
+    bb += rgb[2]
+  }
+  const seedRgb: [number, number, number] = [br / 4, bg / 4, bb / 4]
+  const seedLuma = 0.2126 * seedRgb[0] + 0.7152 * seedRgb[1] + 0.0722 * seedRgb[2]
+  const thresholds = { deltaLimit: 28, lightWindow: 36, gradStop: 70 }
+  const mask = new Uint8Array(width * height)
+  const stack: number[] = []
+  const consider = (p: number) => {
+    if (mask[p]) return
+    if (!pixelMatchesSeed(data, width, height, p, -1, seedRgb, seedLuma, thresholds, true)) return
+    stack.push(p)
+  }
+  for (let x = 0; x < width; x++) {
+    consider(x)
+    consider((height - 1) * width + x)
+  }
+  for (let y = 0; y < height; y++) {
+    consider(y * width)
+    consider(y * width + width - 1)
+  }
+  while (stack.length) {
+    const p = stack.pop() as number
+    if (mask[p]) continue
+    if (!pixelMatchesSeed(data, width, height, p, -1, seedRgb, seedLuma, thresholds, true)) continue
+    mask[p] = 1
+    const x = p % width
+    const y = (p - x) / width
+    if (x > 0) stack.push(p - 1)
+    if (x < width - 1) stack.push(p + 1)
+    if (y > 0) stack.push(p - width)
+    if (y < height - 1) stack.push(p + width)
+  }
+  for (let p = 0; p < mask.length; p++) {
+    if (mask[p]) out.data[p * 4 + 3] = 0
+  }
+  return out
 }
 
 /** Snap soft alpha on the matte rim and drop tiny specks. */
@@ -409,15 +499,18 @@ export function polishCutoutMatte(cutout: ImageDataLike): ImageDataLike {
     const i = p * 4
     const alpha = data[i + 3]
     if (alpha === 0 || alpha === 255) continue
+    const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    if (luma < 110) continue
     const nearClear = rim[p] <= 2
     if (!nearClear) continue
-    if (alpha < 48) out.data[i + 3] = 0
-    else if (alpha > 208) out.data[i + 3] = 255
-    else out.data[i + 3] = Math.round(alpha * (rim[p] / 2))
+    if (alpha < 28) out.data[i + 3] = 0
+    else if (alpha > 220) out.data[i + 3] = 255
   }
   for (let p = 0; p < rim.length; p++) {
     const i = p * 4
     if (out.data[i + 3] >= 16) continue
+    const luma = 0.2126 * out.data[i] + 0.7152 * out.data[i + 1] + 0.0722 * out.data[i + 2]
+    if (luma < 110) continue
     let opaqueNeighbors = 0
     const x = p % width
     const y = (p - x) / width
@@ -467,6 +560,9 @@ function defringeWandSelection(
       }
     }
     if (!touchesOutside) continue
+    const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    const seedLuma = 0.2126 * seedRgb[0] + 0.7152 * seedRgb[1] + 0.0722 * seedRgb[2]
+    if (Math.abs(luma - seedLuma) > 42) continue
     const dist = colorDistancePerceptual(data[i], data[i + 1], data[i + 2], seedRgb[0], seedRgb[1], seedRgb[2])
     if (dist <= fringeLimit) data[i + 3] = 0
   }

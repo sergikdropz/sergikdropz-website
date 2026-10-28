@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   coloredTemplate,
+  containedImageBox,
   designGarmentImage,
   filterPrintFilesForTechnique,
   isAllOverCatalogProduct,
@@ -90,6 +91,20 @@ describe('catalog-studio', () => {
       backgroundColor: '#ffffff',
     })
     expect(coloredTemplate(detail, file, 'Black', 'One size')?.backgroundColor).toBe('#2a2a2a')
+  })
+
+  it('letterboxes a portrait product photo inside a square card', () => {
+    expect(containedImageBox(1, 1)).toEqual({ x: 0, y: 0, w: 1, h: 1 })
+    const portrait = containedImageBox(1, 700 / 1000)
+    expect(portrait.y).toBe(0)
+    expect(portrait.h).toBe(1)
+    expect(portrait.w).toBeCloseTo(0.7)
+    expect(portrait.x).toBeCloseTo(0.15)
+    const landscape = containedImageBox(1, 1.6)
+    expect(landscape.x).toBe(0)
+    expect(landscape.w).toBe(1)
+    expect(landscape.h).toBeCloseTo(1 / 1.6)
+    expect(landscape.y).toBeCloseTo((1 - 1 / 1.6) / 2)
   })
 
   it('filters dad hat files by embroidery vs dtf technique', () => {

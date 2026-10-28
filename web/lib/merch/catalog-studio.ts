@@ -32,6 +32,24 @@ export function pickPreviewVariant(
   return variants.find((row) => row.in_stock !== false) || variants[0]
 }
 
+/**
+ * Where an `object-contain` image sits inside a frame, as fractions of the frame.
+ * Art that was measured on the image has to use this box, or a portrait photo in a
+ * square card shifts the print off the garment.
+ */
+export function containedImageBox(
+  containerAspect: number,
+  imageAspect: number,
+): { x: number; y: number; w: number; h: number } {
+  if (!(containerAspect > 0) || !(imageAspect > 0)) return { x: 0, y: 0, w: 1, h: 1 }
+  if (imageAspect >= containerAspect) {
+    const h = containerAspect / imageAspect
+    return { x: 0, y: (1 - h) / 2, w: 1, h }
+  }
+  const w = imageAspect / containerAspect
+  return { x: (1 - w) / 2, y: 0, w, h: 1 }
+}
+
 export function previewGarmentImage(
   detail: CatalogProductDetail | null,
   colorName: string | null,

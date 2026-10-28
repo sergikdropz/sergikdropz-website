@@ -36,6 +36,8 @@ export type MerchDesign = {
   catalogProductId?: number | null
   family: GarmentFamily
   placements: ArtPlacement[]
+  /** Print-file tab that was selected when this design was last saved. */
+  activeFileType?: string | null
   colors: string[]
   sizes: string[]
   previewColor: string

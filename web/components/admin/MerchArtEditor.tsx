@@ -10,8 +10,10 @@ import {
   defaultArtEdit,
   displayToSource,
   orientedPixelSourceIndexes,
+  previewColorRangeMask,
   previewMagicWandMask,
   scaleImageData,
+  sourceToDisplay,
   type ArtEdit,
   type ArtView,
   type CropRect,
@@ -19,13 +21,15 @@ import {
   type FitMode,
   type Rgb,
 } from '@/lib/merch/art-adjust'
+import { cleanTrace, extendBleed, lanczosUpscale } from '@/lib/merch/print-prep'
 import type { ImageDataLike } from '@/lib/merch/remove-background'
 import { brushDiameterPx } from '@/lib/editor/brush'
 import { BrushCursor, BrushSizeControl, useBrushCursor } from '@/components/editor/BrushTools'
 import { clampStagePan, clampStageZoom, panForZoom } from '@/lib/editor/stage-view'
 
 type SaveMode = 'replace' | 'copy'
-type ToolId = 'adjust' | 'curves' | 'crop' | 'cutout' | 'fit' | 'effects'
+type ToolId = 'adjust' | 'curves' | 'crop' | 'cutout' | 'fit' | 'print' | 'effects'
+type CutoutPaintMode = 'brush' | 'wand' | 'range' | 'lasso' | 'heal' | 'clone' | 'inpaint'
 type EditorHistorySnap = { edit: ArtEdit; effect: EffectName }
 
 const EDITOR_HISTORY_MAX = 60
@@ -50,6 +54,7 @@ const TOOLS: Array<[ToolId, string]> = [
   ['crop', 'Crop'],
   ['cutout', 'Cutout'],
   ['fit', 'Fit'],
+  ['print', 'Print'],
   ['effects', 'Effects'],
 ]
 
@@ -300,15 +305,19 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   const [effect, setEffect] = useState<EffectName>('none')
   const [brushSize, setBrushSize] = useState(0.04)
   const [brushRestore, setBrushRestore] = useState(true)
-  const [cutoutPaintMode, setCutoutPaintMode] = useState<'brush' | 'wand'>('brush')
+  const [cutoutPaintMode, setCutoutPaintMode] = useState<CutoutPaintMode>('brush')
   const [wandTolerance, setWandTolerance] = useState(28)
   const [wandEdgeGuard, setWandEdgeGuard] = useState(62)
+  const [rangeContiguous, setRangeContiguous] = useState(true)
+  const [lassoPoints, setLassoPoints] = useState<Array<{ x: number; y: number }>>([])
+  const [sampleSource, setSampleSource] = useState<{ x: number; y: number } | null>(null)
   const [backdropMode, setBackdropMode] = useState<'checkers' | 'solid'>('checkers')
   const [backdropGray, setBackdropGray] = useState(22)
   const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [applying, setApplying] = useState<SaveMode | null>(null)
   const [baking, setBaking] = useState(false)
+  const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [frame, setFrame] = useState({ width: 960, height: 720 })
@@ -338,7 +347,15 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; midX: number; midY: number } | null>(null)
   const panDrag = useRef<{ id: number; x: number; y: number; panX: number; panY: number } | null>(null)
-  const cutoutEditFloor = useRef({ strokes: 0, wand: 0 })
+  const cutoutEditFloor = useRef({ strokes: 0, wand: 0, range: 0, sample: 0, inpaint: 0 })
+  const lassoPointsRef = useRef<Array<{ x: number; y: number }>>([])
+  const sampleOffsetRef = useRef<{ dx: number; dy: number } | null>(null)
+  const cutoutKeysRef = useRef({
+    tool: 'adjust' as ToolId,
+    mode: 'brush' as CutoutPaintMode,
+    commit: () => {},
+    clear: () => {},
+  })
   const undoStackRef = useRef<EditorHistorySnap[]>([])
   const redoStackRef = useRef<EditorHistorySnap[]>([])
   const lastCommittedRef = useRef<EditorHistorySnap | null>(null)
@@ -427,12 +444,28 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target
+      const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+      const cutoutKeys = cutoutKeysRef.current
+      if (!typing && cutoutKeys.tool === 'cutout' && cutoutKeys.mode === 'lasso') {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          cutoutKeys.commit()
+          return
+        }
+        if (event.key === 'Escape') {
+          cutoutKeys.clear()
+          return
+        }
+      }
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return
       const key = event.key.toLowerCase()
       if (key === 'z' && event.shiftKey) {
         event.preventDefault()
         redoEditor()
-      } else if (key === 'z') {
+        return
+      }
+      if (key === 'z') {
         event.preventDefault()
         undoEditor()
       }
@@ -480,6 +513,7 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
       .then((image) => {
         if (cancelled) return
         fullRef.current = readImage(image)
+        setSourceSize({ width: fullRef.current.width, height: fullRef.current.height })
         const snap = { edit: cloneArtEdit(fresh), effect: 'none' as EffectName }
         lastCommittedRef.current = snap
         setReady((value) => value + 1)
@@ -599,13 +633,13 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   }, [edit, tool, ready, stageBox])
 
   useEffect(() => {
-    if (tool !== 'cutout' || cutoutPaintMode !== 'wand') {
+    if (tool !== 'cutout' || (cutoutPaintMode !== 'wand' && cutoutPaintMode !== 'range')) {
       scheduleWandPreview(null)
       return
     }
     if (wandHoverRef.current) scheduleWandPreview(wandHoverRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- redraw preview when matte inputs change
-  }, [edit, wandTolerance, wandEdgeGuard, brushRestore, cutoutPaintMode, tool])
+  }, [edit, wandTolerance, wandEdgeGuard, brushRestore, cutoutPaintMode, rangeContiguous, tool])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -702,6 +736,103 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
     clearWandOverlay()
   }
 
+  function paintRange(event: ReactPointerEvent<HTMLDivElement>) {
+    if (cutoutPaintMode !== 'range') return
+    const source = pointerSourcePoint(event)
+    if (!source) return
+    setEdit((current) => ({
+      ...current,
+      cutout: true,
+      rangeFills: [
+        ...current.rangeFills,
+        {
+          x: source.x,
+          y: source.y,
+          tolerance: wandTolerance,
+          contiguous: rangeContiguous,
+          restore: brushRestore,
+        },
+      ],
+    }))
+    wandHoverRef.current = null
+    clearWandOverlay()
+  }
+
+  function addLassoPoint(event: ReactPointerEvent<HTMLDivElement>) {
+    const source = pointerSourcePoint(event)
+    if (!source) return
+    setLassoPoints((points) => {
+      const last = points[points.length - 1]
+      if (last && Math.hypot(last.x - source.x, last.y - source.y) < 0.004) return points
+      const next = [...points, source]
+      lassoPointsRef.current = next
+      return next
+    })
+  }
+
+  function commitLasso() {
+    const points = lassoPointsRef.current
+    if (points.length >= 3) {
+      const region = { points: points.map((point) => ({ ...point })), restore: brushRestore }
+      setEdit((current) => ({ ...current, cutout: true, lassos: [...current.lassos, region] }))
+    }
+    lassoPointsRef.current = []
+    setLassoPoints([])
+  }
+
+  cutoutKeysRef.current = {
+    tool,
+    mode: cutoutPaintMode,
+    commit: commitLasso,
+    clear: () => {
+      lassoPointsRef.current = []
+      setLassoPoints([])
+    },
+  }
+
+  function beginSample(source: { x: number; y: number }) {
+    if (sampleSource) {
+      sampleOffsetRef.current = { dx: sampleSource.x - source.x, dy: sampleSource.y - source.y }
+      return
+    }
+    sampleOffsetRef.current = { dx: -0.08, dy: 0 }
+  }
+
+  function paintSample(event: ReactPointerEvent<HTMLDivElement>, heal: boolean) {
+    const source = pointerSourcePoint(event)
+    if (!source) return
+    const offset = sampleOffsetRef.current ?? { dx: -0.08, dy: 0 }
+    const previous = lastBrush.current
+    if (previous && Math.hypot(previous.x - source.x, previous.y - source.y) < brushSize * 0.35) return
+    lastBrush.current = source
+    setEdit((current) => ({
+      ...current,
+      sampleDabs: [
+        ...current.sampleDabs,
+        {
+          x: source.x,
+          y: source.y,
+          radius: brushSize,
+          srcX: Math.min(1, Math.max(0, source.x + offset.dx)),
+          srcY: Math.min(1, Math.max(0, source.y + offset.dy)),
+          heal,
+        },
+      ],
+    }))
+  }
+
+  function paintInpaint(event: ReactPointerEvent<HTMLDivElement>) {
+    const source = pointerSourcePoint(event)
+    if (!source) return
+    const previous = lastBrush.current
+    if (previous && Math.hypot(previous.x - source.x, previous.y - source.y) < brushSize * 0.35) return
+    lastBrush.current = source
+    setEdit((current) => ({
+      ...current,
+      inpaints: [...current.inpaints, { x: source.x, y: source.y, radius: brushSize }],
+    }))
+  }
+
   function clearWandOverlay() {
     const overlay = wandOverlayRef.current
     if (!overlay) return
@@ -724,15 +855,10 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
       return
     }
     const forceCutout = !edit.cutout
-    const mask = previewMagicWandMask(
-      scaled,
-      edit,
-      source.x,
-      source.y,
-      wandTolerance,
-      wandEdgeGuard,
-      forceCutout,
-    )
+    const mask =
+      cutoutPaintMode === 'range'
+        ? previewColorRangeMask(scaled, edit, source.x, source.y, wandTolerance, rangeContiguous, forceCutout)
+        : previewMagicWandMask(scaled, edit, source.x, source.y, wandTolerance, wandEdgeGuard, forceCutout)
     if (!mask) {
       clearWandOverlay()
       return
@@ -837,7 +963,13 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
   function onStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button === 2) return
     if (pointers.current.size === 0) {
-      cutoutEditFloor.current = { strokes: edit.strokes.length, wand: edit.wandFills.length }
+      cutoutEditFloor.current = {
+        strokes: edit.strokes.length,
+        wand: edit.wandFills.length,
+        range: edit.rangeFills.length,
+        sample: edit.sampleDabs.length,
+        inpaint: edit.inpaints.length,
+      }
     }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     if (pointers.current.size >= 2) {
@@ -861,21 +993,33 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
         const floor = cutoutEditFloor.current
         const trimStrokes = current.strokes.length > floor.strokes
         const trimWand = current.wandFills.length > floor.wand
-        if (!trimStrokes && !trimWand) return current
+        const trimRange = current.rangeFills.length > floor.range
+        const trimSample = current.sampleDabs.length > floor.sample
+        const trimInpaint = current.inpaints.length > floor.inpaint
+        if (!trimStrokes && !trimWand && !trimRange && !trimSample && !trimInpaint) return current
         return {
           ...current,
           strokes: trimStrokes ? current.strokes.slice(0, floor.strokes) : current.strokes,
           wandFills: trimWand ? current.wandFills.slice(0, floor.wand) : current.wandFills,
+          rangeFills: trimRange ? current.rangeFills.slice(0, floor.range) : current.rangeFills,
+          sampleDabs: trimSample ? current.sampleDabs.slice(0, floor.sample) : current.sampleDabs,
+          inpaints: trimInpaint ? current.inpaints.slice(0, floor.inpaint) : current.inpaints,
         }
       })
       return
     }
+    const samplingSource =
+      tool === 'cutout' &&
+      (cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone') &&
+      event.altKey &&
+      event.button === 0
+    if (samplingSource) return
     const painting =
       tool === 'cutout' &&
-      edit.cutout &&
       event.button === 0 &&
       !event.altKey &&
-      (event.pointerType === 'touch' || event.target !== event.currentTarget)
+      (event.pointerType === 'touch' || event.target !== event.currentTarget) &&
+      (cutoutPaintMode !== 'brush' || edit.cutout)
     if (event.button === 1 || event.altKey || !painting) {
       panDrag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, panX: panRef.current.x, panY: panRef.current.y }
       if (!painting) event.currentTarget.setPointerCapture(event.pointerId)
@@ -937,9 +1081,39 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
         setEffect('none')
         setBaselineEffect('none')
         setBaselineBrush(brushSize)
+        setSourceSize({ width: fullRef.current.width, height: fullRef.current.height })
         setReady((value) => value + 1)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not apply the edit')
+      } finally {
+        setBaking(false)
+      }
+    }, 0)
+  }
+
+  function runPrint(kind: 'upscale' | 'bleed' | 'trace') {
+    const full = fullRef.current
+    if (!full || baking || applying) return
+    setBaking(true)
+    setError(null)
+    window.setTimeout(() => {
+      try {
+        const current = applyArtEdit(full, edit, 'final')
+        const next =
+          kind === 'upscale' ? lanczosUpscale(current, 2) : kind === 'bleed' ? extendBleed(current, 32) : cleanTrace(current)
+        fullRef.current = next
+        const cleared = defaultArtEdit()
+        cutoutBeforeClean.current = null
+        setEdit(cleared)
+        setBaseline(cleared)
+        setEffect('none')
+        setBaselineEffect('none')
+        setBaselineBrush(brushSize)
+        setSourceSize({ width: next.width, height: next.height })
+        resetEditorHistory({ edit: cleared, effect: 'none' })
+        setReady((value) => value + 1)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not prepare the print file')
       } finally {
         setBaking(false)
       }
@@ -1117,7 +1291,7 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
               }
             >
               <canvas ref={canvasRef} className="block h-full w-full object-contain" />
-              {tool === 'cutout' && cutoutPaintMode === 'wand' && viewSize.width > 0 ? (
+              {tool === 'cutout' && (cutoutPaintMode === 'wand' || cutoutPaintMode === 'range') && viewSize.width > 0 ? (
                 <canvas
                   ref={wandOverlayRef}
                   className="pointer-events-none absolute inset-0 h-full w-full object-contain"
@@ -1127,16 +1301,45 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
               {tool === 'crop' && viewSize.width > 0 ? (
                 <CropOverlay crop={edit.crop} onChange={(crop) => setEdit((current) => ({ ...current, crop }))} />
               ) : null}
-              {tool === 'cutout' && viewSize.width > 0 && (edit.cutout || cutoutPaintMode === 'wand') ? (
+              {tool === 'cutout' && viewSize.width > 0 ? (
                 <div
-                  className={`absolute inset-0 touch-none ${cutoutPaintMode === 'brush' ? 'cursor-none' : 'cursor-crosshair'}`}
+                  className={`absolute inset-0 touch-none ${cutoutPaintMode === 'brush' || cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone' || cutoutPaintMode === 'inpaint' ? 'cursor-none' : 'cursor-crosshair'}`}
                   onPointerDown={(event) => {
-                    if (event.button === 2 || event.altKey || event.button === 1) return
+                    if (event.button === 2 || event.button === 1) return
+                    if ((cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone') && event.altKey) {
+                      const source = pointerSourcePoint(event)
+                      if (source) setSampleSource(source)
+                      return
+                    }
+                    if (event.altKey) return
                     if (pointers.current.size > 0) return
+                    if (cutoutPaintMode === 'brush' && !edit.cutout) return
                     lastBrush.current = null
                     event.currentTarget.setPointerCapture(event.pointerId)
                     if (cutoutPaintMode === 'wand') {
                       paintWand(event)
+                      return
+                    }
+                    if (cutoutPaintMode === 'range') {
+                      paintRange(event)
+                      return
+                    }
+                    if (cutoutPaintMode === 'lasso') {
+                      addLassoPoint(event)
+                      return
+                    }
+                    const source = pointerSourcePoint(event)
+                    if (cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone') {
+                      if (source) beginSample(source)
+                      if (event.pointerType === 'touch') return
+                      brush.place(event)
+                      paintSample(event, cutoutPaintMode === 'heal')
+                      return
+                    }
+                    if (cutoutPaintMode === 'inpaint') {
+                      if (event.pointerType === 'touch') return
+                      brush.place(event)
+                      paintInpaint(event)
                       return
                     }
                     if (!edit.cutout) return
@@ -1144,17 +1347,30 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                     brush.place(event)
                     paintStroke(event)
                   }}
+                  onDoubleClick={(event) => {
+                    if (cutoutPaintMode !== 'lasso') return
+                    event.preventDefault()
+                    commitLasso()
+                  }}
                   onPointerMove={(event) => {
                     if (pointers.current.size > 1) return
-                    if (cutoutPaintMode === 'wand') {
-                      const source = pointerSourcePoint(event)
-                      scheduleWandPreview(source)
+                    if (cutoutPaintMode === 'wand' || cutoutPaintMode === 'range') {
+                      scheduleWandPreview(pointerSourcePoint(event))
                       return
                     }
-                    if (!edit.cutout) return
+                    if (cutoutPaintMode === 'lasso') return
+                    if (cutoutPaintMode === 'brush' && !edit.cutout) return
                     brush.place(event)
-                    if (event.buttons !== 1) return
+                    if (event.buttons !== 1 || event.altKey) return
                     if (event.pointerType === 'touch' && pointers.current.size !== 1) return
+                    if (cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone') {
+                      paintSample(event, cutoutPaintMode === 'heal')
+                      return
+                    }
+                    if (cutoutPaintMode === 'inpaint') {
+                      paintInpaint(event)
+                      return
+                    }
                     paintStroke(event)
                   }}
                   onPointerLeave={() => {
@@ -1162,13 +1378,40 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                     scheduleWandPreview(null)
                   }}
                   onPointerEnter={(event) => {
-                    if (cutoutPaintMode === 'wand') {
+                    if (cutoutPaintMode === 'wand' || cutoutPaintMode === 'range') {
                       scheduleWandPreview(pointerSourcePoint(event))
                     }
                   }}
                 >
-                  {cutoutPaintMode === 'brush' && edit.cutout ? (
-                    <BrushCursor ref={brush.ref} tone={brushRestore ? 'restore' : 'erase'} />
+                  {cutoutPaintMode === 'lasso' && lassoPoints.length > 0 ? (
+                    <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+                      <polyline
+                        fill={brushRestore ? 'rgba(52,211,153,0.28)' : 'rgba(250,204,21,0.28)'}
+                        stroke={brushRestore ? 'rgb(52,211,153)' : 'rgb(250,204,21)'}
+                        strokeWidth="1.5"
+                        points={lassoPoints
+                          .map((point) => {
+                            const display = sourceToDisplay(point.x, point.y, edit.flipX, edit.flipY, edit.rotate)
+                            return `${display.x * viewSize.width},${display.y * viewSize.height}`
+                          })
+                          .join(' ')}
+                      />
+                    </svg>
+                  ) : null}
+                  {sampleSource && (cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone') ? (
+                    <span
+                      className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow"
+                      style={{
+                        left: `${sourceToDisplay(sampleSource.x, sampleSource.y, edit.flipX, edit.flipY, edit.rotate).x * 100}%`,
+                        top: `${sourceToDisplay(sampleSource.x, sampleSource.y, edit.flipX, edit.flipY, edit.rotate).y * 100}%`,
+                      }}
+                    />
+                  ) : null}
+                  {(cutoutPaintMode === 'brush' && edit.cutout) ||
+                  cutoutPaintMode === 'heal' ||
+                  cutoutPaintMode === 'clone' ||
+                  cutoutPaintMode === 'inpaint' ? (
+                    <BrushCursor ref={brush.ref} tone={brushRestore || cutoutPaintMode === 'inpaint' ? 'restore' : 'erase'} />
                   ) : null}
                 </div>
               ) : null}
@@ -1399,7 +1642,18 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                       shave: baseline.shave,
                       crisp: baseline.crisp,
                       strokes: baseline.strokes.map((stroke) => ({ ...stroke })),
+                      subjectCutout: baseline.subjectCutout,
                       wandFills: baseline.wandFills.map((fill) => ({ ...fill })),
+                      rangeFills: baseline.rangeFills.map((fill) => ({ ...fill })),
+                      lassos: baseline.lassos.map((region) => ({
+                        restore: region.restore,
+                        points: region.points.map((point) => ({ ...point })),
+                      })),
+                      sampleDabs: baseline.sampleDabs.map((dab) => ({ ...dab })),
+                      inpaints: baseline.inpaints.map((stamp) => ({ ...stamp })),
+                      refine: { ...baseline.refine },
+                      defringe: baseline.defringe,
+                      defringeAmount: baseline.defringeAmount,
                       invertMask: baseline.invertMask,
                       fillHoles: baseline.fillHoles,
                       maskExpand: baseline.maskExpand,
@@ -1411,6 +1665,24 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                 >
                   {edit.cutout ? 'Background removed' : 'Remove background'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEdit((current) => ({
+                      ...current,
+                      cutout: true,
+                      subjectCutout: !current.subjectCutout,
+                    }))
+                  }
+                  className={`w-full rounded-lg border px-3 py-2 text-xs ${
+                    edit.subjectCutout ? 'border-white bg-white text-black' : 'border-white/20 hover:bg-white/10'
+                  }`}
+                >
+                  {edit.subjectCutout ? 'Subject cutout on' : 'Subject cutout'}
+                </button>
+                <p className="text-[11px] text-white/45">
+                  Subject cutout stops at outlines. Use it for logos on a flat background. There is no separate AI model wired in.
+                </p>
                 <Slider
                   label="Edge clean"
                   min={0}
@@ -1435,68 +1707,193 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                   onChange={(crisp) => setMatte({ crisp })}
                   onReset={() => setMatte({ crisp: baseline.crisp })}
                 />
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Local edits</p>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Refine edge</p>
+                <Slider
+                  label="Radius"
+                  min={0}
+                  max={16}
+                  value={edit.refine.radius}
+                  onChange={(radius) => setEdit((current) => ({ ...current, cutout: true, refine: { ...current.refine, radius } }))}
+                  onReset={() => setEdit((current) => ({ ...current, refine: { ...current.refine, radius: baseline.refine.radius } }))}
+                />
+                <Slider
+                  label="Smooth"
+                  min={0}
+                  max={100}
+                  value={edit.refine.smooth}
+                  onChange={(smooth) => setEdit((current) => ({ ...current, cutout: true, refine: { ...current.refine, smooth } }))}
+                  onReset={() => setEdit((current) => ({ ...current, refine: { ...current.refine, smooth: baseline.refine.smooth } }))}
+                />
+                <Slider
+                  label="Feather"
+                  min={0}
+                  max={100}
+                  value={edit.refine.feather}
+                  onChange={(feather) => setEdit((current) => ({ ...current, cutout: true, refine: { ...current.refine, feather } }))}
+                  onReset={() => setEdit((current) => ({ ...current, refine: { ...current.refine, feather: baseline.refine.feather } }))}
+                />
+                <Slider
+                  label="Contrast"
+                  min={0}
+                  max={100}
+                  value={edit.refine.contrast}
+                  onChange={(contrast) => setEdit((current) => ({ ...current, cutout: true, refine: { ...current.refine, contrast } }))}
+                  onReset={() => setEdit((current) => ({ ...current, refine: { ...current.refine, contrast: baseline.refine.contrast } }))}
+                />
+                <Slider
+                  label="Shift edge"
+                  min={-8}
+                  max={8}
+                  value={edit.refine.shift}
+                  onChange={(shift) => setEdit((current) => ({ ...current, cutout: true, refine: { ...current.refine, shift } }))}
+                  onReset={() => setEdit((current) => ({ ...current, refine: { ...current.refine, shift: baseline.refine.shift } }))}
+                />
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Defringe</p>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCutoutPaintMode('brush')}
-                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${cutoutPaintMode === 'brush' ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
-                  >
-                    Brush
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCutoutPaintMode('wand')}
-                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${cutoutPaintMode === 'wand' ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
-                  >
-                    Magic wand
-                  </button>
+                  {(['off', 'white', 'black'] as const).map((target) => (
+                    <button
+                      key={target}
+                      type="button"
+                      onClick={() => setEdit((current) => ({ ...current, cutout: target !== 'off' ? true : current.cutout, defringe: target }))}
+                      className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] capitalize ${
+                        edit.defringe === target ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'
+                      }`}
+                    >
+                      {target}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBrushRestore(true)}
-                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${brushRestore ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
-                  >
-                    Restore
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBrushRestore(false)}
-                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${!brushRestore ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
-                  >
-                    Erase
-                  </button>
+                {edit.defringe !== 'off' ? (
+                  <Slider
+                    label="Defringe amount"
+                    min={0}
+                    max={100}
+                    value={edit.defringeAmount}
+                    onChange={(defringeAmount) => setEdit((current) => ({ ...current, defringeAmount }))}
+                    onReset={() => setEdit((current) => ({ ...current, defringeAmount: baseline.defringeAmount }))}
+                  />
+                ) : null}
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Mask tools</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      ['brush', 'Brush'],
+                      ['wand', 'Edge wand'],
+                      ['range', 'Color'],
+                      ['lasso', 'Lasso'],
+                      ['heal', 'Heal'],
+                      ['clone', 'Clone'],
+                      ['inpaint', 'Inpaint'],
+                    ] as Array<[CutoutPaintMode, string]>
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setCutoutPaintMode(id)}
+                      className={`rounded-lg border px-2 py-1.5 text-[11px] ${
+                        cutoutPaintMode === id ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                {cutoutPaintMode === 'brush' ? (
+                {cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone' || cutoutPaintMode === 'inpaint' ? null : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBrushRestore(true)}
+                      className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${brushRestore ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrushRestore(false)}
+                      className={`flex-1 rounded-lg border px-3 py-1.5 text-xs ${!brushRestore ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                    >
+                      Erase
+                    </button>
+                  </div>
+                )}
+                {cutoutPaintMode === 'brush' ||
+                cutoutPaintMode === 'heal' ||
+                cutoutPaintMode === 'clone' ||
+                cutoutPaintMode === 'inpaint' ? (
                   <BrushSizeControl
                     label="Brush"
                     radius={brushSize}
                     surfaceWidth={viewSize.width}
-                    tone={brushRestore ? 'restore' : 'erase'}
+                    tone={brushRestore || cutoutPaintMode === 'inpaint' ? 'restore' : 'erase'}
                     onChange={setBrushSize}
                     onReset={() => setBrushSize(baselineBrush)}
                   />
-                ) : (
-                  <>
-                    <Slider
-                      label="Wand tolerance"
-                      min={4}
-                      max={72}
-                      value={wandTolerance}
-                      onChange={setWandTolerance}
-                      onReset={() => setWandTolerance(28)}
-                    />
-                    <Slider
-                      label="Edge guard"
-                      min={0}
-                      max={100}
-                      value={wandEdgeGuard}
-                      onChange={setWandEdgeGuard}
-                      onReset={() => setWandEdgeGuard(62)}
-                    />
-                  </>
-                )}
+                ) : null}
+                {cutoutPaintMode === 'wand' || cutoutPaintMode === 'range' ? (
+                  <Slider
+                    label="Tolerance"
+                    min={4}
+                    max={72}
+                    value={wandTolerance}
+                    onChange={setWandTolerance}
+                    onReset={() => setWandTolerance(28)}
+                  />
+                ) : null}
+                {cutoutPaintMode === 'wand' ? (
+                  <Slider
+                    label="Edge guard"
+                    min={0}
+                    max={100}
+                    value={wandEdgeGuard}
+                    onChange={setWandEdgeGuard}
+                    onReset={() => setWandEdgeGuard(62)}
+                  />
+                ) : null}
+                {cutoutPaintMode === 'range' ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRangeContiguous(true)}
+                      className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] ${rangeContiguous ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                    >
+                      Contiguous
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRangeContiguous(false)}
+                      className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] ${!rangeContiguous ? 'border-white bg-white text-black' : 'border-white/15 hover:bg-white/10'}`}
+                    >
+                      Whole image
+                    </button>
+                  </div>
+                ) : null}
+                {cutoutPaintMode === 'lasso' ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-white/45">{lassoPoints.length} points. Double-click or press Enter to close.</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={commitLasso}
+                        className="flex-1 rounded-lg border border-white/15 px-2 py-1.5 text-[11px] hover:bg-white/10"
+                      >
+                        Apply lasso
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          lassoPointsRef.current = []
+                          setLassoPoints([])
+                        }}
+                        className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] hover:bg-white/10"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {cutoutPaintMode === 'heal' || cutoutPaintMode === 'clone' ? (
+                  <p className="text-[11px] text-white/45">Option-click to set the source, then paint. A ring marks the source.</p>
+                ) : null}
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -1551,13 +1948,23 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setEdit((current) => ({ ...current, strokes: [], wandFills: [] }))}
+                  onClick={() =>
+                    setEdit((current) => ({
+                      ...current,
+                      strokes: [],
+                      wandFills: [],
+                      rangeFills: [],
+                      lassos: [],
+                      sampleDabs: [],
+                      inpaints: [],
+                    }))
+                  }
                   className="text-xs text-white/55 hover:text-white"
                 >
-                  Clear brush &amp; wand
+                  Clear mask edits
                 </button>
                 <p className="text-[11px] text-white/45">
-                  Lower tolerance selects less; higher edge guard stops bleed into nearby colours. Edge clean, shave, and crisp remove leftover fringe after the automatic cut.
+                  Edge wand stops at a hard outline, so a white fill does not delete a black stroke. Brush, wand, color, and lasso edit the mask only. Heal, clone, and inpaint change colour.
                 </p>
               </div>
             ) : null}
@@ -1618,6 +2025,46 @@ export default function MerchArtEditor({ url, busy = false, onClose, onApply }: 
                     className="h-7 w-10 bg-transparent"
                   />
                 </label>
+              </div>
+            ) : null}
+
+            {tool === 'print' ? (
+              <div className="space-y-3">
+                <p className="text-[11px] leading-relaxed text-white/45">
+                  These run in the browser on the file you already have. Double size sharpens what is there. It does not invent new detail.
+                </p>
+                {sourceSize ? (
+                  <p className="text-[11px] tabular-nums text-white/55">
+                    {sourceSize.width} × {sourceSize.height} px
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={baking || Boolean(applying)}
+                  onClick={() => runPrint('upscale')}
+                  className="w-full rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40"
+                >
+                  {baking ? 'Working…' : 'Double size'}
+                </button>
+                <button
+                  type="button"
+                  disabled={baking || Boolean(applying)}
+                  onClick={() => runPrint('bleed')}
+                  className="w-full rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40"
+                >
+                  Add 32 px bleed
+                </button>
+                <button
+                  type="button"
+                  disabled={baking || Boolean(applying)}
+                  onClick={() => runPrint('trace')}
+                  className="w-full rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-40"
+                >
+                  Clean trace
+                </button>
+                <p className="text-[11px] leading-relaxed text-white/45">
+                  Bleed copies the edge color past the trim. Clean trace flattens a logo into solid colors and redraws it at 2×. Photos should use Double size. Logo cutouts stay in Cutout.
+                </p>
               </div>
             ) : null}
 

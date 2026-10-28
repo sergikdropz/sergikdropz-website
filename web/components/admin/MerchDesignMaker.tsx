@@ -19,6 +19,7 @@ import type { CatalogProductDetail, CatalogTechnique } from '@/lib/merch/printfu
 import { scalePlacementAboutCenter, type ArtPlacement, type DesignStatus } from '@/lib/merch/design'
 import { dpiGradeRingClass, type DpiGrade } from '@/lib/merch/design'
 import { MERCH_ART_ACCEPT, useMerchArtDropUpload } from '@/lib/merch/art-upload-drop'
+import GarmentMatImage from '@/components/shop/GarmentMatImage'
 
 export function PrintAreaSnapGuides({ vertical, horizontal }: { vertical: number[]; horizontal: number[] }) {
   if (vertical.length === 0 && horizontal.length === 0) return null
@@ -535,6 +536,7 @@ export function PlacedArtLayer({
   return (
     <div
       ref={boxRef}
+      data-art-layer=""
       className="absolute touch-none select-none"
       style={{
         left: `${layer.x * 100}%`,
@@ -621,6 +623,8 @@ export function MerchDesignCanvas({
   snapGuides,
   stageToolbar,
   underTabs,
+  matColor,
+  onStageBackdropContextMenu,
 }: {
   tabs: DesignTab[]
   activeTabId: string
@@ -657,6 +661,9 @@ export function MerchDesignCanvas({
   printInsetY: number
   activeDpiGrade: DpiGrade | null
   snapGuides?: { vertical: number[]; horizontal: number[] }
+  /** Flat color behind the cut-out product. Does not recolor the garment image. */
+  matColor?: string | null
+  onStageBackdropContextMenu?: (event: MouseEvent) => void
 }) {
   const height = artHeightFraction(layer, area)
   /** Match preview stand-in: back uses rotateY(180) on the card plus scaleX(-1) on the photo — not flip alone. */
@@ -698,6 +705,12 @@ export function MerchDesignCanvas({
       <div
         ref={viewportRef}
         className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-4"
+        onContextMenu={(event) => {
+          const target = event.target
+          if (!(target instanceof Element) || target.closest('button, [data-art-layer]')) return
+          event.preventDefault()
+          onStageBackdropContextMenu?.(event)
+        }}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault()
@@ -706,6 +719,7 @@ export function MerchDesignCanvas({
         }}
       >
         <div
+          data-stage-garment=""
           className="relative max-h-full max-w-full"
           style={{
             width: frame?.width,
@@ -720,24 +734,25 @@ export function MerchDesignCanvas({
               ...(showBackGarment
                 ? { transformStyle: 'preserve-3d' as const, transform: 'rotateY(180deg)' }
                 : {}),
-              backgroundColor: garmentBackground || undefined,
+              backgroundColor: garmentUrl ? undefined : matColor || undefined,
             }}
           >
             {garmentUrl ? (
-              <img
+              <GarmentMatImage
                 src={garmentUrl}
-                alt=""
-                draggable={false}
+                matColor={matColor}
+                garmentColor={garmentBackground}
+                className="pointer-events-none absolute inset-0"
+                imgClassName={`absolute inset-0 h-full w-full ${
+                  useTemplateMockup ? 'object-fill' : 'object-contain'
+                }`}
+                imgStyle={showBackGarment ? { transform: 'scaleX(-1)' } : undefined}
                 onLoad={(event) => {
                   const image = event.currentTarget
                   if (image.naturalWidth > 0 && image.naturalHeight > 0) {
                     setNaturalAspect(image.naturalWidth / image.naturalHeight)
                   }
                 }}
-                className={`pointer-events-none absolute inset-0 h-full w-full ${
-                  useTemplateMockup ? 'object-fill' : 'object-contain'
-                }`}
-                style={showBackGarment ? { transform: 'scaleX(-1)' } : undefined}
               />
             ) : (
               <MerchMannequin

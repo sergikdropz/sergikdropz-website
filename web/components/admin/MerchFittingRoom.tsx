@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   MERCH_BLANKS,
   getBlank,
@@ -36,8 +36,20 @@ import {
   type StageView,
 } from '@/components/admin/MerchDesignMaker'
 import { sumCatalogAddOnRows, usedCatalogAddOnRows } from '@/lib/merch/catalog-add-ons'
-import { buildDesignTabs } from '@/lib/merch/design-tabs'
-import { readStudioDesignId, writeStudioDesignId } from '@/lib/merch/studio-session'
+import { buildDesignTabs, placementFileToOpen } from '@/lib/merch/design-tabs'
+import {
+  productMatColor,
+  productMatKey,
+  readOpenTab,
+  readProductMats,
+  readStudioDesignId,
+  writeOpenTab,
+  writeProductMat,
+  writeStudioDesignId,
+  type ProductMatMap,
+} from '@/lib/merch/studio-session'
+import { channelLuma, hexToRgb } from '@/lib/merch/product-mat'
+import GarmentMatImage from '@/components/shop/GarmentMatImage'
 import MerchLeaveDesignDialog from '@/components/admin/MerchLeaveDesignDialog'
 import MerchArtEditor from '@/components/admin/MerchArtEditor'
 import StudioContextMenu, {
@@ -223,6 +235,8 @@ export default function MerchFittingRoom({
   const [spinTransition, setSpinTransition] = useState(true)
   const [isSpinning, setIsSpinning] = useState(false)
   const [artMenu, setArtMenu] = useState<ArtContextMenu | null>(null)
+  const [productMats, setProductMats] = useState<ProductMatMap>({})
+  const [stageToneMenu, setStageToneMenu] = useState<{ x: number; y: number } | null>(null)
   const [viewingArt, setViewingArt] = useState<string | null>(null)
   const [editingArt, setEditingArt] = useState<string | null>(null)
   const layersRef = useRef(layers)
@@ -244,10 +258,12 @@ export default function MerchFittingRoom({
     [catalogStudio, blank, catalogTechnique]
   )
 
-  const designTabs = useMemo(
-    () => buildDesignTabs(techniquePrintFiles, garmentPlacements),
-    [techniquePrintFiles, garmentPlacements],
-  )
+  const designTabs = useMemo(() => {
+    const preferTypes = Object.entries(catalogFileLayers)
+      .filter(([, art]) => Boolean(art?.assetUrl))
+      .map(([type]) => type)
+    return buildDesignTabs(techniquePrintFiles, garmentPlacements, { preferTypes })
+  }, [techniquePrintFiles, garmentPlacements, catalogFileLayers])
 
   const activePrintFile =
     techniquePrintFiles.find((file) => file.type === activePrintFileType) || techniquePrintFiles[0]
@@ -799,6 +815,7 @@ export default function MerchFittingRoom({
         const nextArea = placementForPrintFile(file, blank)
         setPlacementId(nextArea.id)
         setPhotoPick(null)
+        if (designId) writeOpenTab(designId, id)
         return
       }
       if (id === 'front' || id === 'back') {
@@ -806,7 +823,7 @@ export default function MerchFittingRoom({
         setPhotoPick(null)
       }
     },
-    [blank, techniquePrintFiles]
+    [blank, designId, techniquePrintFiles]
   )
 
   const selectPlacementView = useCallback(
@@ -1012,6 +1029,19 @@ export default function MerchFittingRoom({
           const files = filterPrintFilesForTechnique(detail.printFiles, technique)
           const mapped = restoreCatalogFileLayers(design.placements, files, template)
           if (Object.keys(mapped).length > 0) setCatalogFileLayers(mapped)
+          const preferTypes = Object.entries(mapped)
+            .filter(([, art]) => Boolean(art?.assetUrl))
+            .map(([type]) => type)
+          const tabs = buildDesignTabs(files, studioPlacementsForTechnique(detail, template, technique), {
+            preferTypes,
+          })
+          const nextType = placementFileToOpen(tabs, mapped, readOpenTab(design.id) || design.activeFileType)
+          const nextFile = nextType ? files.find((file) => file.type === nextType) : null
+          if (nextFile) {
+            setActivePrintFileType(nextFile.type)
+            setPlacementId(placementForPrintFile(nextFile, template).id)
+            writeOpenTab(design.id, nextFile.type)
+          }
         }
       } catch {
         setNote('Could not open that design')
@@ -1037,6 +1067,7 @@ export default function MerchFittingRoom({
     setPickedColorName(null)
     setMockupUrls(design.mockupUrls || [])
     setStandIn(design.mockupUrls.length === 0)
+    onStageViewChange('design')
     setNote(null)
     writeStudioDesignId(design.id)
     markCleanRef.current()
@@ -1066,6 +1097,28 @@ export default function MerchFittingRoom({
       return current
     })
   }
+
+  useEffect(() => {
+    setProductMats(readProductMats())
+  }, [])
+
+  useEffect(() => {
+    if (!stageToneMenu) return
+    const close = (event: PointerEvent) => {
+      const node = event.target
+      if (node instanceof Element && node.closest('[aria-label="Stage background"]')) return
+      setStageToneMenu(null)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setStageToneMenu(null)
+    }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [stageToneMenu])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -1195,6 +1248,7 @@ export default function MerchFittingRoom({
     sizes,
     previewColor,
     catalogTechnique,
+    activeFileType: activePrintFileType,
     placements: activePlacements.map((placement) => [
       placement.fileType || placement.placement,
       placement.assetUrl,
@@ -1617,6 +1671,7 @@ export default function MerchFittingRoom({
         catalogProductId,
         name: name.trim() || blank.name,
         placements: activePlacements,
+        activeFileType: activePrintFileType || null,
         colors,
         sizes,
         previewColor,
@@ -1631,6 +1686,13 @@ export default function MerchFittingRoom({
     setStatus(design.status)
     setName(design.name)
     writeStudioDesignId(design.id)
+    if (!designId && catalogProductId != null) {
+      const carried = readProductMats()[`catalog:${catalogProductId}`]
+      if (carried != null) {
+        writeProductMat(design.id, carried)
+        setProductMats(readProductMats())
+      }
+    }
     refreshSaved()
     markCleanRef.current()
     return design
@@ -1798,6 +1860,33 @@ export default function MerchFittingRoom({
     selectPlacementTab(id)
   }
 
+  const matKey = productMatKey(designId, catalogProductId)
+  const stageTone = matKey != null && productMats[matKey] != null ? productMats[matKey] : null
+  const stageMat = stageTone == null ? null : productMatColor(stageTone)
+  const lightBackdrop =
+    stageTone != null
+      ? stageTone > 170
+      : channelLuma(hexToRgb(designGarment?.backgroundColor) || { r: 20, g: 20, b: 20 }) > 170
+
+  const onStageBackgroundContextMenu = (event: ReactMouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element) || target.closest('button, a, input, textarea, [data-art-layer]')) return
+    event.preventDefault()
+    const menuWidth = 220
+    const menuHeight = 188
+    setStageToneMenu({
+      x: Math.min(event.clientX, window.innerWidth - menuWidth - 8),
+      y: Math.min(event.clientY, window.innerHeight - menuHeight - 8),
+    })
+  }
+
+  const setStageBackgroundTone = (tone: number | null) => {
+    if (!matKey) return
+    const next = tone == null ? null : Math.max(0, Math.min(255, Math.round(tone)))
+    writeProductMat(matKey, next)
+    setProductMats(readProductMats())
+  }
+
   const placedLayers = (
     techniquePrintFiles.length > 0
       ? techniquePrintFiles.map((file) => {
@@ -1899,6 +1988,7 @@ export default function MerchFittingRoom({
           onSelect={(product) => void selectCatalogProduct(product)}
           onOpenDesign={(design) => void selectSavedDesign(design)}
           onCatalogPanelCollapsedChange={setCatalogPanelCollapsed}
+          productMats={productMats}
         />
         {!catalogPanelCollapsed ? (
           <div
@@ -1936,7 +2026,7 @@ export default function MerchFittingRoom({
             colorName={previewColorName}
             colorHex={previewColor}
             garmentUrl={designGarmentUrl}
-            garmentBackground={designGarment?.backgroundColor ?? null}
+            garmentBackground={designGarment?.backgroundColor || previewColor}
             useTemplateMockup={designUsesTemplateMockup}
             garmentAspect={designUsesTemplateMockup ? activePrintFile?.templateAspect ?? null : null}
             family={blank.family}
@@ -1953,6 +2043,7 @@ export default function MerchFittingRoom({
             onArtWheel={onWheel}
             onArtContextMenu={(event) => {
               event.preventDefault()
+              event.stopPropagation()
               setArtMenu({ target: 'stage', x: event.clientX, y: event.clientY })
             }}
             onArtAdjust={onArtAdjust}
@@ -1965,6 +2056,8 @@ export default function MerchFittingRoom({
             snapGuides={snapGuides}
             stageToolbar={stageToolbar}
             underTabs={<StageModeSwitch view={stageView} onChange={onStageViewChange} />}
+            matColor={stageMat}
+            onStageBackdropContextMenu={onStageBackgroundContextMenu}
           />
         ) : (
         <>
@@ -1983,6 +2076,7 @@ export default function MerchFittingRoom({
         )}
         <div
           className="relative min-h-[280px] flex-1"
+          onContextMenu={onStageBackgroundContextMenu}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault()
@@ -1997,6 +2091,7 @@ export default function MerchFittingRoom({
                 style={{ perspective: '1280px' }}
               >
                 <div
+                  data-stage-garment=""
                   className="relative h-[84%] max-h-full"
                   style={{
                     aspectRatio: String(previewCardAspect),
@@ -2050,18 +2145,19 @@ export default function MerchFittingRoom({
                           backfaceVisibility: 'hidden',
                           WebkitBackfaceVisibility: 'hidden',
                           pointerEvents: isActive ? 'auto' : 'none',
-                          backgroundColor: faceTemplate?.backgroundColor || undefined,
+                          backgroundColor: faceImageUrl ? undefined : stageMat || undefined,
                         }}
                       >
                         {faceImageUrl ? (
-                          <img
+                          <GarmentMatImage
                             src={faceImageUrl}
-                            alt=""
-                            draggable={false}
-                            className={`pointer-events-none absolute inset-0 h-full w-full drop-shadow-lg ${
+                            matColor={stageMat}
+                            garmentColor={faceTemplate?.backgroundColor || previewColor}
+                            className="pointer-events-none absolute inset-0"
+                            imgClassName={`absolute inset-0 h-full w-full drop-shadow-lg ${
                               faceTemplateUrl ? 'object-fill' : 'object-contain'
                             }`}
-                            style={
+                            imgStyle={
                               !faceTemplateUrl && faceArea.id === 'back' ? { transform: 'scaleX(-1)' } : undefined
                             }
                           />
@@ -2106,7 +2202,11 @@ export default function MerchFittingRoom({
                 </div>
               </div>
               {!layer && (
-                <p className="absolute bottom-8 inset-x-8 text-center text-white/45 text-sm pointer-events-none">
+                <p
+                  className={`pointer-events-none absolute inset-x-8 bottom-8 text-center text-sm ${
+                    lightBackdrop ? 'text-black/50' : 'text-white/45'
+                  }`}
+                >
                   Upload art on the right, drop a PNG here, or tap Add below.
                 </p>
               )}
@@ -2182,7 +2282,7 @@ export default function MerchFittingRoom({
           ) : (
             <>
               <div className="absolute inset-0 flex items-center justify-center px-8 pb-6">
-                <img src={activePhoto} alt="" className="max-h-full max-w-full object-contain" />
+                <img src={activePhoto} alt="" data-stage-garment="" className="max-h-full max-w-full object-contain" />
               </div>
               {mockupUrls.length > 1 && (
                 <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
@@ -2378,6 +2478,69 @@ export default function MerchFittingRoom({
           )}
         </div>
       )}
+    {stageToneMenu ? (
+      <div
+        role="menu"
+        aria-label="Stage background"
+        className="fixed z-[90] w-[220px] space-y-3 rounded-xl border border-white/15 bg-zinc-950 p-3 text-white shadow-2xl"
+        style={{ left: stageToneMenu.x, top: stageToneMenu.y }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-white/55">This product</span>
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={stageTone == null}
+            onClick={() => setStageBackgroundTone(null)}
+            className={`rounded-md px-2 py-1 text-[11px] ${
+              stageTone == null ? 'bg-white text-black' : 'text-white/70 hover:bg-white/10'
+            }`}
+          >
+            Original
+          </button>
+        </div>
+        <div className="flex gap-1.5">
+          {[
+            { tone: 0, label: 'Black' },
+            { tone: 44, label: 'Dark' },
+            { tone: 128, label: 'Mid' },
+            { tone: 210, label: 'Light' },
+            { tone: 255, label: 'White' },
+          ].map((swatch) => (
+            <button
+              key={swatch.label}
+              type="button"
+              role="menuitemradio"
+              aria-label={swatch.label}
+              aria-checked={stageTone === swatch.tone}
+              title={swatch.label}
+              onClick={() => setStageBackgroundTone(swatch.tone)}
+              className={`h-7 flex-1 rounded-md border ${
+                stageTone === swatch.tone ? 'border-white' : 'border-white/20'
+              }`}
+              style={{ backgroundColor: `rgb(${swatch.tone},${swatch.tone},${swatch.tone})` }}
+            />
+          ))}
+        </div>
+        <label className="block space-y-1">
+          <span className="flex items-center justify-between text-[11px] text-white/70">
+            Tone
+            <span className="tabular-nums text-white/40">{stageTone == null ? 'Original' : stageTone}</span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={255}
+            aria-label="Background tone from black to white"
+            value={stageTone ?? 128}
+            onChange={(event) => setStageBackgroundTone(Number(event.target.value))}
+            className="w-full accent-white"
+          />
+        </label>
+      </div>
+    ) : null}
     {artMenuOpen && artMenu && (
       <StudioContextMenu
         open

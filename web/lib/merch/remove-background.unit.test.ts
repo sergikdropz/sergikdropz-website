@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   cleanCutoutFringe,
   colorDistance,
+  colorRangeMask,
   applyMagicWand,
   crispCutoutEdge,
   estimateBackgroundColor,
   magicWandMask,
+  polishCutoutMatte,
   removeSolidBackground,
   shaveCutout,
   type ImageDataLike,
@@ -156,5 +158,37 @@ describe('remove-background', () => {
     const loose = magicWandMask(image, 1, 1, { tolerance: 64, edgeGuard: 10 })
     const strict = magicWandMask(image, 1, 1, { tolerance: 64, edgeGuard: 85 })
     expect(loose.reduce((s, v) => s + v, 0)).toBeGreaterThan(strict.reduce((s, v) => s + v, 0))
+  })
+
+  it('keeps a black outline when a white edge flood is erased', () => {
+    const size = 24
+    const data = new Uint8ClampedArray(size * size * 4)
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4
+        const inside = x > 6 && x < 17 && y > 6 && y < 17
+        const outline = x >= 6 && x <= 17 && y >= 6 && y <= 17 && !inside
+        data[i] = outline ? 0 : 255
+        data[i + 1] = outline ? 0 : 255
+        data[i + 2] = outline ? 0 : 255
+        data[i + 3] = 255
+      }
+    }
+    const image = { data, width: size, height: size }
+    const mask = magicWandMask(image, 1, 1, { tolerance: 28, edgeGuard: 62 })
+    expect(mask[0]).toBe(1)
+    expect(mask[6 * size + 6]).toBe(0)
+    expect(mask[12 * size + 12]).toBe(0)
+    const cleared = applyMagicWand(image, image, 1, 1, 28, false, { edgeGuard: 62 })
+    expect(alphaAt(cleared, 1, 1)).toBe(0)
+    expect(alphaAt(cleared, 6, 6)).toBe(255)
+    const global = colorRangeMask(image, 1, 1, 28, false, 62)
+    expect(global[12 * size + 12]).toBe(1)
+    expect(global[6 * size + 6]).toBe(0)
+    const soft = { data: new Uint8ClampedArray(cleared.data), width: size, height: size }
+    const outline = (6 * size + 10) * 4
+    soft.data[outline + 3] = 40
+    const polished = polishCutoutMatte(soft)
+    expect(polished.data[outline + 3]).toBe(40)
   })
 })

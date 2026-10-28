@@ -1,9 +1,9 @@
 {
   "designs": [
     {
-      "id": "58008953-5db7-4be2-9c90-7f26b9b58eda",
-      "name": "Ollin Logo Snapback",
-      "slug": "ollin-logo-snapback",
+      "id": "68b08f8b-b11b-4899-8f8d-621f520ca3a4",
+      "name": "Classic Snapback | Yupoong 6089M",
+      "slug": "classic-snapback-yupoong-6089m",
       "blankId": "hat-dad",
       "catalogProductId": 99,
       "family": "hat",
@@ -13,13 +13,66 @@
           "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-27T16%3A44%3A19.078Z",
           "assetWidth": 720,
           "assetHeight": 737,
-          "x": 0.00926269907528443,
-          "y": -0.0023241538632157166,
-          "scale": 0.9814746018494311,
+          "x": 0.015329882664273042,
+          "y": 0.0038862826716239973,
+          "scale": 0.9693402346714539,
           "rotation": 0,
           "fileType": "addon_embroidery_front"
+        },
+        {
+          "placement": "back",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/02b14a50-c193-43e8-bf09-9453ed4727b4.png",
+          "assetWidth": 2241,
+          "assetHeight": 849,
+          "x": 0,
+          "y": 0.1211512717536814,
+          "scale": 1,
+          "rotation": 0,
+          "fileType": "embroidery_back"
         }
       ],
+      "activeFileType": "addon_embroidery_front",
+      "colors": [
+        "Black",
+        "Black/ Neon Pink",
+        "Natural/ Black"
+      ],
+      "sizes": [
+        "One size"
+      ],
+      "previewColor": "#2a2a2a",
+      "retailPrice": 38,
+      "wholesaleCost": 15,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T02:44:04.032Z",
+      "updatedAt": "2026-10-28T03:57:09.243Z"
+    },
+    {
+      "id": "58008953-5db7-4be2-9c90-7f26b9b58eda",
+      "name": "SERGIKfont Snapback",
+      "slug": "sergikfont-snapback",
+      "blankId": "hat-dad",
+      "catalogProductId": 99,
+      "family": "hat",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
+          "assetWidth": 886,
+          "assetHeight": 557,
+          "x": 0.18706158551560104,
+          "y": 0.013950254385338645,
+          "scale": 0.6258768289687979,
+          "rotation": 0,
+          "fileType": "embroidery_front_large"
+        }
+      ],
+      "activeFileType": "embroidery_front_large",
       "colors": [
         "Black",
         "Black/ Neon Pink",
@@ -33,8 +86,8 @@
       "sizes": [
         "One size"
       ],
-      "previewColor": "#f5eee1",
-      "retailPrice": 40,
+      "previewColor": "#2a2a2a",
+      "retailPrice": 38,
       "wholesaleCost": 15,
       "status": "draft",
       "printfulSyncProductId": null,
@@ -43,12 +96,12 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-27T11:42:55.924Z",
-      "updatedAt": "2026-10-27T21:54:57.546Z"
+      "updatedAt": "2026-10-28T03:56:58.028Z"
     },
     {
       "id": "a8be51ca-66ae-4da1-a8a5-a57130611e36",
-      "name": "Unisex Staple T-Shirt | Bella + Canvas 3001",
-      "slug": "unisex-staple-t-shirt-bella-canvas-3001",
+      "name": "Stone Ollin Front",
+      "slug": "stone-ollin-front",
       "blankId": "tee-staple",
       "catalogProductId": 1626,
       "family": "tee",
@@ -58,16 +111,22 @@
           "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/81845825-e781-4c2d-960b-f23347eef613.png",
           "assetWidth": 1254,
           "assetHeight": 1254,
-          "x": 0.05832409567362762,
-          "y": 0.026211394276955166,
-          "scale": 0.8833518086527448,
+          "x": 0.040158460471739765,
+          "y": 0.023827725821477963,
+          "scale": 0.9196830790565204,
           "rotation": -0.1975301590673979,
           "fileType": "front"
         }
       ],
+      "activeFileType": "front",
       "colors": [
         "Black",
-        "Cream"
+        "Cream",
+        "Mocha",
+        "Oatmeal",
+        "Peach",
+        "Shadow",
+        "White"
       ],
       "sizes": [
         "2XL",
@@ -79,14 +138,14 @@
       "previewColor": "#000000",
       "retailPrice": 40,
       "wholesaleCost": 13,
-      "status": "hidden",
+      "status": "draft",
       "printfulSyncProductId": null,
       "mockupTaskKey": null,
       "mockupUrls": [],
       "variants": [],
       "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "createdAt": "2026-10-27T07:02:04.222Z",
-      "updatedAt": "2026-10-27T10:07:05.908Z"
+      "updatedAt": "2026-10-28T03:57:31.860Z"
     }
   ]
 }

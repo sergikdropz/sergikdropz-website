@@ -5,7 +5,14 @@ import { getBlank, MERCH_BLANKS, type BlankPlacement, type MerchBlank } from '@/
 import MerchMannequin from '@/components/admin/MerchMannequin'
 import { artHeightInPrintArea, type ArtPlacement, type MerchDesign } from '@/lib/merch/design'
 import type { CatalogProductDetail } from '@/lib/merch/printful-catalog-types'
-import { placementForPrintFile, previewGarmentImage } from '@/lib/merch/catalog-studio'
+import {
+  coloredTemplate,
+  containedImageBox,
+  hasTemplateStage,
+  placementForPrintFile,
+  previewGarmentImage,
+} from '@/lib/merch/catalog-studio'
+import GarmentMatImage from '@/components/shop/GarmentMatImage'
 
 export type MerchGarmentPreviewDesign = Pick<
   MerchDesign,
@@ -92,13 +99,16 @@ function PlacedArtPreview({ art, area }: { art: ArtPlacement; area: BlankPlaceme
 type Props = {
   design: MerchGarmentPreviewDesign
   className?: string
+  /** Studio mat behind a cut-out product. Leaves the garment image unchanged. */
+  matColor?: string
 }
 
-export default function MerchGarmentPreview({ design, className = '' }: Props) {
+export default function MerchGarmentPreview({ design, className = '', matColor }: Props) {
   const mockup = design.mockupUrls[0]
   const art = primaryPreviewPlacement(design)
   const blank = getBlank(design.blankId) || MERCH_BLANKS[0]
   const [catalog, setCatalog] = useState<CatalogProductDetail | null>(null)
+  const [imageAspect, setImageAspect] = useState<number | null>(null)
 
   useEffect(() => {
     if (!design.catalogProductId) {
@@ -117,13 +127,33 @@ export default function MerchGarmentPreview({ design, className = '' }: Props) {
   const colorName = design.colors[0] || 'Black'
   const previewSize = design.sizes.includes('M') ? 'M' : design.sizes[0] || 'M'
 
-  const garmentUrl = useMemo(
-    () => (catalog ? previewGarmentImage(catalog, colorName, previewSize) : null),
-    [catalog, colorName, previewSize],
-  )
+  const printFile = useMemo(() => {
+    if (!catalog || !art) return null
+    if (art.fileType) return catalog.printFiles.find((file) => file.type === art.fileType) ?? null
+    return (
+      catalog.printFiles.find(
+        (file) => placementForPrintFile(file, blank, { surface: 'photo' }).id === art.placement,
+      ) ?? null
+    )
+  }, [art, blank, catalog])
 
-  const area = art && blank ? printAreaForPlacement(art, catalog, blank) : null
+  // The catalog photo has no print box. When Printful measured one on the flat
+  // template, draw that template so the art lands on the front panel.
+  const calibrated = printFile && hasTemplateStage(printFile) ? printFile : null
+  const templateView = calibrated ? coloredTemplate(catalog, calibrated, colorName, previewSize) : null
+  const garmentUrl = templateView?.imageUrl || (catalog ? previewGarmentImage(catalog, colorName, previewSize) : null)
+  const area =
+    art && blank
+      ? calibrated
+        ? placementForPrintFile(calibrated, blank)
+        : printAreaForPlacement(art, catalog, blank)
+      : null
   const placementId = area?.id || 'front'
+  const frame = containedImageBox(1, imageAspect ?? 1)
+
+  useEffect(() => {
+    setImageAspect(null)
+  }, [garmentUrl])
 
   if (mockup) {
     return <img src={mockup} alt="" className={`h-full w-full object-contain ${className}`} />
@@ -139,17 +169,39 @@ export default function MerchGarmentPreview({ design, className = '' }: Props) {
 
   return (
     <span className={`relative block h-full w-full overflow-hidden ${className}`}>
-      {garmentUrl ? (
-        <img src={garmentUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-contain" />
-      ) : (
-        <MerchMannequin
-          family={design.family}
-          color={design.previewColor}
-          placement={placementId}
-          idPrefix={`shop-preview-${design.id}`}
-        />
-      )}
-      <PlacedArtPreview art={art} area={area} />
+      <span
+        className="absolute"
+        style={{
+          left: `${frame.x * 100}%`,
+          top: `${frame.y * 100}%`,
+          width: `${frame.w * 100}%`,
+          height: `${frame.h * 100}%`,
+        }}
+      >
+        {garmentUrl ? (
+          <GarmentMatImage
+            src={garmentUrl}
+            matColor={matColor}
+            garmentColor={templateView?.backgroundColor || design.previewColor}
+            className="absolute inset-0"
+            imgClassName="absolute inset-0 h-full w-full object-fill"
+            onLoad={(event) => {
+              const image = event.currentTarget
+              if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                setImageAspect(image.naturalWidth / image.naturalHeight)
+              }
+            }}
+          />
+        ) : (
+          <MerchMannequin
+            family={design.family}
+            color={design.previewColor}
+            placement={placementId}
+            idPrefix={`shop-preview-${design.id}`}
+          />
+        )}
+        <PlacedArtPreview art={art} area={area} />
+      </span>
     </span>
   )
 }

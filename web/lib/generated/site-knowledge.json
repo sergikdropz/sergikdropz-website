@@ -17,8 +17,8 @@
     "counts": {
       "appRouterPages": 100,
       "appRouterRouteHandlers": 348,
-      "componentsTsx": 231,
-      "libTs": 953
+      "componentsTsx": 232,
+      "libTs": 964
     },
     "pagesByCategory": {
       "fan": 5,

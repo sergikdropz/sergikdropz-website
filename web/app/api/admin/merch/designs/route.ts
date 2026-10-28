@@ -7,6 +7,10 @@ import { listDesigns, saveDesign, uniqueSlug } from '@/lib/merch/design-store'
 
 export const dynamic = 'force-dynamic'
 
+function normalizeActiveFileType(value: unknown): string | null {
+  return typeof value === 'string' && /^[a-z0-9_]{1,64}$/i.test(value) ? value : null
+}
+
 export async function GET() {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
@@ -40,6 +44,7 @@ export async function POST(request: NextRequest) {
         : existing?.catalogProductId ?? blank.catalogHintId,
     family: blank.family,
     placements: normalizePlacements(body?.placements),
+    activeFileType: normalizeActiveFileType(body?.activeFileType) ?? existing?.activeFileType ?? null,
     colors: Array.isArray(body?.colors) ? body.colors.map(String).slice(0, 8) : blank.defaultColors,
     sizes: Array.isArray(body?.sizes) ? body.sizes.map(String).slice(0, 8) : blank.defaultSizes,
     previewColor: String(body?.previewColor || existing?.previewColor || blank.colors[0]?.hex || '#1a1a1a'),

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import MerchDesignPreviewThumb from '@/components/admin/MerchDesignPreviewThumb'
 import type { DesignStatus, MerchDesign } from '@/lib/merch/design'
+import { productMatColor } from '@/lib/merch/studio-session'
 import type { PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import type { CatalogNavItem, PrintfulCategoryNode } from '@/lib/merch/printful-categories'
 
@@ -54,6 +55,8 @@ type Props = {
   onSelect: (product: PrintfulCatalogProduct) => void
   onOpenDesign?: (design: MerchDesign) => void
   onCatalogPanelCollapsedChange?: (collapsed: boolean) => void
+  /** Backdrop tone saved per design. Missing entries keep the original product color. */
+  productMats?: Record<string, number>
 }
 
 function readFavorites(): number[] {
@@ -141,6 +144,7 @@ export default function MerchPrintfulCatalog({
   onSelect,
   onOpenDesign,
   onCatalogPanelCollapsedChange,
+  productMats,
 }: Props) {
   const [q, setQ] = useState('')
   const [syncedAt, setSyncedAt] = useState<string | null>(null)
@@ -538,8 +542,15 @@ export default function MerchPrintfulCatalog({
                       onClick={() => onOpenDesign?.(design)}
                       className="overflow-hidden rounded-xl border border-white/10 bg-black/25 text-left transition hover:border-white/25"
                     >
-                      <span className="relative block aspect-square bg-[#2a2a2a]">
-                        <MerchDesignPreviewThumb design={design} />
+                      <span className="relative block aspect-square">
+                        <MerchDesignPreviewThumb
+                          design={design}
+                          matColor={
+                            productMats && productMats[design.id] != null
+                              ? productMatColor(productMats[design.id])
+                              : undefined
+                          }
+                        />
                       </span>
                       <span className="block p-2">
                         <span className="line-clamp-2 text-[11px] font-medium leading-snug text-white">

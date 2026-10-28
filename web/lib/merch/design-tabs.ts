@@ -49,9 +49,26 @@ function primaryTabLabel(file: DesignTabPrintFile, view: PlacementView): string 
   return view
 }
 
+function placementFileWins(
+  file: DesignTabPrintFile,
+  current: DesignTabPrintFile,
+  prefer: ReadonlySet<string>,
+): boolean {
+  const filePreferred = prefer.has(file.type)
+  const currentPreferred = prefer.has(current.type)
+  if (filePreferred !== currentPreferred) {
+    // A wide or paid extra stays its own tab. It must not take the primary Front slot.
+    if (filePreferred && isAlternatePlacementFile(file) && !isAlternatePlacementFile(current)) return false
+    if (currentPreferred && isAlternatePlacementFile(current) && !isAlternatePlacementFile(file)) return true
+    return filePreferred
+  }
+  return placementFileScore(file) < placementFileScore(current)
+}
+
 export function buildDesignTabs(
   techniquePrintFiles: DesignTabPrintFile[],
   garmentPlacements: Array<{ id: string; label: string }>,
+  options?: { preferTypes?: readonly string[] },
 ): DesignTab[] {
   if (techniquePrintFiles.length === 0) {
     return garmentPlacements.map((item) => ({
@@ -60,12 +77,13 @@ export function buildDesignTabs(
     }))
   }
 
+  const prefer = new Set(options?.preferTypes || [])
   const chosen = new Map<PlacementView, DesignTabPrintFile>()
   for (const file of techniquePrintFiles) {
     const view = placementViewName(file.type, file.title || file.type)
     if (!view) continue
     const current = chosen.get(view)
-    if (!current || placementFileScore(file) < placementFileScore(current)) chosen.set(view, file)
+    if (!current || placementFileWins(file, current, prefer)) chosen.set(view, file)
   }
 
   const tabs: DesignTab[] = PLACEMENT_VIEWS.flatMap((view) => {
@@ -106,4 +124,16 @@ export function buildDesignTabs(
     id: item.id,
     label: item.id === 'back' ? 'Back' : 'Front',
   }))
+}
+
+/** Tab to show when a saved design opens. A remembered tab wins; otherwise the first tab that has art. */
+export function placementFileToOpen(
+  tabs: DesignTab[],
+  layers: Record<string, { assetUrl?: string } | null | undefined>,
+  remembered?: string | null,
+): string | null {
+  if (tabs.length === 0) return null
+  if (remembered && tabs.some((tab) => tab.id === remembered)) return remembered
+  const withArt = tabs.find((tab) => Boolean(layers[tab.id]?.assetUrl))
+  return withArt?.id ?? tabs[0].id
 }
