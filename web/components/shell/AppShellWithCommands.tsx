@@ -49,10 +49,12 @@ export function AppShellWithCommands({
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="rounded-md border border-line bg-surface-overlay px-2.5 py-1.5 text-xs text-ink-muted hover:text-ink"
+              className="shrink-0 rounded-md border border-line bg-surface-overlay px-2.5 py-1.5 text-xs text-ink-muted hover:text-ink"
               aria-keyshortcuts="Meta+K Control+K"
+              aria-label="Open command search"
             >
-              Command ⌘K
+              <span className="sm:hidden">Search</span>
+              <span className="hidden sm:inline">Command ⌘K</span>
             </button>
           </div>
         }

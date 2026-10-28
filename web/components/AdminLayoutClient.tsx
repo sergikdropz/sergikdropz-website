@@ -30,8 +30,11 @@ function AdminChrome({
     <div className="min-h-screen bg-surface">
       <AdminNav />
       <main
-        className="min-h-screen pt-shell-top transition-[padding] duration-ui ease-out md:pt-0 md:pl-[calc(var(--shell-nav-width)+var(--admin-ai-dock-inset-left,0px))] [padding-bottom:var(--global-music-player-height,0px)]"
-        style={{ paddingRight: 'var(--admin-ai-dock-inset-right, var(--admin-ai-dock-inset, 0px))' }}
+        className="shell-main min-h-screen transition-[padding] duration-ui ease-out [padding-bottom:var(--global-music-player-height,0px)]"
+        style={{
+          paddingRight:
+            'calc(var(--shell-safe-right) + var(--admin-ai-dock-inset-right, var(--admin-ai-dock-inset, 0px)))',
+        }}
       >
         <AppShellWithCommands surface="admin">{children}</AppShellWithCommands>
       </main>

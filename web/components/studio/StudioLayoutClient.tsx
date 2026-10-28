@@ -8,8 +8,11 @@ export default function StudioLayoutClient({ children }: { children: React.React
   return (
     <AdminAiPageProvider surface="studio">
       <main
-        className="min-h-screen pt-shell-top transition-[padding] duration-ui ease-out md:pt-0 md:pl-[calc(var(--shell-nav-width)+var(--admin-ai-dock-inset-left,0px))]"
-        style={{ paddingRight: 'var(--admin-ai-dock-inset-right, var(--admin-ai-dock-inset, 0px))' }}
+        className="shell-main min-h-screen transition-[padding] duration-ui ease-out"
+        style={{
+          paddingRight:
+            'calc(var(--shell-safe-right) + var(--admin-ai-dock-inset-right, var(--admin-ai-dock-inset, 0px)))',
+        }}
       >
         <AppShellWithCommands surface="studio" showBreadcrumbs={false}>
           {children}

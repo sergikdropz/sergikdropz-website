@@ -1,5 +1,5 @@
 {
-  "syncedAt": "2026-10-28T06:54:24.983Z",
+  "syncedAt": "2026-10-28T08:34:50.267Z",
   "productCount": 571,
   "products": [
     {
@@ -9290,11 +9290,13 @@
       "variantCount": 10,
       "fileTypes": [
         "embroidery_front",
+        "front_dtf_hat",
         "mockup"
       ],
       "isDiscontinued": false,
       "techniques": [
-        "EMBROIDERY"
+        "EMBROIDERY",
+        "DTFILM"
       ],
       "studioFamily": "hat",
       "studioBlankId": "hat-dad",

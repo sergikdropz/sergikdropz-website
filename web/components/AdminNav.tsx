@@ -336,7 +336,7 @@ export default function AdminNav() {
       ) : null}
       {/* Desktop sidebar */}
       <aside
-        className={`admin-sidebar z-40 hidden border-r border-line bg-surface-overlay/95 backdrop-blur-sm transition-[width] duration-ui ease-out md:fixed md:inset-y-0 md:left-0 md:flex md:w-shell-nav md:flex-col ${
+        className={`admin-sidebar z-40 hidden border-r border-line bg-surface-overlay/95 backdrop-blur-sm transition-[width] duration-ui ease-out md:fixed md:inset-y-0 md:left-0 md:flex md:w-[calc(var(--shell-nav-width)+var(--shell-safe-left))] md:flex-col md:pb-[var(--shell-safe-bottom)] md:pl-[var(--shell-safe-left)] md:pt-[var(--shell-safe-top)] ${
           collapsed ? 'admin-sidebar--collapsed' : ''
         }`}
       >
@@ -344,7 +344,7 @@ export default function AdminNav() {
       </aside>
 
       {/* Mobile top bar */}
-      <div className="fixed left-0 right-0 top-0 z-50 border-b border-line bg-surface-overlay/95 backdrop-blur-sm md:hidden">
+      <div className="fixed inset-x-0 top-0 z-50 border-b border-line bg-surface-overlay/95 pl-[var(--shell-safe-left)] pr-[var(--shell-safe-right)] pt-[var(--shell-safe-top)] backdrop-blur-sm md:hidden">
         <div className="flex h-shell-top items-center justify-between px-4">
           <Link href="/admin" className="text-lg font-bold text-ink">
             Admin Panel
@@ -373,7 +373,7 @@ export default function AdminNav() {
             className="fixed inset-0 z-50 bg-black/60 md:hidden"
             onClick={() => setIsMobileOpen(false)}
           />
-          <aside className="admin-sidebar fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-surface-overlay md:hidden">
+          <aside className="admin-sidebar fixed bottom-0 left-0 top-0 z-50 flex w-[calc(16rem+var(--shell-safe-left))] flex-col bg-surface-overlay pb-[var(--shell-safe-bottom)] pl-[var(--shell-safe-left)] pt-[var(--shell-safe-top)] md:hidden">
             {sidebarContent({ showCollapseToggle: false, compact: false })}
           </aside>
         </>

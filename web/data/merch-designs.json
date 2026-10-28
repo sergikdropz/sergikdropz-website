@@ -124,7 +124,7 @@
         "XL"
       ],
       "previewColor": "#000000",
-      "retailPrice": 46,
+      "retailPrice": 40,
       "wholesaleCost": 13,
       "status": "draft",
       "printfulSyncProductId": null,
@@ -133,7 +133,7 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-28T07:36:49.687Z",
-      "updatedAt": "2026-10-28T08:05:57.812Z"
+      "updatedAt": "2026-10-28T08:41:11.838Z"
     },
     {
       "id": "6d3d8572-c79e-4f43-808a-f49b26244d9b",
