@@ -1117,7 +1117,7 @@ export function MerchDesignSidebar({
                     type="button"
                     onClick={() => onPlaceArt(item.url)}
                     onContextMenu={(event) => onUploadContextMenu(event, item)}
-                    title="Place on the active area"
+                    title="Place on the active area. Right-click for library actions."
                     className={`aspect-square overflow-hidden rounded bg-black/40 hover:ring-1 hover:ring-white/40 ${
                       activeLayerUrl && sameMerchArt(activeLayerUrl, item.url) ? 'ring-1 ring-white' : ''
                     }`}
@@ -1129,6 +1129,9 @@ export function MerchDesignSidebar({
             ) : (
               <p className="mt-2 text-[11px] text-white/45">PNG or JPEG artwork for this placement.</p>
             )}
+            {note ? (
+              <p className="mt-2 rounded border border-white/10 bg-black/30 p-2 text-xs text-white/80">{note}</p>
+            ) : null}
           </div>
         )}
 

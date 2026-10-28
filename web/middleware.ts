@@ -149,9 +149,9 @@ export async function middleware(request: NextRequest) {
 
   if (isPrivilegedOpsApi) {
     const resolved = await resolveRequestAccessToken(request)
-    if (!resolved?.accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!resolved?.accessToken) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
     const refreshed = refreshResultFromResolved(resolved.refreshed)
     const denied = await denyUnlessAdmin(request, resolved.accessToken, true)
     if (denied) {

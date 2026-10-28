@@ -37,9 +37,12 @@ export async function resolveRequestAccessToken(
     }
   }
 
-  if (!accessToken || isJwtExpired(accessToken)) {
-    return null
+  // A parallel refresh may already have rotated the cookie. The access token
+  // is often still valid for the rest of its minute, so a failed refresh
+  // must not turn that into a 401.
+  if (accessToken && !isJwtExpired(accessToken, 0)) {
+    return { accessToken }
   }
 
-  return { accessToken }
+  return null
 }

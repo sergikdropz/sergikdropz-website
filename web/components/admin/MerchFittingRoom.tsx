@@ -289,8 +289,11 @@ export default function MerchFittingRoom({
 
   const refreshUploads = useCallback(() => {
     fetch('/api/admin/merch/art')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setUploads(data?.uploads || []))
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = await res.json()
+        setUploads(Array.isArray(data?.uploads) ? data.uploads : [])
+      })
       .catch(() => undefined)
   }, [])
 
@@ -914,6 +917,11 @@ export default function MerchFittingRoom({
     const res = await fetch(`/api/admin/merch/art?id=${encodeURIComponent(upload.id)}`, { method: 'DELETE' })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
+      if (res.status === 401) {
+        setNote('Your session expired. Sign in again to remove artwork.')
+        window.location.assign('/admin/login')
+        return
+      }
       setNote(data.error || 'Could not remove that artwork')
       return
     }
@@ -1984,7 +1992,9 @@ export default function MerchFittingRoom({
       <aside className="relative flex h-[70vh] min-h-[360px] flex-col overflow-hidden xl:h-full xl:min-h-0">
         <MerchPrintfulCatalog
           activeCatalogId={catalogProductId}
-          designs={saved}
+          designs={saved.map((design) =>
+            design.id === designId ? { ...design, previewColor, colors, sizes } : design
+          )}
           onSelect={(product) => void selectCatalogProduct(product)}
           onOpenDesign={(design) => void selectSavedDesign(design)}
           onCatalogPanelCollapsedChange={setCatalogPanelCollapsed}

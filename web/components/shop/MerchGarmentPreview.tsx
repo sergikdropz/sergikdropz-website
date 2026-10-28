@@ -8,6 +8,7 @@ import type { CatalogProductDetail } from '@/lib/merch/printful-catalog-types'
 import {
   coloredTemplate,
   containedImageBox,
+  designPreviewColorName,
   hasTemplateStage,
   placementForPrintFile,
   previewGarmentImage,
@@ -31,8 +32,16 @@ const catalogDetailCache = new Map<number, Promise<CatalogProductDetail | null>>
 
 function loadCatalogDetail(catalogProductId: number): Promise<CatalogProductDetail | null> {
   const existing = catalogDetailCache.get(catalogProductId)
-  if (existing) return existing
-  const request = fetch(`/api/merch/catalog/${catalogProductId}/garment`)
+  if (existing) {
+    return existing.then((detail) => {
+      if (detail && !Array.isArray(detail.colors)) {
+        catalogDetailCache.delete(catalogProductId)
+        return loadCatalogDetail(catalogProductId)
+      }
+      return detail
+    })
+  }
+  const request = fetch(`/api/merch/catalog/${catalogProductId}/garment`, { cache: 'no-store' })
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => (data?.detail as CatalogProductDetail | undefined) ?? null)
     .catch(() => null)
@@ -115,6 +124,7 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
       setCatalog(null)
       return
     }
+    if (catalog && Array.isArray(catalog.colors)) return
     let cancelled = false
     void loadCatalogDetail(design.catalogProductId).then((detail) => {
       if (!cancelled) setCatalog(detail)
@@ -122,9 +132,9 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
     return () => {
       cancelled = true
     }
-  }, [design.catalogProductId])
+  }, [catalog, design.catalogProductId])
 
-  const colorName = design.colors[0] || 'Black'
+  const colorName = designPreviewColorName(catalog?.colors || [], design.previewColor, design.colors)
   const previewSize = design.sizes.includes('M') ? 'M' : design.sizes[0] || 'M'
 
   const printFile = useMemo(() => {

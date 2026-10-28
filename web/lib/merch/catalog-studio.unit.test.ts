@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   coloredTemplate,
   containedImageBox,
+  designPreviewColorName,
   designGarmentImage,
   filterPrintFilesForTechnique,
   isAllOverCatalogProduct,
@@ -91,6 +92,21 @@ describe('catalog-studio', () => {
       backgroundColor: '#ffffff',
     })
     expect(coloredTemplate(detail, file, 'Black', 'One size')?.backgroundColor).toBe('#2a2a2a')
+  })
+
+  it('uses the saved preview color instead of the first sell color', () => {
+    expect(
+      designPreviewColorName(
+        [
+          { name: 'Black Denim', hex: '#1c1c1c' },
+          { name: 'Classic / Light Denim', hex: '#547da0' },
+        ],
+        '#547DA0',
+        ['Black Denim'],
+      ),
+    ).toBe('Classic / Light Denim')
+    expect(designPreviewColorName([], '#ffffff', ['Black Denim'])).toBe('Black Denim')
+    expect(designPreviewColorName([], null, [])).toBe('Black')
   })
 
   it('letterboxes a portrait product photo inside a square card', () => {

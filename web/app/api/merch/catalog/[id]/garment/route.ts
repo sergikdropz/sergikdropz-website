@@ -17,10 +17,17 @@ export async function GET(_request: NextRequest, context: { params: { id: string
     return NextResponse.json({
       detail: {
         product: detail.product,
+        colors: detail.colors.map((color) => ({
+          name: color.name,
+          hex: color.hex,
+          hex2: color.hex2 ?? null,
+        })),
         variants: detail.variants.map((row) => ({
+          id: row.id,
           color: row.color,
           size: row.size,
           image: row.image,
+          color_code: row.color_code,
           in_stock: row.in_stock,
         })),
         printFiles: detail.printFiles.map((file) => ({
@@ -28,7 +35,9 @@ export async function GET(_request: NextRequest, context: { params: { id: string
           type: file.type,
           title: file.title,
           templateUrl: file.templateUrl,
+          variantTemplates: file.variantTemplates,
           mockupStage: file.mockupStage,
+          templateAspect: file.templateAspect,
           printWidth: file.printWidth,
           printHeight: file.printHeight,
           mockupSupported: file.mockupSupported,

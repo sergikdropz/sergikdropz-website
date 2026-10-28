@@ -32,6 +32,20 @@ export function pickPreviewVariant(
   return variants.find((row) => row.in_stock !== false) || variants[0]
 }
 
+/** Color the stage is showing. Saved preview hex wins over the first sell color. */
+export function designPreviewColorName(
+  colors: { name: string; hex: string }[],
+  previewColor: string | null | undefined,
+  fallbackNames: string[] = [],
+): string {
+  const hex = previewColor?.trim().toLowerCase()
+  if (hex) {
+    const match = colors.find((color) => color.hex.trim().toLowerCase() === hex)
+    if (match?.name) return match.name
+  }
+  return fallbackNames.find((name) => name.trim()) || 'Black'
+}
+
 /**
  * Where an `object-contain` image sits inside a frame, as fractions of the frame.
  * Art that was measured on the image has to use this box, or a portrait photo in a

@@ -1,41 +1,296 @@
 {
   "designs": [
     {
-      "id": "68b08f8b-b11b-4899-8f8d-621f520ca3a4",
-      "name": "OLLIN Logo Black Snapback",
-      "slug": "ollin-logo-black-snapback",
+      "id": "f03a4bbc-4d59-4c4c-b2fb-945f718f50ef",
+      "name": "OLLIN Obsidian Back Tee",
+      "slug": "ollin-obsidian-back-tee",
+      "blankId": "tee-staple",
+      "catalogProductId": 1637,
+      "family": "tee",
+      "placements": [
+        {
+          "placement": "back",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
+          "assetWidth": 886,
+          "assetHeight": 886,
+          "x": 0.006038282878269529,
+          "y": -1.3877787807814457e-17,
+          "scale": 0.987923434243461,
+          "rotation": 0,
+          "fileType": "back"
+        }
+      ],
+      "activeFileType": "back",
+      "colors": [
+        "Black",
+        "Blonde",
+        "Brown",
+        "Orange",
+        "Pink",
+        "Purple",
+        "Royal",
+        "Safety Green"
+      ],
+      "sizes": [
+        "3XL",
+        "4XL",
+        "L",
+        "M",
+        "2XL",
+        "XL"
+      ],
+      "previewColor": "#000000",
+      "retailPrice": 40,
+      "wholesaleCost": 13,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T07:59:38.752Z",
+      "updatedAt": "2026-10-28T08:05:47.500Z"
+    },
+    {
+      "id": "4970ae6b-bbe2-41dd-a74b-1e93e66b5c75",
+      "name": "OLLIN Black Snapback",
+      "slug": "ollin-black-snapback",
       "blankId": "hat-dad",
       "catalogProductId": 99,
       "family": "hat",
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-27T16%3A44%3A19.078Z",
-          "assetWidth": 720,
-          "assetHeight": 737,
-          "x": 0.015329882664273042,
-          "y": 0.0038862826716239973,
-          "scale": 0.9693402346714539,
+          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-28T07%3A12%3A16.893Z",
+          "assetWidth": 1376,
+          "assetHeight": 1442,
+          "x": 0.026454499310222868,
+          "y": 0.0037408343062073635,
+          "scale": 0.9470910013795543,
           "rotation": 0,
           "fileType": "addon_embroidery_front"
-        },
-        {
-          "placement": "back",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/02b14a50-c193-43e8-bf09-9453ed4727b4.png",
-          "assetWidth": 2241,
-          "assetHeight": 849,
-          "x": 0,
-          "y": 0.1211512717536814,
-          "scale": 1,
-          "rotation": 0,
-          "fileType": "embroidery_back"
         }
       ],
       "activeFileType": "addon_embroidery_front",
       "colors": [
         "Black",
+        "Black/ Neon Pink"
+      ],
+      "sizes": [
+        "One size"
+      ],
+      "previewColor": "#2a2a2a",
+      "retailPrice": 38,
+      "wholesaleCost": 15,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T07:54:05.139Z",
+      "updatedAt": "2026-10-28T07:56:42.630Z"
+    },
+    {
+      "id": "c38e99fc-d472-4293-92ef-9f79df29d583",
+      "name": "OLLIN Stone Back Tee",
+      "slug": "ollin-stone-back-tee",
+      "blankId": "tee-staple",
+      "catalogProductId": 1626,
+      "family": "tee",
+      "placements": [
+        {
+          "placement": "back",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/81845825-e781-4c2d-960b-f23347eef613.png?v=2026-10-25T14%3A15%3A23.293Z",
+          "assetWidth": 1254,
+          "assetHeight": 1254,
+          "x": 0.004200503635281294,
+          "y": 0.06252985614877765,
+          "scale": 0.9915989927294374,
+          "rotation": 0,
+          "fileType": "back"
+        }
+      ],
+      "activeFileType": "back",
+      "colors": [
+        "Black",
+        "Cream"
+      ],
+      "sizes": [
+        "2XL",
+        "L",
+        "M",
+        "S",
+        "XL"
+      ],
+      "previewColor": "#000000",
+      "retailPrice": 46,
+      "wholesaleCost": 13,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T07:36:49.687Z",
+      "updatedAt": "2026-10-28T08:05:57.812Z"
+    },
+    {
+      "id": "6d3d8572-c79e-4f43-808a-f49b26244d9b",
+      "name": "OLLIN Obsidian Front Tee",
+      "slug": "ollin-obsidian-front-tee",
+      "blankId": "tee-staple",
+      "catalogProductId": 1637,
+      "family": "tee",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
+          "assetWidth": 886,
+          "assetHeight": 886,
+          "x": 0.011513876607519137,
+          "y": -2.0816681711721685e-17,
+          "scale": 0.9769722467849616,
+          "rotation": 0,
+          "fileType": "front"
+        }
+      ],
+      "activeFileType": "front",
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "sizes": [
+        "3XL",
+        "4XL",
+        "L",
+        "M",
+        "XL",
+        "2XL"
+      ],
+      "previewColor": "#000000",
+      "retailPrice": 35,
+      "wholesaleCost": 13,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T07:34:40.656Z",
+      "updatedAt": "2026-10-28T08:06:07.117Z"
+    },
+    {
+      "id": "5236d6f6-c0b9-49d3-9b65-2e87c0e6d96b",
+      "name": "OLLIN Denim Bucket Hat",
+      "slug": "ollin-denim-bucket-hat",
+      "blankId": "hat-dad",
+      "catalogProductId": 501,
+      "family": "hat",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=2026-10-28T07%3A12%3A16.893Z",
+          "assetWidth": 1376,
+          "assetHeight": 1442,
+          "x": 0.3337568905794319,
+          "y": 0.02090330639007082,
+          "scale": 0.3324862188411361,
+          "rotation": 0,
+          "fileType": "embroidery_front"
+        }
+      ],
+      "activeFileType": "embroidery_front",
+      "colors": [
+        "Black Denim",
+        "Classic / Light Denim",
+        "Light Denim"
+      ],
+      "sizes": [
+        "One size"
+      ],
+      "previewColor": "#181818",
+      "retailPrice": 35,
+      "wholesaleCost": 15,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T07:16:39.027Z",
+      "updatedAt": "2026-10-28T07:48:21.896Z"
+    },
+    {
+      "id": "510dc23d-71e8-42eb-ab65-35a9305f18c6",
+      "name": "OLLIN Organic Bucket Hat",
+      "slug": "ollin-organic-bucket-hat",
+      "blankId": "hat-dad",
+      "catalogProductId": 547,
+      "family": "hat",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=1793171536895",
+          "assetWidth": 1376,
+          "assetHeight": 1442,
+          "x": 0.33636417640707933,
+          "y": 0.04010704885205707,
+          "scale": 0.32727164718584134,
+          "rotation": 0,
+          "fileType": "embroidery_front"
+        }
+      ],
+      "activeFileType": "embroidery_front",
+      "colors": [
+        "Bio White",
+        "Black",
+        "Dill",
+        "Stone",
+        "Slate Blue"
+      ],
+      "sizes": [
+        "One size"
+      ],
+      "previewColor": "#e4c9b0",
+      "retailPrice": 30,
+      "wholesaleCost": 15,
+      "status": "draft",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "variants": [],
+      "publishNote": null,
+      "createdAt": "2026-10-28T07:08:58.353Z",
+      "updatedAt": "2026-10-28T07:52:07.538Z"
+    },
+    {
+      "id": "68b08f8b-b11b-4899-8f8d-621f520ca3a4",
+      "name": "SERGIK Stone Bucket Hat",
+      "slug": "sergik-stone-bucket-hat",
+      "blankId": "hat-dad",
+      "catalogProductId": 547,
+      "family": "hat",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
+          "assetWidth": 886,
+          "assetHeight": 557,
+          "x": 0.21150914866026027,
+          "y": 0.0012462059371937673,
+          "scale": 0.5769817026794795,
+          "rotation": 0,
+          "fileType": "embroidery_front"
+        }
+      ],
+      "activeFileType": "embroidery_front",
+      "colors": [
+        "Black",
         "Black/ Neon Pink",
-        "Natural/ Black"
+        "Natural/ Black",
+        "Black/ Red",
+        "Black/ Silver"
       ],
       "sizes": [
         "One size"
@@ -50,7 +305,7 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-28T02:44:04.032Z",
-      "updatedAt": "2026-10-28T03:59:29.180Z"
+      "updatedAt": "2026-10-28T08:07:54.649Z"
     },
     {
       "id": "58008953-5db7-4be2-9c90-7f26b9b58eda",
@@ -96,12 +351,12 @@
       "variants": [],
       "publishNote": null,
       "createdAt": "2026-10-27T11:42:55.924Z",
-      "updatedAt": "2026-10-28T03:59:57.519Z"
+      "updatedAt": "2026-10-28T07:53:00.143Z"
     },
     {
       "id": "a8be51ca-66ae-4da1-a8a5-a57130611e36",
-      "name": "Stone Ollin Front",
-      "slug": "stone-ollin-front",
+      "name": "OLLIN Stone Front Tee",
+      "slug": "ollin-stone-front-tee",
       "blankId": "tee-staple",
       "catalogProductId": 1626,
       "family": "tee",
@@ -111,9 +366,9 @@
           "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/81845825-e781-4c2d-960b-f23347eef613.png",
           "assetWidth": 1254,
           "assetHeight": 1254,
-          "x": 0.040158460471739765,
-          "y": 0.023827725821477963,
-          "scale": 0.9196830790565204,
+          "x": 0.014552151218525544,
+          "y": 0.0012339235392300751,
+          "scale": 0.9708956975629488,
           "rotation": -0.1975301590673979,
           "fileType": "front"
         }
@@ -145,7 +400,7 @@
       "variants": [],
       "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "createdAt": "2026-10-27T07:02:04.222Z",
-      "updatedAt": "2026-10-28T03:57:31.860Z"
+      "updatedAt": "2026-10-28T08:06:21.344Z"
     }
   ]
 }

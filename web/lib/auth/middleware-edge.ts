@@ -59,8 +59,10 @@ export async function middlewareHasAdminAccess(accessToken: string): Promise<boo
   }
 
   const email = await fetchSupabaseUserEmail(accessToken)
-  const allowed = Boolean(email) && isAdminEmailAllowed(email)
-  accessCache.set(key, { allowed, expiresAt: now + ACCESS_CACHE_TTL_MS })
+  if (!email) return false
+  const allowed = isAdminEmailAllowed(email)
+  if (!allowed) return false
+  accessCache.set(key, { allowed: true, expiresAt: now + ACCESS_CACHE_TTL_MS })
 
   // Bound memory in long-lived edge isolates
   if (accessCache.size > 200) {
