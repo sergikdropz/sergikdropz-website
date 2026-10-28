@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-28T10:01:17.392Z",
+    "generatedAt": "2026-10-28T10:22:55.460Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -16,9 +16,9 @@
     },
     "counts": {
       "appRouterPages": 100,
-      "appRouterRouteHandlers": 349,
-      "componentsTsx": 232,
-      "libTs": 965
+      "appRouterRouteHandlers": 350,
+      "componentsTsx": 233,
+      "libTs": 966
     },
     "pagesByCategory": {
       "fan": 5,
@@ -30,7 +30,7 @@
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "53cbe36c4356662f"
+    "contentHash": "ef8e4129ff1a1247"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -1492,6 +1492,11 @@
       {
         "urlPath": "/api/merch/catalog/[id]/garment",
         "file": "web/app/api/merch/catalog/[id]/garment/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/merch/catalog/[id]/sizes",
+        "file": "web/app/api/merch/catalog/[id]/sizes/route.ts",
         "category": "api"
       },
       {

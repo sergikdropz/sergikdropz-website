@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ensureShopCheckoutAuth } from '@/lib/checkoutActor'
 import Image from 'next/image'
 import SizeGuide from './SizeGuide'
+import MerchShippingEstimate from '@/components/shop/MerchShippingEstimate'
 import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
 
 interface Variant {
@@ -233,6 +234,13 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
             </div>
           </div>
 
+          {shippable && (
+            <MerchShippingEstimate
+              variantId={selectedVariant?.printful_variant_id}
+              quantity={quantity}
+            />
+          )}
+
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <button
@@ -257,7 +265,13 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
         </div>
       </div>
 
-      {showSizeGuide && <SizeGuide onClose={() => setShowSizeGuide(false)} />}
+      {showSizeGuide && (
+        <SizeGuide
+          onClose={() => setShowSizeGuide(false)}
+          productId={product.designPreview?.catalogProductId}
+          sizes={product.variants.map((v) => v.size)}
+        />
+      )}
     </>
   )
 }
