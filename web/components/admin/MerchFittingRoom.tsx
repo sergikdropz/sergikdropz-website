@@ -1586,13 +1586,30 @@ export default function MerchFittingRoom({
       })
       if (!signRes.ok) return null
       const sign = await signRes.json()
-      if (!sign?.path || !sign?.token || !sign?.publicUrl) return null
-      const supabase = createSupabaseClient()
-      const { error } = await supabase.storage
-        .from('gallery-images')
-        .uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type })
-      if (error) return null
-      return withArtVersion(String(sign.publicUrl), Date.now())
+      if (!sign?.publicUrl) return null
+
+      // Cloudflare R2: presigned PUT straight to the bucket.
+      if (sign.provider === 'r2' && sign.uploadUrl) {
+        const put = await fetch(String(sign.uploadUrl), {
+          method: 'PUT',
+          headers: { 'Content-Type': String(sign.contentType || file.type) },
+          body: file,
+        })
+        if (!put.ok) return null
+        return withArtVersion(String(sign.publicUrl), Date.now())
+      }
+
+      // Supabase Storage: signed upload token.
+      if (sign.path && sign.token) {
+        const supabase = createSupabaseClient()
+        const { error } = await supabase.storage
+          .from('gallery-images')
+          .uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type })
+        if (error) return null
+        return withArtVersion(String(sign.publicUrl), Date.now())
+      }
+
+      return null
     } catch {
       return null
     }

@@ -10,7 +10,7 @@
       "placements": [
         {
           "placement": "back",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
+          "assetUrl": "/api/merch/art/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
           "assetWidth": 886,
           "assetHeight": 886,
           "x": 0.006038282878269529,
@@ -61,7 +61,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
+          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
           "assetWidth": 1376,
           "assetHeight": 1442,
           "x": 0.026454499310222868,
@@ -101,7 +101,7 @@
       "placements": [
         {
           "placement": "back",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/81845825-e781-4c2d-960b-f23347eef613.png?v=2026-10-25T14%3A15%3A23.293Z",
+          "assetUrl": "/api/merch/art/81845825-e781-4c2d-960b-f23347eef613.png?v=2026-10-25T14%3A15%3A23.293Z",
           "assetWidth": 1254,
           "assetHeight": 1254,
           "x": 0.004200503635281294,
@@ -145,7 +145,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
+          "assetUrl": "/api/merch/art/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
           "assetWidth": 886,
           "assetHeight": 886,
           "x": 0.011513876607519137,
@@ -190,7 +190,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
+          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
           "assetWidth": 1376,
           "assetHeight": 1442,
           "x": 0.3337568905794319,
@@ -231,7 +231,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=1793171536895",
+          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=1793171536895",
           "assetWidth": 1376,
           "assetHeight": 1442,
           "x": 0.33636417640707933,
@@ -274,7 +274,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
+          "assetUrl": "/api/merch/art/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
           "assetWidth": 886,
           "assetHeight": 557,
           "x": 0.21150914866026027,
@@ -317,7 +317,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
+          "assetUrl": "/api/merch/art/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
           "assetWidth": 886,
           "assetHeight": 557,
           "x": 0.18706158551560104,
@@ -363,7 +363,7 @@
       "placements": [
         {
           "placement": "front",
-          "assetUrl": "https://bjzevrsruixsbypybyiy.supabase.co/storage/v1/object/public/gallery-images/merch-designs/81845825-e781-4c2d-960b-f23347eef613.png",
+          "assetUrl": "/api/merch/art/81845825-e781-4c2d-960b-f23347eef613.png",
           "assetWidth": 1254,
           "assetHeight": 1254,
           "x": 0.014552151218525544,

@@ -3,6 +3,13 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { withArtVersion } from '@/lib/merch/art-url'
+import {
+  deleteR2Art,
+  fetchR2Art,
+  isR2ArtConfigured,
+  listR2Art,
+  putR2Art,
+} from '@/lib/merch/r2-art'
 
 const BUCKET = 'gallery-images'
 
@@ -21,6 +28,16 @@ export async function storeMerchArt(
   const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png'
   const id = `${randomUUID()}.${ext}`
 
+  // Primary backend: Cloudflare R2.
+  if (isR2ArtConfigured()) {
+    try {
+      return await putR2Art(id, bytes, contentType)
+    } catch (error) {
+      console.error('merch art R2 upload:', error)
+    }
+  }
+
+  // Fallback: Supabase Storage (legacy).
   try {
     const supabase = createSupabaseServerClient()
     const path = `merch-designs/${id}`
@@ -48,6 +65,16 @@ export async function replaceMerchArt(
   contentType: string,
 ): Promise<{ id: string; url: string }> {
   if (!isMerchArtId(id)) throw new Error('Save edit can only replace a library file')
+
+  // Primary backend: Cloudflare R2 (same id → same object key, so URLs are stable).
+  if (isR2ArtConfigured()) {
+    try {
+      const stored = await putR2Art(id, bytes, contentType)
+      return { id, url: withArtVersion(stored.url, Date.now()) }
+    } catch (error) {
+      console.error('merch art R2 replace:', error)
+    }
+  }
 
   try {
     const supabase = createSupabaseServerClient()
@@ -100,28 +127,47 @@ export type MerchArtUpload = {
 export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]> {
   const byId = new Map<string, MerchArtUpload>()
 
+  // Primary backend: Cloudflare R2.
   try {
-    const supabase = createSupabaseServerClient()
-    const { data, error } = await supabase.storage.from(BUCKET).list('merch-designs', {
-      limit: 100,
-      sortBy: { column: 'created_at', order: 'desc' },
-    })
-    if (!error && data) {
-      for (const item of data) {
-        if (!item.name || !UPLOAD_ID.test(item.name)) continue
-        const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(`merch-designs/${item.name}`)
-        if (!pub.publicUrl) continue
-        const createdAt = item.updated_at || item.created_at || new Date(0).toISOString()
-        byId.set(item.name, {
-          id: item.name,
-          url: withArtVersion(pub.publicUrl, createdAt),
-          label: item.name.slice(0, 8),
-          createdAt,
-        })
-      }
+    const items = await listR2Art(100)
+    for (const item of items) {
+      byId.set(item.id, {
+        id: item.id,
+        url: withArtVersion(item.url, item.createdAt),
+        label: item.id.slice(0, 8),
+        createdAt: item.createdAt,
+      })
     }
   } catch (error) {
-    console.error('merch art storage list:', error)
+    console.error('merch art R2 list:', error)
+  }
+
+  // Legacy backend: only consult Supabase when R2 is unavailable (post-migration
+  // R2 is the source of truth; this avoids duplicate/stale entries).
+  if (!isR2ArtConfigured()) {
+    try {
+      const supabase = createSupabaseServerClient()
+      const { data, error } = await supabase.storage.from(BUCKET).list('merch-designs', {
+        limit: 100,
+        sortBy: { column: 'created_at', order: 'desc' },
+      })
+      if (!error && data) {
+        for (const item of data) {
+          if (!item.name || !UPLOAD_ID.test(item.name)) continue
+          const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(`merch-designs/${item.name}`)
+          if (!pub.publicUrl) continue
+          const createdAt = item.updated_at || item.created_at || new Date(0).toISOString()
+          byId.set(item.name, {
+            id: item.name,
+            url: withArtVersion(pub.publicUrl, createdAt),
+            label: item.name.slice(0, 8),
+            createdAt,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('merch art storage list:', error)
+    }
   }
 
   try {
@@ -153,6 +199,13 @@ export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]>
 export async function deleteMerchArt(id: string): Promise<boolean> {
   if (!isMerchArtId(id)) return false
   let removed = false
+  if (isR2ArtConfigured()) {
+    try {
+      if (await deleteR2Art(id)) removed = true
+    } catch (error) {
+      console.error('merch art R2 delete:', error)
+    }
+  }
   try {
     const supabase = createSupabaseServerClient()
     const { error } = await supabase.storage.from(BUCKET).remove([`merch-designs/${id}`])
@@ -181,4 +234,17 @@ export async function readLocalMerchArt(id: string): Promise<{ bytes: Buffer; co
   } catch {
     return null
   }
+}
+
+/**
+ * Read an art object for the same-origin proxy route: Cloudflare R2 first, then
+ * the local fallback directory. Used to serve `/api/merch/art/:id`.
+ */
+export async function readMerchArt(id: string): Promise<{ bytes: Buffer; contentType: string } | null> {
+  if (!/^[0-9a-f-]{36}\.(png|jpg)$/i.test(id)) return null
+  if (isR2ArtConfigured()) {
+    const fromR2 = await fetchR2Art(id)
+    if (fromR2) return fromR2
+  }
+  return readLocalMerchArt(id)
 }

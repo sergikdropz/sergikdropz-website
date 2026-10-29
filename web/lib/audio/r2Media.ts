@@ -13,8 +13,13 @@ export type R2MediaConfig = {
 const DEFAULT_PRESIGN_SEC = 3600
 let corsEnsured = false
 
-/** Allow the site to play signed objects in <audio>. Object-only keys ignore a failed write. */
-async function ensurePlaybackCors(cfg: R2MediaConfig): Promise<void> {
+/**
+ * Ensure the bucket CORS allows the site to read signed audio in <audio>, read
+ * images onto <canvas> (crossOrigin), and PUT art directly from the browser via
+ * presigned upload URLs. This is the single CORS setter for the shared R2 bucket
+ * so the audio and image paths don't overwrite each other's rules.
+ */
+export async function ensureR2Cors(cfg: R2MediaConfig): Promise<void> {
   if (corsEnsured) return
   corsEnsured = true
   const origins = [
@@ -31,7 +36,7 @@ async function ensurePlaybackCors(cfg: R2MediaConfig): Promise<void> {
           CORSRules: [
             {
               AllowedOrigins: origins,
-              AllowedMethods: ['GET', 'HEAD'],
+              AllowedMethods: ['GET', 'HEAD', 'PUT'],
               AllowedHeaders: ['*'],
               ExposeHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag'],
               MaxAgeSeconds: 3600,
@@ -41,9 +46,12 @@ async function ensurePlaybackCors(cfg: R2MediaConfig): Promise<void> {
       }),
     )
   } catch (err) {
-    console.warn('[r2] playback CORS not updated (token may be object-scoped):', err)
+    console.warn('[r2] CORS not updated (token may be object-scoped):', err)
   }
 }
+
+/** @deprecated use ensureR2Cors */
+const ensurePlaybackCors = ensureR2Cors
 
 export function getR2MediaConfig(): R2MediaConfig | null {
   const accountId = process.env.R2_ACCOUNT_ID?.trim()
@@ -56,6 +64,11 @@ export function getR2MediaConfig(): R2MediaConfig | null {
 
 let cachedClient: S3Client | null = null
 let cachedKey = ''
+
+/** Shared, cached S3 client for the R2 bucket (reused by audio + image paths). */
+export function getR2Client(cfg: R2MediaConfig): S3Client {
+  return clientFor(cfg)
+}
 
 function clientFor(cfg: R2MediaConfig): S3Client {
   const key = `${cfg.accountId}:${cfg.accessKeyId}:${cfg.bucket}`
