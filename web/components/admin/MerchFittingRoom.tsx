@@ -10,6 +10,7 @@ import {
   type PlacementId,
 } from '@/lib/merch/blanks'
 import { merchArtIdFromUrl, sameMerchArt, withArtVersion } from '@/lib/merch/art-url'
+import { createSupabaseClient } from '@/lib/supabase'
 import MerchMannequin from '@/components/admin/MerchMannequin'
 import type { StudioDockTool } from '@/components/admin/MerchStudioDock'
 import MerchPrintfulCatalog, {
@@ -1571,12 +1572,67 @@ export default function MerchFittingRoom({
   const artMenuTitle =
     artMenu?.target === 'stage' ? `${area.label} art` : artMenu?.target === 'upload' ? 'Library art' : 'Artwork'
 
+  /**
+   * Upload art straight to Supabase Storage via a signed URL. This avoids the
+   * ~4.5MB serverless request-body limit on Vercel that otherwise fails larger
+   * uploads on the live site. Returns the public URL, or null to fall back.
+   */
+  async function uploadViaSignedUrl(file: File): Promise<string | null> {
+    try {
+      const signRes = await fetch('/api/admin/merch/art/sign-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentType: file.type }),
+      })
+      if (!signRes.ok) return null
+      const sign = await signRes.json()
+      if (!sign?.path || !sign?.token || !sign?.publicUrl) return null
+      const supabase = createSupabaseClient()
+      const { error } = await supabase.storage
+        .from('gallery-images')
+        .uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type })
+      if (error) return null
+      return withArtVersion(String(sign.publicUrl), Date.now())
+    } catch {
+      return null
+    }
+  }
+
   async function uploadFile(file: File) {
+    const type = file.type || ''
+    if (type !== 'image/png' && type !== 'image/jpeg') {
+      throw new Error('Use a PNG or JPEG file.')
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('Image is over 10MB. Please export a smaller file.')
+    }
+
+    // Preferred path: direct-to-storage (no function body limit).
+    const directUrl = await uploadViaSignedUrl(file)
+    if (directUrl) {
+      refreshUploads()
+      await placeArt(directUrl)
+      return
+    }
+
+    // Fallback: multipart through the API (works in dev / for small files).
     const body = new FormData()
     body.set('file', file)
     const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
+    if (!res.ok) {
+      let message = 'Upload failed'
+      if (res.status === 413) {
+        message = 'That image is too large to upload here. Please use a file under ~4MB.'
+      } else {
+        try {
+          message = (await res.json()).error || message
+        } catch {
+          /* non-JSON error body (e.g. a platform 413) */
+        }
+      }
+      throw new Error(message)
+    }
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Upload failed')
     refreshUploads()
     await placeArt(data.url)
   }

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-28T10:22:55.460Z",
+    "generatedAt": "2026-10-29T05:30:06.141Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -16,7 +16,7 @@
     },
     "counts": {
       "appRouterPages": 100,
-      "appRouterRouteHandlers": 350,
+      "appRouterRouteHandlers": 351,
       "componentsTsx": 233,
       "libTs": 966
     },
@@ -30,7 +30,7 @@
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "ef8e4129ff1a1247"
+    "contentHash": "a8284d5998e98ed6"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -812,6 +812,11 @@
       {
         "urlPath": "/api/admin/merch/art",
         "file": "web/app/api/admin/merch/art/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/art/sign-upload",
+        "file": "web/app/api/admin/merch/art/sign-upload/route.ts",
         "category": "api"
       },
       {
