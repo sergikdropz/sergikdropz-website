@@ -11,6 +11,7 @@ import {
   mockupPhotosForColor,
   mockupTitlesForColor,
   shopFrontPhotoIndex,
+  catalogAngleViews,
   orderPrintFilesByAngles,
   previewUsesMockupPhoto,
   designGarmentImage,
@@ -227,6 +228,29 @@ describe('catalog-studio', () => {
     ).toBe(5)
     expect(mockupTitlesForColor({ Black: titles }, 'Black', 'Black')).toEqual(titles)
     expect(mockupTitlesForColor({ Black: titles }, 'White', 'Black')).toEqual([])
+  })
+
+  it('offers each Printful template face once, skipping add-ons and unmeasured files', () => {
+    const stage = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }
+    const face = (type: string, title: string, measured: boolean): CatalogPrintFile =>
+      ({
+        fileId: type,
+        type,
+        title,
+        additionalPrice: null,
+        options: [],
+        templateUrl: measured ? `https://files.example/${type}.png` : null,
+        mockupStage: measured ? stage : null,
+      }) as CatalogPrintFile
+    expect(
+      catalogAngleViews([
+        face('embroidery_front', 'Front', false),
+        face('embroidery_front_large', 'Front', true),
+        face('embroidery_back', 'Back', true),
+        face('embroidery_right', 'Right side', true),
+        face('addon_embroidery_front', 'Front', true),
+      ]).map((view) => view.label),
+    ).toEqual(['Front', 'Back', 'Right side'])
   })
 
   it('uses the angle photos Printful stored for the selected color', () => {

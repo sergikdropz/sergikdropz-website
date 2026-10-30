@@ -70,12 +70,14 @@ export type ResolvedSharePayload = {
   listenLocked?: boolean
 }
 
-/** Listener stores on the share page, in DistroKid’s main-row order. */
+/** Listener stores on the share page, in popularity order. */
 export type SharePlatformId =
   | 'spotify'
   | 'apple_music'
   | 'youtube_music'
+  | 'youtube'
   | 'amazon'
+  | 'soundcloud'
   | 'deezer'
   | 'tidal'
   | 'pandora'
@@ -84,7 +86,7 @@ export type SharePlatformId =
 export type SharePlatformEmbed = {
   id: SharePlatformId
   label: string
-  /** Release page on that service. Never an artist or search page. */
+  /** Store page. Album and track URLs can also embed. */
   url: string
   /** Iframe src when the store can play inside the page. */
   embedUrl?: string

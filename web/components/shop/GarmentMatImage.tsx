@@ -7,6 +7,7 @@ import {
   fillSilhouetteWithPattern,
   hexToRgb,
   paintGarmentBackdrop,
+  type BackdropKind,
 } from '@/lib/merch/product-mat'
 
 type Props = {
@@ -27,6 +28,40 @@ type PaintResult = { kind: 'cutout' } | { kind: 'ghost'; url: string }
 
 const paintedCache = new Map<string, PaintResult>()
 const patternCache = new Map<string, string>()
+const kindCache = new Map<string, BackdropKind>()
+
+/** Catalog photos sit on white. A transparent Printful flat should too, unless the studio set a mat. */
+const CATALOG_BACKDROP = '#ffffff'
+
+function readBackdropKind(src: string): Promise<BackdropKind | null> {
+  const cached = kindCache.get(src)
+  if (cached) return Promise.resolve(cached)
+  return new Promise((resolve) => {
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = image.naturalWidth
+        canvas.height = image.naturalHeight
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx || canvas.width < 1 || canvas.height < 1) {
+          resolve(null)
+          return
+        }
+        ctx.drawImage(image, 0, 0)
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const kind = backdropKind(frame.data, canvas.width, canvas.height)
+        kindCache.set(src, kind)
+        resolve(kind)
+      } catch {
+        resolve(null)
+      }
+    }
+    image.onerror = () => resolve(null)
+    image.src = src
+  })
+}
 
 function compositePattern(
   src: string,
@@ -147,6 +182,7 @@ export default function GarmentMatImage({
 }: Props) {
   const [painted, setPainted] = useState<PaintResult | null>(null)
   const [patterned, setPatterned] = useState<string | null>(null)
+  const [kind, setKind] = useState<BackdropKind | null>(null)
 
   useEffect(() => {
     if (!patternUrl) {
@@ -165,6 +201,23 @@ export default function GarmentMatImage({
       cancelled = true
     }
   }, [src, patternUrl, matColor])
+
+  useEffect(() => {
+    if (patternUrl) {
+      setKind(null)
+      return
+    }
+    const cached = kindCache.get(src) ?? null
+    setKind(cached)
+    if (cached) return
+    let cancelled = false
+    void readBackdropKind(src).then((result) => {
+      if (!cancelled) setKind(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [src, patternUrl])
 
   useEffect(() => {
     if (patternUrl || !matColor) {
@@ -188,15 +241,16 @@ export default function GarmentMatImage({
   // A positioning hole uses the color photo. Until that composite is ready, show
   // the photo itself so the flat swatch never flashes through the shirt.
   const imageSrc = patterned || (patternUrl ? patternUrl : ghostUrl || src)
-  // Until a cut-out is confirmed, keep the garment fill. A ghost file would
-  // otherwise take the mat color through the fabric.
+  // Catalog photos and transparent flats sit on white from the first paint.
+  // Only a confirmed ghost template lets the fabric color through, and a studio
+  // mat still replaces that white field.
   const backgroundColor = patternUrl
     ? undefined
-    : painted?.kind === 'cutout' && matColor
-      ? matColor
-      : ghostUrl
+    : kind === 'ghost'
+      ? ghostUrl
         ? undefined
         : garmentColor || undefined
+      : matColor || CATALOG_BACKDROP
 
   return (
     <span className={className} style={{ backgroundColor }}>

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-29T16:17:23.664Z",
+    "generatedAt": "2026-10-30T07:54:51.263Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,22 +15,22 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 100,
+      "appRouterPages": 101,
       "appRouterRouteHandlers": 355,
-      "componentsTsx": 233,
-      "libTs": 972
+      "componentsTsx": 234,
+      "libTs": 976
     },
     "pagesByCategory": {
       "fan": 5,
       "music_library": 2,
-      "public": 26,
+      "public": 27,
       "debug": 1,
       "tooling": 1,
       "shop": 10,
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "211b5c38de76c9d9"
+    "contentHash": "0b308f208a1e84b8"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -480,6 +480,11 @@
       {
         "urlPath": "/embed/[token]",
         "file": "web/app/embed/[token]/page.tsx",
+        "category": "public"
+      },
+      {
+        "urlPath": "/l/[slug]",
+        "file": "web/app/l/[slug]/page.tsx",
         "category": "public"
       },
       {

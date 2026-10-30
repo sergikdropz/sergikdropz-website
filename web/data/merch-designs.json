@@ -12,19 +12,19 @@
         "Black/ Neon Pink"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T09:14:33.830Z",
       "sortIndex": 0,
-      "updatedAt": "2026-10-29T17:22:18.403Z",
+      "updatedAt": "2026-10-30T00:51:35.493Z",
       "mockupUrls": [
-        "/api/merch/art/6f0c1a5a-9946-40e3-aae3-56cb771ab56f.jpg",
         "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
         "/api/merch/art/fe3a26db-6f51-46a8-84ed-d1773902b05a.jpg",
         "/api/merch/art/5a50f81b-bd0f-4f34-a984-db440a319ca3.jpg",
         "/api/merch/art/fcf09437-b5f3-48df-8d40-ba230cb4c437.jpg",
-        "/api/merch/art/8c8574e8-7e3e-4abe-960f-11a1e608cc46.jpg"
+        "/api/merch/art/8c8574e8-7e3e-4abe-960f-11a1e608cc46.jpg",
+        "/api/merch/art/6f0c1a5a-9946-40e3-aae3-56cb771ab56f.jpg"
       ],
       "placements": [
         {
@@ -39,24 +39,52 @@
           "assetHeight": 2577
         }
       ],
-      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#2a2a2a",
       "mockupTaskKey": null,
       "printFileUrls": {
-        "embroidery_front_large": "/api/merch/art/635e029d-1f33-4449-84a7-53ace764d2e3.png"
+        "embroidery_front_large": "/api/merch/art/635e029d-1f33-4449-84a7-53ace764d2e3.png?v=1793321302554"
       },
       "wholesaleCost": 17.23,
       "activeFileType": "embroidery_front_large",
       "catalogProductId": 99,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
       "embroideryThreads": {
         "thread_colors_front_large": [
           "#FFFFFF",
           "#000000"
         ]
       },
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
+          "/api/merch/art/fe3a26db-6f51-46a8-84ed-d1773902b05a.jpg",
+          "/api/merch/art/5a50f81b-bd0f-4f34-a984-db440a319ca3.jpg",
+          "/api/merch/art/fcf09437-b5f3-48df-8d40-ba230cb4c437.jpg",
+          "/api/merch/art/8c8574e8-7e3e-4abe-960f-11a1e608cc46.jpg",
+          "/api/merch/art/6f0c1a5a-9946-40e3-aae3-56cb771ab56f.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "embroideryUnlimitedColor": false
+      "mockupPhotoKeysByColor": {
+        "Black": "99~black~embroidery_front_large:https://sergikdropz.com/api/merch/art/635e029d-1f33-4449-84a7-53ace764d2e3.png~embroidery_front_large:/api/merch/art/b998d67b-e49c-4aac-b17c-fdd145ba1245.png:0.254:0.118:0.492:0~thread_colors_front_large:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Left Front",
+          "Left Side",
+          "Right Front",
+          "Right Side",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "4d027db3-9e17-4e20-9117-18cc0e08f112",
@@ -70,19 +98,19 @@
         "Black/ Neon Pink"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T11:36:03.122Z",
       "sortIndex": 1,
-      "updatedAt": "2026-10-29T16:25:38.198Z",
+      "updatedAt": "2026-10-30T00:45:48.781Z",
       "mockupUrls": [
-        "/api/merch/art/575d14af-dbb3-4ba5-aa86-cb6592a5c1bc.jpg",
         "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
-        "/api/merch/art/3dbe903e-ed45-445a-8ac4-79eb8007648a.jpg",
-        "/api/merch/art/77a3d6b7-3b3f-4399-b6f6-42bffeece773.jpg",
-        "/api/merch/art/ef33c20d-11c7-4024-8e1e-c141bf9c7984.jpg",
-        "/api/merch/art/cd933fa2-e69b-403f-98d8-8cf762142bb0.jpg"
+        "/api/merch/art/d097f404-dce9-48c5-89df-a17b4edb9b58.jpg",
+        "/api/merch/art/d23f893e-4000-4c39-90ab-ef891532f549.jpg",
+        "/api/merch/art/35e4e29d-761e-4f6d-b407-76959273a1c3.jpg",
+        "/api/merch/art/7825444d-94ed-45fc-9cd4-c7340b71082a.jpg",
+        "/api/merch/art/951000f4-fc92-4fb8-bf1d-41491bfb5b67.jpg"
       ],
       "placements": [
         {
@@ -97,16 +125,18 @@
           "assetHeight": 675
         }
       ],
-      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#2a2a2a",
       "mockupTaskKey": null,
       "printFileUrls": {
-        "embroidery_front_large": "/api/merch/art/880ede20-7990-48a6-8243-55cafd49dad4.png?v=1793291099363"
+        "embroidery_front_large": "/api/merch/art/880ede20-7990-48a6-8243-55cafd49dad4.png?v=1793321097163"
       },
       "wholesaleCost": 17.23,
       "activeFileType": "embroidery_front_large",
       "catalogProductId": 99,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
       "embroideryThreads": {
         "addon_thread_colors_front": [
           "#000000",
@@ -117,8 +147,34 @@
           "#FFFFFF"
         ]
       },
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
+          "/api/merch/art/d097f404-dce9-48c5-89df-a17b4edb9b58.jpg",
+          "/api/merch/art/d23f893e-4000-4c39-90ab-ef891532f549.jpg",
+          "/api/merch/art/35e4e29d-761e-4f6d-b407-76959273a1c3.jpg",
+          "/api/merch/art/7825444d-94ed-45fc-9cd4-c7340b71082a.jpg",
+          "/api/merch/art/951000f4-fc92-4fb8-bf1d-41491bfb5b67.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "embroideryUnlimitedColor": false
+      "mockupPhotoKeysByColor": {
+        "Black": "99~black~embroidery_front_large:https://sergikdropz.com/api/merch/art/880ede20-7990-48a6-8243-55cafd49dad4.png~embroidery_front_large:/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png:0.345:0.118:0.31:0~addon_thread_colors_front:#000000,#FFFFFF|thread_colors_front_large:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Left Front",
+          "Left Side",
+          "Right Front",
+          "Right Side",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "4c15d1ac-881e-4e9e-bcfa-06fb1ce20fb5",
@@ -132,19 +188,19 @@
         "Black/ Neon Pink"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T10:31:57.441Z",
       "sortIndex": 2,
-      "updatedAt": "2026-10-29T18:10:18.148Z",
+      "updatedAt": "2026-10-30T00:47:54.315Z",
       "mockupUrls": [
-        "/api/merch/art/9f4b62ef-0b15-43f9-ac08-ca1f557fd28c.jpg",
         "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
-        "/api/merch/art/ab1bbcd7-bcc9-4902-a0a9-9c9c0d371f94.jpg",
-        "/api/merch/art/17e12200-b1ed-422b-9e8a-d4ea69a02fa7.jpg",
-        "/api/merch/art/6b598b8b-0f8e-44d5-a68d-f90f87a5988a.jpg",
-        "/api/merch/art/ee671355-5e01-46e7-b277-f1bed4fa3e8f.jpg"
+        "/api/merch/art/eaf5572a-4a35-476c-9d4e-7b4fade0b719.jpg",
+        "/api/merch/art/56928b12-b8d7-4d84-961a-09aaad0ffa76.jpg",
+        "/api/merch/art/d4732591-e934-4476-a5b5-7650d8b61e10.jpg",
+        "/api/merch/art/db92d2fd-385e-4784-abcb-629977c9ae66.jpg",
+        "/api/merch/art/61c4e49b-86af-40bc-abfd-486d7bb15a4c.jpg"
       ],
       "placements": [
         {
@@ -159,17 +215,18 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#2a2a2a",
       "mockupTaskKey": null,
       "printFileUrls": {
         "addon_embroidery_front": "/api/merch/art/16f165cd-20e4-47e3-b9af-f064097649dc.png",
-        "embroidery_front_large": "/api/merch/art/0322f05c-9cb3-4e80-bc5b-7426bf94f390.png?v=1793297417432"
+        "embroidery_front_large": "/api/merch/art/0322f05c-9cb3-4e80-bc5b-7426bf94f390.png?v=1793321260328"
       },
       "wholesaleCost": 17.23,
       "activeFileType": "embroidery_front_large",
       "catalogProductId": 99,
+      "mockupPendingKey": null,
       "previewColorName": "Black",
       "embroideryThreads": {
         "addon_thread_colors_front": [
@@ -181,8 +238,34 @@
           "#000000"
         ]
       },
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
+          "/api/merch/art/eaf5572a-4a35-476c-9d4e-7b4fade0b719.jpg",
+          "/api/merch/art/56928b12-b8d7-4d84-961a-09aaad0ffa76.jpg",
+          "/api/merch/art/d4732591-e934-4476-a5b5-7650d8b61e10.jpg",
+          "/api/merch/art/db92d2fd-385e-4784-abcb-629977c9ae66.jpg",
+          "/api/merch/art/61c4e49b-86af-40bc-abfd-486d7bb15a4c.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "embroideryUnlimitedColor": false
+      "mockupPhotoKeysByColor": {
+        "Black": "99~black~embroidery_front_large:https://sergikdropz.com/api/merch/art/0322f05c-9cb3-4e80-bc5b-7426bf94f390.png~embroidery_front_large:/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png:0.34:0.118:0.32:0~addon_thread_colors_front:#000000,#FFFFFF|thread_colors_front_large:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Left Front",
+          "Left Side",
+          "Right Front",
+          "Right Side",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "e5abb310-8a9c-477e-a980-9d348c0b0379",
@@ -199,12 +282,12 @@
         "Black/ Silver"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T08:35:51.654Z",
       "sortIndex": 3,
-      "updatedAt": "2026-10-29T17:25:25.580Z",
+      "updatedAt": "2026-10-30T02:19:30.625Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -219,24 +302,32 @@
           "assetHeight": 2577
         }
       ],
-      "publishNote": "Design saved. None of the selected colors and sizes are in stock at Printful.",
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#2a2a2a",
       "mockupTaskKey": null,
       "printFileUrls": {
-        "embroidery_front": "/api/merch/art/ed629d5c-066a-47fb-9287-0026ce4e447a.png?v=1793294725048"
+        "embroidery_front": "/api/merch/art/ed629d5c-066a-47fb-9287-0026ce4e447a.png?v=1793326750024"
       },
       "wholesaleCost": 15,
       "activeFileType": "embroidery_front",
       "catalogProductId": 547,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
       "embroideryThreads": {
         "thread_colors": [
           "#FFFFFF",
           "#000000"
         ]
       },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "embroideryUnlimitedColor": false
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "510dc23d-71e8-42eb-ab65-35a9305f18c6",
@@ -253,15 +344,14 @@
         "Slate Blue"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-28T07:08:58.353Z",
       "sortIndex": 4,
-      "updatedAt": "2026-10-29T17:26:24.735Z",
+      "updatedAt": "2026-10-30T02:18:54.942Z",
       "mockupUrls": [
-        "/api/merch/art/6604d135-f1b5-4eec-9b03-04a7eeef41a0.jpg",
-        "/api/merch/art/a400077d-ee6b-48e5-9f38-9f7edfb8fc60.png"
+        "/api/merch/art/09e23acf-3245-4890-b3cc-4dd763550c6e.jpg"
       ],
       "placements": [
         {
@@ -276,24 +366,42 @@
           "assetHeight": 3274
         }
       ],
-      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#e4c9b0",
       "mockupTaskKey": null,
       "printFileUrls": {
-        "embroidery_front": "/api/merch/art/987dd7a2-0489-40b0-9122-ed98b258b0d9.png"
+        "embroidery_front": "/api/merch/art/987dd7a2-0489-40b0-9122-ed98b258b0d9.png?v=1793326533593"
       },
       "wholesaleCost": 20.7,
       "activeFileType": "embroidery_front",
       "catalogProductId": 547,
+      "mockupPendingKey": null,
+      "previewColorName": "Stone",
       "embroideryThreads": {
         "thread_colors": [
           "#000000",
           "#FFFFFF"
         ]
       },
+      "mockupUrlsByColor": {
+        "Stone": [
+          "/api/merch/art/09e23acf-3245-4890-b3cc-4dd763550c6e.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "embroideryUnlimitedColor": false
+      "mockupPhotoKeysByColor": {
+        "Stone": "547~stone~embroidery_front:https://sergikdropz.com/api/merch/art/987dd7a2-0489-40b0-9122-ed98b258b0d9.png~embroidery_front:/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png:0.368:0.15:0.264:0~thread_colors:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Stone": [
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "c3691d1f-b0bb-437c-b5db-f5f8f8badb62",
@@ -310,18 +418,20 @@
         "Slate Blue"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T10:35:53.897Z",
       "sortIndex": 5,
-      "updatedAt": "2026-10-29T10:49:28.769Z",
-      "mockupUrls": [],
+      "updatedAt": "2026-10-30T02:15:23.977Z",
+      "mockupUrls": [
+        "/api/merch/art/ca1da931-8cb2-4933-9e69-a1f7b4fe49f2.jpg"
+      ],
       "placements": [
         {
-          "x": 0.31341045904000364,
-          "y": 0.003680077220788447,
-          "scale": 0.3731790819199927,
+          "x": 0.36841886384429845,
+          "y": 0.15000000000000002,
+          "scale": 0.2631622723114031,
           "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
           "fileType": "embroidery_front",
           "rotation": 0,
@@ -330,14 +440,42 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#e4c9b0",
       "mockupTaskKey": null,
-      "wholesaleCost": 15,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/fa490f6d-f561-40b7-9d7f-1f9db5c39d14.png"
+      },
+      "wholesaleCost": 20.7,
       "activeFileType": "embroidery_front",
       "catalogProductId": 547,
-      "printfulSyncProductId": null
+      "mockupPendingKey": null,
+      "previewColorName": "Stone",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "mockupUrlsByColor": {
+        "Stone": [
+          "/api/merch/art/ca1da931-8cb2-4933-9e69-a1f7b4fe49f2.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {
+        "Stone": "547~stone~embroidery_front:https://sergikdropz.com/api/merch/art/fa490f6d-f561-40b7-9d7f-1f9db5c39d14.png~embroidery_front:/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png:0.368:0.15:0.263:0~thread_colors:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Stone": [
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "318416e9-6da1-4b81-b073-7d0d1d1b1765",
@@ -352,12 +490,12 @@
         "Light Denim"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T10:51:12.769Z",
       "sortIndex": 6,
-      "updatedAt": "2026-10-29T19:06:00.669Z",
+      "updatedAt": "2026-10-30T02:14:25.399Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -372,11 +510,13 @@
           "assetHeight": 2577
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#547da0",
       "mockupTaskKey": null,
-      "printFileUrls": {},
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/ed629d5c-066a-47fb-9287-0026ce4e447a.png?v=1793326461824"
+      },
       "wholesaleCost": 15,
       "activeFileType": "embroidery_front",
       "catalogProductId": 501,
@@ -410,18 +550,18 @@
         "Light Denim"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-28T07:16:39.027Z",
       "sortIndex": 7,
-      "updatedAt": "2026-10-29T10:35:09.199Z",
+      "updatedAt": "2026-10-30T02:14:44.954Z",
       "mockupUrls": [],
       "placements": [
         {
-          "x": 0.31125125446132346,
-          "y": -0.0005594493247346177,
-          "scale": 0.3774974910773531,
+          "x": 0.3680235463986228,
+          "y": 0.15000000000000002,
+          "scale": 0.2639529072027545,
           "assetUrl": "/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png?v=1793268403937",
           "fileType": "embroidery_front",
           "rotation": 0,
@@ -434,10 +574,28 @@
       "retailPrice": 35,
       "previewColor": "#181818",
       "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/987dd7a2-0489-40b0-9122-ed98b258b0d9.png"
+      },
       "wholesaleCost": 15,
       "activeFileType": "embroidery_front",
       "catalogProductId": 501,
-      "printfulSyncProductId": null
+      "mockupPendingKey": null,
+      "previewColorName": "Black Denim",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#000000",
+          "#FFFFFF"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "6355fed0-bcbc-4021-a188-c6c3b94cbf94",
@@ -452,18 +610,18 @@
         "Light Denim"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T10:33:39.857Z",
       "sortIndex": 8,
-      "updatedAt": "2026-10-29T10:34:43.727Z",
+      "updatedAt": "2026-10-30T02:14:36.367Z",
       "mockupUrls": [],
       "placements": [
         {
-          "x": 0.31646579969199284,
-          "y": 0.011807148163015535,
-          "scale": 0.36706840061601426,
+          "x": 0.36841886384429845,
+          "y": 0.15000000000000002,
+          "scale": 0.2631622723114031,
           "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
           "fileType": "embroidery_front",
           "rotation": 0,
@@ -472,14 +630,32 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#181818",
       "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/fa490f6d-f561-40b7-9d7f-1f9db5c39d14.png"
+      },
       "wholesaleCost": 15,
       "activeFileType": "embroidery_front",
       "catalogProductId": 501,
-      "printfulSyncProductId": null
+      "mockupPendingKey": null,
+      "previewColorName": "Black Denim",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
     },
     {
       "id": "ea09ceb9-1242-43b6-8690-ede7249012d0",
@@ -496,13 +672,20 @@
         "Yellow/Navy"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T19:19:49.930Z",
       "sortIndex": 9,
-      "updatedAt": "2026-10-29T20:07:34.457Z",
-      "mockupUrls": [],
+      "updatedAt": "2026-10-30T02:12:45.779Z",
+      "mockupUrls": [
+        "/api/merch/art/93f30ed1-686a-4426-8275-85bdb62ea5cd.jpg",
+        "/api/merch/art/476fe777-7319-4b93-8536-722969d112f1.jpg",
+        "/api/merch/art/16ab95a2-4a13-4830-90dc-2679c531de6b.jpg",
+        "/api/merch/art/c48b92b6-789b-4010-b50a-1cc38db861a0.jpg",
+        "/api/merch/art/db74cd05-c7b7-4f84-8818-5223edfd17e5.jpg",
+        "/api/merch/art/792d76a0-9d50-4cc9-8efb-f51da696cfdd.jpg"
+      ],
       "placements": [
         {
           "x": 0.3813559322033898,
@@ -516,12 +699,14 @@
           "assetHeight": 675
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 32,
       "previewColor": "#060603",
       "mockupTaskKey": null,
-      "printFileUrls": {},
-      "wholesaleCost": 15,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/50d5aba2-8d46-417c-b369-fe6b911b79be.png?v=1793326347797"
+      },
+      "wholesaleCost": 14.27,
       "activeFileType": "embroidery_front",
       "catalogProductId": 807,
       "mockupPendingKey": null,
@@ -532,13 +717,33 @@
           "#FFFFFF"
         ]
       },
-      "mockupUrlsByColor": {},
+      "mockupUrlsByColor": {
+        "Black/White": [
+          "/api/merch/art/93f30ed1-686a-4426-8275-85bdb62ea5cd.jpg",
+          "/api/merch/art/476fe777-7319-4b93-8536-722969d112f1.jpg",
+          "/api/merch/art/16ab95a2-4a13-4830-90dc-2679c531de6b.jpg",
+          "/api/merch/art/c48b92b6-789b-4010-b50a-1cc38db861a0.jpg",
+          "/api/merch/art/db74cd05-c7b7-4f84-8818-5223edfd17e5.jpg",
+          "/api/merch/art/792d76a0-9d50-4cc9-8efb-f51da696cfdd.jpg"
+        ]
+      },
       "mockupRetiredArtIds": [],
       "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "mockupPhotoKeysByColor": {},
+      "mockupPhotoKeysByColor": {
+        "Black/White": "807~black/white~embroidery_front:https://sergikdropz.com/api/merch/art/50d5aba2-8d46-417c-b369-fe6b911b79be.png~embroidery_front:/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png:0.381:0.15:0.237:0~thread_colors:#000000,#FFFFFF"
+      },
       "embroideryUnlimitedColor": false,
-      "mockupAngleTitlesByColor": {},
+      "mockupAngleTitlesByColor": {
+        "Black/White": [
+          "Back",
+          "Left Front",
+          "Right Front",
+          "Product details",
+          "Product details 2",
+          "Front"
+        ]
+      },
       "mockupPendingTitlesByColor": {}
     },
     {
@@ -556,12 +761,12 @@
         "Yellow/Navy"
       ],
       "family": "hat",
-      "status": "draft",
+      "status": "live",
       "blankId": "hat-dad",
       "variants": [],
       "createdAt": "2026-10-29T19:08:40.441Z",
       "sortIndex": 10,
-      "updatedAt": "2026-10-29T22:13:42.410Z",
+      "updatedAt": "2026-10-30T02:11:35.651Z",
       "mockupUrls": [
         "/api/merch/art/93f30ed1-686a-4426-8275-85bdb62ea5cd.jpg",
         "/api/merch/art/f902b3c1-4d3d-45a7-aaf4-00cf71a79bdc.jpg",
@@ -583,12 +788,12 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 30,
       "previewColor": "#060603",
       "mockupTaskKey": null,
       "printFileUrls": {
-        "embroidery_front": "/api/merch/art/c5edac3a-3ac8-41cf-a117-696eac17cffa.png?v=1793311983143"
+        "embroidery_front": "/api/merch/art/c5edac3a-3ac8-41cf-a117-696eac17cffa.png?v=1793326288255"
       },
       "wholesaleCost": 14.27,
       "activeFileType": "embroidery_front",
@@ -631,122 +836,6 @@
       "mockupPendingTitlesByColor": {}
     },
     {
-      "id": "4eb2a09d-2c65-43f1-a3c8-f9e08d448dfd",
-      "name": "Smiley Acid Dropz Corduroy Hat",
-      "slug": "smiley-acid-dropz-corduroy-hat",
-      "sizes": [
-        "One size"
-      ],
-      "colors": [
-        "Black",
-        "Camel",
-        "Dark Olive",
-        "Oxford Navy"
-      ],
-      "family": "hat",
-      "status": "draft",
-      "blankId": "hat-dad",
-      "variants": [],
-      "createdAt": "2026-10-29T19:18:32.285Z",
-      "sortIndex": 11,
-      "updatedAt": "2026-10-29T20:07:01.318Z",
-      "mockupUrls": [],
-      "placements": [
-        {
-          "x": 0.3771583933813718,
-          "y": 0.17142857142857143,
-          "scale": 0.24568321323725645,
-          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
-          "fileType": "embroidery_front",
-          "rotation": 0,
-          "placement": "front",
-          "assetWidth": 3202,
-          "assetHeight": 3747
-        }
-      ],
-      "publishNote": null,
-      "retailPrice": 39,
-      "previewColor": "#0f0f0f",
-      "mockupTaskKey": null,
-      "printFileUrls": {},
-      "wholesaleCost": 15,
-      "activeFileType": "embroidery_front",
-      "catalogProductId": 532,
-      "mockupPendingKey": null,
-      "previewColorName": "Black",
-      "embroideryThreads": {
-        "thread_colors": [
-          "#000000",
-          "#FFCC00",
-          "#CC3333"
-        ]
-      },
-      "mockupUrlsByColor": {},
-      "mockupRetiredArtIds": [],
-      "mockupPendingByColor": {},
-      "printfulSyncProductId": null,
-      "mockupPhotoKeysByColor": {},
-      "embroideryUnlimitedColor": false,
-      "mockupAngleTitlesByColor": {},
-      "mockupPendingTitlesByColor": {}
-    },
-    {
-      "id": "e7642ab4-abb2-4c0b-88a0-fdc576a98690",
-      "name": "OlliN Wall Clock",
-      "slug": "ollin-wall-clock",
-      "sizes": [
-        "10″"
-      ],
-      "colors": [
-        "Black Base/Clock Hand Black",
-        "Black Base/Clock Hand White",
-        "White Base/Clock Hand Black",
-        "White Base/Clock Hand White",
-        "Wooden Base/Clock Hand Black",
-        "Wooden Base/Clock Hand White"
-      ],
-      "family": "tee",
-      "status": "draft",
-      "blankId": "tee-staple",
-      "variants": [],
-      "createdAt": "2026-10-29T19:23:53.522Z",
-      "sortIndex": 12,
-      "updatedAt": "2026-10-29T20:08:45.677Z",
-      "mockupUrls": [],
-      "placements": [
-        {
-          "x": 0.1715124183880382,
-          "y": 0.1514734021312646,
-          "scale": 0.6569751632239236,
-          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
-          "fileType": "front",
-          "rotation": 0,
-          "placement": "front",
-          "assetWidth": 675,
-          "assetHeight": 675
-        }
-      ],
-      "publishNote": null,
-      "retailPrice": 66,
-      "previewColor": "#e7c79d",
-      "mockupTaskKey": null,
-      "printFileUrls": {},
-      "wholesaleCost": 13,
-      "activeFileType": "front",
-      "catalogProductId": 1470,
-      "mockupPendingKey": null,
-      "previewColorName": "Wooden Base/Clock Hand Black",
-      "embroideryThreads": {},
-      "mockupUrlsByColor": {},
-      "mockupRetiredArtIds": [],
-      "mockupPendingByColor": {},
-      "printfulSyncProductId": null,
-      "mockupPhotoKeysByColor": {},
-      "embroideryUnlimitedColor": false,
-      "mockupAngleTitlesByColor": {},
-      "mockupPendingTitlesByColor": {}
-    },
-    {
       "id": "be092c93-7bac-41f1-910a-bbbc5f67fad8",
       "name": "Iza Vibe Tie Die Front",
       "slug": "iza-vibe-tie-die-front",
@@ -765,12 +854,12 @@
         "Sherbet rainbow"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T21:03:01.793Z",
-      "sortIndex": 13,
-      "updatedAt": "2026-10-29T21:29:34.908Z",
+      "sortIndex": 11,
+      "updatedAt": "2026-10-30T01:17:48.318Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -829,13 +918,19 @@
           "assetHeight": 2843
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 40,
       "previewColor": "#ef8fbf",
       "mockupTaskKey": null,
-      "printFileUrls": {},
+      "printFileUrls": {
+        "front_dtf": "/api/merch/art/9ad10415-259c-49c3-b71c-0e254ee9899c.png?v=1793322939676",
+        "embroidery_chest_left": "/api/merch/art/3a03f13c-a6aa-4846-a69a-e40f39e3ea32.png",
+        "embroidery_chest_center": "/api/merch/art/e8352599-76bf-4087-a4db-d1eae1c12eb9.png",
+        "embroidery_sleeve_left_top": "/api/merch/art/037fb73e-8cc7-4334-91d5-7d6c5129fd69.png",
+        "embroidery_sleeve_right_top": "/api/merch/art/d0cb3a5f-0c17-4f7d-9d94-3c8fe283ca28.png"
+      },
       "wholesaleCost": 13,
-      "activeFileType": "short_sleeve_left_dtf",
+      "activeFileType": "front_dtf",
       "catalogProductId": 515,
       "mockupPendingKey": null,
       "previewColorName": "Sherbet rainbow",
@@ -867,6 +962,82 @@
       "mockupPendingTitlesByColor": {}
     },
     {
+      "id": "e7642ab4-abb2-4c0b-88a0-fdc576a98690",
+      "name": "OlliN Wall Clock",
+      "slug": "ollin-wall-clock",
+      "sizes": [
+        "10″"
+      ],
+      "colors": [
+        "Black Base/Clock Hand Black",
+        "Black Base/Clock Hand White",
+        "White Base/Clock Hand Black",
+        "White Base/Clock Hand White",
+        "Wooden Base/Clock Hand Black"
+      ],
+      "family": "tee",
+      "status": "hidden",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T19:23:53.522Z",
+      "sortIndex": 12,
+      "updatedAt": "2026-10-30T02:21:39.799Z",
+      "mockupUrls": [
+        "/api/merch/art/8a7293b2-02b6-4451-9202-c5dbb458e29b.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.1715124183880382,
+          "y": 0.1514734021312646,
+          "scale": 0.6569751632239236,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        }
+      ],
+      "publishNote": "Hidden in the shop. Photos for this color are already current.",
+      "retailPrice": 66,
+      "previewColor": "#e7c79d",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "front": "/api/merch/art/40730336-e069-4a9d-af94-eba25fd81592.png?v=1793326897439"
+      },
+      "wholesaleCost": 29.57,
+      "activeFileType": "front",
+      "catalogProductId": 1470,
+      "mockupPendingKey": null,
+      "previewColorName": "Wooden Base/Clock Hand Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {
+        "Wooden Base/Clock Hand Black": [
+          "/api/merch/art/faa10907-d3ce-44fd-a094-697b5617edc0.jpg"
+        ],
+        "Wooden Base/Clock Hand White": [
+          "/api/merch/art/8a7293b2-02b6-4451-9202-c5dbb458e29b.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {
+        "Wooden Base/Clock Hand Black": "1470~wooden base/clock hand black~front:https://sergikdropz.com/api/merch/art/40730336-e069-4a9d-af94-eba25fd81592.png~front:/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png:0.172:0.151:0.657:0~",
+        "Wooden Base/Clock Hand White": "1470~wooden base/clock hand white~front:https://sergikdropz.com/api/merch/art/40730336-e069-4a9d-af94-eba25fd81592.png~front:/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png:0.172:0.151:0.657:0~"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Wooden Base/Clock Hand Black": [
+          "Front"
+        ],
+        "Wooden Base/Clock Hand White": [
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
       "id": "069a8c90-3185-4f18-a917-a4475e8619e3",
       "name": "Iza Vibe Tie Die Back",
       "slug": "iza-vibe-tie-die-back",
@@ -885,12 +1056,12 @@
         "Sherbet rainbow"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T21:29:55.063Z",
-      "sortIndex": 14,
-      "updatedAt": "2026-10-29T23:34:44.258Z",
+      "sortIndex": 13,
+      "updatedAt": "2026-10-30T01:56:42.179Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -949,17 +1120,17 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 45,
       "previewColor": "#ef8fbf",
       "mockupTaskKey": null,
       "printFileUrls": {
-        "back_dtf": "/api/merch/art/361908a2-76c5-4147-b3d6-a62089fd669f.png?v=1793316744462",
-        "front_dtf": "/api/merch/art/1a1cf5f2-1b45-4939-aa47-01df68da3217.png",
-        "embroidery_chest_left": "/api/merch/art/3a03f13c-a6aa-4846-a69a-e40f39e3ea32.png",
+        "back_dtf": "/api/merch/art/fdb332d2-80ab-4230-8032-cbf83c524162.png?v=1793323609475",
+        "front_dtf": "/api/merch/art/1a1cf5f2-1b45-4939-aa47-01df68da3217.png?v=1793323612415",
+        "embroidery_chest_left": "/api/merch/art/3a03f13c-a6aa-4846-a69a-e40f39e3ea32.png?v=1793323587743",
         "embroidery_chest_center": "/api/merch/art/e8352599-76bf-4087-a4db-d1eae1c12eb9.png",
-        "embroidery_sleeve_left_top": "/api/merch/art/037fb73e-8cc7-4334-91d5-7d6c5129fd69.png",
-        "embroidery_sleeve_right_top": "/api/merch/art/d0cb3a5f-0c17-4f7d-9d94-3c8fe283ca28.png"
+        "embroidery_sleeve_left_top": "/api/merch/art/037fb73e-8cc7-4334-91d5-7d6c5129fd69.png?v=1793323590157",
+        "embroidery_sleeve_right_top": "/api/merch/art/d0cb3a5f-0c17-4f7d-9d94-3c8fe283ca28.png?v=1793323592508"
       },
       "wholesaleCost": 13,
       "activeFileType": "front_dtf",
@@ -1013,18 +1184,21 @@
         "Blonde"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T19:29:28.147Z",
-      "sortIndex": 15,
-      "updatedAt": "2026-10-29T19:54:20.347Z",
-      "mockupUrls": [],
+      "sortIndex": 14,
+      "updatedAt": "2026-10-30T02:06:57.304Z",
+      "mockupUrls": [
+        "/api/merch/art/94c8c5ee-1294-45a0-a6d6-0124d79b3dd3.jpg",
+        "/api/merch/art/d567e835-1c7e-49a8-a04c-cb42f7fd0016.jpg"
+      ],
       "placements": [
         {
-          "x": 8.673617379884035e-19,
-          "y": -1.3877787807814457e-17,
-          "scale": 1,
+          "x": 0.04886931305186398,
+          "y": 0,
+          "scale": 0.902261373896272,
           "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
           "fileType": "front",
           "rotation": 0,
@@ -1033,24 +1207,38 @@
           "assetHeight": 2843
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 40,
       "previewColor": "#000000",
       "mockupTaskKey": null,
-      "printFileUrls": {},
-      "wholesaleCost": 13,
+      "printFileUrls": {
+        "front": "/api/merch/art/59451f3b-3a94-45c2-a72f-abf6c8ce8bf1.png?v=1793323231217"
+      },
+      "wholesaleCost": 16.39,
       "activeFileType": "front",
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Black",
       "embroideryThreads": {},
-      "mockupUrlsByColor": {},
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/94c8c5ee-1294-45a0-a6d6-0124d79b3dd3.jpg",
+          "/api/merch/art/d567e835-1c7e-49a8-a04c-cb42f7fd0016.jpg"
+        ]
+      },
       "mockupRetiredArtIds": [],
       "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "mockupPhotoKeysByColor": {},
+      "mockupPhotoKeysByColor": {
+        "Black": "1637~black~front:https://sergikdropz.com/api/merch/art/59451f3b-3a94-45c2-a72f-abf6c8ce8bf1.png~front:/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png:0:0:1:0~"
+      },
       "embroideryUnlimitedColor": false,
-      "mockupAngleTitlesByColor": {},
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Front"
+        ]
+      },
       "mockupPendingTitlesByColor": {}
     },
     {
@@ -1071,18 +1259,21 @@
         "Blonde"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T19:33:41.293Z",
-      "sortIndex": 16,
-      "updatedAt": "2026-10-29T23:20:13.307Z",
-      "mockupUrls": [],
+      "sortIndex": 15,
+      "updatedAt": "2026-10-30T02:07:02.569Z",
+      "mockupUrls": [
+        "/api/merch/art/48b69d2f-3991-4ac7-946b-1c6ddea05a00.jpg",
+        "/api/merch/art/7e5baffe-ac6a-42fd-92a2-4c5340473edf.jpg"
+      ],
       "placements": [
         {
-          "x": 1.0755285551056204e-16,
-          "y": -6.938893903907228e-18,
-          "scale": 1,
+          "x": 0.07642914076852292,
+          "y": 0.06854656686941168,
+          "scale": 0.8471417184629544,
           "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
           "fileType": "back",
           "rotation": 0,
@@ -1102,106 +1293,40 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 45,
       "previewColor": "#000000",
       "mockupTaskKey": null,
-      "printFileUrls": {},
-      "wholesaleCost": 13,
+      "printFileUrls": {
+        "back": "/api/merch/art/a713255f-4210-4663-8a04-a550850b532e.png?v=1793323827563",
+        "front": "/api/merch/art/964d0e5f-ef46-4efb-93ef-cf7c7bfe7741.png?v=1793323830555"
+      },
+      "wholesaleCost": 16.39,
       "activeFileType": "back",
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Black",
       "embroideryThreads": {},
-      "mockupUrlsByColor": {},
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/48b69d2f-3991-4ac7-946b-1c6ddea05a00.jpg",
+          "/api/merch/art/7e5baffe-ac6a-42fd-92a2-4c5340473edf.jpg"
+        ]
+      },
       "mockupRetiredArtIds": [],
       "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "mockupPhotoKeysByColor": {},
+      "mockupPhotoKeysByColor": {
+        "Black": "1637~black~back:https://sergikdropz.com/api/merch/art/a713255f-4210-4663-8a04-a550850b532e.png|front:https://sergikdropz.com/api/merch/art/964d0e5f-ef46-4efb-93ef-cf7c7bfe7741.png~back:/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png:0.076:0.069:0.847:0|front:/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png:0.379:0:0.242:0~"
+      },
       "embroideryUnlimitedColor": false,
-      "mockupAngleTitlesByColor": {},
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Front"
+        ]
+      },
       "mockupPendingTitlesByColor": {}
-    },
-    {
-      "id": "c38fee1f-5520-4aa1-8400-72bfbd070cd3",
-      "name": "Ollin Front / FTP Back Tee",
-      "slug": "ollin-front-ftp-back-tee",
-      "blankId": "tee-staple",
-      "catalogProductId": 1637,
-      "family": "tee",
-      "placements": [
-        {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png?v=2026-10-29T10%3A06%3A43.533Z",
-          "assetWidth": 3395,
-          "assetHeight": 3274,
-          "x": 0.3497135806945871,
-          "y": 0,
-          "scale": 0.3005728386108258,
-          "rotation": 0,
-          "fileType": "front"
-        },
-        {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/1d67f677-9025-43d9-be3e-782403646aea.png?v=2026-10-29T08%3A29%3A32.602Z",
-          "assetWidth": 3544,
-          "assetHeight": 2228,
-          "x": 0,
-          "y": 0.18566591422121898,
-          "scale": 1,
-          "rotation": 0,
-          "fileType": "sleeve_left"
-        },
-        {
-          "placement": "back",
-          "assetUrl": "/api/merch/art/c8a9eaf2-078e-4f91-a808-0a0dea2e6373.jpg?v=2026-10-29T09%3A58%3A31.709Z",
-          "assetWidth": 2857,
-          "assetHeight": 2797,
-          "x": 0.07000000000000002,
-          "y": 0,
-          "scale": 0.86,
-          "rotation": 0,
-          "fileType": "back"
-        }
-      ],
-      "activeFileType": "back",
-      "colors": [
-        "Black",
-        "Blonde"
-      ],
-      "sizes": [
-        "3XL",
-        "4XL",
-        "5XL",
-        "L",
-        "M",
-        "XL",
-        "2XL",
-        "S"
-      ],
-      "previewColor": "#000000",
-      "previewColorName": "Black",
-      "retailPrice": 40,
-      "wholesaleCost": 13,
-      "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
-      "mockupUrlsByColor": {},
-      "mockupAngleTitlesByColor": {},
-      "mockupPendingByColor": {},
-      "mockupPendingTitlesByColor": {},
-      "mockupPendingKey": null,
-      "mockupPhotoKeysByColor": {},
-      "mockupRetiredArtIds": [],
-      "printFileUrls": {},
-      "variants": [],
-      "publishNote": null,
-      "sortIndex": null,
-      "embroideryUnlimitedColor": false,
-      "embroideryThreads": {},
-      "createdAt": "2026-10-29T23:49:57.887Z",
-      "updatedAt": "2026-10-30T00:00:07.289Z"
     },
     {
       "id": "872951bf-eaf4-44fb-9ae4-948d5448912c",
@@ -1222,12 +1347,12 @@
         "Blonde"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T23:40:04.944Z",
-      "sortIndex": null,
-      "updatedAt": "2026-10-29T23:49:24.752Z",
+      "sortIndex": 16,
+      "updatedAt": "2026-10-30T02:07:41.806Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -1264,7 +1389,7 @@
           "assetHeight": 886
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 40,
       "previewColor": "#000000",
       "mockupTaskKey": null,
@@ -1274,6 +1399,92 @@
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "c38fee1f-5520-4aa1-8400-72bfbd070cd3",
+      "name": "Ollin Front / FTP Back Tee",
+      "slug": "ollin-front-ftp-back-tee",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL",
+        "S"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Charcoal Grey",
+        "Dark Grey",
+        "Heather Grey",
+        "Hunter Green",
+        "Navy"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T23:49:57.887Z",
+      "sortIndex": 17,
+      "updatedAt": "2026-10-30T06:17:16.403Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.3497135806945871,
+          "y": 0,
+          "scale": 0.3005728386108258,
+          "assetUrl": "/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png?v=2026-10-29T10%3A06%3A43.533Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3395,
+          "assetHeight": 3274
+        },
+        {
+          "x": 0,
+          "y": 0.18566591422121898,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/1d67f677-9025-43d9-be3e-782403646aea.png?v=2026-10-29T08%3A29%3A32.602Z",
+          "fileType": "sleeve_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3544,
+          "assetHeight": 2228
+        },
+        {
+          "x": 0.07000000000000002,
+          "y": 0,
+          "scale": 0.86,
+          "assetUrl": "/api/merch/art/c8a9eaf2-078e-4f91-a808-0a0dea2e6373.jpg?v=2026-10-29T09%3A58%3A31.709Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 2857,
+          "assetHeight": 2797
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 40,
+      "previewColor": "#494949",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "back",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Dark Grey",
       "embroideryThreads": {},
       "mockupUrlsByColor": {},
       "mockupRetiredArtIds": [],
@@ -1309,12 +1520,12 @@
         "Purple"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T22:36:29.603Z",
-      "sortIndex": null,
-      "updatedAt": "2026-10-29T22:45:00.115Z",
+      "sortIndex": 18,
+      "updatedAt": "2026-10-30T02:07:21.800Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -1340,13 +1551,13 @@
           "assetHeight": 2228
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 40,
       "previewColor": "#000000",
       "mockupTaskKey": null,
       "printFileUrls": {},
       "wholesaleCost": 13,
-      "activeFileType": "front",
+      "activeFileType": "back",
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Black",
@@ -1379,12 +1590,12 @@
         "Blonde"
       ],
       "family": "tee",
-      "status": "draft",
+      "status": "live",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T22:25:38.337Z",
-      "sortIndex": null,
-      "updatedAt": "2026-10-29T22:29:14.086Z",
+      "sortIndex": 19,
+      "updatedAt": "2026-10-30T02:07:07.042Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -1410,7 +1621,7 @@
           "assetHeight": 2228
         }
       ],
-      "publishNote": null,
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 40,
       "previewColor": "#000000",
       "mockupTaskKey": null,
@@ -1420,6 +1631,586 @@
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "c778e81a-5933-46a9-a20e-e8227ccdb869",
+      "name": "Le' Sergik Dropz Bucket Hat",
+      "slug": "le-sergik-dropz-bucket-hat",
+      "sizes": [
+        "M/L",
+        "S/M"
+      ],
+      "colors": [
+        "Black",
+        "Heather Grey",
+        "Natural"
+      ],
+      "family": "hat",
+      "status": "live",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-30T06:25:54.105Z",
+      "sortIndex": 20,
+      "updatedAt": "2026-10-30T07:01:34.006Z",
+      "mockupUrls": [
+        "/api/merch/art/ea1ec93c-ba39-42f7-b050-8684a80c0107.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.305784021156319,
+          "y": 0,
+          "scale": 0.388431957687362,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "front_dtf_hat",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 32,
+      "previewColor": "#171717",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "front_dtf_hat": "/api/merch/art/58eceada-5340-43bf-8d6c-08f51f8d8a96.png"
+      },
+      "wholesaleCost": 14.25,
+      "activeFileType": "front_dtf_hat",
+      "catalogProductId": 1688,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/ea1ec93c-ba39-42f7-b050-8684a80c0107.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {
+        "Black": "1688~black~front_dtf_hat:https://sergikdropz.com/api/merch/art/58eceada-5340-43bf-8d6c-08f51f8d8a96.png~front_dtf_hat:/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png:0.306:0:0.388:0~"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "4eb2a09d-2c65-43f1-a3c8-f9e08d448dfd",
+      "name": "Smiley Acid Dropz Corduroy Hat",
+      "slug": "smiley-acid-dropz-corduroy-hat",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Black",
+        "Camel",
+        "Dark Olive",
+        "Oxford Navy"
+      ],
+      "family": "hat",
+      "status": "live",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T19:18:32.285Z",
+      "sortIndex": 21,
+      "updatedAt": "2026-10-30T02:19:36.481Z",
+      "mockupUrls": [
+        "/api/merch/art/900e622f-9650-4e4b-94e8-ca0bd8457e32.jpg",
+        "/api/merch/art/514de7d0-1953-40a3-bbdd-3028d55b2ecd.jpg",
+        "/api/merch/art/e89127be-9c06-4762-96da-4c03403d43a8.jpg",
+        "/api/merch/art/09f87971-7419-4180-8345-34e22495c9cb.jpg",
+        "/api/merch/art/f255f75b-15e4-424f-ad8d-e169e3599cb1.jpg",
+        "/api/merch/art/8ab102ea-9a0c-41af-8cc7-0a101127630d.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.3771583933813718,
+          "y": 0.17142857142857143,
+          "scale": 0.24568321323725645,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 39,
+      "previewColor": "#0f0f0f",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/022acfbb-cc8b-4536-beb7-b6304ff32648.png?v=1793326763114"
+      },
+      "wholesaleCost": 17.29,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 532,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#000000",
+          "#FFCC00",
+          "#CC3333"
+        ]
+      },
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/900e622f-9650-4e4b-94e8-ca0bd8457e32.jpg",
+          "/api/merch/art/514de7d0-1953-40a3-bbdd-3028d55b2ecd.jpg",
+          "/api/merch/art/e89127be-9c06-4762-96da-4c03403d43a8.jpg",
+          "/api/merch/art/09f87971-7419-4180-8345-34e22495c9cb.jpg",
+          "/api/merch/art/f255f75b-15e4-424f-ad8d-e169e3599cb1.jpg",
+          "/api/merch/art/8ab102ea-9a0c-41af-8cc7-0a101127630d.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {
+        "Black": "532~black~embroidery_front:https://sergikdropz.com/api/merch/art/022acfbb-cc8b-4536-beb7-b6304ff32648.png~embroidery_front:/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png:0.377:0.171:0.246:0~thread_colors:#000000,#CC3333,#FFCC00"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Left",
+          "Left Front",
+          "Right",
+          "Right Front",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "d3cbe947-ee5f-47b5-b257-f3291e414888",
+      "name": "Le' Sergik Dropz - Back print Tee",
+      "slug": "le-sergik-dropz-back-print-tee",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "2XL",
+        "XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-30T06:09:23.090Z",
+      "sortIndex": 22,
+      "updatedAt": "2026-10-30T06:21:28.288Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.08354915043145628,
+          "y": 0.07,
+          "scale": 0.8329016991370874,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        },
+        {
+          "x": 0.3802965671966086,
+          "y": 0,
+          "scale": 0.23940686560678281,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 40,
+      "previewColor": "#000000",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "back",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "684f5bc5-fb1a-402e-86ae-8b97d91b6cc5",
+      "name": "Le' Sergik Dropz - Front print Tee",
+      "slug": "le-sergik-dropz-front-print-tee",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "2XL",
+        "XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Brown",
+        "Burgundy",
+        "Cardinal",
+        "Charcoal Grey",
+        "Coral",
+        "Cream Blue"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-30T06:07:09.428Z",
+      "sortIndex": 23,
+      "updatedAt": "2026-10-30T06:21:15.769Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.1442222222222222,
+          "y": 0,
+          "scale": 0.7115555555555556,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        },
+        {
+          "x": 0.07,
+          "y": 0.22946533203125002,
+          "scale": 0.86,
+          "assetUrl": "/api/merch/art/90489eda-98ce-4ae5-800e-6c9d54958995.png?v=2026-10-29T19%3A46%3A57.866Z",
+          "fileType": "sleeve_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 4096,
+          "assetHeight": 2577
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 40,
+      "previewColor": "#fdeb71",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Yellow",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "46b06757-d992-4182-8d7e-949d41e8ccd9",
+      "name": "Le' Sergik Dropz - Tie-Dye T-Shirt",
+      "slug": "le-sergik-dropz-tie-dye-t-shirt",
+      "sizes": [
+        "2XL",
+        "L",
+        "M",
+        "S",
+        "XL"
+      ],
+      "colors": [
+        "Black / White",
+        "Classic rainbow"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-30T06:19:10.408Z",
+      "sortIndex": 24,
+      "updatedAt": "2026-10-30T06:20:57.906Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.07,
+          "y": 0.12260852592129923,
+          "scale": 0.86,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "front_dtf",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        },
+        {
+          "x": 0.11101326623970725,
+          "y": 0.07,
+          "scale": 0.7779734675205855,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "short_sleeve_left_dtf",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 44,
+      "previewColor": "#eee448",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front_dtf",
+      "catalogProductId": 515,
+      "mockupPendingKey": null,
+      "previewColorName": "Classic rainbow",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "f70be90b-b961-4554-b0e6-fcddbaac3eb5",
+      "name": "Smiley - Le' Sergik Dropz - Front print Tee copy",
+      "slug": "smiley-le-sergik-dropz-front-print-tee-copy",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "2XL",
+        "XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Brown",
+        "Burgundy",
+        "Cardinal",
+        "Charcoal Grey",
+        "Coral",
+        "Cream Blue"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-30T06:17:37.015Z",
+      "sortIndex": 25,
+      "updatedAt": "2026-10-30T06:17:37.015Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.1442222222222222,
+          "y": 0,
+          "scale": 0.7115555555555556,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        },
+        {
+          "x": 0.07,
+          "y": 0.22946533203125002,
+          "scale": 0.86,
+          "assetUrl": "/api/merch/art/90489eda-98ce-4ae5-800e-6c9d54958995.png?v=2026-10-29T19%3A46%3A57.866Z",
+          "fileType": "sleeve_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 4096,
+          "assetHeight": 2577
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 40,
+      "previewColor": "#fdeb71",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": null,
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "19e55a0b-35a8-4c97-92b2-b538ba8e8f1c",
+      "name": "Valle Del Sol - Backprint Tee",
+      "slug": "valle-del-sol-backprint-tee",
+      "blankId": "tee-staple",
+      "catalogProductId": 1637,
+      "family": "tee",
+      "placements": [
+        {
+          "placement": "back",
+          "assetUrl": "/api/merch/art/5bde075d-2d1b-4825-9ada-57dcb43c5e0b.png?v=2026-10-30T06%3A59%3A05.932Z",
+          "assetWidth": 4500,
+          "assetHeight": 4500,
+          "x": -2.47198095326695e-17,
+          "y": 0,
+          "scale": 1,
+          "rotation": 0,
+          "fileType": "back"
+        },
+        {
+          "placement": "front",
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "assetWidth": 6780,
+          "assetHeight": 6558,
+          "x": 0.38458081622246887,
+          "y": 6.938893903907228e-18,
+          "scale": 0.23083836755506232,
+          "rotation": 0,
+          "fileType": "front"
+        }
+      ],
+      "activeFileType": "back",
+      "colors": [
+        "Black",
+        "Blonde",
+        "Orange",
+        "Purple",
+        "Kelly Green",
+        "Cream Blue",
+        "Khaki"
+      ],
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "2XL",
+        "XL"
+      ],
+      "previewColor": "#d8aa7c",
+      "previewColorName": "Khaki",
+      "retailPrice": 40,
+      "wholesaleCost": 13,
+      "status": "hidden",
+      "printfulSyncProductId": null,
+      "mockupTaskKey": null,
+      "mockupUrls": [],
+      "mockupUrlsByColor": {},
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingByColor": {},
+      "mockupPendingTitlesByColor": {},
+      "mockupPendingKey": null,
+      "mockupPhotoKeysByColor": {},
+      "mockupRetiredArtIds": [],
+      "printFileUrls": {},
+      "variants": [],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "sortIndex": null,
+      "embroideryUnlimitedColor": false,
+      "embroideryThreads": {},
+      "createdAt": "2026-10-30T07:02:17.829Z",
+      "updatedAt": "2026-10-30T07:07:46.630Z"
+    },
+    {
+      "id": "3f52f023-a177-488d-afd1-aba93cecb1df",
+      "name": "Valle Del Sol Tee",
+      "slug": "valle-del-sol-tee",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "2XL",
+        "XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Orange",
+        "Purple",
+        "Kelly Green",
+        "Cream Blue",
+        "Khaki"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-30T06:59:29.991Z",
+      "sortIndex": null,
+      "updatedAt": "2026-10-30T06:59:33.709Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.011568661675800332,
+          "y": 1.3877787807814457e-17,
+          "scale": 0.9768626766483993,
+          "assetUrl": "/api/merch/art/5bde075d-2d1b-4825-9ada-57dcb43c5e0b.png?v=1793343547305",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 4500,
+          "assetHeight": 4500
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 40,
+      "previewColor": "#fff7e5",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Blonde",
       "embroideryThreads": {},
       "mockupUrlsByColor": {},
       "mockupRetiredArtIds": [],

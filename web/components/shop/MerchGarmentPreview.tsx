@@ -234,6 +234,8 @@ type Props = {
   colorName?: string | null
   /** Angle of the put-out photo, used only while that photo's color is selected. */
   photoIndex?: number
+  /** Catalog template face to draw when this color has no photographed angles. */
+  viewFileType?: string | null
   /** Draw the saved art on the garment instead of a stored photo. */
   preferLayout?: boolean
 }
@@ -244,6 +246,7 @@ export default function MerchGarmentPreview({
   matColor,
   colorName: requestedColorName = null,
   photoIndex = 0,
+  viewFileType = null,
   preferLayout = false,
 }: Props) {
   const art = primaryPreviewPlacement(design)
@@ -276,13 +279,20 @@ export default function MerchGarmentPreview({
     design.previewColorName || savedColorName,
   )
   const mockup = colorPhotos[Math.min(Math.max(photoIndex, 0), Math.max(colorPhotos.length - 1, 0))] || null
-  const embroideryArt = Boolean(art?.fileType && /embroidery/i.test(art.fileType))
+  const directedFile = viewFileType
+    ? catalog?.printFiles.find((file) => file.type === viewFileType) ?? null
+    : null
+  const drawnArt = directedFile
+    ? design.placements.find((row) => row.assetUrl && row.fileType === directedFile.type) ?? null
+    : art
+  const embroideryArt = Boolean(drawnArt?.fileType && /embroidery/i.test(drawnArt.fileType))
   const stitchThreads = embroideryArt
     ? previewStitchThreads(design.embroideryUnlimitedColor, design.embroideryThreads)
     : null
   const swatchHex = catalog?.colors.find((color) => sameColorKey(color.name, colorName))?.hex || null
 
   const printFile = useMemo(() => {
+    if (directedFile) return directedFile
     if (!catalog || !art) return null
     if (art.fileType) return catalog.printFiles.find((file) => file.type === art.fileType) ?? null
     return (
@@ -290,7 +300,7 @@ export default function MerchGarmentPreview({
         (file) => placementForPrintFile(file, blank, { surface: 'photo' }).id === art.placement,
       ) ?? null
     )
-  }, [art, blank, catalog])
+  }, [art, blank, catalog, directedFile])
 
   // The catalog photo has no print box. When Printful measured one on the flat
   // template, draw that template so the art lands on the front panel.
@@ -298,8 +308,9 @@ export default function MerchGarmentPreview({
   const templateView = calibrated ? coloredTemplate(catalog, calibrated, colorName, previewSize) : null
   const garmentUrl = templateView?.imageUrl || (catalog ? previewGarmentImage(catalog, colorName, previewSize) : null)
   const patternUrl = positioningPatternUrl(catalog, garmentUrl, colorName, previewSize)
-  const area =
-    art && blank
+  const area = directedFile
+    ? placementForPrintFile(directedFile, blank)
+    : art && blank
       ? calibrated
         ? placementForPrintFile(calibrated, blank)
         : printAreaForPlacement(art, catalog, blank)
@@ -311,11 +322,11 @@ export default function MerchGarmentPreview({
     setImageAspect(null)
   }, [garmentUrl])
 
-  if (mockup && !preferLayout) {
+  if (mockup && !preferLayout && !directedFile) {
     return <img src={mockup} alt="" className={`h-full w-full object-contain ${className}`} />
   }
 
-  if (!art || !blank || !area) {
+  if (!blank || !area || (!drawnArt && !garmentUrl)) {
     return (
       <span className={`flex h-full items-center justify-center text-xs text-gray-500 ${className}`}>
         Preview unavailable
@@ -357,30 +368,32 @@ export default function MerchGarmentPreview({
             idPrefix={`shop-preview-${design.id}`}
           />
         )}
-        {art.fileType && design.printFileUrls?.[art.fileType] && !preferLayout ? (
-          <div
-            className="pointer-events-none absolute"
-            style={{
-              left: `${area.stage.x * 100}%`,
-              top: `${area.stage.y * 100}%`,
-              width: `${area.stage.w * 100}%`,
-              height: `${area.stage.h * 100}%`,
-            }}
-          >
-            {stitchThreads ? (
-              <ThreadStitchImage src={design.printFileUrls[art.fileType]} threadColors={stitchThreads} />
-            ) : (
-              <img
-                src={design.printFileUrls[art.fileType]}
-                alt=""
-                draggable={false}
-                className="h-full w-full object-fill"
-              />
-            )}
-          </div>
-        ) : (
-          <PlacedArtPreview art={art} area={area} />
-        )}
+        {drawnArt?.assetUrl ? (
+          drawnArt.fileType && design.printFileUrls?.[drawnArt.fileType] && !preferLayout ? (
+            <div
+              className="pointer-events-none absolute"
+              style={{
+                left: `${area.stage.x * 100}%`,
+                top: `${area.stage.y * 100}%`,
+                width: `${area.stage.w * 100}%`,
+                height: `${area.stage.h * 100}%`,
+              }}
+            >
+              {stitchThreads ? (
+                <ThreadStitchImage src={design.printFileUrls[drawnArt.fileType]} threadColors={stitchThreads} />
+              ) : (
+                <img
+                  src={design.printFileUrls[drawnArt.fileType]}
+                  alt=""
+                  draggable={false}
+                  className="h-full w-full object-fill"
+                />
+              )}
+            </div>
+          ) : (
+            <PlacedArtPreview art={drawnArt} area={area} />
+          )
+        ) : null}
       </span>
     </span>
   )

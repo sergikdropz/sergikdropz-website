@@ -167,7 +167,7 @@ export default function SmartLinksAdmin() {
   }
 
   const handleCopySlug = (slug: string) => {
-    const url = `${window.location.origin}/api/go/${slug}`
+    const url = `${window.location.origin}/l/${slug}`
     navigator.clipboard.writeText(url)
     setCopyFeedback(slug)
     showNotification('Link copied to clipboard', 'success')

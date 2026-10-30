@@ -5,6 +5,7 @@ import {
   platformEmbedFromUrl,
   releaseUrlsFromOdesliMatches,
   releaseUrlsFromStoreHtml,
+  popularPlatformLinks,
   sharePlatformEmbeds,
 } from '@/lib/shares/platform-embeds'
 
@@ -67,6 +68,35 @@ describe('share platform embeds', () => {
     ])
     expect(embeds.find((embed) => embed.id === 'amazon')?.embedUrl).toBeUndefined()
     expect(embeds.find((embed) => embed.id === 'tidal')?.url).toBe('https://tidal.com/album/567167649')
+  })
+
+  it('keeps the ten most popular stores as icon links', () => {
+    const links = popularPlatformLinks({
+      spotify: 'https://open.spotify.com/album/5RQ6vJgfsS3PnOn6IBbO9K',
+      apple_music: 'https://music.apple.com/us/album/walk-that-walk-ep/6827013965',
+      youtube_music: 'https://music.youtube.com/channel/UCBWcROfNv8PeY6KdrnNM_pw',
+      youtube: 'https://youtube.com/@sergikdropz',
+      amazon: 'https://music.amazon.com/artists/B09B2LNNSF/sergik',
+      soundcloud: 'https://soundcloud.com/sergikdropz',
+      deezer: 'https://www.deezer.com/us/artist/140080312',
+      tidal: 'https://tidal.com/artist/27288636',
+      pandora: 'https://www.pandora.com/artist/sergik/ARz95KfVdbj3P5Z',
+      iheart: 'https://www.iheart.com/artist/id-36587473/',
+    })
+    expect(links.map((link) => link.id)).toEqual([
+      'spotify',
+      'apple_music',
+      'youtube_music',
+      'youtube',
+      'amazon',
+      'soundcloud',
+      'deezer',
+      'tidal',
+      'pandora',
+      'iheart',
+    ])
+    expect(links[0]?.embedUrl).toContain('/embed/album/5RQ6vJgfsS3PnOn6IBbO9K')
+    expect(links.find((link) => link.id === 'soundcloud')?.embedUrl).toBeUndefined()
   })
 
   it('reads Odesli album matches and ignores the iTunes duplicate', () => {

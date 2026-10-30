@@ -318,6 +318,17 @@ async function readArtPrefix(id: string): Promise<Buffer | null> {
   }
 }
 
+/**
+ * Mockup photos are newer and more numerous than source art. Keep the user's
+ * files even when a short list would otherwise be filled by those photos.
+ */
+export function prioritizeUserUploads(items: MerchArtUpload[], limit = 48): MerchArtUpload[] {
+  const ranked = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const users = ranked.filter((item) => item.origin !== 'printful').slice(0, limit)
+  const generated = ranked.filter((item) => item.origin === 'printful').slice(0, limit)
+  return [...users, ...generated]
+}
+
 export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]> {
   const { printful: printfulIds, assets: assetIds } = await libraryArtSets()
   const originFor = (id: string): MerchArtOrigin => (printfulIds.has(id.toLowerCase()) ? 'printful' : 'user')
@@ -325,7 +336,7 @@ export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]>
 
   // Primary backend: Cloudflare R2.
   try {
-    const items = await listR2Art(100)
+    const items = await listR2Art(1000)
     for (const item of items) {
       byId.set(item.id, {
         id: item.id,
@@ -412,10 +423,10 @@ export async function listMerchArtUploads(limit = 48): Promise<MerchArtUpload[]>
     console.error('merch art library index:', error)
   }
 
-  return [...byId.values()]
-    .filter((item) => !printIds.has(item.id.toLowerCase()))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, limit)
+  return prioritizeUserUploads(
+    [...byId.values()].filter((item) => !printIds.has(item.id.toLowerCase())),
+    limit,
+  )
 }
 
 export async function deleteMerchArt(id: string): Promise<boolean> {

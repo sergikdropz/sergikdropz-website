@@ -3,6 +3,8 @@ import {
   deezerAlbumFromSearch,
   hyperfollowLookupUrl,
   PLATFORM_ORDER,
+  POPULAR_PLATFORM_ORDER,
+  popularPlatformLinks,
   releaseUrlsFromOdesliMatches,
   releaseUrlsFromStoreHtml,
   sharePlatformEmbeds,
@@ -87,7 +89,7 @@ export async function loadSharePlatformEmbeds(input: {
       for (const row of data || []) {
         const store = String(row.store || '').trim() as SharePlatformId
         const url = String(row.url || '').trim()
-        if (!PLATFORM_ORDER.includes(store) || !url) continue
+        if (!POPULAR_PLATFORM_ORDER.includes(store) || !url) continue
         if (!urls[store]) urls[store] = url
       }
     }
@@ -141,5 +143,5 @@ export async function loadSharePlatformEmbeds(input: {
     }
   }
 
-  return sharePlatformEmbeds(urls)
+  return popularPlatformLinks(urls)
 }

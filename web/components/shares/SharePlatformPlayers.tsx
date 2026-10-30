@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { FaApple, FaDeezer, FaSpotify } from 'react-icons/fa'
+import { FaApple, FaDeezer, FaSoundcloud, FaSpotify, FaYoutube } from 'react-icons/fa'
 import { SiAmazonmusic, SiIheartradio, SiPandora, SiTidal, SiYoutubemusic } from 'react-icons/si'
 import type { IconType } from 'react-icons'
 import type { SharePlatformEmbed, SharePlatformId } from '@/lib/shares/types'
@@ -10,7 +10,9 @@ const ICONS: Record<SharePlatformId, IconType> = {
   spotify: FaSpotify,
   apple_music: FaApple,
   youtube_music: SiYoutubemusic,
+  youtube: FaYoutube,
   amazon: SiAmazonmusic,
+  soundcloud: FaSoundcloud,
   deezer: FaDeezer,
   tidal: SiTidal,
   pandora: SiPandora,
@@ -37,6 +39,7 @@ export default function SharePlatformPlayers({
       >
         {platforms.map((platform) => {
           const Icon = ICONS[platform.id]
+          if (!Icon) return null
           const selected = platform.id === activeId && Boolean(platform.embedUrl)
           const className = `inline-flex h-9 w-9 items-center justify-center rounded-full border text-base transition ${
             selected

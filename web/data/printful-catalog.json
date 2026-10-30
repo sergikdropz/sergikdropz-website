@@ -1,6 +1,6 @@
 {
-  "syncedAt": "2026-10-29T23:55:55.339Z",
-  "productCount": 571,
+  "syncedAt": "2026-10-30T08:03:10.912Z",
+  "productCount": 572,
   "products": [
     {
       "id": 1677,
@@ -4945,6 +4945,29 @@
       "studioBlankId": "hat-dad",
       "category": "hats",
       "mainCategoryId": 45,
+      "avgFulfillmentDays": null
+    },
+    {
+      "id": 1767,
+      "title": "Custom Shape Metal Pin",
+      "type": "SUBLIMATION",
+      "typeName": "Custom Shape Metal Pin",
+      "brand": "Generic brand",
+      "model": "Custom Shape Metal Pin",
+      "image": "https://static.cdn.printful.com/s/static/v880/images/products/product_temporary_image.jpg",
+      "variantCount": 2,
+      "fileTypes": [
+        "front",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "SUBLIMATION"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "accessories",
+      "mainCategoryId": 268,
       "avgFulfillmentDays": null
     },
     {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-10-25T18:47:24.569Z",
+  "generatedAt": "2026-10-30T08:37:40.936Z",
   "source": "json-export",
   "description": "Compiled SERGIK library analysis. One analysis file per audio recording; the same file can belong to multiple folders/playlists.",
   "counts": {

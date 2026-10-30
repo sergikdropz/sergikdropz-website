@@ -9,7 +9,16 @@ import MerchGarmentPreview, {
   loadMerchCatalogDetail,
   type MerchGarmentPreviewDesign,
 } from '@/components/shop/MerchGarmentPreview'
-import { designPreviewColorName, mockupPhotosForColor, shopFrontPhotoIndex } from '@/lib/merch/catalog-studio'
+import type { BlankColor } from '@/lib/merch/blanks'
+import {
+  catalogAngleViews,
+  designPreviewColorName,
+  mockupPhotosForColor,
+  mockupTitlesForColor,
+  sameColorKey,
+  shopFrontPhotoIndex,
+  type CatalogAngleView,
+} from '@/lib/merch/catalog-studio'
 
 interface Variant {
   id: number
@@ -41,10 +50,18 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
   const [showSizeGuide, setShowSizeGuide] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
   const [colorReady, setColorReady] = useState(!product.designPreview?.catalogProductId)
+  const [catalogColors, setCatalogColors] = useState<BlankColor[]>([])
+  const [angleViews, setAngleViews] = useState<CatalogAngleView[]>([])
+  const [pickedColor, setPickedColor] = useState<string | null>(null)
+  const [viewFileType, setViewFileType] = useState<string | null>(null)
   const colorTouched = useRef(false)
 
   useEffect(() => {
     colorTouched.current = false
+    setPickedColor(null)
+    setViewFileType(null)
+    setCatalogColors([])
+    setAngleViews([])
     setSelectedVariant(product.variants[0])
     setActiveImage(product.designPreview ? shopFrontPhotoIndex(product.designPreview) : 0)
     const design = product.designPreview
@@ -56,6 +73,10 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
     let cancelled = false
     void loadMerchCatalogDetail(design.catalogProductId).then((detail) => {
       if (cancelled) return
+      if (detail) {
+        setCatalogColors(detail.colors || [])
+        setAngleViews(catalogAngleViews(detail.printFiles || []))
+      }
       if (!colorTouched.current && detail) {
         const name = designPreviewColorName(detail.colors || [], design.previewColor, design.colors)
         const match = product.variants.find(
@@ -75,15 +96,31 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
 
   const savedColorName = product.designPreview?.previewColorName || null
   const requestedColor = colorReady ? selectedVariant?.color : savedColorName
+  const activeColorName = pickedColor || requestedColor || null
   const allImages = product.designPreview
     ? mockupPhotosForColor(
         product.designPreview.mockupUrls,
         product.designPreview.mockupUrlsByColor,
-        requestedColor,
+        activeColorName,
         savedColorName,
       )
     : [product.thumbnail, ...(product.images || [])].filter(Boolean)
-  const shippable = product.fulfillmentReady !== false && Boolean(selectedVariant?.printful_variant_id)
+  const photoTitles = product.designPreview
+    ? mockupTitlesForColor(
+        product.designPreview.mockupAngleTitlesByColor,
+        activeColorName,
+        savedColorName,
+      )
+    : []
+  const usingPhotos = Boolean(product.designPreview) && allImages.length > 0
+  const designPreview = product.designPreview
+  const activeAngleId = viewFileType || angleViews[0]?.id || null
+  const colorListed = product.variants.some(
+    (variant) => !activeColorName || sameColorKey(variant.color, activeColorName),
+  )
+  const productReady =
+    product.fulfillmentReady !== false && product.variants.some((variant) => variant.printful_variant_id > 0)
+  const shippable = colorListed && productReady && Boolean(selectedVariant?.printful_variant_id)
   const sizes = Array.from(new Set(product.variants.map((v) => v.size).filter(Boolean)))
   const colors = Array.from(new Set(product.variants.map((v) => v.color).filter(Boolean)))
 
@@ -132,17 +169,35 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)
 
+  const chooseColor = (name: string) => {
+    colorTouched.current = true
+    setColorReady(true)
+    setPickedColor(name)
+    setViewFileType(null)
+    const variant =
+      product.variants.find(
+        (row) => sameColorKey(row.color, name) && (!selectedVariant.size || row.size === selectedVariant.size),
+      ) || product.variants.find((row) => sameColorKey(row.color, name))
+    if (variant) setSelectedVariant(variant)
+    if (product.designPreview) setActiveImage(shopFrontPhotoIndex(product.designPreview, name))
+  }
+
   return (
     <>
       <div className="grid md:grid-cols-2 gap-8">
         {/* Images */}
         <div className="space-y-3">
-          <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-900">
+          <div
+            className={`relative aspect-square overflow-hidden rounded-lg ${
+              usingPhotos || !product.designPreview ? 'bg-gray-900' : 'bg-white'
+            }`}
+          >
             {product.designPreview ? (
               <MerchGarmentPreview
                 design={product.designPreview}
-                colorName={colorReady ? selectedVariant?.color : null}
+                colorName={colorReady ? activeColorName : null}
                 photoIndex={activeImage}
+                viewFileType={viewFileType || (usingPhotos ? null : activeAngleId)}
               />
             ) : allImages[activeImage] &&
               (allImages[activeImage].startsWith('/api/') ? (
@@ -162,21 +217,64 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
                 />
               ))}
           </div>
+          {designPreview && angleViews.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {angleViews.map((view) => {
+                const selected = (viewFileType || (usingPhotos ? null : activeAngleId)) === view.id
+                return (
+                  <button
+                    key={view.id}
+                    type="button"
+                    aria-label={view.label}
+                    aria-pressed={selected}
+                    onClick={() => setViewFileType(view.id)}
+                    className="flex w-20 flex-shrink-0 flex-col gap-1"
+                  >
+                    <span
+                      className={`relative block aspect-square w-full overflow-hidden rounded border-2 bg-white ${
+                        selected ? 'border-white' : 'border-transparent opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      <MerchGarmentPreview
+                        design={designPreview}
+                        colorName={colorReady ? activeColorName : null}
+                        viewFileType={view.id}
+                        className="absolute inset-0"
+                      />
+                    </span>
+                    <span className="truncate text-center text-[10px] text-gray-400">{view.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {allImages.length > 1 && (
             <div className="flex gap-2 overflow-x-auto">
               {allImages.map((img, i) => (
                 <button
-                  key={i}
-                  onClick={() => setActiveImage(i)}
-                  className={`relative w-16 h-16 rounded overflow-hidden flex-shrink-0 border-2 transition-all ${
-                    activeImage === i ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
+                  key={`${img}-${i}`}
+                  type="button"
+                  onClick={() => {
+                    setViewFileType(null)
+                    setActiveImage(i)
+                  }}
+                  aria-pressed={activeImage === i}
+                  className="flex w-16 flex-shrink-0 flex-col gap-1"
                 >
-                  {img.startsWith('/api/') ? (
-                    <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                  ) : (
-                    <Image src={img} alt="" fill className="object-cover" sizes="64px" />
-                  )}
+                  <span
+                    className={`relative h-16 w-16 overflow-hidden rounded border-2 transition-all ${
+                      activeImage === i ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    {img.startsWith('/api/') ? (
+                      <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    ) : (
+                      <Image src={img} alt="" fill className="object-cover" sizes="64px" />
+                    )}
+                  </span>
+                  {photoTitles[i] ? (
+                    <span className="truncate text-center text-[10px] text-gray-400">{photoTitles[i]}</span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -207,7 +305,7 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
               <div className="flex flex-wrap gap-2">
                 {sizes.map((size) => {
                   const variant = product.variants.find(
-                    (v) => v.size === size && (!selectedVariant.color || v.color === selectedVariant.color)
+                    (v) => v.size === size && (!activeColorName || sameColorKey(v.color, activeColorName)),
                   )
                   const isSelected = selectedVariant.size === size
                   return (
@@ -231,39 +329,55 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
             </div>
           )}
 
-          {/* Color selection */}
-          {colors.length > 1 && (
+          {/* Color selection — every Printful swatch, not only the colors saved on the design. */}
+          {(catalogColors.length > 0 || colors.length > 1) && (
             <div>
-              <p className="text-sm text-gray-400 mb-2">Color</p>
-              <div className="flex flex-wrap gap-2">
-                {colors.map((color) => {
-                  const variant = product.variants.find(
-                    (v) => v.color === color && (!selectedVariant.size || v.size === selectedVariant.size)
-                  )
-                  const isSelected = selectedVariant.color === color
-                  return (
-                    <button
-                      key={color}
-                      onClick={() => {
-                        if (!variant) return
-                        colorTouched.current = true
-                        setColorReady(true)
-                        setSelectedVariant(variant)
-                        setActiveImage(
-                          product.designPreview ? shopFrontPhotoIndex(product.designPreview, variant.color) : 0,
-                        )
-                      }}
-                      className={`px-4 py-2 rounded text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-white text-black'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {color}
-                    </button>
-                  )
-                })}
-              </div>
+              <p className="text-sm text-gray-400 mb-2">
+                Color{activeColorName ? ` · ${activeColorName}` : ''}
+              </p>
+              {catalogColors.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {catalogColors.map((color) => {
+                    const selected = sameColorKey(activeColorName, color.name)
+                    return (
+                      <button
+                        key={color.name}
+                        type="button"
+                        title={color.name}
+                        aria-label={color.name}
+                        aria-pressed={selected}
+                        onClick={() => chooseColor(color.name)}
+                        className={`h-8 w-8 rounded-full border ${
+                          selected ? 'border-white ring-2 ring-white/70' : 'border-white/25 hover:border-white/60'
+                        }`}
+                        style={{
+                          background: color.hex2
+                            ? `linear-gradient(135deg, ${color.hex} 50%, ${color.hex2} 50%)`
+                            : color.hex,
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {colors.map((color) => {
+                    const selected = sameColorKey(activeColorName, color)
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => chooseColor(color || '')}
+                        className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                          selected ? 'bg-white text-black' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        }`}
+                      >
+                        {color}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -303,8 +417,10 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
           >
             {loading
               ? 'Processing...'
-              : !shippable
+              : !productReady
               ? 'Preview only'
+              : !colorListed
+              ? 'Not available in this color'
               : !selectedVariant?.in_stock
               ? 'Out of Stock'
               : `Add to Cart — ${formatPrice(selectedVariant.retail_price * quantity)}`}

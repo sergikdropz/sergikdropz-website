@@ -13,11 +13,27 @@ export const PLATFORM_ORDER: SharePlatformId[] = [
   'iheart',
 ]
 
+/** Ten most-used listener stores, shown as icon links on the share page. */
+export const POPULAR_PLATFORM_ORDER: SharePlatformId[] = [
+  'spotify',
+  'apple_music',
+  'youtube_music',
+  'youtube',
+  'amazon',
+  'soundcloud',
+  'deezer',
+  'tidal',
+  'pandora',
+  'iheart',
+]
+
 const LABELS: Record<SharePlatformId, string> = {
   spotify: 'Spotify',
   apple_music: 'Apple Music',
   youtube_music: 'YouTube Music',
+  youtube: 'YouTube',
   amazon: 'Amazon Music',
+  soundcloud: 'SoundCloud',
   deezer: 'Deezer',
   tidal: 'Tidal',
   pandora: 'Pandora',
@@ -75,13 +91,21 @@ function canonical(id: SharePlatformId, rawUrl: string): string | null {
     return `https://music.apple.com/${match[1].toLowerCase()}/${match[2].toLowerCase()}/${match[3]}/${match[4]}`
   }
 
-  if (id === 'youtube_music') {
+  if (id === 'youtube_music' || id === 'youtube') {
     const playlist = url.match(/[?&]list=([A-Za-z0-9_-]+)/)
     const watch = url.match(/(?:[?&]v=|youtu\.be\/)([A-Za-z0-9_-]{11})/)
     if (/\/channel\/|\/@/i.test(url) && !playlist && !watch) return null
     if (!/music\.youtube\.com|youtube\.com|youtu\.be/i.test(url)) return null
     if (playlist) return `https://music.youtube.com/playlist?list=${playlist[1]}`
     if (watch) return `https://music.youtube.com/watch?v=${watch[1]}`
+    return null
+  }
+
+  if (id === 'soundcloud') {
+    if (/soundcloud\.com\/[^/]+\/(tracks|sets)\//i.test(url) || /soundcloud\.com\/[^/]+\/[^/]+/i.test(url)) {
+      if (/soundcloud\.com\/[^/]+\/?$/i.test(url)) return null
+      return url.split('?')[0]
+    }
     return null
   }
 
@@ -232,6 +256,31 @@ export function platformEmbedFromUrl(
     url,
     ...(player || {}),
   }
+}
+
+function isPublicStoreUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+    const host = parsed.hostname.toLowerCase()
+    return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1'
+  } catch {
+    return false
+  }
+}
+
+/** Icon links for the ten most popular stores. Album URLs also get a player. */
+export function popularPlatformLinks(
+  urls: Partial<Record<SharePlatformId, string | null | undefined>>,
+): SharePlatformEmbed[] {
+  const links: SharePlatformEmbed[] = []
+  for (const id of POPULAR_PLATFORM_ORDER) {
+    const raw = String(urls[id] || '').trim()
+    if (!isPublicStoreUrl(raw)) continue
+    const embed = platformEmbedFromUrl(id, raw)
+    links.push(embed || { id, label: LABELS[id], url: raw })
+  }
+  return links
 }
 
 export function sharePlatformEmbeds(

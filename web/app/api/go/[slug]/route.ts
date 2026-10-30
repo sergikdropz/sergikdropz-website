@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { UAParser } from 'ua-parser-js'
+import { loadSmartLinkLanding } from '@/lib/smartlinks/load-landing'
+import { resolveSmartLinkTarget } from '@/lib/smartlinks/landing'
 
 let supabaseClient: SupabaseClient | null = null
 
@@ -23,7 +25,7 @@ export async function GET(
 ) {
   try {
     const supabase = getSupabase()
-    const { slug } = params
+    const slug = decodeURIComponent(params.slug || '').trim()
 
     // Fetch the smart link
     const { data: link, error: linkError } = await supabase
@@ -44,7 +46,19 @@ export async function GET(
     const utm_source = url.searchParams.get('utm_source') || 'direct'
     const utm_medium = url.searchParams.get('utm_medium') || 'link'
     const utm_campaign = url.searchParams.get('utm_campaign')
-    const utm_content = url.searchParams.get('utm_content')
+    const dest = url.searchParams.get('dest')?.trim() || ''
+    let target = String(link.destination_url || '')
+    if (dest) {
+      const landing = await loadSmartLinkLanding(supabase, slug)
+      const chosen = landing?.destinations.find((row) => row.id === dest)
+      const resolved = chosen ? resolveSmartLinkTarget(chosen.href, url.origin) : null
+      if (!resolved) {
+        return NextResponse.json({ error: 'Link not found' }, { status: 404 })
+      }
+      target = resolved
+    }
+
+    const utm_content = url.searchParams.get('utm_content') || dest || null
     const session_id = url.searchParams.get('sid') || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     // Extract request metadata
@@ -115,7 +129,8 @@ export async function GET(
               utm_source,
               utm_medium,
               utm_campaign,
-              destination: link.destination_url,
+              destination: target,
+              dest: dest || null,
             },
             session_id,
           },
@@ -124,9 +139,8 @@ export async function GET(
       // Silently fail if analytics_events doesn't exist
     }
 
-    // Redirect to destination
-    return NextResponse.redirect(link.destination_url, {
-      status: 301,
+    return NextResponse.redirect(target, {
+      status: dest ? 302 : 301,
     })
   } catch (error) {
     console.error('Error in redirect endpoint:', error)

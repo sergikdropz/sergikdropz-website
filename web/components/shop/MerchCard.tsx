@@ -34,10 +34,7 @@ export default function MerchCard({ product }: MerchCardProps) {
   return (
     <Link href={`/shop/merch/${product.slug}`} className="group block">
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden transition-all duration-300 hover:border-gray-600">
-        <div
-          className="relative aspect-square overflow-hidden bg-gray-800"
-          style={product.previewHex ? { background: product.previewHex } : undefined}
-        >
+        <div className="relative aspect-square overflow-hidden bg-white">
           {product.designPreview ? (
             <MerchGarmentPreview
               design={product.designPreview}

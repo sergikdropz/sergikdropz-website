@@ -82,6 +82,26 @@ export function orderPrintFilesByAngles<T extends { title?: string | null; type?
   return ordered.length > 0 ? ordered : files
 }
 
+export type CatalogAngleView = { id: string; label: string }
+
+/**
+ * Printful positions a shopper can turn through: each template face once.
+ * Add-on duplicates and files with no measured stage stay out.
+ */
+export function catalogAngleViews(files: CatalogPrintFile[]): CatalogAngleView[] {
+  const seen = new Set<string>()
+  const views: CatalogAngleView[] = []
+  for (const file of files) {
+    if (!hasTemplateStage(file) || /^addon_/i.test(file.type || '')) continue
+    const label = (file.title || file.type).trim()
+    const key = label.toLowerCase()
+    if (!label || seen.has(key)) continue
+    seen.add(key)
+    views.push({ id: file.type, label })
+  }
+  return views
+}
+
 /** Angle photos for one color. A single saved set stays on the color it was made in. */
 export function mockupPhotosForColor(
   mockupUrls: string[] | null | undefined,
