@@ -41,6 +41,7 @@ export default function MerchCard({ product }: MerchCardProps) {
           {product.designPreview ? (
             <MerchGarmentPreview
               design={product.designPreview}
+              preferLayout
               className="transition-transform duration-300 group-hover:scale-[1.02]"
             />
           ) : thumbnail.startsWith('/api/') ? (

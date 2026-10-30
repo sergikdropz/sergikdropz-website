@@ -10,5 +10,5 @@ export default function MerchDesignPreviewThumb({
   design: MerchDesign
   matColor?: string
 }) {
-  return <MerchGarmentPreview design={design} matColor={matColor} />
+  return <MerchGarmentPreview design={design} matColor={matColor} preferLayout />
 }

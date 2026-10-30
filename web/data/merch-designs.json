@@ -1,290 +1,196 @@
 {
   "designs": [
     {
-      "id": "f03a4bbc-4d59-4c4c-b2fb-945f718f50ef",
-      "name": "OLLIN Obsidian Back Tee",
-      "slug": "ollin-obsidian-back-tee",
-      "blankId": "tee-staple",
-      "catalogProductId": 1637,
-      "family": "tee",
-      "placements": [
-        {
-          "placement": "back",
-          "assetUrl": "/api/merch/art/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
-          "assetWidth": 886,
-          "assetHeight": 886,
-          "x": 0.006038282878269529,
-          "y": -1.3877787807814457e-17,
-          "scale": 0.987923434243461,
-          "rotation": 0,
-          "fileType": "back"
-        }
-      ],
-      "activeFileType": "back",
-      "colors": [
-        "Black",
-        "Blonde",
-        "Brown",
-        "Orange",
-        "Pink",
-        "Purple",
-        "Royal",
-        "Safety Green"
-      ],
+      "id": "3eab6772-0555-4a2f-89dc-189858d34a17",
+      "name": "SERGIK Stone Snapback",
+      "slug": "sergik-stone-snapback",
       "sizes": [
-        "3XL",
-        "4XL",
-        "L",
-        "M",
-        "2XL",
-        "XL"
+        "One size"
       ],
-      "previewColor": "#000000",
-      "retailPrice": 40,
-      "wholesaleCost": 13,
-      "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
-      "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T07:59:38.752Z",
-      "updatedAt": "2026-10-28T08:05:47.500Z"
-    },
-    {
-      "id": "4970ae6b-bbe2-41dd-a74b-1e93e66b5c75",
-      "name": "OLLIN Black Snapback",
-      "slug": "ollin-black-snapback",
-      "blankId": "hat-dad",
-      "catalogProductId": 99,
-      "family": "hat",
-      "placements": [
-        {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
-          "assetWidth": 1376,
-          "assetHeight": 1442,
-          "x": 0.026454499310222868,
-          "y": 0.0037408343062073635,
-          "scale": 0.9470910013795543,
-          "rotation": 0,
-          "fileType": "addon_embroidery_front"
-        }
-      ],
-      "activeFileType": "addon_embroidery_front",
       "colors": [
         "Black",
         "Black/ Neon Pink"
       ],
-      "sizes": [
-        "One size"
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T09:14:33.830Z",
+      "sortIndex": 0,
+      "updatedAt": "2026-10-29T17:22:18.403Z",
+      "mockupUrls": [
+        "/api/merch/art/6f0c1a5a-9946-40e3-aae3-56cb771ab56f.jpg",
+        "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
+        "/api/merch/art/fe3a26db-6f51-46a8-84ed-d1773902b05a.jpg",
+        "/api/merch/art/5a50f81b-bd0f-4f34-a984-db440a319ca3.jpg",
+        "/api/merch/art/fcf09437-b5f3-48df-8d40-ba230cb4c437.jpg",
+        "/api/merch/art/8c8574e8-7e3e-4abe-960f-11a1e608cc46.jpg"
       ],
+      "placements": [
+        {
+          "x": 0.2540144501727738,
+          "y": 0.11764705882352941,
+          "scale": 0.49197109965445235,
+          "assetUrl": "/api/merch/art/b998d67b-e49c-4aac-b17c-fdd145ba1245.png?v=2026-10-29T10%3A16%3A50.872Z",
+          "fileType": "embroidery_front_large",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 4096,
+          "assetHeight": 2577
+        }
+      ],
+      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "retailPrice": 35,
       "previewColor": "#2a2a2a",
-      "retailPrice": 38,
-      "wholesaleCost": 15,
-      "status": "draft",
-      "printfulSyncProductId": null,
       "mockupTaskKey": null,
-      "mockupUrls": [],
-      "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T07:54:05.139Z",
-      "updatedAt": "2026-10-28T07:56:42.630Z"
+      "printFileUrls": {
+        "embroidery_front_large": "/api/merch/art/635e029d-1f33-4449-84a7-53ace764d2e3.png"
+      },
+      "wholesaleCost": 17.23,
+      "activeFileType": "embroidery_front_large",
+      "catalogProductId": 99,
+      "embroideryThreads": {
+        "thread_colors_front_large": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "printfulSyncProductId": null,
+      "embroideryUnlimitedColor": false
     },
     {
-      "id": "c38e99fc-d472-4293-92ef-9f79df29d583",
-      "name": "OLLIN Stone Back Tee",
-      "slug": "ollin-stone-back-tee",
-      "blankId": "tee-staple",
-      "catalogProductId": 1626,
-      "family": "tee",
-      "placements": [
-        {
-          "placement": "back",
-          "assetUrl": "/api/merch/art/81845825-e781-4c2d-960b-f23347eef613.png?v=2026-10-25T14%3A15%3A23.293Z",
-          "assetWidth": 1254,
-          "assetHeight": 1254,
-          "x": 0.004200503635281294,
-          "y": 0.06252985614877765,
-          "scale": 0.9915989927294374,
-          "rotation": 0,
-          "fileType": "back"
-        }
-      ],
-      "activeFileType": "back",
-      "colors": [
-        "Black",
-        "Cream"
-      ],
-      "sizes": [
-        "2XL",
-        "L",
-        "M",
-        "S",
-        "XL"
-      ],
-      "previewColor": "#000000",
-      "retailPrice": 40,
-      "wholesaleCost": 13,
-      "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
-      "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T07:36:49.687Z",
-      "updatedAt": "2026-10-28T08:41:11.838Z"
-    },
-    {
-      "id": "6d3d8572-c79e-4f43-808a-f49b26244d9b",
-      "name": "OLLIN Obsidian Front Tee",
-      "slug": "ollin-obsidian-front-tee",
-      "blankId": "tee-staple",
-      "catalogProductId": 1637,
-      "family": "tee",
-      "placements": [
-        {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-27T12%3A09%3A44.111Z",
-          "assetWidth": 886,
-          "assetHeight": 886,
-          "x": 0.011513876607519137,
-          "y": -2.0816681711721685e-17,
-          "scale": 0.9769722467849616,
-          "rotation": 0,
-          "fileType": "front"
-        }
-      ],
-      "activeFileType": "front",
-      "colors": [
-        "Black",
-        "Blonde"
-      ],
-      "sizes": [
-        "3XL",
-        "4XL",
-        "L",
-        "M",
-        "XL",
-        "2XL"
-      ],
-      "previewColor": "#000000",
-      "retailPrice": 35,
-      "wholesaleCost": 13,
-      "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
-      "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T07:34:40.656Z",
-      "updatedAt": "2026-10-28T08:06:07.117Z"
-    },
-    {
-      "id": "5236d6f6-c0b9-49d3-9b65-2e87c0e6d96b",
-      "name": "OLLIN Denim Bucket Hat",
-      "slug": "ollin-denim-bucket-hat",
-      "blankId": "hat-dad",
-      "catalogProductId": 501,
-      "family": "hat",
-      "placements": [
-        {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png",
-          "assetWidth": 1376,
-          "assetHeight": 1442,
-          "x": 0.3337568905794319,
-          "y": 0.02090330639007082,
-          "scale": 0.3324862188411361,
-          "rotation": 0,
-          "fileType": "embroidery_front"
-        }
-      ],
-      "activeFileType": "embroidery_front",
-      "colors": [
-        "Black Denim",
-        "Classic / Light Denim",
-        "Light Denim"
-      ],
+      "id": "4d027db3-9e17-4e20-9117-18cc0e08f112",
+      "name": "OLLIN Black Snapback",
+      "slug": "ollin-black-snapback",
       "sizes": [
         "One size"
       ],
-      "previewColor": "#181818",
-      "retailPrice": 35,
-      "wholesaleCost": 15,
-      "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
-      "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T07:16:39.027Z",
-      "updatedAt": "2026-10-28T07:48:21.896Z"
-    },
-    {
-      "id": "510dc23d-71e8-42eb-ab65-35a9305f18c6",
-      "name": "OLLIN Organic Bucket Hat",
-      "slug": "ollin-organic-bucket-hat",
-      "blankId": "hat-dad",
-      "catalogProductId": 547,
+      "colors": [
+        "Black",
+        "Black/ Neon Pink"
+      ],
       "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T11:36:03.122Z",
+      "sortIndex": 1,
+      "updatedAt": "2026-10-29T16:25:38.198Z",
+      "mockupUrls": [
+        "/api/merch/art/575d14af-dbb3-4ba5-aa86-cb6592a5c1bc.jpg",
+        "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
+        "/api/merch/art/3dbe903e-ed45-445a-8ac4-79eb8007648a.jpg",
+        "/api/merch/art/77a3d6b7-3b3f-4399-b6f6-42bffeece773.jpg",
+        "/api/merch/art/ef33c20d-11c7-4024-8e1e-c141bf9c7984.jpg",
+        "/api/merch/art/cd933fa2-e69b-403f-98d8-8cf762142bb0.jpg"
+      ],
       "placements": [
         {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/c9810c9f-af57-4351-961a-9dae7c5a10fc.png?v=1793171536895",
-          "assetWidth": 1376,
-          "assetHeight": 1442,
-          "x": 0.33636417640707933,
-          "y": 0.04010704885205707,
-          "scale": 0.32727164718584134,
+          "x": 0.34523809523809523,
+          "y": 0.11764705882352941,
+          "scale": 0.30952380952380953,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "embroidery_front_large",
           "rotation": 0,
-          "fileType": "embroidery_front"
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
         }
       ],
-      "activeFileType": "embroidery_front",
-      "colors": [
-        "Bio White",
-        "Black",
-        "Dill",
-        "Stone",
-        "Slate Blue"
-      ],
+      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "retailPrice": 35,
+      "previewColor": "#2a2a2a",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front_large": "/api/merch/art/880ede20-7990-48a6-8243-55cafd49dad4.png?v=1793291099363"
+      },
+      "wholesaleCost": 17.23,
+      "activeFileType": "embroidery_front_large",
+      "catalogProductId": 99,
+      "embroideryThreads": {
+        "addon_thread_colors_front": [
+          "#000000",
+          "#FFFFFF"
+        ],
+        "thread_colors_front_large": [
+          "#000000",
+          "#FFFFFF"
+        ]
+      },
+      "printfulSyncProductId": null,
+      "embroideryUnlimitedColor": false
+    },
+    {
+      "id": "4c15d1ac-881e-4e9e-bcfa-06fb1ce20fb5",
+      "name": "OLLIN White Snapback",
+      "slug": "ollin-white-snapback",
       "sizes": [
         "One size"
       ],
-      "previewColor": "#e4c9b0",
-      "retailPrice": 30,
-      "wholesaleCost": 15,
+      "colors": [
+        "Black",
+        "Black/ Neon Pink"
+      ],
+      "family": "hat",
       "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
+      "blankId": "hat-dad",
       "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T07:08:58.353Z",
-      "updatedAt": "2026-10-28T07:52:07.538Z"
+      "createdAt": "2026-10-29T10:31:57.441Z",
+      "sortIndex": 2,
+      "updatedAt": "2026-10-29T18:10:18.148Z",
+      "mockupUrls": [
+        "/api/merch/art/9f4b62ef-0b15-43f9-ac08-ca1f557fd28c.jpg",
+        "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
+        "/api/merch/art/ab1bbcd7-bcc9-4902-a0a9-9c9c0d371f94.jpg",
+        "/api/merch/art/17e12200-b1ed-422b-9e8a-d4ea69a02fa7.jpg",
+        "/api/merch/art/6b598b8b-0f8e-44d5-a68d-f90f87a5988a.jpg",
+        "/api/merch/art/ee671355-5e01-46e7-b277-f1bed4fa3e8f.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.33999912865420645,
+          "y": 0.11764705882352941,
+          "scale": 0.32000174269158715,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_front_large",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "retailPrice": 35,
+      "previewColor": "#2a2a2a",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "addon_embroidery_front": "/api/merch/art/16f165cd-20e4-47e3-b9af-f064097649dc.png",
+        "embroidery_front_large": "/api/merch/art/0322f05c-9cb3-4e80-bc5b-7426bf94f390.png?v=1793297417432"
+      },
+      "wholesaleCost": 17.23,
+      "activeFileType": "embroidery_front_large",
+      "catalogProductId": 99,
+      "previewColorName": "Black",
+      "embroideryThreads": {
+        "addon_thread_colors_front": [
+          "#000000",
+          "#FFFFFF"
+        ],
+        "thread_colors_front_large": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "printfulSyncProductId": null,
+      "embroideryUnlimitedColor": false
     },
     {
-      "id": "68b08f8b-b11b-4899-8f8d-621f520ca3a4",
+      "id": "e5abb310-8a9c-477e-a980-9d348c0b0379",
       "name": "SERGIK Stone Bucket Hat",
       "slug": "sergik-stone-bucket-hat",
-      "blankId": "hat-dad",
-      "catalogProductId": 547,
-      "family": "hat",
-      "placements": [
-        {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
-          "assetWidth": 886,
-          "assetHeight": 557,
-          "x": 0.21150914866026027,
-          "y": 0.0012462059371937673,
-          "scale": 0.5769817026794795,
-          "rotation": 0,
-          "fileType": "embroidery_front"
-        }
+      "sizes": [
+        "One size"
       ],
-      "activeFileType": "embroidery_front",
       "colors": [
         "Black",
         "Black/ Neon Pink",
@@ -292,97 +198,558 @@
         "Black/ Red",
         "Black/ Silver"
       ],
-      "sizes": [
-        "One size"
-      ],
-      "previewColor": "#2a2a2a",
-      "retailPrice": 38,
-      "wholesaleCost": 15,
-      "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
-      "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-28T02:44:04.032Z",
-      "updatedAt": "2026-10-28T08:07:54.649Z"
-    },
-    {
-      "id": "58008953-5db7-4be2-9c90-7f26b9b58eda",
-      "name": "SERGIK Stone Font Snapback",
-      "slug": "sergik-stone-font-snapback",
-      "blankId": "hat-dad",
-      "catalogProductId": 99,
       "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T08:35:51.654Z",
+      "sortIndex": 3,
+      "updatedAt": "2026-10-29T17:25:25.580Z",
+      "mockupUrls": [],
       "placements": [
         {
-          "placement": "front",
-          "assetUrl": "/api/merch/art/5b09b988-1cec-46a3-ac53-98b5792cb1c2.png?v=2026-10-28T01%3A20%3A26.272Z",
-          "assetWidth": 886,
-          "assetHeight": 557,
-          "x": 0.18706158551560104,
-          "y": 0.013950254385338645,
-          "scale": 0.6258768289687979,
+          "x": 0.2977069883938336,
+          "y": 0.15000000000000002,
+          "scale": 0.40458602321233283,
+          "assetUrl": "/api/merch/art/b998d67b-e49c-4aac-b17c-fdd145ba1245.png?v=2026-10-29T10%3A16%3A50.872Z",
+          "fileType": "embroidery_front",
           "rotation": 0,
-          "fileType": "embroidery_front_large"
+          "placement": "front",
+          "assetWidth": 4096,
+          "assetHeight": 2577
         }
       ],
-      "activeFileType": "embroidery_front_large",
-      "colors": [
-        "Black",
-        "Black/ Neon Pink",
-        "Red",
-        "Royal Blue",
-        "Black/ Red",
-        "Navy",
-        "Navy/ Red",
-        "Silver"
-      ],
+      "publishNote": "Design saved. None of the selected colors and sizes are in stock at Printful.",
+      "retailPrice": 35,
+      "previewColor": "#2a2a2a",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/ed629d5c-066a-47fb-9287-0026ce4e447a.png?v=1793294725048"
+      },
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 547,
+      "embroideryThreads": {
+        "thread_colors": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "printfulSyncProductId": null,
+      "embroideryUnlimitedColor": false
+    },
+    {
+      "id": "510dc23d-71e8-42eb-ab65-35a9305f18c6",
+      "name": "OLLIN Black Organic Bucket Hat",
+      "slug": "ollin-black-organic-bucket-hat",
       "sizes": [
         "One size"
       ],
-      "previewColor": "#2a2a2a",
-      "retailPrice": 38,
-      "wholesaleCost": 15,
+      "colors": [
+        "Bio White",
+        "Black",
+        "Dill",
+        "Stone",
+        "Slate Blue"
+      ],
+      "family": "hat",
       "status": "draft",
-      "printfulSyncProductId": null,
-      "mockupTaskKey": null,
-      "mockupUrls": [],
+      "blankId": "hat-dad",
       "variants": [],
-      "publishNote": null,
-      "createdAt": "2026-10-27T11:42:55.924Z",
-      "updatedAt": "2026-10-28T07:53:00.143Z"
-    },
-    {
-      "id": "a8be51ca-66ae-4da1-a8a5-a57130611e36",
-      "name": "OLLIN Stone Front Tee",
-      "slug": "ollin-stone-front-tee",
-      "blankId": "tee-staple",
-      "catalogProductId": 1626,
-      "family": "tee",
+      "createdAt": "2026-10-28T07:08:58.353Z",
+      "sortIndex": 4,
+      "updatedAt": "2026-10-29T17:26:24.735Z",
+      "mockupUrls": [
+        "/api/merch/art/6604d135-f1b5-4eec-9b03-04a7eeef41a0.jpg",
+        "/api/merch/art/a400077d-ee6b-48e5-9f38-9f7edfb8fc60.png"
+      ],
       "placements": [
         {
+          "x": 0.3680235463986228,
+          "y": 0.15,
+          "scale": 0.2639529072027545,
+          "assetUrl": "/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png?v=2026-10-29T10%3A06%3A43.533Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
           "placement": "front",
-          "assetUrl": "/api/merch/art/81845825-e781-4c2d-960b-f23347eef613.png",
-          "assetWidth": 1254,
-          "assetHeight": 1254,
-          "x": 0.014552151218525544,
-          "y": 0.0012339235392300751,
-          "scale": 0.9708956975629488,
-          "rotation": -0.1975301590673979,
-          "fileType": "front"
+          "assetWidth": 3395,
+          "assetHeight": 3274
         }
       ],
-      "activeFileType": "front",
+      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "retailPrice": 35,
+      "previewColor": "#e4c9b0",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/987dd7a2-0489-40b0-9122-ed98b258b0d9.png"
+      },
+      "wholesaleCost": 20.7,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 547,
+      "embroideryThreads": {
+        "thread_colors": [
+          "#000000",
+          "#FFFFFF"
+        ]
+      },
+      "printfulSyncProductId": null,
+      "embroideryUnlimitedColor": false
+    },
+    {
+      "id": "c3691d1f-b0bb-437c-b5db-f5f8f8badb62",
+      "name": "OLLIN White Organic Bucket Hat",
+      "slug": "ollin-white-organic-bucket-hat",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Bio White",
+        "Black",
+        "Dill",
+        "Stone",
+        "Slate Blue"
+      ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T10:35:53.897Z",
+      "sortIndex": 5,
+      "updatedAt": "2026-10-29T10:49:28.769Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.31341045904000364,
+          "y": 0.003680077220788447,
+          "scale": 0.3731790819199927,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 35,
+      "previewColor": "#e4c9b0",
+      "mockupTaskKey": null,
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 547,
+      "printfulSyncProductId": null
+    },
+    {
+      "id": "318416e9-6da1-4b81-b073-7d0d1d1b1765",
+      "name": "SERGIK Stone Denim Bucket Hat",
+      "slug": "sergik-stone-denim-bucket-hat",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Black Denim",
+        "Classic / Light Denim",
+        "Light Denim"
+      ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T10:51:12.769Z",
+      "sortIndex": 6,
+      "updatedAt": "2026-10-29T19:06:00.669Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.2977069883938335,
+          "y": 0.14999999999999988,
+          "scale": 0.40458602321233295,
+          "assetUrl": "/api/merch/art/b998d67b-e49c-4aac-b17c-fdd145ba1245.png?v=2026-10-29T10%3A16%3A50.872Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 4096,
+          "assetHeight": 2577
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 35,
+      "previewColor": "#547da0",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 501,
+      "mockupPendingKey": null,
+      "previewColorName": "Light Denim",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "5236d6f6-c0b9-49d3-9b65-2e87c0e6d96b",
+      "name": "OLLIN Black Denim Bucket Hat",
+      "slug": "ollin-black-denim-bucket-hat",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Black Denim",
+        "Classic / Light Denim",
+        "Light Denim"
+      ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-28T07:16:39.027Z",
+      "sortIndex": 7,
+      "updatedAt": "2026-10-29T10:35:09.199Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.31125125446132346,
+          "y": -0.0005594493247346177,
+          "scale": 0.3774974910773531,
+          "assetUrl": "/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png?v=1793268403937",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3395,
+          "assetHeight": 3274
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 35,
+      "previewColor": "#181818",
+      "mockupTaskKey": null,
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 501,
+      "printfulSyncProductId": null
+    },
+    {
+      "id": "6355fed0-bcbc-4021-a188-c6c3b94cbf94",
+      "name": "OLLIN White Denim Bucket Hat",
+      "slug": "ollin-white-denim-bucket-hat",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Black Denim",
+        "Classic / Light Denim",
+        "Light Denim"
+      ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T10:33:39.857Z",
+      "sortIndex": 8,
+      "updatedAt": "2026-10-29T10:34:43.727Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.31646579969199284,
+          "y": 0.011807148163015535,
+          "scale": 0.36706840061601426,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 35,
+      "previewColor": "#181818",
+      "mockupTaskKey": null,
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 501,
+      "printfulSyncProductId": null
+    },
+    {
+      "id": "ea09ceb9-1242-43b6-8690-ede7249012d0",
+      "name": "OLLIN Black Golf Rope Cap",
+      "slug": "ollin-black-golf-rope-cap",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Black/White",
+        "Lt Gray/Navy",
+        "Navy/Mint",
+        "Turquoise/White",
+        "Yellow/Navy"
+      ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T19:19:49.930Z",
+      "sortIndex": 9,
+      "updatedAt": "2026-10-29T20:07:34.457Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.3813559322033898,
+          "y": 0.15000000000000002,
+          "scale": 0.23728813559322032,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 32,
+      "previewColor": "#060603",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 807,
+      "mockupPendingKey": null,
+      "previewColorName": "Black/White",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#000000",
+          "#FFFFFF"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "074fb47e-1d12-46e6-8cfa-4c665d6bd626",
+      "name": "OLLIN White Golf Rope Cap",
+      "slug": "ollin-white-golf-rope-cap",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "Black/White",
+        "Lt Gray/Navy",
+        "Navy/Mint",
+        "Turquoise/White",
+        "Yellow/Navy"
+      ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T19:08:40.441Z",
+      "sortIndex": 10,
+      "updatedAt": "2026-10-29T22:13:42.410Z",
+      "mockupUrls": [
+        "/api/merch/art/93f30ed1-686a-4426-8275-85bdb62ea5cd.jpg",
+        "/api/merch/art/f902b3c1-4d3d-45a7-aaf4-00cf71a79bdc.jpg",
+        "/api/merch/art/36895b34-55d8-4183-85e4-486505282d5c.jpg",
+        "/api/merch/art/c48b92b6-789b-4010-b50a-1cc38db861a0.jpg",
+        "/api/merch/art/db74cd05-c7b7-4f84-8818-5223edfd17e5.jpg",
+        "/api/merch/art/b43aef1e-63ff-4cde-ab10-9b4082a520d8.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.37733961883790534,
+          "y": 0.15,
+          "scale": 0.24532076232418937,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "retailPrice": 30,
+      "previewColor": "#060603",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front": "/api/merch/art/c5edac3a-3ac8-41cf-a117-696eac17cffa.png?v=1793311983143"
+      },
+      "wholesaleCost": 14.27,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 807,
+      "mockupPendingKey": null,
+      "previewColorName": "Black/White",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "mockupUrlsByColor": {
+        "Black/White": [
+          "/api/merch/art/93f30ed1-686a-4426-8275-85bdb62ea5cd.jpg",
+          "/api/merch/art/f902b3c1-4d3d-45a7-aaf4-00cf71a79bdc.jpg",
+          "/api/merch/art/36895b34-55d8-4183-85e4-486505282d5c.jpg",
+          "/api/merch/art/c48b92b6-789b-4010-b50a-1cc38db861a0.jpg",
+          "/api/merch/art/db74cd05-c7b7-4f84-8818-5223edfd17e5.jpg",
+          "/api/merch/art/b43aef1e-63ff-4cde-ab10-9b4082a520d8.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {
+        "Black/White": "807~black/white~embroidery_front:https://sergikdropz.com/api/merch/art/c5edac3a-3ac8-41cf-a117-696eac17cffa.png~embroidery_front:/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png:0.377:0.15:0.245:0~thread_colors:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black/White": [
+          "Back",
+          "Left Front",
+          "Right Front",
+          "Product details",
+          "Product details 2",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "4eb2a09d-2c65-43f1-a3c8-f9e08d448dfd",
+      "name": "Smiley Acid Dropz Corduroy Hat",
+      "slug": "smiley-acid-dropz-corduroy-hat",
+      "sizes": [
+        "One size"
+      ],
       "colors": [
         "Black",
-        "Cream",
-        "Mocha",
-        "Oatmeal",
-        "Peach",
-        "Shadow",
-        "White"
+        "Camel",
+        "Dark Olive",
+        "Oxford Navy"
       ],
+      "family": "hat",
+      "status": "draft",
+      "blankId": "hat-dad",
+      "variants": [],
+      "createdAt": "2026-10-29T19:18:32.285Z",
+      "sortIndex": 11,
+      "updatedAt": "2026-10-29T20:07:01.318Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.3771583933813718,
+          "y": 0.17142857142857143,
+          "scale": 0.24568321323725645,
+          "assetUrl": "/api/merch/art/1fbf1930-2401-4e6d-95a8-ddf296cda99e.png?v=2026-10-29T09%3A14%3A29.009Z",
+          "fileType": "embroidery_front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3202,
+          "assetHeight": 3747
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 39,
+      "previewColor": "#0f0f0f",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 15,
+      "activeFileType": "embroidery_front",
+      "catalogProductId": 532,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {
+        "thread_colors": [
+          "#000000",
+          "#FFCC00",
+          "#CC3333"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "e7642ab4-abb2-4c0b-88a0-fdc576a98690",
+      "name": "OlliN Wall Clock",
+      "slug": "ollin-wall-clock",
+      "sizes": [
+        "10″"
+      ],
+      "colors": [
+        "Black Base/Clock Hand Black",
+        "Black Base/Clock Hand White",
+        "White Base/Clock Hand Black",
+        "White Base/Clock Hand White",
+        "Wooden Base/Clock Hand Black",
+        "Wooden Base/Clock Hand White"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T19:23:53.522Z",
+      "sortIndex": 12,
+      "updatedAt": "2026-10-29T20:08:45.677Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.1715124183880382,
+          "y": 0.1514734021312646,
+          "scale": 0.6569751632239236,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 66,
+      "previewColor": "#e7c79d",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1470,
+      "mockupPendingKey": null,
+      "previewColorName": "Wooden Base/Clock Hand Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "be092c93-7bac-41f1-910a-bbbc5f67fad8",
+      "name": "Iza Vibe Tie Die Front",
+      "slug": "iza-vibe-tie-die-front",
       "sizes": [
         "2XL",
         "L",
@@ -390,17 +757,678 @@
         "S",
         "XL"
       ],
+      "colors": [
+        "Black / White",
+        "Classic rainbow",
+        "Milky way",
+        "Navy / White",
+        "Sherbet rainbow"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T21:03:01.793Z",
+      "sortIndex": 13,
+      "updatedAt": "2026-10-29T21:29:34.908Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.14041382342595854,
+          "y": 0.1345,
+          "scale": 0.7191723531480829,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "embroidery_chest_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        },
+        {
+          "x": 0.15000000000000002,
+          "y": 0.1,
+          "scale": 0.7,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "embroidery_sleeve_left_top",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        },
+        {
+          "x": 0.0818765388673936,
+          "y": 0.07499999999999984,
+          "scale": 0.8362469222652128,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "embroidery_chest_center",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        },
+        {
+          "x": 0.15000000000000002,
+          "y": 0.1,
+          "scale": 0.7,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_sleeve_right_top",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        },
+        {
+          "x": 0,
+          "y": 0.11883267786914542,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "front_dtf",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 40,
+      "previewColor": "#ef8fbf",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "short_sleeve_left_dtf",
+      "catalogProductId": 515,
+      "mockupPendingKey": null,
+      "previewColorName": "Sherbet rainbow",
+      "embroideryThreads": {
+        "thread_colors_chest_left": [
+          "#000000",
+          "#FFFFFF",
+          "#CC3366"
+        ],
+        "thread_colors_chest_center": [
+          "#000000",
+          "#FFFFFF",
+          "#CC3366"
+        ],
+        "thread_colors_sleeve_left_top": [
+          "#96A1A8"
+        ],
+        "thread_colors_sleeve_right_top": [
+          "#96A1A8"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "069a8c90-3185-4f18-a917-a4475e8619e3",
+      "name": "Iza Vibe Tie Die Back",
+      "slug": "iza-vibe-tie-die-back",
+      "sizes": [
+        "2XL",
+        "L",
+        "M",
+        "S",
+        "XL"
+      ],
+      "colors": [
+        "Black / White",
+        "Classic rainbow",
+        "Milky way",
+        "Navy / White",
+        "Sherbet rainbow"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T21:29:55.063Z",
+      "sortIndex": 14,
+      "updatedAt": "2026-10-29T23:34:44.258Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.14041382342595854,
+          "y": 0.1345,
+          "scale": 0.7191723531480829,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "embroidery_chest_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        },
+        {
+          "x": 0.15000000000000002,
+          "y": 0.1,
+          "scale": 0.7,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "embroidery_sleeve_left_top",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        },
+        {
+          "x": 0.15000000000000002,
+          "y": 0.1,
+          "scale": 0.7,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_sleeve_right_top",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        },
+        {
+          "x": 0,
+          "y": 0.14959961585266063,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "back_dtf",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        },
+        {
+          "x": 0.33663767128474964,
+          "y": 0.32416279790357155,
+          "scale": 0.32672465743050083,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "front_dtf",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 45,
+      "previewColor": "#ef8fbf",
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "back_dtf": "/api/merch/art/361908a2-76c5-4147-b3d6-a62089fd669f.png?v=1793316744462",
+        "front_dtf": "/api/merch/art/1a1cf5f2-1b45-4939-aa47-01df68da3217.png",
+        "embroidery_chest_left": "/api/merch/art/3a03f13c-a6aa-4846-a69a-e40f39e3ea32.png",
+        "embroidery_chest_center": "/api/merch/art/e8352599-76bf-4087-a4db-d1eae1c12eb9.png",
+        "embroidery_sleeve_left_top": "/api/merch/art/037fb73e-8cc7-4334-91d5-7d6c5129fd69.png",
+        "embroidery_sleeve_right_top": "/api/merch/art/d0cb3a5f-0c17-4f7d-9d94-3c8fe283ca28.png"
+      },
+      "wholesaleCost": 13,
+      "activeFileType": "front_dtf",
+      "catalogProductId": 515,
+      "mockupPendingKey": null,
+      "previewColorName": "Sherbet rainbow",
+      "embroideryThreads": {
+        "thread_colors_chest_left": [
+          "#000000",
+          "#FFFFFF",
+          "#CC3366"
+        ],
+        "thread_colors_chest_center": [
+          "#000000",
+          "#FFFFFF",
+          "#CC3366",
+          "#3399FF",
+          "#FFCC00"
+        ],
+        "thread_colors_sleeve_left_top": [
+          "#96A1A8"
+        ],
+        "thread_colors_sleeve_right_top": [
+          "#96A1A8"
+        ]
+      },
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "5b8ebf73-7fad-4312-9c53-eb6eb77961bc",
+      "name": "Iza Vibe Tee Front",
+      "slug": "iza-vibe-tee-front",
+      "sizes": [
+        "3XL",
+        "L",
+        "M",
+        "2XL",
+        "XL",
+        "S",
+        "4XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T19:29:28.147Z",
+      "sortIndex": 15,
+      "updatedAt": "2026-10-29T19:54:20.347Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 8.673617379884035e-19,
+          "y": -1.3877787807814457e-17,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 40,
       "previewColor": "#000000",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "a69ee73c-8056-41b0-9c76-91eedab6a650",
+      "name": "Iza Vibe Tee Back",
+      "slug": "iza-vibe-tee-back",
+      "sizes": [
+        "3XL",
+        "L",
+        "M",
+        "2XL",
+        "XL",
+        "S",
+        "4XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T19:33:41.293Z",
+      "sortIndex": 16,
+      "updatedAt": "2026-10-29T23:20:13.307Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 1.0755285551056204e-16,
+          "y": -6.938893903907228e-18,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/ea1f02fc-5a73-43c8-bfd7-c0a6aa994301.png?v=2026-10-29T19%3A28%3A00.583Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 2797,
+          "assetHeight": 2843
+        },
+        {
+          "x": 0.37897838745840284,
+          "y": 0,
+          "scale": 0.2420432250831942,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 45,
+      "previewColor": "#000000",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "back",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "c38fee1f-5520-4aa1-8400-72bfbd070cd3",
+      "name": "Ollin Front / FTP Back Tee",
+      "slug": "ollin-front-ftp-back-tee",
+      "blankId": "tee-staple",
+      "catalogProductId": 1637,
+      "family": "tee",
+      "placements": [
+        {
+          "placement": "front",
+          "assetUrl": "/api/merch/art/7c6ead14-2cc3-41e5-b49b-a9738ffab689.png?v=2026-10-29T10%3A06%3A43.533Z",
+          "assetWidth": 3395,
+          "assetHeight": 3274,
+          "x": 0.3497135806945871,
+          "y": 0,
+          "scale": 0.3005728386108258,
+          "rotation": 0,
+          "fileType": "front"
+        },
+        {
+          "placement": "front",
+          "assetUrl": "/api/merch/art/1d67f677-9025-43d9-be3e-782403646aea.png?v=2026-10-29T08%3A29%3A32.602Z",
+          "assetWidth": 3544,
+          "assetHeight": 2228,
+          "x": 0,
+          "y": 0.18566591422121898,
+          "scale": 1,
+          "rotation": 0,
+          "fileType": "sleeve_left"
+        },
+        {
+          "placement": "back",
+          "assetUrl": "/api/merch/art/c8a9eaf2-078e-4f91-a808-0a0dea2e6373.jpg?v=2026-10-29T09%3A58%3A31.709Z",
+          "assetWidth": 2857,
+          "assetHeight": 2797,
+          "x": 0.07000000000000002,
+          "y": 0,
+          "scale": 0.86,
+          "rotation": 0,
+          "fileType": "back"
+        }
+      ],
+      "activeFileType": "back",
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL",
+        "S"
+      ],
+      "previewColor": "#000000",
+      "previewColorName": "Black",
       "retailPrice": 40,
       "wholesaleCost": 13,
       "status": "draft",
       "printfulSyncProductId": null,
       "mockupTaskKey": null,
       "mockupUrls": [],
+      "mockupUrlsByColor": {},
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingByColor": {},
+      "mockupPendingTitlesByColor": {},
+      "mockupPendingKey": null,
+      "mockupPhotoKeysByColor": {},
+      "mockupRetiredArtIds": [],
+      "printFileUrls": {},
       "variants": [],
-      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
-      "createdAt": "2026-10-27T07:02:04.222Z",
-      "updatedAt": "2026-10-28T08:06:21.344Z"
+      "publishNote": null,
+      "sortIndex": null,
+      "embroideryUnlimitedColor": false,
+      "embroideryThreads": {},
+      "createdAt": "2026-10-29T23:49:57.887Z",
+      "updatedAt": "2026-10-30T00:00:07.289Z"
+    },
+    {
+      "id": "872951bf-eaf4-44fb-9ae4-948d5448912c",
+      "name": "FTP Front / Obsidian OlliN Back Tee",
+      "slug": "ftp-front-obsidian-ollin-back-tee",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL",
+        "S"
+      ],
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T23:40:04.944Z",
+      "sortIndex": null,
+      "updatedAt": "2026-10-29T23:49:24.752Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/7ff66bac-9f24-4b39-ac79-b4462a687944.png?v=2026-10-29T09%3A59%3A21.330Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3444,
+          "assetHeight": 3483
+        },
+        {
+          "x": 0,
+          "y": 0.18566591422121898,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/1d67f677-9025-43d9-be3e-782403646aea.png?v=2026-10-29T08%3A29%3A32.602Z",
+          "fileType": "sleeve_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3544,
+          "assetHeight": 2228
+        },
+        {
+          "x": 9.540979117872439e-18,
+          "y": -1.3877787807814457e-17,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/5ae07695-148a-4bab-992c-5f09d1c6a473.png?v=2026-10-29T05%3A46%3A30.796Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 886,
+          "assetHeight": 886
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 40,
+      "previewColor": "#000000",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "c6f1c1ce-a57c-44b5-8253-6bba3a6a51b8",
+      "name": "Stone OLLIN Back",
+      "slug": "stone-ollin-back",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL",
+        "S"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Brown",
+        "Burgundy",
+        "Navy",
+        "Orange",
+        "Pink",
+        "Purple"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T22:36:29.603Z",
+      "sortIndex": null,
+      "updatedAt": "2026-10-29T22:45:00.115Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 2.0166160408230382e-17,
+          "y": 2.0816681711721685e-17,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/0a694237-3749-45f8-af4d-93eb16617aed.png?v=2026-10-29T08%3A25%3A50.038Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 3464,
+          "assetHeight": 3464
+        },
+        {
+          "x": 0.39661899214082597,
+          "y": 0.0037026707031483086,
+          "scale": 0.20676201571834812,
+          "assetUrl": "/api/merch/art/1d67f677-9025-43d9-be3e-782403646aea.png?v=2026-10-29T08%3A29%3A32.602Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3544,
+          "assetHeight": 2228
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 40,
+      "previewColor": "#000000",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "907fd005-1801-48b6-a2bb-09779210749e",
+      "name": "Stone OLLIN Front",
+      "slug": "stone-ollin-front",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL",
+        "S"
+      ],
+      "colors": [
+        "Black",
+        "Blonde"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-29T22:25:38.337Z",
+      "sortIndex": null,
+      "updatedAt": "2026-10-29T22:29:14.086Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 5.117434254131581e-17,
+          "y": -6.938893903907228e-18,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/0a694237-3749-45f8-af4d-93eb16617aed.png?v=2026-10-29T08%3A25%3A50.038Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3464,
+          "assetHeight": 3464
+        },
+        {
+          "x": 0,
+          "y": 0.18566591422121898,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/1d67f677-9025-43d9-be3e-782403646aea.png?v=2026-10-29T08%3A29%3A32.602Z",
+          "fileType": "sleeve_left",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3544,
+          "assetHeight": 2228
+        }
+      ],
+      "publishNote": null,
+      "retailPrice": 40,
+      "previewColor": "#000000",
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
     }
   ]
 }

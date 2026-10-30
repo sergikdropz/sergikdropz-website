@@ -68,6 +68,8 @@ export type CatalogProductDetail = {
   variants: CatalogVariantRow[]
   techniques: CatalogTechnique[]
   printFiles: CatalogPrintFile[]
+  /** Flat Printful thread-color option ids for this product (`thread_colors_front_large`, …). */
+  threadOptionIds?: string[]
   description: string | null
   specs: ProductSpecs | null
 }

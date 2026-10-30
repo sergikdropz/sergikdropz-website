@@ -94,3 +94,97 @@ export function paintGarmentBackdrop(
   }
   return out
 }
+
+/**
+ * A front photo pasted into a back silhouette shows the collar opening and brand tag.
+ * Repaint that narrow neck from the fabric just below it. The shirt outline stays put,
+ * so Printful's print box still lands on the same pixels.
+ */
+export function coverFrontNeck(
+  pattern: Uint8ClampedArray,
+  silhouette: Uint8ClampedArray,
+  width: number,
+  height: number,
+): Uint8ClampedArray {
+  if (width < 8 || height < 8 || pattern.length !== silhouette.length || pattern.length !== width * height * 4) {
+    return pattern
+  }
+  const spans: Array<[number, number] | null> = new Array(height)
+  let maxSpan = 1
+  for (let y = 0; y < height; y += 1) {
+    let left = -1
+    let right = -1
+    const row = y * width
+    for (let x = 0; x < width; x += 1) {
+      if (silhouette[(row + x) * 4 + 3] < 128) {
+        if (left < 0) left = x
+        right = x
+      }
+    }
+    if (left >= 0) {
+      spans[y] = [left, right]
+      maxSpan = Math.max(maxSpan, right - left)
+    }
+  }
+  const neck: number[] = []
+  let started = false
+  for (let y = 0; y < height; y += 1) {
+    const span = spans[y]
+    if (!span) {
+      if (started) break
+      continue
+    }
+    started = true
+    if (span[1] - span[0] <= maxSpan * 0.5) neck.push(y)
+    else if (neck.length > 0) break
+  }
+  const count = neck.length
+  if (count < 6 || count > height * 0.22) return pattern
+  const sourceStart = neck[count - 1] + 1
+  if (sourceStart >= height) return pattern
+  const sourceHeight = Math.min(count, height - sourceStart)
+  if (sourceHeight < 1) return pattern
+  const out = new Uint8ClampedArray(pattern)
+  for (let i = 0; i < count; i += 1) {
+    const y = neck[i]
+    const span = spans[y]
+    if (!span) continue
+    const fromEnd = count > 1 ? (count - 1 - i) / (count - 1) : 0
+    const sampleY = Math.min(height - 1, sourceStart + Math.round(fromEnd * (sourceHeight - 1)))
+    const sampleSpan = spans[sampleY]
+    for (let x = span[0]; x <= span[1]; x += 1) {
+      const sx = sampleSpan ? Math.min(Math.max(x, sampleSpan[0]), sampleSpan[1]) : x
+      const src = (sampleY * width + sx) * 4
+      const dst = (y * width + x) * 4
+      out[dst] = pattern[src]
+      out[dst + 1] = pattern[src + 1]
+      out[dst + 2] = pattern[src + 2]
+      out[dst + 3] = pattern[src + 3]
+    }
+  }
+  return out
+}
+
+/**
+ * Printful positioning ghosts leave the garment transparent and the backdrop opaque.
+ * Paint the color photo through the hole so a patterned shirt is not a flat swatch.
+ */
+export function fillSilhouetteWithPattern(
+  silhouette: Uint8ClampedArray,
+  pattern: Uint8ClampedArray,
+  mat: Rgb | null,
+): Uint8ClampedArray {
+  if (silhouette.length !== pattern.length || silhouette.length % 4 !== 0) return silhouette
+  const out = new Uint8ClampedArray(silhouette.length)
+  for (let index = 0; index < silhouette.length; index += 4) {
+    const hole = 1 - silhouette[index + 3] / 255
+    const backdropR = mat ? mat.r : silhouette[index]
+    const backdropG = mat ? mat.g : silhouette[index + 1]
+    const backdropB = mat ? mat.b : silhouette[index + 2]
+    out[index] = Math.round(pattern[index] * hole + backdropR * (1 - hole))
+    out[index + 1] = Math.round(pattern[index + 1] * hole + backdropG * (1 - hole))
+    out[index + 2] = Math.round(pattern[index + 2] * hole + backdropB * (1 - hole))
+    out[index + 3] = 255
+  }
+  return out
+}

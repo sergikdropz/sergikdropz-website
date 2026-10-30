@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth/route-policy'
+import { merchArtIdFromUrl } from '@/lib/merch/art-url'
 import { getDesign, saveDesign } from '@/lib/merch/design-store'
 import { publishDesignToPrintful } from '@/lib/merch/publish'
 
@@ -20,6 +21,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   const body = await request.json().catch(() => ({}))
   const printFiles =
     body?.printFiles && typeof body.printFiles === 'object' ? body.printFiles : {}
+  const printFileUrls = { ...(design.printFileUrls || {}) }
+  for (const [key, url] of Object.entries(printFiles as Record<string, unknown>)) {
+    if (typeof url === 'string' && merchArtIdFromUrl(url)) printFileUrls[key.slice(0, 64)] = url
+  }
 
   const origin =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -43,7 +48,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     status: 'hidden',
     variants: result.variants.length > 0 ? result.variants : design.variants,
     printfulSyncProductId: result.printfulSyncProductId || design.printfulSyncProductId,
-    mockupTaskKey: result.mockupTaskKey || design.mockupTaskKey,
+    mockupTaskKey: result.reusePhotos
+      ? null
+      : result.requestedMockups
+        ? result.mockupTaskKey
+        : design.mockupTaskKey,
+    mockupPendingKey: result.mockupTaskKey ? result.mockupPhotoKey || null : design.mockupPendingKey || null,
+    printFileUrls,
     wholesaleCost: result.wholesaleCost ?? design.wholesaleCost,
     publishNote: result.note,
     updatedAt: new Date().toISOString(),

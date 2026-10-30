@@ -24,6 +24,8 @@ export type BlankPlacement = {
   stage: { x: number; y: number; w: number; h: number }
   printWidth: number
   printHeight: number
+  /** Print file DPI from Printful. Embroidery files are 300; studio blanks are 150. */
+  dpi?: number | null
 }
 
 export type MerchBlank = {

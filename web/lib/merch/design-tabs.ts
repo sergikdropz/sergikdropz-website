@@ -126,14 +126,16 @@ export function buildDesignTabs(
   }))
 }
 
-/** Tab to show when a saved design opens. A remembered tab wins; otherwise the first tab that has art. */
+/** Tab to show when a saved design opens. A remembered tab wins only when it has art. */
 export function placementFileToOpen(
   tabs: DesignTab[],
   layers: Record<string, { assetUrl?: string } | null | undefined>,
   remembered?: string | null,
 ): string | null {
   if (tabs.length === 0) return null
-  if (remembered && tabs.some((tab) => tab.id === remembered)) return remembered
+  if (remembered && tabs.some((tab) => tab.id === remembered) && layers[remembered]?.assetUrl) return remembered
   const withArt = tabs.find((tab) => Boolean(layers[tab.id]?.assetUrl))
-  return withArt?.id ?? tabs[0].id
+  if (withArt) return withArt.id
+  if (remembered && tabs.some((tab) => tab.id === remembered)) return remembered
+  return tabs[0].id
 }

@@ -1,11 +1,27 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import MerchDesignPreviewThumb from '@/components/admin/MerchDesignPreviewThumb'
-import type { DesignStatus, MerchDesign } from '@/lib/merch/design'
+import StudioContextMenu, { type StudioContextMenuEntry } from '@/components/studio/StudioContextMenu'
+import { sortMerchDesigns, type DesignStatus, type MerchDesign } from '@/lib/merch/design'
 import { productMatColor } from '@/lib/merch/studio-session'
 import type { PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import type { CatalogNavItem, PrintfulCategoryNode } from '@/lib/merch/printful-categories'
+
+/** Same double chevron as the admin sidebar collapse control. */
+export function PanelChevron({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      className={`h-4 w-4 ${direction === 'right' ? 'rotate-180' : ''}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+    </svg>
+  )
+}
 
 const FAVORITES_KEY = 'sergwear-catalog-favorites'
 export const CATALOG_PANEL_COLLAPSED_KEY = 'sergwear-catalog-nav-collapsed'
@@ -42,6 +58,13 @@ const PRODUCT_FOLDERS: Array<{ id: DesignStatus; label: string }> = [
   { id: 'hidden', label: 'Hidden' },
 ]
 
+/** Status tabs across the top of the catalog column. */
+const STATUS_TABS: Array<{ id: DesignStatus; label: string }> = [
+  { id: 'draft', label: 'Drafts' },
+  { id: 'hidden', label: 'Hidden' },
+  { id: 'live', label: 'Public' },
+]
+
 const FOLDER_LABEL: Record<ProductFolder, string> = {
   all: 'My Products',
   draft: 'Drafts',
@@ -54,6 +77,12 @@ type Props = {
   designs?: MerchDesign[]
   onSelect: (product: PrintfulCatalogProduct) => void
   onOpenDesign?: (design: MerchDesign) => void
+  /** Fired after rename, duplicate, or a folder move so the parent can refresh. */
+  onDesignsChanged?: () => void
+  /** Fired when a saved product is renamed or moved, including the updated row. */
+  onDesignUpdated?: (design: MerchDesign) => void
+  /** Fired after a product is deleted. */
+  onDesignRemoved?: (id: string) => void
   onCatalogPanelCollapsedChange?: (collapsed: boolean) => void
   /** Backdrop tone saved per design. Missing entries keep the original product color. */
   productMats?: Record<string, number>
@@ -72,6 +101,50 @@ function readFavorites(): number[] {
 
 function writeFavorites(ids: number[]) {
   window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids))
+}
+
+/** Move one visible card, leaving products outside this folder in place. */
+function reorderVisibleIds(order: string[], visibleIds: string[], fromId: string, toId: string): string[] {
+  const visibleSet = new Set(visibleIds)
+  const currentVisible = order.filter((id) => visibleSet.has(id))
+  const from = currentVisible.indexOf(fromId)
+  const to = currentVisible.indexOf(toId)
+  if (from < 0 || to < 0 || from === to) return order
+  const nextVisible = [...currentVisible]
+  nextVisible.splice(from, 1)
+  nextVisible.splice(to, 0, fromId)
+  let cursor = 0
+  return order.map((id) => (visibleSet.has(id) ? nextVisible[cursor++] : id))
+}
+
+function productPhotoUrls(design: MerchDesign): string[] {
+  const seen = new Set<string>()
+  const urls: string[] = []
+  for (const url of design.mockupUrls || []) {
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    urls.push(url)
+  }
+  return urls
+}
+
+function designWriteBody(design: MerchDesign, overrides?: Record<string, unknown>) {
+  return {
+    id: design.id,
+    blankId: design.blankId,
+    catalogProductId: design.catalogProductId,
+    name: design.name,
+    placements: design.placements,
+    activeFileType: design.activeFileType,
+    colors: design.colors,
+    sizes: design.sizes,
+    previewColor: design.previewColor,
+    retailPrice: design.retailPrice,
+    status: design.status,
+    embroideryUnlimitedColor: Boolean(design.embroideryUnlimitedColor),
+    embroideryThreads: design.embroideryThreads || {},
+    ...overrides,
+  }
 }
 
 function CategoryTree({
@@ -143,6 +216,9 @@ export default function MerchPrintfulCatalog({
   designs = [],
   onSelect,
   onOpenDesign,
+  onDesignsChanged,
+  onDesignUpdated,
+  onDesignRemoved,
   onCatalogPanelCollapsedChange,
   productMats,
 }: Props) {
@@ -161,7 +237,229 @@ export default function MerchPrintfulCatalog({
   const [favorites, setFavorites] = useState<number[]>([])
   const [productsOpen, setProductsOpen] = useState(true)
   const [productFolder, setProductFolder] = useState<ProductFolder | null>('all')
+  /** Narrows My Products. Sidebar folders still switch the whole list. */
+  const [statusTab, setStatusTab] = useState<DesignStatus | null>(null)
   const [catalogPanelCollapsed, setCatalogPanelCollapsed] = useState(false)
+  const [designMenu, setDesignMenu] = useState<{ design: MerchDesign; x: number; y: number } | null>(null)
+  const [openPhotoIds, setOpenPhotoIds] = useState<Set<string>>(() => new Set())
+  const [previewOrder, setPreviewOrder] = useState<string[] | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const previewOrderRef = useRef<string[] | null>(null)
+  const dragIdRef = useRef<string | null>(null)
+  const dragMovedRef = useRef(false)
+  const dragDroppedRef = useRef(false)
+  const suppressClickRef = useRef(false)
+
+  const setOrder = (next: string[] | null) => {
+    previewOrderRef.current = next
+    setPreviewOrder(next)
+  }
+  const [designActionId, setDesignActionId] = useState<string | null>(null)
+  const [designNote, setDesignNote] = useState<string | null>(null)
+
+  const runDesignAction = useCallback(
+    async (design: MerchDesign, label: string, work: () => Promise<string>) => {
+      setDesignActionId(design.id)
+      setDesignNote(null)
+      try {
+        setDesignNote(await work())
+        onDesignsChanged?.()
+      } catch (error) {
+        setDesignNote(error instanceof Error ? error.message : `Could not ${label.toLowerCase()}`)
+      } finally {
+        setDesignActionId(null)
+      }
+    },
+    [onDesignsChanged],
+  )
+
+  const saveDesignFields = useCallback(
+    async (design: MerchDesign, overrides: Record<string, unknown>) => {
+      const res = await fetch('/api/admin/merch/designs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(designWriteBody(design, overrides)),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not update that product')
+      const saved = data.design as MerchDesign | undefined
+      if (saved) onDesignUpdated?.(saved)
+      return saved
+    },
+    [onDesignUpdated],
+  )
+
+  const renameDesign = (design: MerchDesign) => {
+    const next = window.prompt('Rename this product', design.name)
+    if (next == null) return
+    const name = next.trim().slice(0, 80)
+    if (!name || name === design.name) return
+    void runDesignAction(design, 'rename', async () => {
+      await saveDesignFields(design, { name })
+      return `Renamed to “${name}”.`
+    })
+  }
+
+  const duplicateDesign = (design: MerchDesign) => {
+    const name = `${design.name} copy`.slice(0, 80)
+    void runDesignAction(design, 'duplicate', async () => {
+      const res = await fetch('/api/admin/merch/designs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...designWriteBody(design, { name, status: 'draft' }),
+          id: undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not duplicate that product')
+      const copy = data.design as MerchDesign | undefined
+      if (copy) onOpenDesign?.(copy)
+      return `Duplicated as a draft: “${copy?.name || name}”.`
+    })
+  }
+
+  const moveDesign = (design: MerchDesign, status: DesignStatus) => {
+    if (design.status === status) return
+    void runDesignAction(design, 'move', async () => {
+      if (status === 'draft') {
+        await saveDesignFields(design, { status: 'draft' })
+        return `“${design.name}” is now a draft.`
+      }
+      const res = await fetch(`/api/admin/merch/designs/${design.id}/visibility`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not update that product')
+      if (data.design) onDesignUpdated?.(data.design as MerchDesign)
+      return status === 'live'
+        ? `“${design.name}” is public.`
+        : `“${design.name}” is hidden.`
+    })
+  }
+
+  const copyText = async (value: string, ok: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setDesignNote(ok)
+    } catch {
+      setDesignNote('Could not copy that.')
+    }
+  }
+
+  const deleteDesignCard = (design: MerchDesign) => {
+    const confirmed = window.confirm(
+      `Delete “${design.name}”? This removes it from My Products and deletes its artwork and Printful photos. A file another product still uses stays in the library.`,
+    )
+    if (!confirmed) return
+    void runDesignAction(design, 'delete', async () => {
+      const res = await fetch(`/api/admin/merch/designs/${design.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not delete that product')
+      onDesignRemoved?.(design.id)
+      return `Deleted “${design.name}”.`
+    })
+  }
+
+  const designMenuItems: StudioContextMenuEntry[] = !designMenu
+    ? []
+    : [
+        {
+          type: 'command',
+          command: {
+            id: 'open',
+            label: 'Open',
+            onSelect: () => onOpenDesign?.(designMenu.design),
+          },
+        },
+        {
+          type: 'command',
+          command: { id: 'rename', label: 'Rename', onSelect: () => renameDesign(designMenu.design) },
+        },
+        {
+          type: 'command',
+          command: {
+            id: 'duplicate',
+            label: 'Duplicate as draft',
+            onSelect: () => duplicateDesign(designMenu.design),
+          },
+        },
+        { type: 'separator' },
+        {
+          type: 'heading',
+          label: 'Move to',
+        },
+        {
+          type: 'command',
+          command: {
+            id: 'to-draft',
+            label: 'Drafts',
+            disabled: designMenu.design.status === 'draft',
+            onSelect: () => moveDesign(designMenu.design, 'draft'),
+          },
+        },
+        {
+          type: 'command',
+          command: {
+            id: 'to-live',
+            label: 'Public',
+            disabled: designMenu.design.status === 'live',
+            onSelect: () => moveDesign(designMenu.design, 'live'),
+          },
+        },
+        {
+          type: 'command',
+          command: {
+            id: 'to-hidden',
+            label: 'Hidden',
+            disabled: designMenu.design.status === 'hidden',
+            onSelect: () => moveDesign(designMenu.design, 'hidden'),
+          },
+        },
+        { type: 'separator' },
+        {
+          type: 'command',
+          command: {
+            id: 'copy-name',
+            label: 'Copy name',
+            onSelect: () => void copyText(designMenu.design.name, 'Copied the product name.'),
+          },
+        },
+        {
+          type: 'command',
+          command: {
+            id: 'copy-link',
+            label: 'Copy shop link',
+            disabled: designMenu.design.status !== 'live',
+            onSelect: () =>
+              void copyText(
+                `${window.location.origin}/shop/merch/${designMenu.design.slug}`,
+                'Copied the shop link.',
+              ),
+          },
+        },
+        {
+          type: 'command',
+          command: {
+            id: 'open-shop',
+            label: 'Open shop page',
+            disabled: designMenu.design.status !== 'live',
+            onSelect: () => window.open(`/shop/merch/${designMenu.design.slug}`, '_blank', 'noopener'),
+          },
+        },
+        { type: 'separator' },
+        {
+          type: 'command',
+          command: {
+            id: 'delete',
+            label: 'Delete',
+            danger: true,
+            onSelect: () => deleteDesignCard(designMenu.design),
+          },
+        },
+      ]
 
   const setPanelCollapsed = useCallback(
     (next: boolean) => {
@@ -272,6 +570,14 @@ export default function MerchPrintfulCatalog({
     setProductsOpen(true)
     setProductFolder(folder)
     setSectionTitle(FOLDER_LABEL[folder])
+    if (folder !== 'all') setStatusTab(null)
+  }
+
+  function matchesProductFolder(design: MerchDesign) {
+    if (!productFolder) return false
+    if (productFolder !== 'all') return design.status === productFolder
+    if (statusTab) return design.status === statusTab
+    return true
   }
 
   function toggleFavorite(productId: number) {
@@ -284,15 +590,63 @@ export default function MerchPrintfulCatalog({
     })
   }
 
+  const serverOrder = useMemo(() => sortMerchDesigns(designs).map((design) => design.id), [designs])
+
+  const orderedDesigns = useMemo(() => {
+    const rank = new Map((previewOrder ?? serverOrder).map((id, index) => [id, index]))
+    return [...designs].sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9))
+  }, [designs, previewOrder, serverOrder])
+
   const visibleDesigns = useMemo(() => {
     if (!productFolder) return []
     const query = q.trim().toLowerCase()
-    return designs.filter((design) => {
-      if (productFolder !== 'all' && design.status !== productFolder) return false
+    return orderedDesigns.filter((design) => {
+      if (!matchesProductFolder(design)) return false
       if (!query) return true
       return design.name.toLowerCase().includes(query)
     })
-  }, [designs, productFolder, q])
+  }, [orderedDesigns, productFolder, statusTab, q])
+
+  const folderIds = useMemo(() => {
+    if (!productFolder) return []
+    return orderedDesigns.filter((design) => matchesProductFolder(design)).map((design) => design.id)
+  }, [orderedDesigns, productFolder, statusTab])
+
+  const canReorder = Boolean(productFolder) && !q.trim() && visibleDesigns.length > 1
+
+  useEffect(() => {
+    if (!previewOrder) return
+    if (previewOrder.join('|') === serverOrder.join('|')) setOrder(null)
+  }, [previewOrder, serverOrder])
+
+  const moveDraggedDesign = (toId: string) => {
+    const fromId = dragIdRef.current
+    if (!fromId || fromId === toId || !canReorder) return
+    const base = previewOrderRef.current ?? serverOrder
+    const next = reorderVisibleIds(base, folderIds, fromId, toId)
+    if (next.join('|') === base.join('|')) return
+    dragMovedRef.current = true
+    setOrder(next)
+  }
+
+  const commitDesignOrder = async () => {
+    const ids = previewOrderRef.current
+    if (!ids || !dragMovedRef.current) return
+    try {
+      const res = await fetch('/api/admin/merch/designs/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save that order')
+      setDesignNote('Order saved.')
+      onDesignsChanged?.()
+    } catch (error) {
+      setOrder(null)
+      setDesignNote(error instanceof Error ? error.message : 'Could not save that order.')
+    }
+  }
 
   const summary = useMemo(() => {
     if (productFolder) return `${visibleDesigns.length} designs · ${sectionTitle}`
@@ -334,21 +688,19 @@ export default function MerchPrintfulCatalog({
     >
       <div className="relative flex h-[45px] shrink-0 items-center justify-center border-b border-white/10 bg-black/30">
         {catalogPanelCollapsed ? (
-          <span
-            aria-hidden
-            className="flex h-7 w-7 items-center justify-center text-sm text-white/55"
-          >
-            ▸
+          <span aria-hidden className="inline-flex h-8 w-8 items-center justify-center text-gray-400">
+            <PanelChevron direction="right" />
           </span>
         ) : (
           <button
             type="button"
             aria-label="Collapse catalog panel"
             aria-expanded
+            title="Collapse catalog"
             onClick={() => setPanelCollapsed(true)}
-            className="absolute left-1.5 top-1/2 flex h-7 w-7 shrink-0 -translate-y-1/2 items-center justify-center rounded-md text-sm text-white/55 hover:bg-white/10 hover:text-white"
+            className="absolute left-1.5 top-1/2 inline-flex h-8 w-8 shrink-0 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-800 hover:text-white"
           >
-            ◂
+            <PanelChevron direction="left" />
           </button>
         )}
         {!catalogPanelCollapsed ? (
@@ -515,16 +867,47 @@ export default function MerchPrintfulCatalog({
             className="w-full rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-white placeholder:text-white/35"
           />
         </div>
+        {productFolder === 'all' ? (
+          <div className="border-b border-white/10 bg-black/10 px-3 pb-2">
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/40 p-1" role="tablist" aria-label="Product status">
+              {STATUS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={statusTab === tab.id}
+                  onClick={() => setStatusTab((current) => (current === tab.id ? null : tab.id))}
+                  className={`rounded-lg px-1 py-1.5 text-[10px] font-semibold leading-tight ${
+                    statusTab === tab.id ? 'bg-white text-black' : 'text-white/65 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
           {productFolder && (
             <>
+              {designNote && (
+                <p className="text-[11px] text-sky-100/90 bg-sky-400/10 border border-sky-400/25 rounded-lg px-2 py-1">
+                  {designNote}
+                </p>
+              )}
               {visibleDesigns.length === 0 && (
                 <p className="py-4 text-center text-xs text-white/45">
                   {q.trim()
                   ? 'No designs match that search.'
-                  : productFolder === 'all'
+                  : productFolder === 'all' && !statusTab
                     ? 'No designs yet.'
+                    : productFolder === 'all' && statusTab === 'draft'
+                      ? 'No drafts yet.'
+                      : productFolder === 'all' && statusTab === 'live'
+                        ? 'Nothing public yet.'
+                        : productFolder === 'all' && statusTab === 'hidden'
+                          ? 'Nothing hidden yet.'
                     : productFolder === 'draft'
                       ? 'No drafts yet.'
                       : productFolder === 'live'
@@ -532,33 +915,127 @@ export default function MerchPrintfulCatalog({
                         : 'Nothing hidden yet.'}
                 </p>
               )}
-              <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+              <div
+                className="grid grid-cols-2 gap-2 xl:grid-cols-3"
+                onDragOver={(event) => {
+                  if (!dragIdRef.current || !canReorder) return
+                  event.preventDefault()
+                }}
+              >
                 {visibleDesigns.map((design) => {
                   const statusLabel = FOLDER_LABEL[design.status]
+                  const photos = productPhotoUrls(design)
+                  const photosOpen = openPhotoIds.has(design.id)
                   return (
-                    <button
+                    <div
                       key={design.id}
-                      type="button"
-                      onClick={() => onOpenDesign?.(design)}
-                      className="overflow-hidden rounded-xl border border-white/10 bg-black/25 text-left transition hover:border-white/25"
+                      className={`overflow-hidden rounded-xl border bg-black/25 text-left transition ${
+                        photosOpen ? 'col-span-full' : ''
+                      } ${designMenu?.design.id === design.id ? 'border-white/40' : 'border-white/10'} ${
+                        draggingId === design.id ? 'opacity-40' : ''
+                      } ${designActionId === design.id ? 'opacity-60' : ''}`}
                     >
-                      <span className="relative block aspect-square">
-                        <MerchDesignPreviewThumb
-                          design={design}
-                          matColor={
-                            productMats && productMats[design.id] != null
-                              ? productMatColor(productMats[design.id])
-                              : undefined
-                          }
-                        />
-                      </span>
-                      <span className="block p-2">
-                        <span className="line-clamp-2 text-[11px] font-medium leading-snug text-white">
-                          {design.name}
+                    <button
+                      type="button"
+                      draggable={canReorder}
+                      title={canReorder ? 'Drag to reorder' : undefined}
+                      onClick={() => {
+                        if (suppressClickRef.current) {
+                          suppressClickRef.current = false
+                          return
+                        }
+                        onOpenDesign?.(design)
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setDesignMenu({ design, x: event.clientX, y: event.clientY })
+                      }}
+                      onDragStart={(event: DragEvent<HTMLButtonElement>) => {
+                        dragIdRef.current = design.id
+                        dragMovedRef.current = false
+                        suppressClickRef.current = true
+                        setDraggingId(design.id)
+                        event.dataTransfer.effectAllowed = 'move'
+                        event.dataTransfer.setData('text/plain', design.id)
+                      }}
+                      onDragOver={(event) => {
+                        if (!dragIdRef.current || !canReorder) return
+                        event.preventDefault()
+                        event.dataTransfer.dropEffect = 'move'
+                        moveDraggedDesign(design.id)
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        dragDroppedRef.current = true
+                        void commitDesignOrder()
+                      }}
+                      onDragEnd={() => {
+                        if (!dragDroppedRef.current) setOrder(null)
+                        dragDroppedRef.current = false
+                        dragMovedRef.current = false
+                        dragIdRef.current = null
+                        setDraggingId(null)
+                      }}
+                      className={`block w-full bg-transparent text-left transition hover:bg-white/[0.03] ${
+                        canReorder ? 'cursor-grab active:cursor-grabbing' : ''
+                      }`}
+                    >
+                      <span className={photosOpen ? 'flex items-center gap-3 p-2' : ''}>
+                        <span className={`relative block overflow-hidden ${photosOpen ? 'h-16 w-16 shrink-0 rounded-lg' : 'aspect-square'}`}>
+                          <MerchDesignPreviewThumb
+                            design={design}
+                            matColor={
+                              productMats && productMats[design.id] != null
+                                ? productMatColor(productMats[design.id])
+                                : undefined
+                            }
+                          />
                         </span>
-                        <span className="mt-1 block text-[10px] text-white/45">{statusLabel}</span>
+                        <span className="block p-2">
+                          <span className="line-clamp-2 text-[11px] font-medium leading-snug text-white">
+                            {design.name}
+                          </span>
+                          <span className="mt-1 block text-[10px] text-white/45">{statusLabel}</span>
+                        </span>
                       </span>
                     </button>
+                    {photos.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-expanded={photosOpen}
+                        onClick={() =>
+                          setOpenPhotoIds((current) => {
+                            const next = new Set(current)
+                            if (next.has(design.id)) next.delete(design.id)
+                            else next.add(design.id)
+                            return next
+                          })
+                        }
+                        className="flex w-full items-center justify-between border-t border-white/10 px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-white/55 hover:text-white"
+                      >
+                        <span>{photos.length === 1 ? '1 photo' : `${photos.length} photos`}</span>
+                        <span aria-hidden className={`inline-block transition ${photosOpen ? 'rotate-180' : ''}`}>
+                          ▾
+                        </span>
+                      </button>
+                    ) : null}
+                    {photosOpen ? (
+                      <div className="grid grid-cols-3 gap-1.5 border-t border-white/10 p-2">
+                        {photos.map((url) => (
+                          <button
+                            key={url}
+                            type="button"
+                            title="Open this product"
+                            onClick={() => onOpenDesign?.(design)}
+                            className="aspect-square overflow-hidden rounded bg-black/40 hover:ring-1 hover:ring-white/40"
+                          >
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    </div>
                   )
                 })}
               </div>
@@ -645,6 +1122,14 @@ export default function MerchPrintfulCatalog({
       </div>
         </div>
       ) : null}
+      <StudioContextMenu
+        open={Boolean(designMenu)}
+        x={designMenu?.x ?? 0}
+        y={designMenu?.y ?? 0}
+        title={designMenu?.design.name || 'Product'}
+        items={designMenuItems}
+        onClose={() => setDesignMenu(null)}
+      />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 {
-  "syncedAt": "2026-10-28T09:22:07.702Z",
+  "syncedAt": "2026-10-29T23:55:55.339Z",
   "productCount": 571,
   "products": [
     {
@@ -114,6 +114,7 @@
       "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/98/981aeb03a99768240286bb8803819d7c_l",
       "variantCount": 9,
       "fileTypes": [
+        "front_dtf_hat",
         "embroidery_front",
         "embroidery_left",
         "embroidery_right",
@@ -122,6 +123,7 @@
       ],
       "isDiscontinued": false,
       "techniques": [
+        "DTFILM",
         "EMBROIDERY"
       ],
       "studioFamily": "hat",
@@ -11674,7 +11676,7 @@
       "typeName": "Unisex Knitted Quarter Zip Sweater",
       "brand": null,
       "model": "Unisex Knitted Quarter Zip Sweater",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/7f/7f8b52b6b8d793769323d3a47514cf3b_l",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/5a/5a918ef6fda592a73e797a3968c6cfd6_l",
       "variantCount": 8,
       "fileTypes": [
         "front",

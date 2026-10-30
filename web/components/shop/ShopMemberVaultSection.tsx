@@ -40,8 +40,8 @@ export default function ShopMemberVaultSection({ items }: Props) {
 
   return (
     <section id="member-vault" className="mt-16 scroll-mt-28">
-      <h2 className="text-2xl font-bold text-white">Member vault picks</h2>
-      <p className="mt-1 max-w-2xl text-sm text-gray-400">
+      <h2 className="text-center text-2xl font-bold text-white">Member vault picks</h2>
+      <p className="mx-auto mt-1 max-w-2xl text-center text-sm text-gray-400">
         Supporter and Inner Circle: use your monthly MP3 and WAV allowances on these catalog favorites (not exclusives).
       </p>
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}

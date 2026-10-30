@@ -30,6 +30,19 @@ Three columns: Printful catalog, stage, art rail / design sidebar.
 - Families: tee, hoodie, hat, sweatpants, plus **catalog-driven** placements (front, back, left/right sleeve when Printful print files include them).
 - Drag, scale, and rotate inside the print rectangle. The rectangle turns red when the upright art box leaves it. Art gets a **DPI ring** (blue ≥150, yellow ≥100, red below) on both Design and Preview when art is on the active placement.
 - **Put it out** bakes each placement to a transparent PNG the size of the print file, uploads it, saves the design as hidden, and asks Printful to create the sync product and a mockup task. Blocks if any placement is outside the print area; confirms when any placement is under 100 DPI.
+
+### Mitigation (visualization contract)
+
+`mitigationGuidelines()` in `web/lib/merch/design.ts` is the copy the product-design panel shows. Do not paraphrase those four facts in notes, guides, or chat. Design, the baked PNG, and the Printful photo are three different pictures.
+
+| Surface | What it is |
+| --- | --- |
+| **Design** | The print file on Printful's garment template. The dashed box is the area that will be stitched or printed. Dragging changes the file. |
+| **Preview** | The last photo Printful stored. It is not redrawn from the canvas. A new photo appears only after Put it out stores one. |
+| **Print file** | A PNG at the catalog print-file size and DPI. Put it out sends that file. The panel states the pixels and the inches. |
+| **Design boundary** | Every catalog placement. `containPlacement` runs on load, drag, scale, fit, copy, and `bakePrint`. Embroidery keeps art inside `EMBROIDERY_SAFE_INCHES` (0.3″) at the file DPI. The bright box is that stitch area and the dim band is not stitched. Print, DTF, and every other technique keep art inside the print-file edge, which is the area Printful prints. Their faint inner line is a 0.25″ guide and does not move the art. |
+
+When Preview cuts the art and Design shows it inside the dashed box, the photo is the previous file. Put the design out again. The editor does not rewrite a stored mockup.
 - **Make public** is a separate switch. Buy stays disabled until a sync variant id exists.
 - Printful cannot fetch `localhost`. A design still saves. Fulfillment waits until `NEXT_PUBLIC_SITE_URL` is a public https origin and `PRINTFUL_API_KEY` plus `PRINTFUL_STORE_ID` are set. Mockup image URLs expire after about 72 hours; the mockup poll copies them into our storage.
 

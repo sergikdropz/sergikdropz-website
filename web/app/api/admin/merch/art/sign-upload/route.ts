@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { rememberPrintArtId } from '@/lib/merch/art-store'
 import { isR2ArtConfigured, presignR2ArtPut } from '@/lib/merch/r2-art'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
 
-  let body: { contentType?: string } = {}
+  let body: { contentType?: string; origin?: string } = {}
   try {
     body = await request.json()
   } catch {
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
   const ext = type.includes('jpeg') || type.includes('jpg') ? 'jpg' : 'png'
   const id = `${randomUUID()}.${ext}`
   const contentType = type || 'image/png'
+  if (body.origin === 'print') {
+    await rememberPrintArtId(id)
+  }
 
   // Primary backend: Cloudflare R2 presigned PUT.
   if (isR2ArtConfigured()) {

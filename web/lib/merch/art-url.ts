@@ -19,3 +19,44 @@ export function withArtVersion(url: string, version: number | string): string {
   const base = url.split(/[?#]/)[0]
   return `${base}?v=${encodeURIComponent(String(version))}`
 }
+
+/** Library file names referenced by a list of art or mockup URLs. */
+export function merchArtIdsFromUrls(urls: string[]): string[] {
+  const ids: string[] = []
+  for (const url of urls) {
+    const id = merchArtIdFromUrl(url)
+    if (id) ids.push(id.toLowerCase())
+  }
+  return ids
+}
+
+export type DesignArtRefs = {
+  id: string
+  mockupUrls?: string[]
+  mockupUrlsByColor?: Record<string, string[]> | null
+  mockupPendingByColor?: Record<string, string[]> | null
+  placements?: Array<{ assetUrl?: string | null }>
+  printFileUrls?: Record<string, string> | null
+}
+
+/** Artwork, baked print files, and Printful photos this product points at. */
+export function referencedArtIds(design: DesignArtRefs): string[] {
+  const urls = [
+    ...(design.mockupUrls || []),
+    ...Object.values(design.mockupUrlsByColor || {}).flat(),
+    ...Object.values(design.mockupPendingByColor || {}).flat(),
+    ...(design.placements || []).map((placement) => placement.assetUrl || ''),
+    ...Object.values(design.printFileUrls || {}),
+  ]
+  return [...new Set(merchArtIdsFromUrls(urls))]
+}
+
+/** Files that go away with this product. A file another product still uses stays. */
+export function artIdsOnlyUsedBy(design: DesignArtRefs, all: DesignArtRefs[]): string[] {
+  const mine = new Set(referencedArtIds(design))
+  for (const other of all) {
+    if (other.id === design.id) continue
+    for (const id of referencedArtIds(other)) mine.delete(id)
+  }
+  return [...mine]
+}

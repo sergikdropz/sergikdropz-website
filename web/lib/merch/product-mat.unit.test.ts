@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backdropKind, paintGarmentBackdrop } from '@/lib/merch/product-mat'
+import { backdropKind, coverFrontNeck, fillSilhouetteWithPattern, paintGarmentBackdrop } from '@/lib/merch/product-mat'
 
 function pixel(data: Uint8ClampedArray, index: number) {
   const offset = index * 4
@@ -34,5 +34,45 @@ describe('paintGarmentBackdrop', () => {
     const fabric = Math.round(8 * cover + 255 * (1 - cover))
     expect(pixel(painted, 4)).toEqual([fabric, fabric, fabric, 255])
     expect(fabric).toBeGreaterThan(160)
+  })
+
+  it('fills a transparent positioning hole with the color photo and keeps the backdrop', () => {
+    const hole = [0, 0, 0, 0]
+    const outside = [255, 255, 255, 255]
+    const tieDye = [244, 120, 180, 255]
+    const silhouette = new Uint8ClampedArray([...outside, ...hole])
+    const pattern = new Uint8ClampedArray([...tieDye, ...tieDye])
+    const filled = fillSilhouetteWithPattern(silhouette, pattern, null)
+    expect(pixel(filled, 0)).toEqual([255, 255, 255, 255])
+    expect(pixel(filled, 1)).toEqual([244, 120, 180, 255])
+    const onMat = fillSilhouetteWithPattern(silhouette, pattern, { r: 10, g: 20, b: 30 })
+    expect(pixel(onMat, 0)).toEqual([10, 20, 30, 255])
+    expect(pixel(onMat, 1)).toEqual([244, 120, 180, 255])
+  })
+
+  it('replaces the front collar inside a back neck with the fabric below it', () => {
+    const width = 10
+    const height = 40
+    const pattern = new Uint8ClampedArray(width * height * 4)
+    const silhouette = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4
+        const neck = y >= 1 && y <= 8 && x >= 4 && x <= 5
+        const body = y >= 9 && y <= 38
+        const hole = neck || body
+        silhouette[offset + 3] = hole ? 0 : 255
+        const color = neck ? [8, 8, 12] : body ? [200, 10, 10] : [255, 255, 255]
+        pattern[offset] = color[0]
+        pattern[offset + 1] = color[1]
+        pattern[offset + 2] = color[2]
+        pattern[offset + 3] = 255
+      }
+    }
+    const covered = coverFrontNeck(pattern, silhouette, width, height)
+    expect(pixel(covered, 1 * width + 4)).toEqual([200, 10, 10, 255])
+    expect(pixel(covered, 8 * width + 5)).toEqual([200, 10, 10, 255])
+    expect(pixel(covered, 20 * width + 3)).toEqual([200, 10, 10, 255])
+    expect(pixel(covered, 0)).toEqual([255, 255, 255, 255])
   })
 })

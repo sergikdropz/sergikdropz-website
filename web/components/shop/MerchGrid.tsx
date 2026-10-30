@@ -27,7 +27,7 @@ export default function MerchGrid({ products, compact = false }: MerchGridProps)
   return (
     <div className="space-y-6">
       {!compact && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           <button
             onClick={() => setActiveCategory('all')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${

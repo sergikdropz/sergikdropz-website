@@ -88,5 +88,6 @@ describe('buildDesignTabs', () => {
     expect(placementFileToOpen(tabs, { embroidery_front_large: { assetUrl: '/wide.png' } }, 'embroidery_front')).toBe(
       'embroidery_front_large',
     )
+    expect(placementFileToOpen(tabs, layers, 'embroidery_right')).toBe('addon_embroidery_front')
   })
 })

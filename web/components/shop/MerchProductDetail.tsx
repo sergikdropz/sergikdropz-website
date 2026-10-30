@@ -1,11 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ensureShopCheckoutAuth } from '@/lib/checkoutActor'
 import Image from 'next/image'
 import SizeGuide from './SizeGuide'
 import MerchShippingEstimate from '@/components/shop/MerchShippingEstimate'
-import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
+import MerchGarmentPreview, {
+  loadMerchCatalogDetail,
+  type MerchGarmentPreviewDesign,
+} from '@/components/shop/MerchGarmentPreview'
+import { designPreviewColorName, mockupPhotosForColor, shopFrontPhotoIndex } from '@/lib/merch/catalog-studio'
 
 interface Variant {
   id: number
@@ -36,12 +40,49 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
   const [error, setError] = useState<string | null>(null)
   const [showSizeGuide, setShowSizeGuide] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
+  const [colorReady, setColorReady] = useState(!product.designPreview?.catalogProductId)
+  const colorTouched = useRef(false)
 
+  useEffect(() => {
+    colorTouched.current = false
+    setSelectedVariant(product.variants[0])
+    setActiveImage(product.designPreview ? shopFrontPhotoIndex(product.designPreview) : 0)
+    const design = product.designPreview
+    if (!design?.catalogProductId) {
+      setColorReady(true)
+      return
+    }
+    setColorReady(false)
+    let cancelled = false
+    void loadMerchCatalogDetail(design.catalogProductId).then((detail) => {
+      if (cancelled) return
+      if (!colorTouched.current && detail) {
+        const name = designPreviewColorName(detail.colors || [], design.previewColor, design.colors)
+        const match = product.variants.find(
+          (variant) => variant.color?.trim().toLowerCase() === name.trim().toLowerCase(),
+        )
+        if (match) {
+          setSelectedVariant(match)
+          setActiveImage(shopFrontPhotoIndex(design, match.color))
+        }
+      }
+      setColorReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [product])
+
+  const savedColorName = product.designPreview?.previewColorName || null
+  const requestedColor = colorReady ? selectedVariant?.color : savedColorName
   const allImages = product.designPreview
-    ? (product.images || []).filter(Boolean)
+    ? mockupPhotosForColor(
+        product.designPreview.mockupUrls,
+        product.designPreview.mockupUrlsByColor,
+        requestedColor,
+        savedColorName,
+      )
     : [product.thumbnail, ...(product.images || [])].filter(Boolean)
-  const showGarmentPreview =
-    Boolean(product.designPreview) && (allImages.length === 0 ? true : activeImage === 0)
   const shippable = product.fulfillmentReady !== false && Boolean(selectedVariant?.printful_variant_id)
   const sizes = Array.from(new Set(product.variants.map((v) => v.size).filter(Boolean)))
   const colors = Array.from(new Set(product.variants.map((v) => v.color).filter(Boolean)))
@@ -97,8 +138,12 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
         {/* Images */}
         <div className="space-y-3">
           <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-900">
-            {showGarmentPreview && product.designPreview ? (
-              <MerchGarmentPreview design={product.designPreview} />
+            {product.designPreview ? (
+              <MerchGarmentPreview
+                design={product.designPreview}
+                colorName={colorReady ? selectedVariant?.color : null}
+                photoIndex={activeImage}
+              />
             ) : allImages[activeImage] &&
               (allImages[activeImage].startsWith('/api/') ? (
                 <img
@@ -199,7 +244,15 @@ export default function MerchProductDetail({ product }: MerchProductDetailProps)
                   return (
                     <button
                       key={color}
-                      onClick={() => variant && setSelectedVariant(variant)}
+                      onClick={() => {
+                        if (!variant) return
+                        colorTouched.current = true
+                        setColorReady(true)
+                        setSelectedVariant(variant)
+                        setActiveImage(
+                          product.designPreview ? shopFrontPhotoIndex(product.designPreview, variant.color) : 0,
+                        )
+                      }}
                       className={`px-4 py-2 rounded text-sm font-medium transition-all ${
                         isSelected
                           ? 'bg-white text-black'

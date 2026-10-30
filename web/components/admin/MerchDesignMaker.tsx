@@ -15,11 +15,53 @@ import {
 import type { BlankColor, BlankPlacement, GarmentFamily } from '@/lib/merch/blanks'
 import { sameMerchArt } from '@/lib/merch/art-url'
 import type { CatalogAddOnRow } from '@/lib/merch/catalog-add-ons'
-import type { CatalogProductDetail, CatalogTechnique } from '@/lib/merch/printful-catalog-types'
-import { scalePlacementAboutCenter, type ArtPlacement, type DesignStatus } from '@/lib/merch/design'
+import type { CatalogPrintFile, CatalogProductDetail, CatalogTechnique } from '@/lib/merch/printful-catalog-types'
+import {
+  mitigationGuidelines,
+  scalePlacementAboutCenter,
+  type ArtPlacement,
+  type DesignStatus,
+} from '@/lib/merch/design'
 import { dpiGradeRingClass, type DpiGrade } from '@/lib/merch/design'
+import { rotationAlignAxis, snapRotation, type RotationAlignAxis } from '@/lib/merch/placement-snap'
 import { MERCH_ART_ACCEPT, useMerchArtDropUpload } from '@/lib/merch/art-upload-drop'
+import { EMBROIDERY_THREADS, embroideryThreadByHex } from '@/lib/merch/embroidery-threads'
 import GarmentMatImage from '@/components/shop/GarmentMatImage'
+
+export function RotationAlignGuides({
+  cx,
+  cy,
+  rotation,
+}: {
+  cx: number
+  cy: number
+  rotation: number
+}) {
+  const active = rotationAlignAxis(rotation)
+  const axes: RotationAlignAxis[] = [0, 45, 90, 135]
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[7] overflow-hidden" aria-hidden>
+      {axes.map((angle) => {
+        const on = active === angle
+        return (
+          <div
+            key={angle}
+            className={`absolute h-px w-[220%] ${
+              on ? 'bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]' : 'bg-cyan-300/40'
+            }`}
+            style={{
+              left: `${cx * 100}%`,
+              top: `${cy * 100}%`,
+              transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+              animation: 'rotation-guide-in 140ms ease-out',
+            }}
+          />
+        )
+      })}
+      <style>{`@keyframes rotation-guide-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
+    </div>
+  )
+}
 
 export function PrintAreaSnapGuides({ vertical, horizontal }: { vertical: number[]; horizontal: number[] }) {
   if (vertical.length === 0 && horizontal.length === 0) return null
@@ -212,7 +254,7 @@ export function PlacementViewTabs({
   )
 }
 
-type ArtUpload = { id: string; label: string; url: string }
+type ArtUpload = { id: string; label: string; url: string; origin?: 'user' | 'printful' }
 
 type PlacedLayer = { id: string; label: string; url: string }
 
@@ -221,10 +263,10 @@ type SavedDesignRow = { id: string; name: string; status: string }
 const NAV: Array<{ id: DesignNavId; label: string }> = [
   { id: 'product', label: 'Product' },
   { id: 'uploads', label: 'Uploads' },
-  { id: 'quick', label: 'AI Art' },
   { id: 'text', label: 'Text' },
   { id: 'saved', label: 'Saved designs' },
   { id: 'layers', label: 'Layers' },
+  { id: 'quick', label: 'AI Art' },
   { id: 'help', label: 'Help' },
 ]
 
@@ -316,18 +358,47 @@ function DesignMakerNavBar({ nav, onNav }: { nav: DesignNavId; onNav: (id: Desig
 export function StageModeSwitch({
   view,
   onChange,
+  zoom,
+  onZoom,
 }: {
   view: StageView
   onChange: (view: StageView) => void
+  /** Preview view zoom, 1–2.5. Shown under the mode buttons. */
+  zoom?: number
+  onZoom?: (value: number) => void
 }) {
   return (
-    <div className="flex justify-center gap-2">
-      <ModeButton active={view === 'design'} onClick={() => onChange('design')}>
-        Design
-      </ModeButton>
-      <ModeButton active={view === 'preview'} onClick={() => onChange('preview')}>
-        Preview
-      </ModeButton>
+    <div>
+      <div className="flex justify-center gap-2">
+        <ModeButton active={view === 'preview'} onClick={() => onChange('preview')}>
+          Preview
+        </ModeButton>
+        <ModeButton active={view === 'design'} onClick={() => onChange('design')}>
+          Design
+        </ModeButton>
+      </div>
+      {onZoom ? (
+        <label
+          className="mx-auto mt-2 flex w-48 items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-white/60"
+          title="Zoom the preview. Double-click to reset. Does not change the print size."
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            onZoom(1)
+          }}
+        >
+          Zoom
+          <input
+            type="range"
+            min={1}
+            max={2.5}
+            step={0.01}
+            value={zoom ?? 1}
+            aria-label="Zoom preview"
+            onChange={(event) => onZoom(Number(event.target.value))}
+            className="w-full accent-white"
+          />
+        </label>
+      ) : null}
     </div>
   )
 }
@@ -401,6 +472,7 @@ export function PlacedArtLayer({
   onAdjust,
   onAdjustStart,
   onAdjustEnd,
+  onRotationGuide,
 }: {
   layer: ArtPlacement
   heightFraction: number
@@ -413,6 +485,7 @@ export function PlacedArtLayer({
   onAdjust: (patch: Partial<ArtPlacement>) => void
   onAdjustStart: () => void
   onAdjustEnd: () => void
+  onRotationGuide?: (active: boolean) => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const transformModeRef = useRef<'rotate' | 'scale' | null>(null)
@@ -425,6 +498,9 @@ export function PlacedArtLayer({
     anchorY: number
   } | null>(null)
   const transformSessionRef = useRef(false)
+  const alignHoldRef = useRef<number | null>(null)
+  const onRotationGuideRef = useRef(onRotationGuide)
+  onRotationGuideRef.current = onRotationGuide
   const onAdjustRef = useRef(onAdjust)
   onAdjustRef.current = onAdjust
   const onAdjustEndRef = useRef(onAdjustEnd)
@@ -437,7 +513,9 @@ export function PlacedArtLayer({
     rotateSnapRef.current = null
     scaleSnapRef.current = null
     transformSessionRef.current = false
+    alignHoldRef.current = null
     setActiveHandle(null)
+    onRotationGuideRef.current?.(false)
     if (hadSession) onAdjustEndRef.current()
   }, [])
 
@@ -457,9 +535,10 @@ export function PlacedArtLayer({
         const cy = box.top + box.height / 2
         const angle = pointerAngleDeg(event.clientX, event.clientY, cx, cy)
         const delta = angle - rotateSnapRef.current.startPointerAngle
-        onAdjustRef.current({
-          rotation: normalizeRotation(rotateSnapRef.current.startRotation + delta),
-        })
+        const raw = normalizeRotation(rotateSnapRef.current.startRotation + delta)
+        const snapped = snapRotation(raw, alignHoldRef.current)
+        alignHoldRef.current = snapped.held
+        onAdjustRef.current({ rotation: snapped.rotation })
         return
       }
       if (mode === 'scale' && scaleSnapRef.current) {
@@ -497,6 +576,8 @@ export function PlacedArtLayer({
       startPointerAngle: pointerAngleDeg(event.clientX, event.clientY, cx, cy),
     }
     transformModeRef.current = 'rotate'
+    alignHoldRef.current = null
+    onRotationGuideRef.current?.(true)
     setActiveHandle('rotate')
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
@@ -565,7 +646,7 @@ export function PlacedArtLayer({
       <button
         type="button"
         aria-label="Drag to rotate"
-        title="Click and drag to rotate"
+        title="Drag to rotate. Guides appear every 45°."
         onPointerDown={onRotatePointerDown}
         onLostPointerCapture={endTransform}
         className={`${ART_HANDLE_BASE} -right-2.5 -top-2.5 cursor-grab ${
@@ -598,6 +679,7 @@ export function MerchDesignCanvas({
   colorHex,
   garmentUrl,
   garmentBackground = null,
+  patternUrl = null,
   useTemplateMockup = false,
   garmentAspect = null,
   family,
@@ -616,9 +698,13 @@ export function MerchDesignCanvas({
   onArtAdjust,
   onArtAdjustStart,
   onArtAdjustEnd,
+  onOptimizeForPrint,
+  onRotationGuide,
+  showRotationGuides = false,
   showPrintGuide,
   printInsetX,
   printInsetY,
+  boundToInset = false,
   activeDpiGrade,
   snapGuides,
   stageToolbar,
@@ -636,6 +722,8 @@ export function MerchDesignCanvas({
   garmentUrl: string | null
   /** Printful `background_color` for a transparent ghost template. */
   garmentBackground?: string | null
+  /** Color photo drawn through a positioning silhouette. */
+  patternUrl?: string | null
   /** Printful positioning template — skip 3D back flip; placement is per template. */
   useTemplateMockup?: boolean
   /** Width / height of the garment image, known before it loads (template_width / template_height). */
@@ -656,9 +744,16 @@ export function MerchDesignCanvas({
   onArtAdjust: (patch: Partial<ArtPlacement>) => void
   onArtAdjustStart: () => void
   onArtAdjustEnd: () => void
+  /** Size the active art inside the stitch or print edge. */
+  onOptimizeForPrint?: () => void
+  onRotationGuide?: (active: boolean) => void
+  /** 45° lines through the art, shown while a rotate gesture is active. */
+  showRotationGuides?: boolean
   showPrintGuide: boolean
   printInsetX: number
   printInsetY: number
+  /** Embroidery stitch margin is the design limit. The band outside it is not stitched. */
+  boundToInset?: boolean
   activeDpiGrade: DpiGrade | null
   snapGuides?: { vertical: number[]; horizontal: number[] }
   /** Flat color behind the cut-out product. Does not recolor the garment image. */
@@ -741,7 +836,8 @@ export function MerchDesignCanvas({
               <GarmentMatImage
                 src={garmentUrl}
                 matColor={matColor}
-                garmentColor={garmentBackground}
+                garmentColor={patternUrl ? null : garmentBackground}
+                patternUrl={patternUrl}
                 className="pointer-events-none absolute inset-0"
                 imgClassName={`absolute inset-0 h-full w-full ${
                   useTemplateMockup ? 'object-fill' : 'object-contain'
@@ -772,33 +868,51 @@ export function MerchDesignCanvas({
                 height: `${area.stage.h * 100}%`,
               }}
             >
-              {showPrintGuide && (
+              {boundToInset && (printInsetX > 0 || printInsetY > 0) ? (
                 <div className="pointer-events-none absolute inset-0">
+                  <div className="absolute inset-0 border border-dashed border-white/20" />
                   <div
-                    className={`absolute inset-0 border border-dashed ${
-                      outside ? 'border-red-400/90' : 'border-white/70'
+                    className={`absolute border border-dashed ${
+                      outside ? 'border-red-400/90' : showPrintGuide ? 'border-white' : 'border-white/90'
                     }`}
-                  />
-                  <div
-                    className="absolute border border-dashed border-white/25"
                     style={{
                       left: `${printInsetX * 100}%`,
                       top: `${printInsetY * 100}%`,
                       right: `${printInsetX * 100}%`,
                       bottom: `${printInsetY * 100}%`,
+                      boxShadow: '0 0 0 999px rgba(0,0,0,0.42)',
                     }}
                   />
                 </div>
-              )}
-              {!showPrintGuide && (
-                <div
-                  className={`pointer-events-none absolute inset-0 border border-dashed ${
-                    outside ? 'border-red-400/90' : 'border-white/70'
-                  }`}
-                />
+              ) : (
+                <div className="pointer-events-none absolute inset-0">
+                  <div
+                    className={`absolute inset-0 border border-dashed ${
+                      outside ? 'border-red-400/90' : showPrintGuide ? 'border-white' : 'border-white/90'
+                    }`}
+                  />
+                  {printInsetX > 0 || printInsetY > 0 ? (
+                    <div
+                      className="absolute border border-dashed border-white/25"
+                      style={{
+                        left: `${printInsetX * 100}%`,
+                        top: `${printInsetY * 100}%`,
+                        right: `${printInsetX * 100}%`,
+                        bottom: `${printInsetY * 100}%`,
+                      }}
+                    />
+                  ) : null}
+                </div>
               )}
               {snapGuides ? (
                 <PrintAreaSnapGuides vertical={snapGuides.vertical} horizontal={snapGuides.horizontal} />
+              ) : null}
+              {showRotationGuides && layer?.assetUrl ? (
+                <RotationAlignGuides
+                  cx={layer.x + layer.scale / 2}
+                  cy={layer.y + height / 2}
+                  rotation={layer.rotation}
+                />
               ) : null}
               {layer?.assetUrl ? (
                 <PlacedArtLayer
@@ -813,6 +927,7 @@ export function MerchDesignCanvas({
                   onAdjust={onArtAdjust}
                   onAdjustStart={onArtAdjustStart}
                   onAdjustEnd={onArtAdjustEnd}
+                  onRotationGuide={onRotationGuide}
                 />
               ) : (
                 <button
@@ -825,9 +940,203 @@ export function MerchDesignCanvas({
               )}
             </div>
           </div>
+          {layer?.assetUrl && onOptimizeForPrint ? (
+            <button
+              type="button"
+              onClick={onOptimizeForPrint}
+              title="Size this art inside the stitch or print area without stretching it"
+              className="absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-lg bg-black/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white ring-1 ring-white/25 backdrop-blur-md hover:bg-black"
+            >
+              Optimize for print
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
+  )
+}
+
+function mitigationPlacementLabel(file: CatalogPrintFile): string {
+  const text = `${file.type} ${file.title}`.toLowerCase()
+  const wideFront = text.includes('front') && /(?:^|[^a-z])(?:large|wide)(?:[^a-z]|$)/.test(text)
+  if (wideFront) return 'Front Wide'
+  return placementTabLabel(file.title || file.type)
+}
+
+function PlacementTools({
+  file,
+  hasArt,
+  scale,
+  scaleMax,
+  rotation,
+  onFit,
+  onCenter,
+  onOptimizeForPrint,
+  onScale,
+  onRotate,
+  onResetScale,
+  onResetRotation,
+  onGestureStart,
+  onGestureEnd,
+  onRotatePointerDown,
+  onRotatePointerUp,
+}: {
+  file: CatalogPrintFile | undefined
+  hasArt: boolean
+  scale: number
+  scaleMax: number
+  rotation: number
+  onFit?: () => void
+  onCenter?: () => void
+  onOptimizeForPrint?: () => void
+  onScale?: (value: number) => void
+  onRotate?: (value: number) => void
+  onResetScale?: () => void
+  onResetRotation?: () => void
+  onGestureStart?: () => void
+  onGestureEnd?: () => void
+  onRotatePointerDown?: () => void
+  onRotatePointerUp?: () => void
+}) {
+  const label = file ? mitigationPlacementLabel(file) : 'This placement'
+  const max = Math.max(0.05, scaleMax || 1)
+  const min = Math.min(0.15, max)
+  const facts = mitigationGuidelines({
+    printfulType: file?.type,
+    label,
+    printWidth: file?.printWidth || 0,
+    printHeight: file?.printHeight || 0,
+    dpi: file?.dpi ?? null,
+  }).filter((line) => line.id === 'print-file' || line.id === 'stitch' || line.id === 'print-edge')
+  return (
+    <section aria-label="Placement tools" className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">{label}</p>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={onFit}
+          disabled={!hasArt || !onFit}
+          className="flex-1 rounded-lg bg-white/10 py-1.5 text-[10px] uppercase tracking-[0.14em] hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Fit
+        </button>
+        <button
+          type="button"
+          onClick={onCenter}
+          disabled={!hasArt || !onCenter}
+          className="flex-1 rounded-lg bg-white/10 py-1.5 text-[10px] uppercase tracking-[0.14em] hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Center
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={onOptimizeForPrint}
+        disabled={!hasArt || !onOptimizeForPrint}
+        title="Size this art inside the stitch or print area without stretching it"
+        className="mt-2 w-full rounded-lg bg-white/10 py-1.5 text-[10px] uppercase tracking-[0.14em] hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Optimize for print
+      </button>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label
+          className="text-[10px] uppercase tracking-[0.12em] text-white/45"
+          title="Double-click to reset scale"
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            onResetScale?.()
+          }}
+        >
+          Scale
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={0.01}
+            value={Math.min(Math.max(scale, min), max)}
+            disabled={!hasArt || !onScale}
+            onPointerDown={onGestureStart}
+            onPointerUp={onGestureEnd}
+            onChange={(event) => onScale?.(Number(event.target.value))}
+            className="mt-1 w-full accent-white disabled:opacity-40"
+          />
+        </label>
+        <label
+          className="text-[10px] uppercase tracking-[0.12em] text-white/45"
+          title="Double-click to reset rotation"
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            onResetRotation?.()
+          }}
+        >
+          Rotate
+          <input
+            type="range"
+            min={-180}
+            max={180}
+            step={1}
+            value={rotation}
+            disabled={!hasArt || !onRotate}
+            onPointerDown={() => {
+              onGestureStart?.()
+              onRotatePointerDown?.()
+            }}
+            onPointerUp={() => {
+              onRotatePointerUp?.()
+              onGestureEnd?.()
+            }}
+            onChange={(event) => onRotate?.(Number(event.target.value))}
+            className="mt-1 w-full accent-white disabled:opacity-40"
+          />
+        </label>
+      </div>
+      {facts.length > 0 ? (
+        <dl className="mt-3 space-y-1.5 border-t border-white/10 pt-2">
+          {facts.map((line) => (
+            <div key={line.id}>
+              <dt className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/40">{line.label}</dt>
+              <dd className="text-[11px] leading-snug text-white/75">{line.detail}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </section>
+  )
+}
+
+function MitigationGuidelines({ file }: { file: CatalogPrintFile | undefined }) {
+  const [open, setOpen] = useState(false)
+  const lines = mitigationGuidelines({
+    printfulType: file?.type,
+    label: file ? mitigationPlacementLabel(file) : undefined,
+    printWidth: file?.printWidth || 0,
+    printHeight: file?.printHeight || 0,
+    dpi: file?.dpi,
+  })
+  return (
+    <section aria-label="Mitigation" className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="relative flex w-full items-center justify-center text-[10px] font-medium uppercase tracking-[0.18em] text-white/40 hover:text-white/70"
+      >
+        Mitigation
+        <span aria-hidden className={`absolute right-0 top-1/2 -translate-y-1/2 transition ${open ? 'rotate-180' : ''}`}>
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <ul className="mt-2 space-y-1.5">
+          {lines.map((line) => (
+            <li key={line.id} className="text-[11px] leading-relaxed text-white/70">
+              <span className="font-medium text-white/90">{line.label}. </span>
+              {line.detail}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   )
 }
 
@@ -842,6 +1151,11 @@ export function MerchDesignSidebar({
   activePrintFileType,
   embroideryUnlimitedColor,
   onEmbroideryUnlimitedColor,
+  embroideryThreadNote,
+  embroideryThreadColors,
+  onEmbroideryThreadColor,
+  onPullStitchFile,
+  onPhotographColor,
   productName,
   onProductName,
   previewColorName,
@@ -872,6 +1186,8 @@ export function MerchDesignSidebar({
   keep,
   note,
   busy,
+  uploadProgress,
+  publishProgress,
   status,
   designId,
   canPutOut,
@@ -882,6 +1198,20 @@ export function MerchDesignSidebar({
   onToggleGuidelines,
   activeDpiGrade,
   onOptimizeQuality,
+  placementScale = 1,
+  placementScaleMax = 1,
+  placementRotation = 0,
+  onFitPlacement,
+  onCenterPlacement,
+  onOptimizeForPrint,
+  onPlacementScale,
+  onPlacementRotate,
+  onResetPlacementScale,
+  onResetPlacementRotation,
+  onPlacementGestureStart,
+  onPlacementGestureEnd,
+  onPlacementRotateStart,
+  onPlacementRotateEnd,
 }: {
   addOnRows: CatalogAddOnRow[]
   nav: DesignNavId
@@ -894,6 +1224,15 @@ export function MerchDesignSidebar({
   activePrintFileType?: string
   embroideryUnlimitedColor: boolean
   onEmbroideryUnlimitedColor: (value: boolean) => void
+  /** Why the current thread colors or unlimited option were chosen. */
+  embroideryThreadNote?: string | null
+  /** Selected standard threads for the active embroidery placement. */
+  embroideryThreadColors: string[]
+  onEmbroideryThreadColor: (hex: string) => void
+  /** Bake the stitch file and store it on this product. */
+  onPullStitchFile?: () => void
+  /** Ask Printful for angle photos of the color on the stage. */
+  onPhotographColor?: () => void
   productName: string
   onProductName: (value: string) => void
   previewColorName: string
@@ -926,6 +1265,10 @@ export function MerchDesignSidebar({
   keep: number
   note: string | null
   busy: string | null
+  /** 0–100 while an art file is uploading. Null hides the bar. */
+  uploadProgress?: number | null
+  /** Shown under the status note while a design is going out and photos are rendering. */
+  publishProgress?: { value: number; label: string } | null
   status: DesignStatus
   designId: string | null
   canPutOut: boolean
@@ -938,11 +1281,37 @@ export function MerchDesignSidebar({
   activeDpiGrade?: DpiGrade | null
   /** Upscale the active art so it clears the 150 DPI print threshold. */
   onOptimizeQuality?: () => void | Promise<void>
+  placementScale?: number
+  placementScaleMax?: number
+  placementRotation?: number
+  onFitPlacement?: () => void
+  onCenterPlacement?: () => void
+  onOptimizeForPrint?: () => void
+  onPlacementScale?: (value: number) => void
+  onPlacementRotate?: (value: number) => void
+  onResetPlacementScale?: () => void
+  onResetPlacementRotation?: () => void
+  onPlacementGestureStart?: () => void
+  onPlacementGestureEnd?: () => void
+  onPlacementRotateStart?: () => void
+  onPlacementRotateEnd?: () => void
 }) {
   const { product } = detail
   const techniqueLabel = techniques.find((item) => item.key === technique)?.label || technique
   const activeFile = printFiles.find((file) => file.type === activePrintFileType) || printFiles[0]
-  const embroideryOption = activeFile?.options.find((option) => option.id === 'full_color')
+  const activeIsEmbroidery =
+    technique.trim().toUpperCase() === 'EMBROIDERY' || Boolean(activeFile && /embroidery/i.test(activeFile.type))
+  const activeSupportsUnlimited = Boolean(activeFile?.options.some((option) => option.id === 'full_color'))
+  const embroideryOption =
+    (activeSupportsUnlimited ? activeFile?.options.find((option) => option.id === 'full_color') : null) ||
+    printFiles
+      .find((file) => file.options.some((option) => option.id === 'full_color'))
+      ?.options.find((option) => option.id === 'full_color')
+  const showThreadColors = activeIsEmbroidery && (!embroideryUnlimitedColor || !activeSupportsUnlimited)
+  const selectedThreadNames = (embroideryThreadColors.length > 0 ? embroideryThreadColors : ['#000000']).map(
+    (hex) => embroideryThreadByHex(hex).name,
+  )
+  const myUploads = uploads.filter((item) => item.origin !== 'printful')
   const { dragOver, dropHint, dropZoneProps } = useMerchArtDropUpload(onUploadFile)
 
   return (
@@ -965,6 +1334,27 @@ export function MerchDesignSidebar({
         }`}
         {...dropZoneProps}
       >
+        {uploadProgress != null ? (
+          <div
+            className="sticky top-0 z-10 -mx-4 -mt-4 shrink-0 border-b border-white/10 bg-black/80 px-4 py-2.5 backdrop-blur-sm"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={uploadProgress}
+            aria-label="Upload progress"
+          >
+            <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.16em] text-white/70">
+              <span>{uploadProgress >= 100 ? 'Placing design' : 'Uploading'}</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-sky-400 transition-[width] duration-150 ease-out"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
         {dropHint ? <p className="text-[11px] text-amber-300/90">{dropHint}</p> : null}
         {nav === 'product' && (
           <>
@@ -980,6 +1370,25 @@ export function MerchDesignSidebar({
                 />
               </label>
             </div>
+            <PlacementTools
+              file={activeFile}
+              hasArt={Boolean(activeLayerUrl)}
+              scale={placementScale}
+              scaleMax={placementScaleMax}
+              rotation={placementRotation}
+              onFit={onFitPlacement}
+              onCenter={onCenterPlacement}
+              onOptimizeForPrint={onOptimizeForPrint}
+              onScale={onPlacementScale}
+              onRotate={onPlacementRotate}
+              onResetScale={onResetPlacementScale}
+              onResetRotation={onResetPlacementRotation}
+              onGestureStart={onPlacementGestureStart}
+              onGestureEnd={onPlacementGestureEnd}
+              onRotatePointerDown={onPlacementRotateStart}
+              onRotatePointerUp={onPlacementRotateEnd}
+            />
+            <MitigationGuidelines file={activeFile} />
             <div>
               <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Technique</p>
               <p className="text-sm">{techniqueLabel}</p>
@@ -1000,8 +1409,10 @@ export function MerchDesignSidebar({
                 </div>
               )}
             </div>
-            {embroideryOption ? (
+            {activeIsEmbroidery ? (
               <div className="rounded-xl border border-white/10 bg-black/25 p-3 space-y-2">
+                {embroideryOption ? (
+                  <>
                 <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Embroidery color option</p>
                 <p className="text-[11px] text-white/55">Which embroidery color option to choose?</p>
                 <div className="flex flex-col gap-1.5">
@@ -1031,6 +1442,48 @@ export function MerchDesignSidebar({
                       : ''}
                   </button>
                 </div>
+                {!showThreadColors && embroideryThreadNote ? (
+                  <p className="text-[11px] leading-snug text-white/70">{embroideryThreadNote}</p>
+                ) : null}
+                  </>
+                ) : null}
+                {showThreadColors ? (
+                  <div className={embroideryOption ? 'border-t border-white/10 pt-2' : ''}>
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Thread colors</p>
+                    <p className="mt-1 text-[11px] leading-snug text-white/55">
+                      {embroideryThreadNote || 'Select every stitch. Black and white means both. Up to 6.'}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {EMBROIDERY_THREADS.map((thread) => {
+                        const selected = embroideryThreadColors.some((hex) => hex.toUpperCase() === thread.hex)
+                        return (
+                          <button
+                            key={thread.hex}
+                            type="button"
+                            title={thread.name}
+                            aria-label={thread.name}
+                            aria-pressed={selected}
+                            onClick={() => onEmbroideryThreadColor(thread.hex)}
+                            className={`h-7 w-7 rounded-full border ${
+                              selected ? 'border-white ring-2 ring-white/80' : 'border-white/30 hover:border-white/60'
+                            }`}
+                            style={{ backgroundColor: thread.hex }}
+                          />
+                        )
+                      })}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-white/80">{selectedThreadNames.join(', ')}</p>
+                    <button
+                      type="button"
+                      onClick={onPullStitchFile}
+                      disabled={!onPullStitchFile || Boolean(busy) || !activeLayerUrl}
+                      title="Bake this stitch file and save it on the product"
+                      className="mt-2 w-full rounded-lg bg-white/10 py-1.5 text-[10px] uppercase tracking-[0.14em] hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {busy === 'Pulling stitch file' ? 'Saving stitch file' : 'Pull stitch file'}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div>
@@ -1055,6 +1508,15 @@ export function MerchDesignSidebar({
                   />
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={onPhotographColor}
+                disabled={!onPhotographColor || Boolean(busy) || !activeLayerUrl}
+                title="Ask Printful for photos of this color only. Other colors stay on the garment template."
+                className="mt-2 w-full rounded-lg bg-white/10 py-1.5 text-[10px] uppercase tracking-[0.14em] hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy === 'Photographing' ? 'Photographing this color' : 'Photograph this color'}
+              </button>
             </div>
             <SizesBlock
               options={detail.sizes.length > 0 ? detail.sizes : sizes}
@@ -1086,6 +1548,7 @@ export function MerchDesignSidebar({
               keep={keep}
               note={note}
               busy={busy}
+              publishProgress={publishProgress}
               status={status}
               designId={designId}
               canPutOut={canPutOut}
@@ -1098,10 +1561,11 @@ export function MerchDesignSidebar({
 
         {nav === 'uploads' && (
           <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">My uploads</p>
             <button
               type="button"
               onClick={() => uploadInputRef.current?.click()}
-              className={`block w-full rounded-xl border border-dashed py-3.5 text-center text-sm font-medium transition-colors ${
+              className={`mt-3 block w-full rounded-xl border border-dashed py-3.5 text-center text-sm font-medium transition-colors ${
                 dragOver
                   ? 'border-white/55 bg-white/10 text-white'
                   : 'border-white/25 bg-black/25 hover:border-white/40'
@@ -1110,9 +1574,9 @@ export function MerchDesignSidebar({
               <span className="block">Upload design</span>
               <span className="mt-1 block text-[11px] font-normal text-white/50">Click or drop PNG / JPEG anywhere in this panel</span>
             </button>
-            {uploads.length > 0 ? (
+            {myUploads.length > 0 ? (
               <div className="mt-3 grid grid-cols-3 gap-1.5">
-                {uploads.map((item) => (
+                {myUploads.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -1164,7 +1628,7 @@ export function MerchDesignSidebar({
         {nav === 'help' && (
           <div className="space-y-2 text-xs leading-relaxed text-white/70">
             <p className="text-sm font-semibold text-white">Help</p>
-            <p>Drop a PNG on the shirt, or use Uploads. Drag the art to move it. Scroll to scale it.</p>
+            <p>Drop a PNG on the product, or use Uploads. Drag the art to move it. Scroll to scale it. Fit, Center, Scale, and Rotate on Product stay inside the print file. Embroidery stays inside the stitch box. Optimize for print sizes the art to that edge and does not stretch it past its own pixels.</p>
             <p>F fits the art. C centers it. Arrow keys nudge it. Right-click the art for rotate, copy, and remove.</p>
             <p>Keys 1–4 switch Front, Back, right sleeve, and left sleeve. ⌘Z / ⌘⇧Z undo and redo.</p>
             <p>Preview shows mockups and the stage dock. Design is the placement workspace (Printful-style tabs).</p>
@@ -1318,6 +1782,7 @@ function PublishBlock({
   keep,
   note,
   busy,
+  publishProgress,
   status,
   designId,
   canPutOut,
@@ -1333,6 +1798,7 @@ function PublishBlock({
   keep: number
   note: string | null
   busy: string | null
+  publishProgress?: { value: number; label: string } | null
   status: DesignStatus
   designId: string | null
   canPutOut: boolean
@@ -1375,6 +1841,26 @@ function PublishBlock({
         <span>${keep.toFixed(2)}</span>
       </div>
       {note && <p className="rounded border border-white/10 bg-black/30 p-2 text-xs text-white/80">{note}</p>}
+      {publishProgress != null ? (
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={publishProgress.value}
+          aria-label={publishProgress.label}
+        >
+          <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.16em] text-white/70">
+            <span>{publishProgress.label}</span>
+            <span>{publishProgress.value}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-sky-400 transition-[width] duration-300 ease-out"
+              style={{ width: `${publishProgress.value}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
       <button
         type="button"
         onClick={onPutItOut}

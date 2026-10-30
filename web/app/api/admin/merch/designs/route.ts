@@ -2,13 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { getBlank } from '@/lib/merch/blanks'
+import { merchArtIdFromUrl } from '@/lib/merch/art-url'
 import { normalizePlacements, suggestRetail, type MerchDesign } from '@/lib/merch/design'
+import { normalizeEmbroideryThreads } from '@/lib/merch/embroidery-threads'
 import { listDesigns, saveDesign, uniqueSlug } from '@/lib/merch/design-store'
 
 export const dynamic = 'force-dynamic'
 
 function normalizeActiveFileType(value: unknown): string | null {
   return typeof value === 'string' && /^[a-z0-9_]{1,64}$/i.test(value) ? value : null
+}
+
+function normalizePrintFileUrls(
+  value: unknown,
+  existing: Record<string, string> | undefined,
+): Record<string, string> {
+  const next = { ...(existing || {}) }
+  if (!value || typeof value !== 'object') return next
+  for (const [key, url] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof url === 'string' && merchArtIdFromUrl(url)) next[key.slice(0, 64)] = url
+  }
+  return next
 }
 
 export async function GET() {
@@ -48,14 +62,35 @@ export async function POST(request: NextRequest) {
     colors: Array.isArray(body?.colors) ? body.colors.map(String).slice(0, 8) : blank.defaultColors,
     sizes: Array.isArray(body?.sizes) ? body.sizes.map(String).slice(0, 8) : blank.defaultSizes,
     previewColor: String(body?.previewColor || existing?.previewColor || blank.colors[0]?.hex || '#1a1a1a'),
+    previewColorName:
+      typeof body?.previewColorName === 'string' && body.previewColorName.trim()
+        ? body.previewColorName.trim().slice(0, 80)
+        : existing?.previewColorName || null,
     retailPrice: Number.isFinite(retail) && retail > 0 ? retail : existing?.retailPrice || suggestRetail(blank.estimatedCost),
     wholesaleCost: existing?.wholesaleCost ?? blank.estimatedCost,
     status: existing?.status || 'draft',
     printfulSyncProductId: existing?.printfulSyncProductId || null,
     mockupTaskKey: existing?.mockupTaskKey || null,
     mockupUrls: existing?.mockupUrls || [],
+    mockupUrlsByColor: existing?.mockupUrlsByColor || {},
+    mockupAngleTitlesByColor: existing?.mockupAngleTitlesByColor || {},
+    mockupPendingByColor: existing?.mockupPendingByColor || {},
+    mockupPendingTitlesByColor: existing?.mockupPendingTitlesByColor || {},
+    mockupPendingKey: existing?.mockupPendingKey || null,
+    mockupPhotoKeysByColor: existing?.mockupPhotoKeysByColor || {},
+    mockupRetiredArtIds: existing?.mockupRetiredArtIds || [],
+    printFileUrls: normalizePrintFileUrls(body?.printFileUrls, existing?.printFileUrls),
     variants: existing?.variants || [],
     publishNote: existing?.publishNote || null,
+    sortIndex: existing?.sortIndex ?? null,
+    embroideryUnlimitedColor:
+      typeof body?.embroideryUnlimitedColor === 'boolean'
+        ? body.embroideryUnlimitedColor
+        : Boolean(existing?.embroideryUnlimitedColor),
+    embroideryThreads:
+      body && Object.prototype.hasOwnProperty.call(body, 'embroideryThreads')
+        ? normalizeEmbroideryThreads(body.embroideryThreads)
+        : existing?.embroideryThreads || {},
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   }

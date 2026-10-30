@@ -67,6 +67,7 @@ type RawProduct = {
     }>
   }>
   techniques?: Array<{ key?: string; display_name?: string; is_default?: boolean }>
+  options?: Array<{ id?: string }>
   description?: string
   origin_country?: string | null
   currency?: string | null
@@ -259,7 +260,7 @@ export function mergePlacementGeometry(parts: PlacementGeometry[]): PlacementGeo
   }
 }
 
-const CATALOG_CACHE_VERSION = 2
+const CATALOG_CACHE_VERSION = 3
 const CATALOG_CACHE_TTL_MS = 12 * 60 * 60 * 1000
 const catalogMemory = new Map<number, { savedAt: number; detail: CatalogProductDetail }>()
 
@@ -361,6 +362,10 @@ async function loadCatalogProductDetail(productId: number): Promise<CatalogProdu
     })
     .filter((file) => file.type && file.type !== 'mockup' && file.type !== 'preview')
 
+  const threadOptionIds = (rawProduct.options || [])
+    .map((option) => option.id || '')
+    .filter((id) => id.startsWith('thread_colors') || id.startsWith('addon_thread_colors'))
+
   const geometry = await fetchPlacementGeometry(
     productId,
     techniques.map((row) => row.key)
@@ -404,6 +409,7 @@ async function loadCatalogProductDetail(productId: number): Promise<CatalogProdu
     variants,
     techniques,
     printFiles: printFilesWithArea,
+    threadOptionIds,
     description: specs.lead || null,
     specs,
   }

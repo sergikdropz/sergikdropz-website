@@ -52,7 +52,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const stored = await storeMerchArt(bytes, type)
+  const origin = form.get('origin') === 'print' ? 'print' : undefined
+  const stored = await storeMerchArt(bytes, type, origin ? { origin } : undefined)
   return NextResponse.json(stored)
 }
 

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { createSupabaseServerClient } from '@/lib/supabase'
-import { slugify, type MerchDesign } from '@/lib/merch/design'
+import { slugify, sortMerchDesigns, type MerchDesign } from '@/lib/merch/design'
 
 type DesignFile = { designs: MerchDesign[] }
 
@@ -81,15 +81,100 @@ async function upsertSupabase(design: MerchDesign): Promise<boolean> {
 
 export async function listDesigns(): Promise<MerchDesign[]> {
   const remote = await readSupabaseDesigns()
-  if (remote.ok && remote.designs.length > 0) return remote.designs
+  if (remote.ok && remote.designs.length > 0) return sortMerchDesigns(remote.designs)
   const local = await readFileDesigns()
-  if (remote.ok && local.length === 0) return remote.designs
-  return local.length > 0 ? local : remote.ok ? remote.designs : local
+  if (remote.ok && local.length === 0) return sortMerchDesigns(remote.designs)
+  return sortMerchDesigns(local.length > 0 ? local : remote.ok ? remote.designs : local)
 }
 
 export async function getDesign(id: string): Promise<MerchDesign | null> {
   const designs = await listDesigns()
   return designs.find((design) => design.id === id) || null
+}
+
+async function deleteSupabaseDesign(id: string): Promise<boolean> {
+  try {
+    const supabase = createSupabaseServerClient()
+    const { error } = await supabase.from('merch_designs').delete().eq('id', id)
+    if (error) {
+      if (!isMissingTable(error)) console.error('merch_designs delete:', error.message)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.error('merch_designs delete failed:', error)
+    return false
+  }
+}
+
+export async function deleteDesign(id: string): Promise<boolean> {
+  const existing = await getDesign(id)
+  if (!existing) return false
+  const next = (await listDesigns()).filter((row) => row.id !== id)
+  const db = await deleteSupabaseDesign(id)
+  let file = false
+  try {
+    await writeFileDesigns(next)
+    file = true
+  } catch (error) {
+    console.error('merch design file delete:', error)
+  }
+  if (!db && !file) {
+    throw new Error('Could not delete the design')
+  }
+  return true
+}
+
+async function upsertSupabaseMany(designs: MerchDesign[]): Promise<boolean> {
+  if (designs.length === 0) return true
+  try {
+    const supabase = createSupabaseServerClient()
+    const { error } = await supabase.from('merch_designs').upsert(
+      designs.map((design) => ({
+        id: design.id,
+        slug: design.slug,
+        status: design.status,
+        name: design.name,
+        payload: design,
+        updated_at: design.updatedAt,
+      })),
+      { onConflict: 'id' },
+    )
+    if (error) {
+      if (!isMissingTable(error)) console.error('merch_designs reorder:', error.message)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.error('merch_designs reorder failed:', error)
+    return false
+  }
+}
+
+/** Persist a manual My Products order. Ids not listed keep their relative place after these. */
+export async function reorderDesigns(ids: string[]): Promise<MerchDesign[]> {
+  const current = await listDesigns()
+  const known = new Set(current.map((design) => design.id))
+  const ranked = ids.filter((id) => known.has(id))
+  const rank = new Map(ranked.map((id, index) => [id, index]))
+  let extra = ranked.length
+  const next = current.map((design) => {
+    const sortIndex = rank.has(design.id) ? rank.get(design.id)! : extra++
+    if (design.sortIndex === sortIndex) return design
+    return { ...design, sortIndex }
+  })
+  const changed = next.filter((design, index) => design !== current[index])
+  if (changed.length === 0) return sortMerchDesigns(next)
+  const db = await upsertSupabaseMany(changed)
+  let file = false
+  try {
+    await writeFileDesigns(sortMerchDesigns(next))
+    file = true
+  } catch (error) {
+    console.error('merch design order file write:', error)
+  }
+  if (!db && !file) throw new Error('Could not save the order')
+  return sortMerchDesigns(next)
 }
 
 export async function saveDesign(design: MerchDesign): Promise<{ design: MerchDesign; where: string }> {

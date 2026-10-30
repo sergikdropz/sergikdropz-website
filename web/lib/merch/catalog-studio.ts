@@ -46,6 +46,136 @@ export function designPreviewColorName(
   return fallbackNames.find((name) => name.trim()) || 'Black'
 }
 
+export function sameColorKey(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase()
+}
+
+/** A Printful photo title such as "Right" lines up with the template for that side. */
+export function angleMatchesFile(title: string, file: { title?: string | null; type?: string | null }): boolean {
+  const shot = title.trim().toLowerCase()
+  const name = `${file.title || ''} ${file.type || ''}`.toLowerCase()
+  if (!shot || !name.trim()) return false
+  if (shot.includes('back')) return name.includes('back')
+  if (shot.includes('left')) return name.includes('left')
+  if (shot.includes('right')) return name.includes('right')
+  if (shot.includes('front')) return name.includes('front') && !name.includes('back')
+  return false
+}
+
+/**
+ * Put template views in the same order as the photographed angles.
+ * An angle with no template is left out. With no matches, the original list stays.
+ */
+export function orderPrintFilesByAngles<T extends { title?: string | null; type?: string | null }>(
+  files: T[],
+  titles: string[],
+): T[] {
+  if (titles.length === 0 || files.length === 0) return files
+  const used = new Set<T>()
+  const ordered: T[] = []
+  for (const title of titles) {
+    const match = files.find((file) => !used.has(file) && angleMatchesFile(title, file))
+    if (!match) continue
+    used.add(match)
+    ordered.push(match)
+  }
+  return ordered.length > 0 ? ordered : files
+}
+
+/** Angle photos for one color. A single saved set stays on the color it was made in. */
+export function mockupPhotosForColor(
+  mockupUrls: string[] | null | undefined,
+  mockupUrlsByColor: Record<string, string[]> | null | undefined,
+  colorName: string | null | undefined,
+  savedColorName: string | null | undefined,
+): string[] {
+  const wanted = (colorName || '').trim()
+  if (wanted && mockupUrlsByColor) {
+    const match = Object.entries(mockupUrlsByColor).find(([name]) => sameColorKey(name, wanted))
+    const urls = (match?.[1] || []).filter(Boolean)
+    if (urls.length > 0) return urls
+  }
+  const legacy = (mockupUrls || []).filter(Boolean)
+  if (legacy.length === 0) return []
+  if (!wanted || !savedColorName || sameColorKey(wanted, savedColorName)) return legacy
+  return []
+}
+
+/** Angle names for one color, in the same order as `mockupPhotosForColor`. */
+export function mockupTitlesForColor(
+  mockupAngleTitlesByColor: Record<string, string[]> | null | undefined,
+  colorName: string | null | undefined,
+  savedColorName: string | null | undefined,
+): string[] {
+  if (!mockupAngleTitlesByColor) return []
+  const wanted = (colorName || '').trim()
+  const saved = (savedColorName || '').trim()
+  const pick = (name: string) =>
+    Object.entries(mockupAngleTitlesByColor)
+      .find(([key]) => sameColorKey(key, name))?.[1]
+      ?.filter(Boolean) || []
+  if (wanted) {
+    const titles = pick(wanted)
+    if (titles.length > 0) return titles
+    if (saved && !sameColorKey(wanted, saved)) return []
+  }
+  return saved ? pick(saved) : []
+}
+
+/**
+ * Printful stores the straight-on Front after Back and the side angles.
+ * Shop cards and the opened product start on Front.
+ */
+export function frontMockupIndex(titles: string[] | null | undefined): number {
+  if (!titles?.length) return 0
+  const names = titles.map((title) => title.trim().toLowerCase())
+  const exact = names.findIndex((title) => title === 'front')
+  if (exact >= 0) return exact
+  const loose = names.findIndex(
+    (title) =>
+      title.includes('front') && !title.includes('back') && !title.includes('left') && !title.includes('right'),
+  )
+  return loose >= 0 ? loose : 0
+}
+
+export function frontPhotoIndex(photoCount: number, titles: string[] | null | undefined): number {
+  if (photoCount <= 0) return 0
+  return Math.min(frontMockupIndex(titles), photoCount - 1)
+}
+
+export function shopFrontPhotoIndex(
+  design: {
+    mockupUrls?: string[] | null
+    mockupUrlsByColor?: Record<string, string[]> | null
+    mockupAngleTitlesByColor?: Record<string, string[]> | null
+    previewColorName?: string | null
+  },
+  colorName?: string | null,
+): number {
+  const saved = design.previewColorName
+  const requested = colorName || saved
+  const photos = mockupPhotosForColor(design.mockupUrls, design.mockupUrlsByColor, requested, saved)
+  const titles = mockupTitlesForColor(design.mockupAngleTitlesByColor, requested, saved)
+  return frontPhotoIndex(photos.length, titles)
+}
+
+/**
+ * A put-out photo is one garment color. Keep it until the catalog can name that
+ * color, then switch to the live color preview when the shopper picks another.
+ */
+export function previewUsesMockupPhoto(
+  mockupUrl: string | null | undefined,
+  savedColorName: string,
+  requestedColorName: string | null | undefined,
+  catalogReady: boolean,
+): boolean {
+  if (!mockupUrl) return false
+  const requested = (requestedColorName || '').trim()
+  if (!requested) return true
+  if (!catalogReady) return true
+  return sameColorKey(requested, savedColorName)
+}
+
 /**
  * Where an `object-contain` image sits inside a frame, as fractions of the frame.
  * Art that was measured on the image has to use this box, or a portrait photo in a
@@ -96,6 +226,69 @@ export function coloredTemplate(
   const specific = variant ? file.variantTemplates?.[String(variant.id)] : undefined
   if (specific?.imageUrl) return specific
   return { imageUrl: file.templateUrl, backgroundColor: null }
+}
+
+/** Shared Printful positioning sheet. The garment itself is a transparent hole. */
+export function isPositioningTemplate(url: string | null | undefined): boolean {
+  return Boolean(url && /positioning/i.test(url))
+}
+
+function frontColorPhotoRank(type: string): number {
+  const name = type.toLowerCase()
+  if (
+    name === 'front' ||
+    name === 'default' ||
+    name === 'front_dtf' ||
+    name === 'front_large' ||
+    name === 'front_large_dtf'
+  ) {
+    return 0
+  }
+  if (name.includes('front') && !name.includes('back') && !name.includes('sleeve') && !name.includes('label')) {
+    return 1
+  }
+  return 2
+}
+
+/** Opaque color photo for this variant. A sheet shared by every color is a ghost, not a photo. */
+export function colorwayGarmentPhoto(
+  detail: CatalogProductDetail | null,
+  colorName: string | null,
+  size: string | null,
+): string | null {
+  if (!detail) return null
+  const variant = pickPreviewVariant(detail.variants, colorName, size)
+  if (!variant) return null
+  const files = [...detail.printFiles].sort((a, b) => frontColorPhotoRank(a.type) - frontColorPhotoRank(b.type))
+  for (const file of files) {
+    if (frontColorPhotoRank(file.type) > 1) continue
+    const templates = file.variantTemplates || {}
+    const url = templates[String(variant.id)]?.imageUrl
+    if (!url || isPositioningTemplate(url)) continue
+    const distinct = new Set(
+      Object.values(templates)
+        .map((row) => row?.imageUrl)
+        .filter((row): row is string => Boolean(row)),
+    )
+    if (distinct.size > 1) return url
+  }
+  return null
+}
+
+/**
+ * When the face is only a positioning hole, fill it with that color's front photo.
+ * Solid garments keep their `background_color` instead.
+ */
+export function positioningPatternUrl(
+  detail: CatalogProductDetail | null,
+  templateUrl: string | null | undefined,
+  colorName: string | null,
+  size: string | null,
+): string | null {
+  if (!isPositioningTemplate(templateUrl)) return null
+  const photo = colorwayGarmentPhoto(detail, colorName, size)
+  if (!photo || photo === templateUrl) return null
+  return photo
 }
 
 export function coloredTemplateUrl(
@@ -199,6 +392,50 @@ function parseTechniqueKey(technique: string): string {
 export function placeablePrintFiles(files: CatalogPrintFile[]): CatalogPrintFile[] {
   const supported = files.filter((file) => file.mockupSupported !== false)
   return supported.length > 0 ? supported : files
+}
+
+/** Technique that owns a saved print file, so opening a product shows that design. */
+export function techniqueKeyForPrintFile(fileType: string | null | undefined): 'EMBROIDERY' | 'DTFILM' | 'DTG' | null {
+  if (!fileType) return null
+  const type = fileType.toLowerCase()
+  if (type.includes('embroidery')) return 'EMBROIDERY'
+  if (type.includes('dtf')) return 'DTFILM'
+  if (
+    type.includes('dtg') ||
+    type === 'front' ||
+    type === 'back' ||
+    type.includes('default') ||
+    type.includes('sleeve') ||
+    type.includes('label')
+  ) {
+    return 'DTG'
+  }
+  return null
+}
+
+/** Product technique key for a saved file. Prefers the key this catalog actually lists. */
+export function techniqueForSavedFile(
+  techniques: Array<{ key: string; isDefault?: boolean }>,
+  fileType: string | null | undefined,
+): string | null {
+  const wanted = techniqueKeyForPrintFile(fileType)
+  if (!wanted) return null
+  const upper = (key: string) => key.trim().toUpperCase()
+  const exact = techniques.find((row) => upper(row.key) === wanted)
+  if (exact) return exact.key
+  if (wanted === 'DTFILM') {
+    const dtf = techniques.find((row) => upper(row.key).includes('DTF'))
+    if (dtf) return dtf.key
+  }
+  if (wanted === 'DTG') {
+    const dtg = techniques.find((row) => /DTG|DIRECT/.test(upper(row.key)) && !upper(row.key).includes('DTF'))
+    if (dtg) return dtg.key
+  }
+  if (wanted === 'EMBROIDERY') {
+    const embroidery = techniques.find((row) => upper(row.key).includes('EMBROID'))
+    if (embroidery) return embroidery.key
+  }
+  return techniques.find((row) => row.isDefault)?.key || techniques[0]?.key || wanted
 }
 
 /** Printful dashboard: technique tabs filter which placements appear. */
@@ -335,14 +572,16 @@ export function placementForPrintFile(
     stage,
     printWidth: dims.printWidth,
     printHeight: dims.printHeight,
+    dpi: file.dpi ?? null,
   }
 }
 
 export function fileGuidelineLines(area: BlankPlacement): string[] {
-  const widthIn = (area.printWidth / 150).toFixed(2)
-  const heightIn = (area.printHeight / 150).toFixed(2)
+  const dpi = area.dpi && area.dpi > 0 ? area.dpi : /embroidery/i.test(area.printfulType) ? 300 : 150
+  const widthIn = (area.printWidth / dpi).toFixed(2)
+  const heightIn = (area.printHeight / dpi).toFixed(2)
   return [
-    `${area.printWidth} × ${area.printHeight} px (${widthIn}″ × ${heightIn}″ at 150 DPI)`,
+    `${area.printWidth} × ${area.printHeight} px (${widthIn}″ × ${heightIn}″ at ${dpi} DPI)`,
     'PNG or JPEG with transparent background when possible.',
     `Printful file type: ${area.printfulType}`,
   ]

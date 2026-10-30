@@ -14,6 +14,7 @@ import { ensureR2Cors, getR2Client, getR2MediaConfig } from '@/lib/audio/r2Media
  * `/api/merch/art/:id` (which streams from R2).
  */
 const PREFIX = 'merch/'
+const PART_PREFIX = 'merch/_parts/'
 const ART_ID = /^[0-9a-f-]{36}\.(png|jpg)$/i
 const DEFAULT_PUT_EXPIRES = 600 // 10 min to upload
 
@@ -107,6 +108,27 @@ export async function r2ArtExists(id: string): Promise<boolean> {
   }
 }
 
+/** First bytes of an art object, enough to read a JPEG size header. */
+export async function fetchR2ArtPrefix(
+  id: string,
+  length = 65536,
+): Promise<Buffer | null> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) return null
+  try {
+    const res = await getR2Client(cfg).send(
+      new GetObjectCommand({
+        Bucket: cfg.bucket,
+        Key: artKey(id),
+        Range: `bytes=0-${Math.max(0, length - 1)}`,
+      }),
+    )
+    return Buffer.from(await (res.Body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray())
+  } catch {
+    return null
+  }
+}
+
 /** Read an art object from R2 for the same-origin proxy route. */
 export async function fetchR2Art(
   id: string,
@@ -124,6 +146,72 @@ export async function fetchR2Art(
   }
 }
 
+function partKey(uploadId: string, index: number): string {
+  return `${PART_PREFIX}${uploadId}/${index}`
+}
+
+export async function putR2Key(key: string, bytes: Buffer, contentType: string): Promise<void> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) throw new Error('Cloudflare R2 is not configured')
+  await getR2Client(cfg).send(
+    new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key: key,
+      Body: bytes,
+      ContentType: contentType,
+    }),
+  )
+}
+
+export async function readR2Key(key: string): Promise<Buffer | null> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) return null
+  try {
+    const res = await getR2Client(cfg).send(new GetObjectCommand({ Bucket: cfg.bucket, Key: key }))
+    return Buffer.from(await (res.Body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray())
+  } catch {
+    return null
+  }
+}
+
+async function deleteR2Key(key: string): Promise<void> {
+  const cfg = getR2MediaConfig()
+  if (!cfg) return
+  try {
+    await getR2Client(cfg).send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }))
+  } catch {
+    /* leftover part is hidden from the art library */
+  }
+}
+
+/** Store one piece of a large art upload. The browser cannot PUT to R2 without bucket CORS. */
+export async function storeMerchArtPart(
+  uploadId: string,
+  index: number,
+  bytes: Buffer,
+  contentType: string,
+): Promise<void> {
+  await putR2Key(partKey(uploadId, index), bytes, contentType)
+}
+
+/** Join stored pieces into one art object and remove the pieces. */
+export async function assembleMerchArtParts(
+  uploadId: string,
+  total: number,
+  id: string,
+  contentType: string,
+): Promise<{ id: string; url: string }> {
+  const parts: Buffer[] = []
+  for (let index = 0; index < total; index += 1) {
+    const part = await readR2Key(partKey(uploadId, index))
+    if (!part) throw new Error('Upload is missing a piece. Try again.')
+    parts.push(part)
+  }
+  const stored = await putR2Art(id, Buffer.concat(parts), contentType)
+  await Promise.all(parts.map((_, index) => deleteR2Key(partKey(uploadId, index))))
+  return stored
+}
+
 export async function deleteR2Art(id: string): Promise<boolean> {
   const cfg = getR2MediaConfig()
   if (!cfg) return false
@@ -134,6 +222,38 @@ export async function deleteR2Art(id: string): Promise<boolean> {
     console.warn('[r2-art] delete failed:', err)
     return false
   }
+}
+
+const PRINTFUL_INDEX_KEY = 'merch/_meta/printful-generated.json'
+
+/** Art ids saved from Printful mockup tasks. Hidden from the art library listing. */
+export async function readPrintfulGeneratedArtIds(): Promise<string[]> {
+  const raw = await readR2Key(PRINTFUL_INDEX_KEY)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw.toString('utf8')) as { ids?: unknown }
+    if (!Array.isArray(parsed.ids)) return []
+    return parsed.ids
+      .filter((id): id is string => typeof id === 'string' && ART_ID.test(id))
+      .map((id) => id.toLowerCase())
+  } catch {
+    return []
+  }
+}
+
+/** Remember mockup files so they stay out of My uploads after a newer photo replaces them. */
+export async function rememberPrintfulGeneratedArtIds(ids: string[]): Promise<void> {
+  const next = new Set(await readPrintfulGeneratedArtIds())
+  for (const id of ids) {
+    const clean = id.toLowerCase()
+    if (ART_ID.test(clean)) next.add(clean)
+  }
+  if (next.size === 0) return
+  await putR2Key(
+    PRINTFUL_INDEX_KEY,
+    Buffer.from(JSON.stringify({ ids: [...next] })),
+    'application/json',
+  )
 }
 
 export type R2ArtItem = { id: string; url: string; createdAt: string }

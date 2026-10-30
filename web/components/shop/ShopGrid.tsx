@@ -144,7 +144,7 @@ export default function ShopGrid({
         <div className="space-y-12">
           {allModeSections.map((section) => (
             <div key={section.categoryId} className="space-y-4">
-              <h3 className="text-lg font-semibold tracking-wide text-white">{section.heading}</h3>
+              <h3 className="text-center text-lg font-semibold tracking-wide text-white">{section.heading}</h3>
               <ProductGrid items={section.items} />
             </div>
           ))}

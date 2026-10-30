@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
   coloredTemplate,
+  colorwayGarmentPhoto,
+  positioningPatternUrl,
   containedImageBox,
   designPreviewColorName,
+  angleMatchesFile,
+  frontMockupIndex,
+  frontPhotoIndex,
+  mockupPhotosForColor,
+  mockupTitlesForColor,
+  shopFrontPhotoIndex,
+  orderPrintFilesByAngles,
+  previewUsesMockupPhoto,
   designGarmentImage,
   filterPrintFilesForTechnique,
+  techniqueForSavedFile,
   isAllOverCatalogProduct,
   studioPlacementsForProduct,
 } from '@/lib/merch/catalog-studio'
@@ -94,6 +105,86 @@ describe('catalog-studio', () => {
     expect(coloredTemplate(detail, file, 'Black', 'One size')?.backgroundColor).toBe('#2a2a2a')
   })
 
+  it('fills a shared back positioning sheet with that color’s front photo', () => {
+    const detail = mockDetail({
+      variants: [
+        { id: 20, color: 'Sherbet rainbow', size: 'M', image: 'https://files.example/model.jpg' },
+        { id: 21, color: 'Classic rainbow', size: 'M', image: 'https://files.example/model-classic.jpg' },
+      ],
+      printFiles: [
+        {
+          fileId: 'back',
+          type: 'back_dtf',
+          title: 'Back',
+          additionalPrice: null,
+          options: [],
+          templateUrl: 'https://files.example/ghost/back/06_ghost_back_positioning_whitebg.png',
+          variantTemplates: {
+            '20': {
+              imageUrl: 'https://files.example/ghost/back/06_ghost_back_positioning_whitebg.png',
+              backgroundColor: null,
+            },
+            '21': {
+              imageUrl: 'https://files.example/ghost/back/06_ghost_back_positioning_whitebg.png',
+              backgroundColor: null,
+            },
+          },
+        },
+        {
+          fileId: 'front',
+          type: 'front_dtf',
+          title: 'Front',
+          additionalPrice: null,
+          options: [],
+          templateUrl: 'https://files.example/ghost/front/05_ghost_front_sherbetrainbow_base_whitebg.png',
+          variantTemplates: {
+            '20': {
+              imageUrl: 'https://files.example/ghost/front/05_ghost_front_sherbetrainbow_base_whitebg.png',
+              backgroundColor: null,
+            },
+            '21': {
+              imageUrl: 'https://files.example/ghost/front/05_ghost_front_classicrainbow_base_whitebg.png',
+              backgroundColor: null,
+            },
+          },
+        },
+      ],
+    })
+    const back = detail.printFiles[0]
+    expect(colorwayGarmentPhoto(detail, 'Sherbet rainbow', 'M')).toBe(
+      'https://files.example/ghost/front/05_ghost_front_sherbetrainbow_base_whitebg.png',
+    )
+    expect(positioningPatternUrl(detail, back.variantTemplates?.['20']?.imageUrl, 'Sherbet rainbow', 'M')).toBe(
+      'https://files.example/ghost/front/05_ghost_front_sherbetrainbow_base_whitebg.png',
+    )
+    expect(positioningPatternUrl(detail, detail.printFiles[1].templateUrl, 'Sherbet rainbow', 'M')).toBeNull()
+  })
+
+  it('keeps a solid-color ghost on its swatch instead of another shared sheet', () => {
+    const detail = mockDetail({
+      variants: [
+        { id: 1, color: 'Black', size: 'M', image: null },
+        { id: 2, color: 'White', size: 'M', image: null },
+      ],
+      printFiles: [
+        {
+          fileId: 'front',
+          type: 'front',
+          title: 'Front',
+          additionalPrice: null,
+          options: [],
+          templateUrl: 'https://files.example/ghost/front/base.png',
+          variantTemplates: {
+            '1': { imageUrl: 'https://files.example/ghost/front/base.png', backgroundColor: '#111111' },
+            '2': { imageUrl: 'https://files.example/ghost/front/base.png', backgroundColor: '#ffffff' },
+          },
+        },
+      ],
+    })
+    expect(colorwayGarmentPhoto(detail, 'Black', 'M')).toBeNull()
+    expect(positioningPatternUrl(detail, 'https://files.example/back_positioning.png', 'Black', 'M')).toBeNull()
+  })
+
   it('uses the saved preview color instead of the first sell color', () => {
     expect(
       designPreviewColorName(
@@ -107,6 +198,58 @@ describe('catalog-studio', () => {
     ).toBe('Classic / Light Denim')
     expect(designPreviewColorName([], '#ffffff', ['Black Denim'])).toBe('Black Denim')
     expect(designPreviewColorName([], null, [])).toBe('Black')
+  })
+
+  it('keeps a put-out photo only for the color it was made in', () => {
+    const photo = '/api/merch/art/photo.jpg'
+    expect(previewUsesMockupPhoto(photo, 'Bio White', null, true)).toBe(true)
+    expect(previewUsesMockupPhoto(photo, 'Bio White', 'Bio White', false)).toBe(true)
+    expect(previewUsesMockupPhoto(photo, 'Bio White', 'Bio White', true)).toBe(true)
+    expect(previewUsesMockupPhoto(photo, 'Bio White', 'Black', true)).toBe(false)
+    expect(previewUsesMockupPhoto('', 'Bio White', 'Black', true)).toBe(false)
+  })
+
+  it('starts a hat on the straight Front photo, not the Back angle Printful lists first', () => {
+    const titles = ['Back', 'Left Front', 'Left Side', 'Right Front', 'Right Side', 'Front']
+    expect(frontMockupIndex(titles)).toBe(5)
+    expect(frontMockupIndex(['Left Front', 'Right Front'])).toBe(0)
+    expect(frontMockupIndex(undefined)).toBe(0)
+    expect(frontPhotoIndex(6, titles)).toBe(5)
+    expect(frontPhotoIndex(2, titles)).toBe(1)
+    const urls = titles.map((title) => `/api/merch/art/${title}.jpg`)
+    expect(
+      shopFrontPhotoIndex({
+        mockupUrls: urls,
+        mockupUrlsByColor: { Black: urls },
+        mockupAngleTitlesByColor: { Black: titles },
+        previewColorName: 'Black',
+      }),
+    ).toBe(5)
+    expect(mockupTitlesForColor({ Black: titles }, 'Black', 'Black')).toEqual(titles)
+    expect(mockupTitlesForColor({ Black: titles }, 'White', 'Black')).toEqual([])
+  })
+
+  it('uses the angle photos Printful stored for the selected color', () => {
+    const black = ['/api/merch/art/black-front.jpg', '/api/merch/art/black-side.jpg']
+    const white = ['/api/merch/art/white-front.jpg']
+    const byColor = { Black: black, White: white }
+    expect(mockupPhotosForColor(black, byColor, 'White', 'Black')).toEqual(white)
+    expect(mockupPhotosForColor(black, byColor, 'Black', 'Black')).toEqual(black)
+    expect(mockupPhotosForColor(black, {}, 'Navy', 'Black')).toEqual([])
+    expect(mockupPhotosForColor(black, {}, 'Black', 'Black')).toEqual(black)
+  })
+
+  it('lines template views up with the photographed angles', () => {
+    const files = [
+      { type: 'embroidery_back', title: 'Back' },
+      { type: 'embroidery_front_large', title: 'Front wide' },
+      { type: 'embroidery_right', title: 'Right side' },
+    ]
+    expect(angleMatchesFile('Right', files[2])).toBe(true)
+    expect(orderPrintFilesByAngles(files, ['Front', 'Right', 'Lifestyle']).map((file) => file.type)).toEqual([
+      'embroidery_front_large',
+      'embroidery_right',
+    ])
   })
 
   it('letterboxes a portrait product photo inside a square card', () => {
@@ -130,5 +273,14 @@ describe('catalog-studio', () => {
     ]
     expect(filterPrintFilesForTechnique(files, 'EMBROIDERY')).toHaveLength(1)
     expect(filterPrintFilesForTechnique(files, 'DTFILM')).toHaveLength(1)
+  })
+
+  it('opens the technique that holds the saved print file', () => {
+    const techniques = [
+      { key: 'EMBROIDERY', isDefault: true },
+      { key: 'DTFILM', isDefault: false },
+    ]
+    expect(techniqueForSavedFile(techniques, 'front_dtf')).toBe('DTFILM')
+    expect(techniqueForSavedFile(techniques, 'embroidery_chest_left')).toBe('EMBROIDERY')
   })
 })

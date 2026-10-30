@@ -3,17 +3,61 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getBlank, MERCH_BLANKS, type BlankPlacement, type MerchBlank } from '@/lib/merch/blanks'
 import MerchMannequin from '@/components/admin/MerchMannequin'
-import { artHeightInPrintArea, type ArtPlacement, type MerchDesign } from '@/lib/merch/design'
+import { artHeightInPrintArea, previewArtPlacement, type ArtPlacement, type MerchDesign } from '@/lib/merch/design'
 import type { CatalogProductDetail } from '@/lib/merch/printful-catalog-types'
 import {
   coloredTemplate,
   containedImageBox,
+  positioningPatternUrl,
   designPreviewColorName,
   hasTemplateStage,
   placementForPrintFile,
+  mockupPhotosForColor,
   previewGarmentImage,
+  sameColorKey,
 } from '@/lib/merch/catalog-studio'
 import GarmentMatImage from '@/components/shop/GarmentMatImage'
+import { previewStitchThreads, quantizeImageData } from '@/lib/merch/embroidery-threads'
+
+const threadStitchCache = new Map<string, string>()
+
+function ThreadStitchImage({ src, threadColors }: { src: string; threadColors: string[] }) {
+  const key = `${src}|${threadColors.join(',')}`
+  const [quantized, setQuantized] = useState<string | null>(threadStitchCache.get(key) || null)
+
+  useEffect(() => {
+    const cached = threadStitchCache.get(key)
+    if (cached) {
+      setQuantized(cached)
+      return
+    }
+    let cancelled = false
+    const image = new Image()
+    image.onload = () => {
+      if (cancelled) return
+      const max = 512
+      const scale = Math.min(1, max / Math.max(image.naturalWidth, image.naturalHeight, 1))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) return
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      quantizeImageData(frame.data, threadColors)
+      ctx.putImageData(frame, 0, 0)
+      const next = canvas.toDataURL('image/png')
+      threadStitchCache.set(key, next)
+      if (!cancelled) setQuantized(next)
+    }
+    image.src = src
+    return () => {
+      cancelled = true
+    }
+  }, [key, src])
+
+  return <img src={quantized || src} alt="" draggable={false} className="h-full w-full object-fill" />
+}
 
 export type MerchGarmentPreviewDesign = Pick<
   MerchDesign,
@@ -25,18 +69,25 @@ export type MerchGarmentPreviewDesign = Pick<
   | 'colors'
   | 'sizes'
   | 'placements'
+  | 'activeFileType'
   | 'mockupUrls'
+  | 'mockupUrlsByColor'
+  | 'mockupAngleTitlesByColor'
+  | 'previewColorName'
+  | 'printFileUrls'
+  | 'embroideryUnlimitedColor'
+  | 'embroideryThreads'
 >
 
 const catalogDetailCache = new Map<number, Promise<CatalogProductDetail | null>>()
 
-function loadCatalogDetail(catalogProductId: number): Promise<CatalogProductDetail | null> {
+export function loadMerchCatalogDetail(catalogProductId: number): Promise<CatalogProductDetail | null> {
   const existing = catalogDetailCache.get(catalogProductId)
   if (existing) {
     return existing.then((detail) => {
       if (detail && !Array.isArray(detail.colors)) {
         catalogDetailCache.delete(catalogProductId)
-        return loadCatalogDetail(catalogProductId)
+        return loadMerchCatalogDetail(catalogProductId)
       }
       return detail
     })
@@ -50,11 +101,7 @@ function loadCatalogDetail(catalogProductId: number): Promise<CatalogProductDeta
 }
 
 function primaryPreviewPlacement(design: MerchGarmentPreviewDesign): ArtPlacement | undefined {
-  for (const id of ['front', 'back'] as const) {
-    const match = design.placements.find((row) => row.placement === id && row.assetUrl)
-    if (match) return match
-  }
-  return design.placements.find((row) => row.assetUrl)
+  return previewArtPlacement(design.placements, design.activeFileType)
 }
 
 function printAreaForPlacement(
@@ -73,6 +120,79 @@ function printAreaForPlacement(
   )
   if (fileOnSide) return placementForPrintFile(fileOnSide, template, { surface: 'photo' })
   return fromBlank
+}
+
+export function StitchedColorPreview({
+  garmentUrl,
+  garmentColor,
+  patternUrl,
+  matColor,
+  stage,
+  printUrl,
+  threadColors,
+  art,
+  area,
+  className = '',
+}: {
+  garmentUrl: string
+  garmentColor?: string | null
+  /** Color photo for a transparent positioning back. */
+  patternUrl?: string | null
+  matColor?: string | null
+  stage: { x: number; y: number; w: number; h: number }
+  /** Baked print file. It already contains the stitch, so it fills the print box. */
+  printUrl?: string | null
+  /** Standard embroidery preview. Omitted for unlimited color and for the file Printful receives. */
+  threadColors?: string[] | null
+  art?: ArtPlacement | null
+  area?: BlankPlacement | null
+  className?: string
+}) {
+  const height = art && area ? artHeightInPrintArea(art, area) : 0
+  return (
+    <div className={`relative h-full w-full ${className}`}>
+      <GarmentMatImage
+        src={garmentUrl}
+        matColor={matColor}
+        garmentColor={patternUrl ? null : garmentColor}
+        patternUrl={patternUrl}
+        className="absolute inset-0"
+        imgClassName="absolute inset-0 h-full w-full object-fill"
+      />
+      <div
+        className="pointer-events-none absolute"
+        style={{
+          left: `${stage.x * 100}%`,
+          top: `${stage.y * 100}%`,
+          width: `${stage.w * 100}%`,
+          height: `${stage.h * 100}%`,
+        }}
+      >
+        {printUrl ? (
+          threadColors && threadColors.length > 0 ? (
+            <ThreadStitchImage src={printUrl} threadColors={threadColors} />
+          ) : (
+            <img src={printUrl} alt="" draggable={false} className="h-full w-full object-fill" />
+          )
+        ) : art?.assetUrl ? (
+          <img
+            src={art.assetUrl}
+            alt=""
+            draggable={false}
+            className="absolute touch-none select-none"
+            style={{
+              left: `${art.x * 100}%`,
+              top: `${art.y * 100}%`,
+              width: `${art.scale * 100}%`,
+              height: `${height * 100}%`,
+              transform: `rotate(${art.rotation}deg)`,
+              transformOrigin: 'center',
+            }}
+          />
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 function PlacedArtPreview({ art, area }: { art: ArtPlacement; area: BlankPlacement }) {
@@ -110,10 +230,22 @@ type Props = {
   className?: string
   /** Studio mat behind a cut-out product. Leaves the garment image unchanged. */
   matColor?: string
+  /** Shopper's color. When it differs from the put-out photo, draw that garment. */
+  colorName?: string | null
+  /** Angle of the put-out photo, used only while that photo's color is selected. */
+  photoIndex?: number
+  /** Draw the saved art on the garment instead of a stored photo. */
+  preferLayout?: boolean
 }
 
-export default function MerchGarmentPreview({ design, className = '', matColor }: Props) {
-  const mockup = design.mockupUrls[0]
+export default function MerchGarmentPreview({
+  design,
+  className = '',
+  matColor,
+  colorName: requestedColorName = null,
+  photoIndex = 0,
+  preferLayout = false,
+}: Props) {
   const art = primaryPreviewPlacement(design)
   const blank = getBlank(design.blankId) || MERCH_BLANKS[0]
   const [catalog, setCatalog] = useState<CatalogProductDetail | null>(null)
@@ -126,7 +258,7 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
     }
     if (catalog && Array.isArray(catalog.colors)) return
     let cancelled = false
-    void loadCatalogDetail(design.catalogProductId).then((detail) => {
+    void loadMerchCatalogDetail(design.catalogProductId).then((detail) => {
       if (!cancelled) setCatalog(detail)
     })
     return () => {
@@ -134,8 +266,21 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
     }
   }, [catalog, design.catalogProductId])
 
-  const colorName = designPreviewColorName(catalog?.colors || [], design.previewColor, design.colors)
+  const savedColorName = designPreviewColorName(catalog?.colors || [], design.previewColor, design.colors)
+  const colorName = requestedColorName?.trim() || savedColorName
   const previewSize = design.sizes.includes('M') ? 'M' : design.sizes[0] || 'M'
+  const colorPhotos = mockupPhotosForColor(
+    design.mockupUrls,
+    design.mockupUrlsByColor,
+    requestedColorName || design.previewColorName || savedColorName,
+    design.previewColorName || savedColorName,
+  )
+  const mockup = colorPhotos[Math.min(Math.max(photoIndex, 0), Math.max(colorPhotos.length - 1, 0))] || null
+  const embroideryArt = Boolean(art?.fileType && /embroidery/i.test(art.fileType))
+  const stitchThreads = embroideryArt
+    ? previewStitchThreads(design.embroideryUnlimitedColor, design.embroideryThreads)
+    : null
+  const swatchHex = catalog?.colors.find((color) => sameColorKey(color.name, colorName))?.hex || null
 
   const printFile = useMemo(() => {
     if (!catalog || !art) return null
@@ -152,6 +297,7 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
   const calibrated = printFile && hasTemplateStage(printFile) ? printFile : null
   const templateView = calibrated ? coloredTemplate(catalog, calibrated, colorName, previewSize) : null
   const garmentUrl = templateView?.imageUrl || (catalog ? previewGarmentImage(catalog, colorName, previewSize) : null)
+  const patternUrl = positioningPatternUrl(catalog, garmentUrl, colorName, previewSize)
   const area =
     art && blank
       ? calibrated
@@ -165,7 +311,7 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
     setImageAspect(null)
   }, [garmentUrl])
 
-  if (mockup) {
+  if (mockup && !preferLayout) {
     return <img src={mockup} alt="" className={`h-full w-full object-contain ${className}`} />
   }
 
@@ -192,7 +338,8 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
           <GarmentMatImage
             src={garmentUrl}
             matColor={matColor}
-            garmentColor={templateView?.backgroundColor || design.previewColor}
+            garmentColor={patternUrl ? null : templateView?.backgroundColor || swatchHex || design.previewColor}
+            patternUrl={patternUrl}
             className="absolute inset-0"
             imgClassName="absolute inset-0 h-full w-full object-fill"
             onLoad={(event) => {
@@ -205,12 +352,35 @@ export default function MerchGarmentPreview({ design, className = '', matColor }
         ) : (
           <MerchMannequin
             family={design.family}
-            color={design.previewColor}
+            color={swatchHex || design.previewColor}
             placement={placementId}
             idPrefix={`shop-preview-${design.id}`}
           />
         )}
-        <PlacedArtPreview art={art} area={area} />
+        {art.fileType && design.printFileUrls?.[art.fileType] && !preferLayout ? (
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: `${area.stage.x * 100}%`,
+              top: `${area.stage.y * 100}%`,
+              width: `${area.stage.w * 100}%`,
+              height: `${area.stage.h * 100}%`,
+            }}
+          >
+            {stitchThreads ? (
+              <ThreadStitchImage src={design.printFileUrls[art.fileType]} threadColors={stitchThreads} />
+            ) : (
+              <img
+                src={design.printFileUrls[art.fileType]}
+                alt=""
+                draggable={false}
+                className="h-full w-full object-fill"
+              />
+            )}
+          </div>
+        ) : (
+          <PlacedArtPreview art={art} area={area} />
+        )}
       </span>
     </span>
   )

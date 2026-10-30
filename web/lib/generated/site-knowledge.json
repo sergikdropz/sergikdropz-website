@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-29T05:30:06.141Z",
+    "generatedAt": "2026-10-29T16:17:23.664Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -16,9 +16,9 @@
     },
     "counts": {
       "appRouterPages": 100,
-      "appRouterRouteHandlers": 351,
+      "appRouterRouteHandlers": 355,
       "componentsTsx": 233,
-      "libTs": 967
+      "libTs": 972
     },
     "pagesByCategory": {
       "fan": 5,
@@ -30,7 +30,7 @@
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "a8284d5998e98ed6"
+    "contentHash": "211b5c38de76c9d9"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -805,6 +805,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/merch/art/chunk",
+        "file": "web/app/api/admin/merch/art/chunk/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/merch/art/generate",
         "file": "web/app/api/admin/merch/art/generate/route.ts",
         "category": "api"
@@ -850,13 +855,28 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/merch/designs/[id]/previews",
+        "file": "web/app/api/admin/merch/designs/[id]/previews/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/merch/designs/[id]/publish",
         "file": "web/app/api/admin/merch/designs/[id]/publish/route.ts",
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/merch/designs/[id]",
+        "file": "web/app/api/admin/merch/designs/[id]/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/merch/designs/[id]/visibility",
         "file": "web/app/api/admin/merch/designs/[id]/visibility/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/designs/order",
+        "file": "web/app/api/admin/merch/designs/order/route.ts",
         "category": "api"
       },
       {

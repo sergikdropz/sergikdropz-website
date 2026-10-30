@@ -134,7 +134,10 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
 
   { path: '/api/admin/merch/designs', method: 'GET', access: 'admin_read', reason: 'List fitting-room merch designs' },
   { path: '/api/admin/merch/designs', method: 'POST', access: 'admin_write', reason: 'Save a fitting-room merch design' },
+  { path: '/api/admin/merch/designs/order', method: 'POST', access: 'admin_write', reason: 'Reorder fitting-room merch designs' },
+  { path: '/api/admin/merch/designs/[id]', method: 'DELETE', access: 'admin_write', reason: 'Remove a fitting-room merch design' },
   { path: '/api/admin/merch/designs/[id]/publish', method: 'POST', access: 'admin_write', reason: 'Send a merch design to Printful and keep it hidden' },
+  { path: '/api/admin/merch/designs/[id]/previews', method: 'POST', access: 'admin_write', reason: 'Ask Printful for new preview photos of a saved design' },
   { path: '/api/admin/merch/designs/[id]/visibility', method: 'POST', access: 'admin_write', reason: 'Show or hide a designed merch product' },
   { path: '/api/admin/merch/designs/[id]/mockups', method: 'GET', access: 'admin_read', reason: 'Poll Printful mockup photos for a design' },
   {
@@ -144,6 +147,7 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
     reason: 'List merch art uploads for the fitting room',
   },
   { path: '/api/admin/merch/art', method: 'POST', access: 'admin_write', reason: 'Upload merch artwork or a baked print file' },
+  { path: '/api/admin/merch/art/chunk', method: 'POST', access: 'admin_write', reason: 'Upload one piece of a large merch art file' },
   { path: '/api/admin/merch/art', method: 'DELETE', access: 'admin_write', reason: 'Remove an unused merch art upload from the fitting room' },
   { path: '/api/admin/merch/art-sources', method: 'GET', access: 'admin_read', reason: 'Gallery and release art for the fitting room' },
   { path: '/api/admin/merch/catalog', method: 'GET', access: 'admin_read', reason: 'Browse cached Printful catalog for SERGWEAR' },

@@ -89,14 +89,12 @@ export default function MusicShopPageClient({
         <ShopMemberBenefitsBar />
 
         <section id="catalog" className="scroll-mt-28">
-          <div className="mb-6 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-white">Catalog</h2>
-              <p className="mt-1 text-sm text-gray-400">
-                {catalogProducts.length} {catalogProducts.length === 1 ? 'release' : 'releases'} on streaming
-                platforms — direct downloads priced per song ($1.29 MP3, $1.99 lossless WAV).
-              </p>
-            </div>
+          <div className="mb-6 text-center">
+            <h2 className="text-2xl font-bold text-white">Catalog</h2>
+            <p className="mx-auto mt-1 max-w-2xl text-sm text-gray-400">
+              {catalogProducts.length} {catalogProducts.length === 1 ? 'release' : 'releases'} on streaming
+              platforms — direct downloads priced per song ($1.29 MP3, $1.99 lossless WAV).
+            </p>
           </div>
           <ShopGrid
             products={catalogProducts}

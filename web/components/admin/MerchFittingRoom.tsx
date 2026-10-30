@@ -15,6 +15,7 @@ import MerchMannequin from '@/components/admin/MerchMannequin'
 import type { StudioDockTool } from '@/components/admin/MerchStudioDock'
 import MerchPrintfulCatalog, {
   CATALOG_PANEL_COLLAPSED_WIDTH,
+  PanelChevron,
   readCatalogPanelCollapsed,
 } from '@/components/admin/MerchPrintfulCatalog'
 import MerchPrintfulSetupPanel, {
@@ -37,11 +38,18 @@ import {
   type StageView,
 } from '@/components/admin/MerchDesignMaker'
 import { sumCatalogAddOnRows, usedCatalogAddOnRows } from '@/lib/merch/catalog-add-ons'
+import {
+  embroideryThreadMatchNote as threadMatchNote,
+  matchingEmbroideryThread,
+  resolveEmbroideryThreads,
+  sampleArtworkThreadColors,
+  threadOptionIdForFile,
+  toggleEmbroideryThread,
+} from '@/lib/merch/embroidery-threads'
 import { buildDesignTabs, placementFileToOpen } from '@/lib/merch/design-tabs'
 import {
   productMatColor,
   productMatKey,
-  readOpenTab,
   readProductMats,
   readStudioDesignId,
   writeOpenTab,
@@ -51,6 +59,7 @@ import {
 } from '@/lib/merch/studio-session'
 import { channelLuma, hexToRgb } from '@/lib/merch/product-mat'
 import GarmentMatImage from '@/components/shop/GarmentMatImage'
+import { StitchedColorPreview } from '@/components/shop/MerchGarmentPreview'
 import MerchLeaveDesignDialog from '@/components/admin/MerchLeaveDesignDialog'
 import MerchArtEditor from '@/components/admin/MerchArtEditor'
 import StudioContextMenu, {
@@ -60,23 +69,36 @@ import type { CatalogProductDetail, PrintfulCatalogProduct } from '@/lib/merch/p
 import {
   coloredTemplate,
   designGarmentImage,
+  positioningPatternUrl,
   filterPrintFilesForTechnique,
   hasTemplateStage,
+  techniqueForSavedFile,
   pickPreviewVariant,
   placementForPrintFile,
   previewGarmentImage,
   resolveBlankForCatalogProduct,
+  orderPrintFilesByAngles,
+  sameColorKey,
   restoreCatalogFileLayers,
   studioPlacementsForTechnique,
 } from '@/lib/merch/catalog-studio'
-import { snapArtInPrintArea, type SnapGuides } from '@/lib/merch/placement-snap'
+import { snapArtInPrintArea, snapRotation, type SnapGuides } from '@/lib/merch/placement-snap'
 import { removeSolidBackground } from '@/lib/merch/remove-background'
 import {
   artOutside,
+  containPlacement,
   designPlacementIssues,
+  EMBROIDERY_SAFE_INCHES,
+  fitPlacement,
+  isEmbroideryFileType,
+  maxScaleInMitigation,
+  nativePrintScale,
+  optimizePlacementForPrint,
+  stitchInsets,
   dpiGrade,
   effectiveDpi,
   placementKey,
+  previewArtPlacement,
   suggestRetail,
   youKeep,
   type ArtPlacement,
@@ -84,7 +106,7 @@ import {
   type MerchDesign,
 } from '@/lib/merch/design'
 
-type ArtUpload = { id: string; label: string; url: string }
+type ArtUpload = { id: string; label: string; url: string; origin?: 'user' | 'printful' }
 
 type ArtContextMenu =
   | { target: 'stage'; x: number; y: number }
@@ -109,25 +131,6 @@ function readStoredNumber(key: string, fallback: number, min: number, max: numbe
   return Math.min(max, Math.max(min, stored))
 }
 
-function fittedPlacement(
-  assetWidth: number,
-  assetHeight: number,
-  area: BlankPlacement
-): Pick<ArtPlacement, 'x' | 'y' | 'scale' | 'rotation'> {
-  const imgAspect = assetWidth > 0 ? assetHeight / assetWidth : 1
-  const areaAspect = area.printWidth > 0 ? area.printHeight / area.printWidth : 1
-  let scale = 0.86
-  const heightAtScale = (scale * imgAspect) / areaAspect
-  if (heightAtScale > 0.86) scale = (0.86 * areaAspect) / imgAspect
-  scale = Math.min(1, Math.max(0.15, scale))
-  const height = (scale * imgAspect) / areaAspect
-  return {
-    scale,
-    x: (1 - scale) / 2,
-    y: Math.max(0, (1 - height) / 2),
-    rotation: 0,
-  }
-}
 
 type LayersState = Partial<Record<PlacementId, ArtPlacement>>
 type CatalogLayersState = Record<string, ArtPlacement>
@@ -162,6 +165,24 @@ function loadImage(url: string, cors = false): Promise<HTMLImageElement> {
   })
 }
 
+function requestWithProgress(
+  url: string,
+  init: { method: string; body: XMLHttpRequestBodyInit; headers?: Record<string, string> },
+  onProgress: (loaded: number, total: number) => void,
+): Promise<{ ok: boolean; status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(init.method, url)
+    for (const [key, value] of Object.entries(init.headers || {})) xhr.setRequestHeader(key, value)
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total)
+    }
+    xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: xhr.responseText || '' })
+    xhr.onerror = () => reject(new Error('Upload failed'))
+    xhr.send(init.body)
+  })
+}
+
 export default function MerchFittingRoom({
   stageView,
   onStageViewChange,
@@ -184,6 +205,10 @@ export default function MerchFittingRoom({
   const [status, setStatus] = useState<DesignStatus>('draft')
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [publishProgress, setPublishProgress] = useState<{ value: number; label: string } | null>(null)
+  const publishRun = useRef(0)
+  const printFileUrlsRef = useRef<Record<string, string>>({})
   const [uploads, setUploads] = useState<ArtUpload[]>([])
   const [saved, setSaved] = useState<MerchDesign[]>([])
   const [savedReady, setSavedReady] = useState(false)
@@ -195,10 +220,21 @@ export default function MerchFittingRoom({
     run: () => Promise<void>
   } | null>(null)
   const [mockupUrls, setMockupUrls] = useState<string[]>([])
+  const [mockupUrlsByColor, setMockupUrlsByColor] = useState<Record<string, string[]>>({})
+  const [mockupAngleTitlesByColor, setMockupAngleTitlesByColor] = useState<Record<string, string[]>>({})
+  /** Garment color the stored Printful photos were made in. */
+  const [mockupColor, setMockupColor] = useState<string | null>(null)
+  /** Color name for those photos. Two-tone colors share one hex. */
+  const [mockupColorName, setMockupColorName] = useState<string | null>(null)
+  const [printFileUrls, setPrintFileUrls] = useState<Record<string, string>>({})
   const [standIn, setStandIn] = useState(true)
   const [photoPick, setPhotoPick] = useState<number | null>(null)
+  /** View zoom for the preview garment. Does not change print size. */
+  const [stageZoom, setStageZoom] = useState(1)
   const [dragging, setDragging] = useState(false)
   const [snapGuides, setSnapGuides] = useState<SnapGuides>({ vertical: [], horizontal: [] })
+  const [showRotationGuides, setShowRotationGuides] = useState(false)
+  const rotateHoldRef = useRef<number | null>(null)
   const snapGuideTimer = useRef<number | null>(null)
   const [guideFlash, setGuideFlash] = useState(false)
   const guideTimer = useRef<number | null>(null)
@@ -222,6 +258,8 @@ export default function MerchFittingRoom({
   const [activePrintFileType, setActivePrintFileType] = useState<string>('')
   const [catalogFileLayers, setCatalogFileLayers] = useState<Record<string, ArtPlacement>>({})
   const [embroideryUnlimitedColor, setEmbroideryUnlimitedColor] = useState(false)
+  const [embroideryThreads, setEmbroideryThreads] = useState<Record<string, string[]>>({})
+  const [embroideryThreadNote, setEmbroideryThreadNote] = useState<string | null>(null)
   const [previewSize, setPreviewSize] = useState('M')
   const [printfulReady, setPrintfulReady] = useState<PrintfulReadyStatus | null>(null)
   const [catalogColumnWidth, setCatalogColumnWidth] = useState(CATALOG_COLUMN_DEFAULT)
@@ -244,6 +282,8 @@ export default function MerchFittingRoom({
   layersRef.current = layers
   const catalogFileLayersRef = useRef(catalogFileLayers)
   catalogFileLayersRef.current = catalogFileLayers
+  const manualThreadKey = useRef<string | null>(null)
+  const threadDetectToken = useRef(0)
 
   const techniquePrintFiles = useMemo(
     () =>
@@ -281,6 +321,54 @@ export default function MerchFittingRoom({
     catalogStudio && activePrintFile
       ? catalogFileLayers[activePrintFile.type]
       : layers[area.id]
+
+  useEffect(() => {
+    const moved = (before: ArtPlacement, after: ArtPlacement) =>
+      Math.abs(after.x - before.x) > 0.0005 ||
+      Math.abs(after.y - before.y) > 0.0005 ||
+      Math.abs(after.scale - before.scale) > 0.0005
+    const boundaryNote = (printfulType: string | undefined) =>
+      isEmbroideryFileType(printfulType)
+        ? `Embroidery was pulled inside the ${EMBROIDERY_SAFE_INCHES}″ stitch margin so the print file matches what Printful stitches.`
+        : 'Art was pulled inside the print area so the print file matches what Printful prints.'
+
+    if (catalogStudio) {
+      const current = catalogFileLayersRef.current
+      let changed = false
+      let activeMoved = false
+      const next = { ...current }
+      for (const file of techniquePrintFiles) {
+        const art = current[file.type]
+        if (!art?.assetUrl) continue
+        const contained = containPlacement(art, placementForPrintFile(file, blank))
+        if (!moved(art, contained)) continue
+        next[file.type] = contained
+        changed = true
+        if (file.type === activePrintFile?.type) activeMoved = true
+      }
+      if (!changed) return
+      if (activeMoved) setNote(boundaryNote(activePrintFile?.type))
+      setCatalogFileLayers(next)
+      return
+    }
+
+    const currentLayers = layersRef.current
+    let changed = false
+    let activeMoved = false
+    const nextLayers = { ...currentLayers }
+    for (const item of garmentPlacements) {
+      const art = currentLayers[item.id]
+      if (!art?.assetUrl) continue
+      const contained = containPlacement(art, item)
+      if (!moved(art, contained)) continue
+      nextLayers[item.id] = contained
+      changed = true
+      if (item.id === area.id) activeMoved = true
+    }
+    if (!changed) return
+    if (activeMoved) setNote(boundaryNote(area.printfulType))
+    setLayers(nextLayers)
+  }, [catalogStudio, techniquePrintFiles, blank, activePrintFile?.type, garmentPlacements, area.id])
 
   useEffect(() => {
     if (!garmentPlacements.some((item) => item.id === placementId)) {
@@ -500,7 +588,7 @@ export default function MerchFittingRoom({
           assetUrl: url,
           assetWidth: image.naturalWidth || 1000,
           assetHeight: image.naturalHeight || 1000,
-          ...fittedPlacement(
+          ...fitPlacement(
             image.naturalWidth || 1000,
             image.naturalHeight || 1000,
             targetPlacement
@@ -553,14 +641,14 @@ export default function MerchFittingRoom({
       setCatalogFileLayers((current) => {
         const existing = current[activePrintFile.type]
         if (!existing) return current
-        return { ...current, [activePrintFile.type]: { ...existing, ...patch } }
+        return { ...current, [activePrintFile.type]: containPlacement({ ...existing, ...patch }, area) }
       })
       return
     }
     setLayers((current) => {
       const existing = current[area.id]
       if (!existing) return current
-      return { ...current, [area.id]: { ...existing, ...patch } }
+      return { ...current, [area.id]: containPlacement({ ...existing, ...patch }, area) }
     })
   }
 
@@ -672,14 +760,36 @@ export default function MerchFittingRoom({
     if (!layer) return
     event.preventDefault()
     const delta = event.deltaY < 0 ? 0.03 : -0.03
-    updateLayer({ scale: Math.min(1, Math.max(0.15, layer.scale + delta)) })
+    const cap = maxScaleInMitigation(layer, area)
+    updateLayer({ scale: Math.min(cap, Math.max(0.15, layer.scale + delta)) })
     flashGuide()
   }
 
   const fit = () => {
     if (!layer) return
     pushStudioUndo()
-    updateLayer(fittedPlacement(layer.assetWidth, layer.assetHeight, area))
+    updateLayer(fitPlacement(layer.assetWidth, layer.assetHeight, area))
+  }
+  const resetScale = () => {
+    if (!layer) return
+    const fitted = fitPlacement(layer.assetWidth, layer.assetHeight, area)
+    if (Math.abs(fitted.scale - layer.scale) < 0.0005) return
+    pushStudioUndo()
+    updateLayer({ scale: fitted.scale })
+  }
+  const applyRotation = (degrees: number) => {
+    const snapped = snapRotation(degrees, rotateHoldRef.current)
+    rotateHoldRef.current = snapped.held
+    updateLayer({ rotation: snapped.rotation })
+    flashGuide()
+  }
+  const beginRotationGuide = () => {
+    rotateHoldRef.current = null
+    setShowRotationGuides(true)
+  }
+  const endRotationGuide = () => {
+    rotateHoldRef.current = null
+    setShowRotationGuides(false)
   }
   const center = () => {
     if (!layer) return
@@ -689,6 +799,30 @@ export default function MerchFittingRoom({
         ? (layer.scale * area.printWidth * (layer.assetHeight / layer.assetWidth)) / area.printHeight
         : layer.scale
     updateLayer({ x: (1 - layer.scale) / 2, y: (1 - height) / 2 })
+  }
+  const optimizeForPrint = () => {
+    if (!layer) return
+    const next = optimizePlacementForPrint(layer, area)
+    const unchanged =
+      Math.abs(next.scale - layer.scale) < 0.0005 &&
+      Math.abs(next.x - layer.x) < 0.0005 &&
+      Math.abs(next.y - layer.y) < 0.0005 &&
+      next.rotation === layer.rotation
+    const embroidery = isEmbroideryFileType(area.printfulType)
+    const edge = embroidery ? 'stitch area' : 'print area'
+    if (unchanged) {
+      setNote(`Already inside the ${edge}. Nothing is clipped.`)
+      return
+    }
+    pushStudioUndo()
+    updateLayer(next)
+    const heldToPixels = next.scale + 0.01 < maxScaleInMitigation(layer, area) && next.scale <= nativePrintScale(layer.assetWidth, area) + 0.0005
+    setNote(
+      heldToPixels
+        ? `Sized inside the ${edge} at this file’s own pixels, so it is not clipped or stretched.`
+        : `Sized to the ${edge} so the edges are not clipped.`,
+    )
+    flashGuide()
   }
 
   const flipPlacement = () => {
@@ -730,7 +864,7 @@ export default function MerchFittingRoom({
       )
       setCatalogFileLayers((current) => ({
         ...current,
-        [backTab.id]: { ...source, placement: backArea.id },
+        [backTab.id]: containPlacement({ ...source, placement: backArea.id, fileType: backTab.id }, backArea),
       }))
       setNote('Front art copied to back placement.')
       return
@@ -738,9 +872,12 @@ export default function MerchFittingRoom({
     const front = layers.front
     if (!front || !garmentPlacements.some((item) => item.id === 'back')) return
     pushStudioUndo()
+    const backArea = garmentPlacements.find((item) => item.id === 'back')
     setLayers((current) => ({
       ...current,
-      back: { ...front, placement: 'back' },
+      back: backArea
+        ? containPlacement({ ...front, placement: 'back' }, backArea)
+        : { ...front, placement: 'back' },
     }))
     setNote('Front art copied to back placement.')
   }
@@ -760,7 +897,7 @@ export default function MerchFittingRoom({
       const otherArea = placementForPrintFile(otherFile, blank)
       setCatalogFileLayers((current) => ({
         ...current,
-        [otherTab.id]: { ...source, placement: otherArea.id },
+        [otherTab.id]: containPlacement({ ...source, placement: otherArea.id, fileType: otherTab.id }, otherArea),
       }))
       setNote(`Copied to the ${otherView.toLowerCase()}.`)
       return
@@ -771,7 +908,7 @@ export default function MerchFittingRoom({
     pushStudioUndo()
     setLayers((current) => ({
       ...current,
-      [other.id]: { ...source, placement: other.id },
+      [other.id]: containPlacement({ ...source, placement: other.id }, other),
     }))
     setNote(`Copied to the ${other.label.toLowerCase()}.`)
   }
@@ -860,7 +997,7 @@ export default function MerchFittingRoom({
     setCatalogTechnique(key)
     if (!catalogStudio) return
     const files = filterPrintFilesForTechnique(catalogStudio.printFiles, key)
-    const first = files[0]
+    const first = files.find((file) => catalogFileLayers[file.type]?.assetUrl) || files[0]
     if (first) {
       selectPlacementTab(first.type)
     } else {
@@ -965,6 +1102,12 @@ export default function MerchFittingRoom({
       setDesignId(null)
       setStatus('draft')
       setMockupUrls([])
+      setMockupUrlsByColor({})
+      setMockupAngleTitlesByColor({})
+      setMockupColor(null)
+      setMockupColorName(null)
+      printFileUrlsRef.current = {}
+      setPrintFileUrls({})
       setCostLive(false)
       setPriceTouched(false)
       setName(product.title.slice(0, 80))
@@ -973,9 +1116,17 @@ export default function MerchFittingRoom({
     setCatalogProductId(product.id)
     setCatalogFileLayers({})
     setEmbroideryUnlimitedColor(false)
+    setEmbroideryThreads({})
     setStandIn(true)
     setPhotoPick(null)
+    setStageZoom(1)
     setMockupUrls([])
+    setMockupUrlsByColor({})
+    setMockupAngleTitlesByColor({})
+    setMockupColor(null)
+    setMockupColorName(null)
+    printFileUrlsRef.current = {}
+    setPrintFileUrls({})
     if (!name.trim()) setName(product.title.slice(0, 80))
     try {
       const res = await fetch(`/api/admin/merch/catalog/${product.id}`)
@@ -1033,10 +1184,15 @@ export default function MerchFittingRoom({
         const detail = (await res.json()) as CatalogProductDetail & { error?: string }
         if (res.ok && detail.product) {
           await applyCatalogProduct(detail.product, { baseline: false })
+          const hero = previewArtPlacement(design.placements, design.activeFileType)
           const technique =
-            detail.techniques?.find((row) => row.isDefault)?.key || detail.techniques?.[0]?.key || 'DTG'
+            techniqueForSavedFile(detail.techniques || [], hero?.fileType || design.activeFileType) ||
+            detail.techniques?.find((row) => row.isDefault)?.key ||
+            detail.techniques?.[0]?.key ||
+            'DTG'
+          setCatalogTechnique(technique)
           const files = filterPrintFilesForTechnique(detail.printFiles, technique)
-          const mapped = restoreCatalogFileLayers(design.placements, files, template)
+          const mapped = restoreCatalogFileLayers(design.placements, detail.printFiles, template)
           if (Object.keys(mapped).length > 0) setCatalogFileLayers(mapped)
           const preferTypes = Object.entries(mapped)
             .filter(([, art]) => Boolean(art?.assetUrl))
@@ -1044,7 +1200,7 @@ export default function MerchFittingRoom({
           const tabs = buildDesignTabs(files, studioPlacementsForTechnique(detail, template, technique), {
             preferTypes,
           })
-          const nextType = placementFileToOpen(tabs, mapped, readOpenTab(design.id) || design.activeFileType)
+          const nextType = placementFileToOpen(tabs, mapped, hero?.fileType || design.activeFileType)
           const nextFile = nextType ? files.find((file) => file.type === nextType) : null
           if (nextFile) {
             setActivePrintFileType(nextFile.type)
@@ -1073,11 +1229,23 @@ export default function MerchFittingRoom({
     setColors(design.colors.length ? design.colors : template.defaultColors)
     setSizes(design.sizes.length ? design.sizes : template.defaultSizes)
     setPreviewColor(design.previewColor || template.colors[0]?.hex || '#1a1a1a')
+    setEmbroideryUnlimitedColor(Boolean(design.embroideryUnlimitedColor))
+    setEmbroideryThreads(design.embroideryThreads || {})
     setPickedColorName(null)
     setMockupUrls(design.mockupUrls || [])
-    setStandIn(design.mockupUrls.length === 0)
-    onStageViewChange('design')
+    setMockupUrlsByColor(design.mockupUrlsByColor || {})
+    setMockupAngleTitlesByColor(design.mockupAngleTitlesByColor || {})
+    setMockupColor(design.mockupUrls.length > 0 ? design.previewColor || null : null)
+    setMockupColorName(design.mockupUrls.length > 0 ? design.previewColorName || null : null)
+    printFileUrlsRef.current = design.printFileUrls || {}
+    setPrintFileUrls(design.printFileUrls || {})
+    setStandIn(design.mockupUrls.length === 0 && !Object.values(design.mockupUrlsByColor || {}).some((urls) => urls.length > 0))
+    setStageZoom(1)
+    onStageViewChange('preview')
     setNote(null)
+    publishRun.current += 1
+    if (design.mockupTaskKey) void pollMockups(design.id, publishRun.current)
+    setPublishProgress(null)
     writeStudioDesignId(design.id)
     markCleanRef.current()
   }
@@ -1100,6 +1268,7 @@ export default function MerchFittingRoom({
     const alreadyPreview = colorName === previewColorName
     setPreviewColor(hex)
     setPickedColorName(colorName)
+    setPhotoPick(null)
     setColors((current) => {
       if (!current.includes(colorName)) return [...current, colorName]
       if (alreadyPreview && current.length > 1) return current.filter((item) => item !== colorName)
@@ -1186,15 +1355,37 @@ export default function MerchFittingRoom({
     onSaveDesign: () => void saveDraft(),
     onSaveHidden: () => void saveHidden(),
   }
-  const safePx = 0.25 * 150
-  const insetX = area.printWidth > 0 ? safePx / area.printWidth : 0
-  const insetY = area.printHeight > 0 ? safePx / area.printHeight : 0
+  const stitch = stitchInsets(area)
+  const safePx = 0.25 * (area.dpi && area.dpi > 0 ? area.dpi : 150)
+  const insetX = stitch.x || (area.printWidth > 0 ? safePx / area.printWidth : 0)
+  const insetY = stitch.y || (area.printHeight > 0 ? safePx / area.printHeight : 0)
   const swatchColors = catalogColors && catalogColors.length > 0 ? catalogColors : blank.colors
   const previewColorName =
     (pickedColorName && swatchColors.some((color) => color.name === pickedColorName) && pickedColorName) ||
     swatchColors.find((color) => color.hex.toLowerCase() === previewColor.toLowerCase())?.name ||
     colors[0] ||
     ''
+  const activeThreadOptionId = threadOptionIdForFile(
+    activePrintFile?.type || '',
+    catalogStudio?.threadOptionIds || [],
+  )
+  const selectedEmbroideryThreads =
+    (activeThreadOptionId && embroideryThreads[activeThreadOptionId]?.length
+      ? embroideryThreads[activeThreadOptionId]
+      : [matchingEmbroideryThread(previewColor, previewColorName).hex])
+  const pickEmbroideryThread = (hex: string) => {
+    if (!activeThreadOptionId) return
+    if (layer?.assetUrl) {
+      manualThreadKey.current = `${activeThreadOptionId}|${layer.assetUrl.split(/[?#]/)[0]}`
+    }
+    setEmbroideryThreadNote('Tap a color to add or remove it. Up to 6.')
+    setEmbroideryThreads((current) => {
+      const existing = current[activeThreadOptionId]?.length
+        ? current[activeThreadOptionId]
+        : [matchingEmbroideryThread(previewColor, previewColorName).hex]
+      return { ...current, [activeThreadOptionId]: toggleEmbroideryThread(existing, hex) }
+    })
+  }
   const catalogGarmentUrl = useMemo(
     () => (catalogStudio ? previewGarmentImage(catalogStudio, previewColorName, previewSize) : null),
     [catalogStudio, previewColorName, previewSize]
@@ -1209,6 +1400,12 @@ export default function MerchFittingRoom({
     )
   }, [catalogStudio, activePrintFile, previewColorName, previewSize])
   const designGarmentUrl = designGarment?.imageUrl || null
+  const designPatternUrl = positioningPatternUrl(
+    catalogStudio,
+    designGarmentUrl,
+    previewColorName,
+    previewSize,
+  )
   const designUsesTemplateMockup = hasTemplateStage(activePrintFile)
   /** Preview card keeps the template image's real shape; studio blanks stay 3:4. */
   const previewCardAspect =
@@ -1230,8 +1427,88 @@ export default function MerchFittingRoom({
 
   const effectiveWholesale = wholesale + catalogExtras
   const keep = useMemo(() => youKeep(price, effectiveWholesale), [price, effectiveWholesale])
-  const photoAt = Math.min(photoPick ?? Math.max(0, garmentPlacements.findIndex((item) => item.id === area.id)), Math.max(mockupUrls.length - 1, 0))
-  const activePhoto = mockupUrls[photoAt]
+  const showStoredPhoto =
+    mockupUrls.length > 0 &&
+    !standIn &&
+    (mockupColorName
+      ? sameColorKey(previewColorName, mockupColorName)
+      : !mockupColor || sameColorKey(previewColor, mockupColor))
+  const anglePhotos = (() => {
+    const named = Object.entries(mockupUrlsByColor).find(([name]) => sameColorKey(name, previewColorName))
+    const fromColor = (named?.[1] || []).filter(Boolean)
+    if (fromColor.length > 0) return fromColor
+    return showStoredPhoto ? mockupUrls : []
+  })()
+  const photoAt = Math.min(
+    photoPick ?? Math.max(0, garmentPlacements.findIndex((item) => item.id === area.id)),
+    Math.max(anglePhotos.length - 1, 0),
+  )
+  const activePhoto = anglePhotos[photoAt]
+  useEffect(() => {
+    if (!mockupUrls.length || mockupColorName || pickedColorName) return
+    if (!previewColorName) return
+    setMockupColorName(previewColorName)
+  }, [mockupUrls.length, mockupColorName, pickedColorName, previewColorName])
+  const colorShots = useMemo(() => {
+    if (!catalogStudio || standIn || mockupUrls.length === 0) return []
+    const swatch = swatchColors.find((color) => color.name === previewColorName)
+    const shots: Array<{
+      id: string
+      garmentUrl: string
+      garmentColor: string
+      patternUrl: string | null
+      aspect: number
+      label: string
+      stage: { x: number; y: number; w: number; h: number }
+      area: typeof area
+      printUrl: string | null
+      art: ArtPlacement | null
+    }> = []
+    const guideTitles =
+      Object.entries(mockupAngleTitlesByColor).find(([name]) => sameColorKey(name, previewColorName))?.[1] ||
+      Object.values(mockupAngleTitlesByColor).find((list) => list.length > 0) ||
+      []
+    for (const file of orderPrintFilesByAngles(
+      techniquePrintFiles.filter((row) => hasTemplateStage(row)),
+      guideTitles,
+    )) {
+      const template = coloredTemplate(catalogStudio, file, previewColorName, previewSize)
+      if (!template?.imageUrl) continue
+      const printArea = placementForPrintFile(file, blank, { surface: 'template' })
+      const patternUrl = positioningPatternUrl(catalogStudio, template.imageUrl, previewColorName, previewSize)
+      shots.push({
+        id: file.type,
+        label: file.title || file.type,
+        garmentUrl: template.imageUrl,
+        garmentColor: patternUrl ? '' : template.backgroundColor || swatch?.hex || previewColor,
+        patternUrl,
+        aspect: file.templateAspect && file.templateAspect > 0 ? file.templateAspect : 1,
+        stage: printArea.stage,
+        area: printArea,
+        printUrl: printFileUrls[file.type] || null,
+        art: catalogFileLayers[file.type] || null,
+      })
+    }
+    return shots
+  }, [
+    blank,
+    catalogFileLayers,
+    catalogStudio,
+    mockupAngleTitlesByColor,
+    mockupUrls.length,
+    previewColor,
+    previewColorName,
+    previewSize,
+    printFileUrls,
+    standIn,
+    swatchColors,
+    techniquePrintFiles,
+  ])
+  const colorAt = Math.min(
+    photoPick ?? Math.max(0, colorShots.findIndex((shot) => shot.id === (activePrintFile?.type || ''))),
+    Math.max(colorShots.length - 1, 0),
+  )
+  const colorShot = !showStoredPhoto ? colorShots[colorAt] : undefined
   const activePlacements: ArtPlacement[] =
     catalogStudio && Object.keys(catalogFileLayers).length > 0
       ? Object.entries(catalogFileLayers)
@@ -1256,6 +1533,8 @@ export default function MerchFittingRoom({
     colors,
     sizes,
     previewColor,
+    embroideryUnlimitedColor,
+    embroideryThreads,
     catalogTechnique,
     activeFileType: activePrintFileType,
     placements: activePlacements.map((placement) => [
@@ -1278,6 +1557,52 @@ export default function MerchFittingRoom({
     setCleanSnapshot(studioSnapshotRef.current)
   }, [baselineTick, guardOn])
   const designDirty = guardOn && cleanSnapshot !== null && studioSnapshot !== cleanSnapshot
+  const embroideryUnlimitedRef = useRef(embroideryUnlimitedColor)
+  embroideryUnlimitedRef.current = embroideryUnlimitedColor
+  const embroideryOn =
+    catalogTechnique.trim().toUpperCase() === 'EMBROIDERY' ||
+    Boolean(activePrintFile && /embroidery/i.test(activePrintFile.type))
+
+  useEffect(() => {
+    if (!embroideryOn || !layer?.assetUrl || !activeThreadOptionId) return
+    const url = layer.assetUrl
+    const optionId = activeThreadOptionId
+    const key = `${optionId}|${url.split(/[?#]/)[0]}`
+    if (manualThreadKey.current === key) return
+    const token = ++threadDetectToken.current
+    void sampleArtworkThreadColors(url)
+      .then((matched) => {
+        if (token !== threadDetectToken.current || matched.threads.length === 0 || manualThreadKey.current === key) return
+        setEmbroideryThreads((current) => ({ ...current, [optionId]: matched.threads }))
+        setEmbroideryThreadNote(threadMatchNote(matched, embroideryUnlimitedRef.current))
+      })
+      .catch(() => {})
+    return () => {
+      if (threadDetectToken.current === token) threadDetectToken.current += 1
+    }
+  }, [embroideryOn, layer?.assetUrl, activeThreadOptionId])
+
+  const chooseEmbroideryColorOption = (unlimited: boolean) => {
+    setEmbroideryUnlimitedColor(unlimited)
+    const url = layer?.assetUrl
+    const optionId = activeThreadOptionId
+    if (!url || !optionId) {
+      setEmbroideryThreadNote(unlimited ? 'Unlimited color stitches every color in this design.' : null)
+      return
+    }
+    manualThreadKey.current = null
+    const token = ++threadDetectToken.current
+    void sampleArtworkThreadColors(url)
+      .then((matched) => {
+        if (token !== threadDetectToken.current || matched.threads.length === 0) return
+        setEmbroideryThreads((current) => ({ ...current, [optionId]: matched.threads }))
+        setEmbroideryThreadNote(threadMatchNote(matched, unlimited))
+      })
+      .catch(() => {
+        if (token !== threadDetectToken.current) return
+        setEmbroideryThreadNote(unlimited ? 'Unlimited color stitches every color in this design.' : null)
+      })
+  }
 
   const openSavedDesignRef = useRef(openSavedDesign)
   openSavedDesignRef.current = openSavedDesign
@@ -1347,11 +1672,12 @@ export default function MerchFittingRoom({
   }
 
   async function selectSavedDesign(design: MerchDesign) {
-    if (design.id === designId) return
-    await confirmLeave(
-      `You’re opening “${design.name}”. Save this design as a draft, discard it, or keep working.`,
-      () => openSavedDesign(design),
-    )
+    if (design.id === designId) {
+      onStageViewChange('preview')
+      return
+    }
+    // Switching products discards unsaved canvas edits. Save draft is explicit.
+    await openSavedDesign(design)
   }
 
   const placedDesignChecks = useMemo(() => {
@@ -1577,12 +1903,16 @@ export default function MerchFittingRoom({
    * ~4.5MB serverless request-body limit on Vercel that otherwise fails larger
    * uploads on the live site. Returns the public URL, or null to fall back.
    */
-  async function uploadViaSignedUrl(file: File): Promise<string | null> {
+  async function uploadViaSignedUrl(
+    file: File,
+    onProgress: (ratio: number) => void,
+    origin?: 'print',
+  ): Promise<string | null> {
     try {
       const signRes = await fetch('/api/admin/merch/art/sign-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentType: file.type }),
+        body: JSON.stringify({ contentType: file.type, ...(origin ? { origin } : {}) }),
       })
       if (!signRes.ok) return null
       const sign = await signRes.json()
@@ -1590,11 +1920,15 @@ export default function MerchFittingRoom({
 
       // Cloudflare R2: presigned PUT straight to the bucket.
       if (sign.provider === 'r2' && sign.uploadUrl) {
-        const put = await fetch(String(sign.uploadUrl), {
-          method: 'PUT',
-          headers: { 'Content-Type': String(sign.contentType || file.type) },
-          body: file,
-        })
+        const put = await requestWithProgress(
+          String(sign.uploadUrl),
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': String(sign.contentType || file.type) },
+            body: file,
+          },
+          (loaded, total) => onProgress(total > 0 ? loaded / total : 0),
+        )
         if (!put.ok) return null
         return withArtVersion(String(sign.publicUrl), Date.now())
       }
@@ -1615,57 +1949,162 @@ export default function MerchFittingRoom({
     }
   }
 
+  /**
+   * Send a large file through the site in pieces. The browser cannot PUT
+   * straight to R2 until the bucket allows uploads from this origin.
+   */
+  async function uploadViaChunks(
+    file: File,
+    onProgress: (ratio: number) => void,
+    origin?: 'print',
+  ): Promise<string> {
+    const chunkSize = Math.floor(3.5 * 1024 * 1024)
+    const total = Math.ceil(file.size / chunkSize)
+    let uploadId = ''
+    for (let index = 0; index < total; index += 1) {
+      const start = index * chunkSize
+      const body = new FormData()
+      const slice = file.slice(start, Math.min(file.size, start + chunkSize))
+      body.set('file', slice, file.name || 'art')
+      body.set('index', String(index))
+      body.set('total', String(total))
+      body.set('contentType', file.type)
+      if (origin) body.set('origin', origin)
+      if (uploadId) body.set('uploadId', uploadId)
+      const res = await requestWithProgress(
+        '/api/admin/merch/art/chunk',
+        { method: 'POST', body },
+        (loaded) => onProgress(Math.min(1, (start + loaded) / file.size)),
+      )
+      let data: { error?: string; uploadId?: string; url?: string } = {}
+      try {
+        data = JSON.parse(res.text || '{}')
+      } catch {
+        data = {
+          error:
+            res.status === 413 || (res.text || '').startsWith('Request En')
+              ? 'That file is too large to send in one piece.'
+              : 'Upload failed',
+        }
+      }
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      uploadId = String(data.uploadId || uploadId)
+      onProgress(Math.min(1, (start + slice.size) / file.size))
+      if (data.url) return withArtVersion(String(data.url), Date.now())
+    }
+    throw new Error('Upload did not finish')
+  }
+
+  /** One Vercel request stays under the platform body limit. Larger files go direct or in pieces. */
+  const SINGLE_UPLOAD_BYTES = Math.floor(3.5 * 1024 * 1024)
+
+  async function responseJson<T extends { error?: string }>(res: Response): Promise<T> {
+    const text = await res.text()
+    if (!text) return {} as T
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      const tooLarge = res.status === 413 || text.startsWith('Request En')
+      throw new Error(
+        tooLarge ? 'That file is too large to send in one piece.' : text.replace(/\s+/g, ' ').slice(0, 160),
+      )
+    }
+  }
+
+  async function storePreparedArt(
+    file: File,
+    options: { replaceUrl?: string | null; origin?: 'print' } = {},
+  ): Promise<string> {
+    if (file.size > SINGLE_UPLOAD_BYTES) {
+      if (!options.replaceUrl) {
+        const direct = await uploadViaSignedUrl(file, () => {}, options.origin)
+        if (direct) return direct
+      }
+      return uploadViaChunks(file, () => {}, options.origin)
+    }
+    const body = new FormData()
+    body.set('file', file)
+    if (options.replaceUrl) body.set('replaceUrl', options.replaceUrl)
+    else if (options.origin) body.set('origin', options.origin)
+    const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
+    const data = await responseJson<{ error?: string; url?: string }>(res)
+    if (!res.ok || !data.url) throw new Error(data.error || 'Could not store that file')
+    return data.url
+  }
+
   async function uploadFile(file: File) {
     const type = file.type || ''
     if (type !== 'image/png' && type !== 'image/jpeg') {
       throw new Error('Use a PNG or JPEG file.')
     }
-    if (file.size > 10 * 1024 * 1024) {
-      throw new Error('Image is over 10MB. Please export a smaller file.')
+    // Direct-to-R2 uploads skip Vercel’s body limit. 50MB covers a high-res
+    // print PNG without decoding a huge file into the fitting-room canvas.
+    const directMaxBytes = 50 * 1024 * 1024
+    if (file.size > directMaxBytes) {
+      throw new Error('Image is over 50MB. Export a smaller PNG or JPEG.')
     }
 
-    // Preferred path: direct-to-storage (no function body limit).
-    const directUrl = await uploadViaSignedUrl(file)
-    if (directUrl) {
-      refreshUploads()
-      await placeArt(directUrl)
-      return
-    }
-
-    // Fallback: multipart through the API (works in dev / for small files).
-    const body = new FormData()
-    body.set('file', file)
-    const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
-    if (!res.ok) {
-      let message = 'Upload failed'
-      if (res.status === 413) {
-        message = 'That image is too large to upload here. Please use a file under ~4MB.'
-      } else {
-        try {
-          message = (await res.json()).error || message
-        } catch {
-          /* non-JSON error body (e.g. a platform 413) */
-        }
+    const report = (ratio: number) => setUploadProgress(Math.max(0, Math.min(100, Math.round(ratio * 100))))
+    setUploadProgress(0)
+    setBusy('Uploading')
+    try {
+      // Preferred path: direct-to-storage (no function body limit).
+      const directUrl = await uploadViaSignedUrl(file, report)
+      if (directUrl) {
+        report(1)
+        refreshUploads()
+        await placeArt(directUrl)
+        return
       }
-      throw new Error(message)
+
+      // Files over ~4MB cannot go through one Vercel request. Send them in pieces.
+      if (file.size > 4 * 1024 * 1024) {
+        const chunkUrl = await uploadViaChunks(file, report)
+        report(1)
+        refreshUploads()
+        await placeArt(chunkUrl)
+        return
+      }
+
+      // Fallback: multipart through the API (works in dev / for small files).
+      const body = new FormData()
+      body.set('file', file)
+      const res = await requestWithProgress(
+        '/api/admin/merch/art',
+        { method: 'POST', body },
+        (loaded, total) => report(total > 0 ? loaded / total : 0),
+      )
+      let data: { error?: string; url?: string } = {}
+      try {
+        data = JSON.parse(res.text || '{}')
+      } catch {
+        /* non-JSON error body (e.g. a platform 413) */
+      }
+      if (!res.ok) {
+        const message =
+          res.status === 413
+            ? 'That image is too large to upload here. Please use a file under ~4MB.'
+            : data.error || 'Upload failed'
+        throw new Error(message)
+      }
+      if (!data.url) throw new Error('Upload failed')
+      report(1)
+      refreshUploads()
+      await placeArt(data.url)
+    } finally {
+      setUploadProgress(null)
+      setBusy(null)
     }
-    const data = await res.json()
-    refreshUploads()
-    await placeArt(data.url)
   }
 
   async function applyEditedArt(previousUrl: string, blob: Blob, mode: 'replace' | 'copy') {
     setBusy(mode === 'copy' ? 'Saving new art' : 'Saving edit')
     setNote(null)
     try {
-      const body = new FormData()
-      body.set('file', new File([blob], mode === 'copy' ? 'edited-copy.png' : 'edited.png', { type: 'image/png' }))
-      if (mode === 'replace') body.set('replaceUrl', previousUrl)
-      const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not save the edit')
-      const savedUrl = String(data.url || '')
-      if (!savedUrl) throw new Error('Could not save the edit')
+      const savedUrl = await storePreparedArt(
+        new File([blob], mode === 'copy' ? 'edited-copy.png' : 'edited.png', { type: 'image/png' }),
+        mode === 'replace' && blob.size <= SINGLE_UPLOAD_BYTES ? { replaceUrl: previousUrl } : {},
+      )
       if (mode === 'replace') {
         const nextUrl = withArtVersion(savedUrl, Date.now())
         const image = await loadImage(nextUrl)
@@ -1727,13 +2166,9 @@ export default function MerchFittingRoom({
       ctx.putImageData(source, 0, 0)
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
       if (!blob) throw new Error('Could not export the cut-out')
-      const body = new FormData()
-      body.set('file', new File([blob], 'cutout.png', { type: 'image/png' }))
-      const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not store the cut-out')
+      const storedUrl = await storePreparedArt(new File([blob], 'cutout.png', { type: 'image/png' }))
       refreshUploads()
-      await placeArt(data.url)
+      await placeArt(storedUrl)
       setNote('Background removed. Transparent art placed on the active area.')
     } catch (error: any) {
       setNote(error?.message || 'Could not remove the background')
@@ -1852,12 +2287,8 @@ export default function MerchFittingRoom({
       ctx.drawImage(image, 0, 0, nextW, nextH)
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
       if (!blob) throw new Error('Could not export the optimized art')
-      const fd = new FormData()
-      fd.set('file', new File([blob], 'optimized.png', { type: 'image/png' }))
-      const storeRes = await fetch('/api/admin/merch/art', { method: 'POST', body: fd })
-      const storeData = await storeRes.json()
-      if (!storeRes.ok || !storeData.url) throw new Error(storeData.error || 'Could not store the optimized art')
-      const nextUrl = withArtVersion(String(storeData.url), Date.now())
+      const storedUrl = await storePreparedArt(new File([blob], 'optimized.png', { type: 'image/png' }))
+      const nextUrl = withArtVersion(storedUrl, Date.now())
       swapLayer(nextUrl, nextW, nextH)
       refreshUploads()
       setNote(`Print quality optimized to about ${reportDpi(nextW)} DPI.`)
@@ -1868,7 +2299,7 @@ export default function MerchFittingRoom({
     }
   }
 
-  async function persist(nextStatus?: DesignStatus): Promise<MerchDesign> {
+  async function persist(nextStatus?: DesignStatus, stitchFiles?: Record<string, string>): Promise<MerchDesign> {
     const res = await fetch('/api/admin/merch/designs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1882,13 +2313,25 @@ export default function MerchFittingRoom({
         colors,
         sizes,
         previewColor,
+        previewColorName,
+        ...(stitchFiles ? { printFileUrls: stitchFiles } : {}),
         retailPrice: price,
         status: nextStatus,
+        embroideryUnlimitedColor,
+        embroideryThreads: embroideryUnlimitedColor
+          ? embroideryThreads
+          : resolveEmbroideryThreads(
+              activePlacements.map((placement) => placement.fileType || '').filter(Boolean),
+              embroideryThreads,
+              previewColor,
+              catalogStudio?.threadOptionIds || [],
+              previewColorName,
+            ),
       }),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Could not save')
-    const design = data.design as MerchDesign
+    const data = await responseJson<{ error?: string; design?: MerchDesign }>(res)
+    if (!res.ok || !data.design) throw new Error(data.error || 'Could not save')
+    const design = data.design
     setDesignId(design.id)
     setStatus(design.status)
     setName(design.name)
@@ -1906,39 +2349,180 @@ export default function MerchFittingRoom({
   }
 
   async function bakePrint(placement: ArtPlacement, printArea: BlankPlacement): Promise<string> {
+    const placed = containPlacement(placement, printArea)
     const canvas = document.createElement('canvas')
     canvas.width = printArea.printWidth
     canvas.height = printArea.printHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Could not prepare the print file')
-    const image = await loadImage(placement.assetUrl, true)
-    const drawW = placement.scale * printArea.printWidth
+    const image = await loadImage(placed.assetUrl, true)
+    const drawW = placed.scale * printArea.printWidth
     const drawH = drawW * (image.naturalHeight / image.naturalWidth)
-    const cx = placement.x * printArea.printWidth + drawW / 2
-    const cy = placement.y * printArea.printHeight + drawH / 2
+    const cx = placed.x * printArea.printWidth + drawW / 2
+    const cy = placed.y * printArea.printHeight + drawH / 2
     ctx.translate(cx, cy)
-    ctx.rotate((placement.rotation * Math.PI) / 180)
+    ctx.rotate((placed.rotation * Math.PI) / 180)
     ctx.drawImage(image, -drawW / 2, -drawH / 2, drawW, drawH)
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((value) => (value ? resolve(value) : reject(new Error('Could not bake the print'))), 'image/png')
     })
-    const body = new FormData()
-    body.set('file', new File([blob], `${placement.placement}.png`, { type: 'image/png' }))
-    const res = await fetch('/api/admin/merch/art', { method: 'POST', body })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Could not store the print file')
-    return data.url as string
+    const file = new File([blob], `${placement.placement}.png`, { type: 'image/png' })
+    const previous = printFileUrlsRef.current[placementKey(placement)]
+    const previousId = previous ? merchArtIdFromUrl(previous) : null
+    const assetId = merchArtIdFromUrl(placement.assetUrl)
+    const replaceUrl = previous && previousId && previousId !== assetId ? previous : null
+    return storePreparedArt(file, { replaceUrl, origin: 'print' })
+  }
+
+  function printAreaForPlacement(placement: ArtPlacement): BlankPlacement | undefined {
+    if (catalogStudio && placement.fileType) {
+      const file = catalogStudio.printFiles.find((row) => row.type === placement.fileType)
+      if (file) return placementForPrintFile(file, blank)
+    }
+    return garmentPlacements.find((item) => item.id === placement.placement)
+  }
+
+  async function pullStitchFile() {
+    const jobs = activePlacements.filter((placement) => printAreaForPlacement(placement))
+    if (jobs.length === 0) {
+      setNote('Add art before pulling a stitch file.')
+      return
+    }
+    setBusy('Pulling stitch file')
+    setNote('Saving the stitch file.')
+    try {
+      const files = { ...printFileUrlsRef.current }
+      for (const placement of jobs) {
+        const printArea = printAreaForPlacement(placement)
+        if (!printArea) continue
+        files[placementKey(placement)] = await bakePrint(placement, printArea)
+      }
+      printFileUrlsRef.current = files
+      setPrintFileUrls(files)
+      await persist(undefined, files)
+      setNote('Stitch file saved.')
+    } catch (error: unknown) {
+      setNote(error instanceof Error ? error.message : 'Could not save the stitch file')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function bakeActivePrintFiles(run: number): Promise<Record<string, string> | null> {
+    const still = () => publishRun.current === run
+    const printFiles: Record<string, string> = {}
+    const jobs = activePlacements.filter((placement) => {
+      let printArea = garmentPlacements.find((item) => item.id === placement.placement)
+      if (catalogStudio && placement.fileType) {
+        const file = catalogStudio.printFiles.find((row) => row.type === placement.fileType)
+        if (file) printArea = placementForPrintFile(file, blank)
+      }
+      return Boolean(printArea)
+    })
+    for (let index = 0; index < jobs.length; index += 1) {
+      if (!still()) return null
+      const placement = jobs[index]
+      setPublishProgress({
+        value: 18 + Math.round((index / Math.max(jobs.length, 1)) * 48),
+        label: jobs.length > 1 ? `Preparing print file ${index + 1} of ${jobs.length}` : 'Preparing print file',
+      })
+      let printArea = garmentPlacements.find((item) => item.id === placement.placement)
+      if (catalogStudio && placement.fileType) {
+        const file = catalogStudio.printFiles.find((row) => row.type === placement.fileType)
+        if (file) printArea = placementForPrintFile(file, blank)
+      }
+      if (!printArea) continue
+      printFiles[placementKey(placement)] = await bakePrint(placement, printArea)
+    }
+    return still() ? printFiles : null
+  }
+
+  async function requestPrintfulPhotos(
+    design: MerchDesign,
+    run: number,
+    endpoint: 'previews' | 'publish',
+  ) {
+    const still = () => publishRun.current === run
+    setNote('Preparing the print file.')
+    const printFiles = await bakeActivePrintFiles(run)
+    if (!printFiles || !still()) return
+    setNote(endpoint === 'publish' ? 'Sending it to Printful.' : 'Asking Printful for new photos.')
+    setPublishProgress({ value: 72, label: endpoint === 'publish' ? 'Sending to Printful' : 'Making photos' })
+    const res = await fetch(`/api/admin/merch/designs/${design.id}/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ printFiles }),
+    })
+    const data = await responseJson<{ error?: string; design?: MerchDesign }>(res)
+    if (!res.ok || !data.design) throw new Error(data.error || 'Could not update the Printful photos')
+    if (!still()) return
+    const next = data.design as MerchDesign
+    if (next.printFileUrls) {
+      printFileUrlsRef.current = next.printFileUrls
+      setPrintFileUrls(next.printFileUrls)
+    }
+    setStatus(next.status)
+    setNote(next.publishNote)
+    setWholesale(next.wholesaleCost ?? wholesale)
+    setCostLive(next.variants.length > 0)
+    if (next.mockupTaskKey) {
+      setPublishProgress({ value: 82, label: 'Making photos' })
+      void pollMockups(next.id, run)
+    } else if (still()) {
+      setPublishProgress(null)
+    }
+    refreshSaved()
   }
 
   async function saveDraft() {
+    const run = publishRun.current + 1
+    publishRun.current = run
+    const still = () => publishRun.current === run
     setBusy('Saving')
+    setNote('Saving the design.')
+    setPublishProgress({ value: 8, label: 'Saving' })
     try {
       const design = await persist('draft')
-      setNote(design.publishNote || 'Draft saved — listed under Drafts in the catalog.')
+      if (!still()) return
+      if (activePlacements.length === 0 || !printfulReady?.canPublish || !printfulReady.publicArtOrigin) {
+        setNote(design.publishNote || 'Draft saved — listed under Drafts in the catalog.')
+        setPublishProgress(null)
+        return
+      }
+      await requestPrintfulPhotos(design, run, 'previews')
     } catch (error: any) {
-      setNote(error.message)
+      if (still()) {
+        setNote(error.message)
+        setPublishProgress(null)
+      }
     } finally {
-      setBusy(null)
+      if (still()) setBusy(null)
+    }
+  }
+
+  async function photographColor() {
+    const run = publishRun.current + 1
+    publishRun.current = run
+    const still = () => publishRun.current === run
+    setBusy('Photographing')
+    setNote(`Photographing ${previewColorName || 'this color'}.`)
+    setPublishProgress({ value: 8, label: 'Photographing' })
+    try {
+      const design = await persist()
+      if (!still()) return
+      if (activePlacements.length === 0 || !printfulReady?.canPublish || !printfulReady.publicArtOrigin) {
+        setNote(design.publishNote || 'Save the design on the live site to photograph this color.')
+        setPublishProgress(null)
+        return
+      }
+      await requestPrintfulPhotos(design, run, 'previews')
+    } catch (error: unknown) {
+      if (still()) {
+        setNote(error instanceof Error ? error.message : 'Could not photograph this color')
+        setPublishProgress(null)
+      }
+    } finally {
+      if (still()) setBusy(null)
     }
   }
 
@@ -1976,56 +2560,78 @@ export default function MerchFittingRoom({
       setNote('Set NEXT_PUBLIC_SITE_URL to a public https URL so Printful can fetch your art files.')
       return
     }
+    const run = publishRun.current + 1
+    publishRun.current = run
+    const stillThisRun = () => publishRun.current === run
     setBusy('Putting it out')
+    setNote('Saving the design.')
+    setPublishProgress({ value: 8, label: 'Saving' })
     try {
       const design = await persist('draft')
-      // Keyed by Printful file type so sleeves/labels bake against their own print area.
-      const printFiles: Record<string, string> = {}
-      for (const placement of activePlacements) {
-        let printArea = garmentPlacements.find((item) => item.id === placement.placement)
-        if (catalogStudio && placement.fileType) {
-          const file = catalogStudio.printFiles.find((row) => row.type === placement.fileType)
-          if (file) printArea = placementForPrintFile(file, blank)
-        }
-        if (!printArea) continue
-        printFiles[placementKey(placement)] = await bakePrint(placement, printArea)
-      }
-      const res = await fetch(`/api/admin/merch/designs/${design.id}/publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ printFiles }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not put this out')
-      const next = data.design as MerchDesign
-      setStatus(next.status)
-      setNote(next.publishNote)
-      setWholesale(next.wholesaleCost ?? wholesale)
-      setCostLive(next.variants.length > 0)
-      if (next.mockupTaskKey) pollMockups(next.id)
-      refreshSaved()
+      if (!stillThisRun()) return
+      await requestPrintfulPhotos(design, run, 'publish')
     } catch (error: any) {
-      setNote(error.message)
+      if (stillThisRun()) {
+        setNote(error.message)
+        setPublishProgress(null)
+      }
     } finally {
-      setBusy(null)
+      if (stillThisRun()) setBusy(null)
     }
   }
 
-  async function pollMockups(id: string) {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+  function finishPublishProgress(run: number) {
+    setPublishProgress({ value: 100, label: 'Photos ready' })
+    window.setTimeout(() => {
+      if (publishRun.current === run) setPublishProgress(null)
+    }, 1200)
+  }
+
+  async function pollMockups(id: string, run: number) {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2500))
+      if (publishRun.current !== run) return
       const res = await fetch(`/api/admin/merch/designs/${id}/mockups`)
-      if (!res.ok) return
-      const data = await res.json()
-      if (data.status === 'completed' && data.design) {
-        const urls = data.design.mockupUrls || []
-        setMockupUrls(urls)
-        if (urls.length > 0) setStandIn(false)
-        setNote(data.design.publishNote)
-        refreshSaved()
+      if (!res.ok) {
+        if (publishRun.current === run) setPublishProgress(null)
         return
       }
-      if (data.status === 'failed') return
+      const data = await res.json()
+      if (publishRun.current !== run) return
+      if ((data.status === 'completed' || data.status === 'storing') && data.design) {
+        const urls = data.design.mockupUrls || []
+        const byColor = (data.design.mockupUrlsByColor || {}) as Record<string, string[]>
+        const titles = (data.design.mockupAngleTitlesByColor || {}) as Record<string, string[]>
+        const any = urls.length > 0 || Object.values(byColor).some((list) => list.length > 0)
+        setMockupUrls(urls)
+        setMockupUrlsByColor(byColor)
+        setMockupAngleTitlesByColor(titles)
+        setMockupColor(any ? data.design.previewColor || null : null)
+        setMockupColorName(any ? data.design.previewColorName || previewColorName : null)
+        if (any) setStandIn(false)
+        setNote(data.design.publishNote)
+        refreshSaved()
+        if (data.status === 'completed') {
+          finishPublishProgress(run)
+          refreshUploads()
+          return
+        }
+        setPublishProgress({ value: Math.min(96, 88), label: 'Saving color angles' })
+        continue
+      }
+      if (data.status === 'failed') {
+        setPublishProgress(null)
+        setNote('Printful could not make the photos. Put it out again.')
+        return
+      }
+      setPublishProgress({
+        value: Math.min(96, 84 + Math.round(((attempt + 1) / 8) * 12)),
+        label: 'Making photos',
+      })
+    }
+    if (publishRun.current === run) {
+      setPublishProgress(null)
+      setNote('Printful is still making the photos. They will show up on this product when they are ready.')
     }
   }
 
@@ -2041,8 +2647,8 @@ export default function MerchFittingRoom({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: next }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not update the shop')
+      const data = await responseJson<{ error?: string; design?: MerchDesign }>(res)
+      if (!res.ok || !data.design) throw new Error(data.error || 'Could not update the shop')
       setStatus(data.design.status)
       setNote(data.design.publishNote)
       refreshSaved()
@@ -2192,10 +2798,42 @@ export default function MerchFittingRoom({
         <MerchPrintfulCatalog
           activeCatalogId={catalogProductId}
           designs={saved.map((design) =>
-            design.id === designId ? { ...design, previewColor, colors, sizes } : design
+            design.id === designId
+              ? {
+                  ...design,
+                  previewColor,
+                  colors,
+                  sizes,
+                  mockupUrls: mockupUrls.length > 0 ? mockupUrls : design.mockupUrls,
+                }
+              : design
           )}
           onSelect={(product) => void selectCatalogProduct(product)}
           onOpenDesign={(design) => void selectSavedDesign(design)}
+          onDesignsChanged={refreshSaved}
+          onDesignUpdated={(design) => {
+            if (design.id !== designId) return
+            setName(design.name)
+            setStatus(design.status)
+            if (design.publishNote) setNote(design.publishNote)
+          }}
+          onDesignRemoved={(id) => {
+            refreshUploads()
+            if (id !== designId) return
+            setDesignId(null)
+            setStatus('draft')
+            setCatalogFileLayers({})
+            setLayers({})
+            setMockupUrls([])
+            setMockupUrlsByColor({})
+            setMockupAngleTitlesByColor({})
+            setMockupColor(null)
+            setMockupColorName(null)
+            setStandIn(true)
+            printFileUrlsRef.current = {}
+            setPrintFileUrls({})
+            setNote(`“${name}” and its files were deleted.`)
+          }}
           onCatalogPanelCollapsedChange={setCatalogPanelCollapsed}
           productMats={productMats}
         />
@@ -2235,7 +2873,8 @@ export default function MerchFittingRoom({
             colorName={previewColorName}
             colorHex={previewColor}
             garmentUrl={designGarmentUrl}
-            garmentBackground={designGarment?.backgroundColor || previewColor}
+            garmentBackground={designPatternUrl ? null : designGarment?.backgroundColor || previewColor}
+            patternUrl={designPatternUrl}
             useTemplateMockup={designUsesTemplateMockup}
             garmentAspect={designUsesTemplateMockup ? activePrintFile?.templateAspect ?? null : null}
             family={blank.family}
@@ -2258,11 +2897,15 @@ export default function MerchFittingRoom({
             onArtAdjust={onArtAdjust}
             onArtAdjustStart={onArtAdjustStart}
             onArtAdjustEnd={onArtAdjustEnd}
+            onOptimizeForPrint={optimizeForPrint}
             showPrintGuide={showGuide}
             printInsetX={insetX}
             printInsetY={insetY}
+            boundToInset={stitch.x > 0 || stitch.y > 0}
             activeDpiGrade={activeDpiGrade}
             snapGuides={snapGuides}
+            showRotationGuides={showRotationGuides}
+            onRotationGuide={setShowRotationGuides}
             stageToolbar={stageToolbar}
             underTabs={<StageModeSwitch view={stageView} onChange={onStageViewChange} />}
             matColor={stageMat}
@@ -2276,15 +2919,27 @@ export default function MerchFittingRoom({
             activeTabId={activeDesignTabId}
             onTab={selectDesignTab}
             toolbar={stageToolbar}
-            underTabs={<StageModeSwitch view={stageView} onChange={onStageViewChange} />}
+            underTabs={
+              <StageModeSwitch
+                view={stageView}
+                onChange={onStageViewChange}
+                zoom={stageZoom}
+                onZoom={setStageZoom}
+              />
+            }
           />
         ) : (
           <div className="shrink-0 px-4 pb-3 pt-4">
-            <StageModeSwitch view={stageView} onChange={onStageViewChange} />
+            <StageModeSwitch
+              view={stageView}
+              onChange={onStageViewChange}
+              zoom={stageZoom}
+              onZoom={setStageZoom}
+            />
           </div>
         )}
         <div
-          className="relative min-h-[280px] flex-1"
+          className="relative min-h-[280px] flex-1 overflow-hidden"
           onContextMenu={onStageBackgroundContextMenu}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
@@ -2293,17 +2948,70 @@ export default function MerchFittingRoom({
             if (file) uploadFile(file).catch((error) => setNote(error.message))
           }}
         >
-          {standIn || !activePhoto ? (
+          {anglePhotos.length === 0 && colorShot ? (
+            <>
+              <div className="absolute inset-0 flex items-center justify-center px-8 pb-6">
+                <div
+                  data-stage-garment=""
+                  className="relative h-[84%] max-h-full"
+                  style={{ aspectRatio: String(colorShot.aspect), transform: `scale(${stageZoom})` }}
+                >
+                  <StitchedColorPreview
+                    garmentUrl={colorShot.garmentUrl}
+                    garmentColor={colorShot.garmentColor}
+                    patternUrl={colorShot.patternUrl}
+                    matColor={stageMat}
+                    stage={colorShot.stage}
+                    printUrl={colorShot.printUrl}
+                    threadColors={embroideryOn && !embroideryUnlimitedColor ? selectedEmbroideryThreads : null}
+                    art={colorShot.art}
+                    area={colorShot.area}
+                  />
+                </div>
+              </div>
+              {colorShots.length > 1 && (
+                <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
+                  {colorShots.map((shot, index) => (
+                    <button
+                      key={shot.id}
+                      type="button"
+                      onClick={() => setPhotoPick(index)}
+                      aria-label={shot.label}
+                      className={`relative h-12 w-12 overflow-hidden rounded border ${index === colorAt ? 'border-white' : 'border-white/20'}`}
+                    >
+                      <StitchedColorPreview
+                        garmentUrl={shot.garmentUrl}
+                        garmentColor={shot.garmentColor}
+                        patternUrl={shot.patternUrl}
+                        matColor={stageMat}
+                        stage={shot.stage}
+                        printUrl={shot.printUrl}
+                        threadColors={embroideryOn && !embroideryUnlimitedColor ? selectedEmbroideryThreads : null}
+                        art={shot.art}
+                        area={shot.area}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : anglePhotos.length === 0 ? (
             <>
               <div
                 className="absolute inset-0 flex items-center justify-center pb-14"
                 style={{ perspective: '1280px' }}
               >
                 <div
-                  data-stage-garment=""
                   className="relative h-[84%] max-h-full"
                   style={{
                     aspectRatio: String(previewCardAspect),
+                    transform: `scale(${stageZoom})`,
+                  }}
+                >
+                <div
+                  data-stage-garment=""
+                  className="relative h-full w-full"
+                  style={{
                     transformStyle: 'preserve-3d',
                     transform: `rotateY(${(placementId === 'back' ? 180 : 0) + cardRotate}deg)`,
                     transition: spinTransition
@@ -2342,7 +3050,13 @@ export default function MerchFittingRoom({
                             surface: faceTemplateUrl ? 'template' : 'photo',
                           })
                         : faceArea
-                    const faceImageUrl = faceTemplateUrl || (standIn ? catalogGarmentUrl : null)
+                    const faceImageUrl = faceTemplateUrl || catalogGarmentUrl
+                    const facePatternUrl = positioningPatternUrl(
+                      catalogStudio,
+                      faceTemplateUrl,
+                      previewColorName,
+                      previewSize,
+                    )
                     const faceHeight = layerHeightFraction(faceLayer, faceGuideArea)
                     const faceRotateY = faceArea.id === 'back' ? 180 : 0
                     return (
@@ -2361,7 +3075,8 @@ export default function MerchFittingRoom({
                           <GarmentMatImage
                             src={faceImageUrl}
                             matColor={stageMat}
-                            garmentColor={faceTemplate?.backgroundColor || previewColor}
+                            garmentColor={facePatternUrl ? null : faceTemplate?.backgroundColor || previewColor}
+                            patternUrl={facePatternUrl}
                             className="pointer-events-none absolute inset-0"
                             imgClassName={`absolute inset-0 h-full w-full drop-shadow-lg ${
                               faceTemplateUrl ? 'object-fill' : 'object-contain'
@@ -2409,6 +3124,7 @@ export default function MerchFittingRoom({
                     )
                   })}
                 </div>
+                </div>
               </div>
               {!layer && (
                 <p
@@ -2438,15 +3154,30 @@ export default function MerchFittingRoom({
                       Center
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={optimizeForPrint}
+                    title="Size this art inside the stitch or print area without stretching it"
+                    className="mb-3 w-full rounded-lg bg-white/10 py-1.5 text-[10px] tracking-[0.14em] uppercase hover:bg-white/20"
+                  >
+                    Optimize for print
+                  </button>
                   <div className="grid grid-cols-2 gap-4">
-                    <label className="text-[10px] tracking-[0.12em] uppercase text-white/45">
+                    <label
+                      className="text-[10px] tracking-[0.12em] uppercase text-white/45"
+                      title="Double-click to reset scale"
+                      onDoubleClick={(event) => {
+                        event.preventDefault()
+                        resetScale()
+                      }}
+                    >
                       Scale
                       <input
                         type="range"
                         min={0.15}
-                        max={1}
+                        max={maxScaleInMitigation(layer, area)}
                         step={0.01}
-                        value={layer.scale}
+                        value={Math.min(layer.scale, maxScaleInMitigation(layer, area))}
                         onPointerDown={() => {
                           sliderSnapshotRef.current = studioSnapshotFrom(
                             layersRef.current,
@@ -2461,7 +3192,14 @@ export default function MerchFittingRoom({
                         className="mt-1 w-full accent-white"
                       />
                     </label>
-                    <label className="text-[10px] tracking-[0.12em] uppercase text-white/45">
+                    <label
+                      className="text-[10px] tracking-[0.12em] uppercase text-white/45"
+                      title="Double-click to reset rotation"
+                      onDoubleClick={(event) => {
+                        event.preventDefault()
+                        straightenActive()
+                      }}
+                    >
                       Rotate
                       <input
                         type="range"
@@ -2474,11 +3212,14 @@ export default function MerchFittingRoom({
                             layersRef.current,
                             catalogFileLayersRef.current
                           )
+                          beginRotationGuide()
                         }}
-                        onPointerUp={finishSliderEdit}
+                        onPointerUp={() => {
+                          endRotationGuide()
+                          finishSliderEdit()
+                        }}
                         onChange={(event) => {
-                          updateLayer({ rotation: Number(event.target.value) })
-                          flashGuide()
+                          applyRotation(Number(event.target.value))
                         }}
                         className="mt-1 w-full accent-white"
                       />
@@ -2491,14 +3232,25 @@ export default function MerchFittingRoom({
           ) : (
             <>
               <div className="absolute inset-0 flex items-center justify-center px-8 pb-6">
-                <img src={activePhoto} alt="" data-stage-garment="" className="max-h-full max-w-full object-contain" />
+                <img
+                  src={activePhoto}
+                  alt=""
+                  data-stage-garment=""
+                  className="max-h-full max-w-full object-contain"
+                  style={{ transform: `scale(${stageZoom})` }}
+                />
               </div>
-              {mockupUrls.length > 1 && (
+              {anglePhotos.length > 1 && (
                 <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
-                  {mockupUrls.map((url, index) => (
+                  {anglePhotos.map((url, index) => (
                     <button
                       key={url}
                       type="button"
+                      aria-label={
+                        Object.entries(mockupAngleTitlesByColor).find(([name]) =>
+                          sameColorKey(name, previewColorName),
+                        )?.[1][index] || `Angle ${index + 1}`
+                      }
                       onClick={() => setPhotoPick(index)}
                       className={`h-12 w-12 overflow-hidden rounded border ${index === photoAt ? 'border-white' : 'border-white/20'}`}
                     >
@@ -2550,19 +3302,20 @@ export default function MerchFittingRoom({
               {designPanelCollapsed ? (
                 <span
                   aria-hidden
-                  className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-sm text-white/55"
+                  className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center text-gray-400"
                 >
-                  ◂
+                  <PanelChevron direction="left" />
                 </span>
               ) : (
                 <button
                   type="button"
                   aria-label="Collapse product design panel"
                   aria-expanded
+                  title="Collapse product design"
                   onClick={() => setDesignPanelCollapsedPersist(true)}
-                  className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-white/55 hover:bg-white/10 hover:text-white"
+                  className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-800 hover:text-white"
                 >
-                  ▸
+                  <PanelChevron direction="right" />
                 </button>
               )}
             </div>
@@ -2581,6 +3334,25 @@ export default function MerchFittingRoom({
             onNav={setDesignNav}
             activeDpiGrade={activeDpiGrade}
             onOptimizeQuality={optimizePrintQuality}
+            placementScale={layer?.scale ?? 1}
+            placementScaleMax={layer ? maxScaleInMitigation(layer, area) : 1}
+            placementRotation={layer?.rotation ?? 0}
+            onFitPlacement={fit}
+            onCenterPlacement={center}
+            onOptimizeForPrint={optimizeForPrint}
+            onPlacementScale={(value) => {
+              updateLayer({ scale: value })
+              flashGuide()
+            }}
+            onPlacementRotate={applyRotation}
+            onResetPlacementScale={resetScale}
+            onResetPlacementRotation={straightenActive}
+            onPlacementGestureStart={() => {
+              sliderSnapshotRef.current = studioSnapshotFrom(layersRef.current, catalogFileLayersRef.current)
+            }}
+            onPlacementGestureEnd={finishSliderEdit}
+            onPlacementRotateStart={beginRotationGuide}
+            onPlacementRotateEnd={endRotationGuide}
             detail={catalogStudio}
             technique={catalogTechnique}
             techniques={catalogStudio.techniques}
@@ -2588,7 +3360,12 @@ export default function MerchFittingRoom({
             printFiles={techniquePrintFiles}
             activePrintFileType={activePrintFile?.type || activePrintFileType}
             embroideryUnlimitedColor={embroideryUnlimitedColor}
-            onEmbroideryUnlimitedColor={setEmbroideryUnlimitedColor}
+            onEmbroideryUnlimitedColor={chooseEmbroideryColorOption}
+            embroideryThreadNote={embroideryThreadNote}
+            embroideryThreadColors={selectedEmbroideryThreads}
+            onEmbroideryThreadColor={pickEmbroideryThread}
+            onPullStitchFile={() => void pullStitchFile()}
+            onPhotographColor={() => void photographColor()}
             productName={name}
             onProductName={setName}
             previewColorName={previewColorName}
@@ -2638,6 +3415,8 @@ export default function MerchFittingRoom({
             keep={keep}
             note={note}
             busy={busy}
+            uploadProgress={uploadProgress}
+            publishProgress={publishProgress}
             status={status}
             designId={designId}
             canPutOut={canPutOutDesign}

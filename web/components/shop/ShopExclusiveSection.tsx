@@ -27,8 +27,8 @@ export default function ShopExclusiveSection({ items }: Props) {
 
   return (
     <section id="exclusive" className="mt-16 scroll-mt-28">
-      <h2 className="text-2xl font-bold text-white">Exclusive releases</h2>
-      <p className="mt-1 max-w-2xl text-sm text-gray-400">
+      <h2 className="text-center text-2xl font-bold text-white">Exclusive releases</h2>
+      <p className="mx-auto mt-1 max-w-2xl text-center text-sm text-gray-400">
         Unreleased and pre-release projects. Inner Circle can preview and purchase with card or shop credits. Supporters
         see a teaser only.
       </p>
