@@ -570,6 +570,7 @@ function coverKey(cover: FolderCover): string {
 }
 
 function FolderCoverCell({ cover }: { cover: FolderCover | null }) {
+  const shopBackdrop = useShopBackdrop()
   if (!cover) {
     return <span className="relative min-h-0 overflow-hidden bg-white/[0.04]" />
   }
@@ -582,7 +583,6 @@ function FolderCoverCell({ cover }: { cover: FolderCover | null }) {
     )
   }
   const preview = designToShopProduct({ ...cover.design, status: 'live' }) as ShopMerchProduct | null
-  const shopBackdrop = useShopBackdrop()
   const mat = previewMat(shopBackdrop?.backdrop)
   return (
     <span
