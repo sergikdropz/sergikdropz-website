@@ -52,6 +52,8 @@ import {
   productMatKey,
   readProductMats,
   readStudioDesignId,
+  resolveProductMat,
+  writeAllProductMats,
   writeOpenTab,
   writeProductMat,
   writeStudioDesignId,
@@ -2688,7 +2690,7 @@ export default function MerchFittingRoom({
   }
 
   const matKey = productMatKey(designId, catalogProductId)
-  const stageTone = matKey != null && productMats[matKey] != null ? productMats[matKey] : null
+  const stageTone = resolveProductMat(productMats, matKey)
   const stageMat = stageTone == null ? null : productMatColor(stageTone)
   const lightBackdrop =
     stageTone != null
@@ -2700,7 +2702,7 @@ export default function MerchFittingRoom({
     if (!(target instanceof Element) || target.closest('button, a, input, textarea, [data-art-layer]')) return
     event.preventDefault()
     const menuWidth = 220
-    const menuHeight = 188
+    const menuHeight = 228
     setStageToneMenu({
       x: Math.min(event.clientX, window.innerWidth - menuWidth - 8),
       y: Math.min(event.clientY, window.innerHeight - menuHeight - 8),
@@ -2711,6 +2713,12 @@ export default function MerchFittingRoom({
     if (!matKey) return
     const next = tone == null ? null : Math.max(0, Math.min(255, Math.round(tone)))
     writeProductMat(matKey, next)
+    setProductMats(readProductMats())
+  }
+
+  const applyStageBackgroundToAll = () => {
+    const next = stageTone == null ? null : Math.max(0, Math.min(255, Math.round(stageTone)))
+    writeAllProductMats(next)
     setProductMats(readProductMats())
   }
 
@@ -3200,6 +3208,14 @@ export default function MerchFittingRoom({
             className="w-full accent-white"
           />
         </label>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={applyStageBackgroundToAll}
+          className="w-full rounded-md border border-white/20 px-2 py-1.5 text-[11px] text-white/80 hover:bg-white/10 hover:text-white"
+        >
+          Apply to all products
+        </button>
       </div>
     ) : null}
     {artMenuOpen && artMenu && (

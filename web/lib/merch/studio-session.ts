@@ -66,13 +66,24 @@ export function writeStageView(view: 'preview' | 'design') {
 
 const PRODUCT_MATS_KEY = 'sergwear-product-mats'
 
+/** Shared backdrop used by every product that has no per-design override. */
+export const ALL_PRODUCTS_MAT_KEY = '__all__'
+/** Explicit “Original” on one product so it does not inherit the all-products tone. */
+export const PRODUCT_MAT_ORIGINAL = -1
+
 export type ProductMatMap = Record<string, number>
 
 function clampTone(tone: number): number {
   return Math.max(0, Math.min(255, Math.round(tone)))
 }
 
-/** Saved backdrop tone for one design. Missing means the product's original color. */
+function parseMatTone(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  if (value === PRODUCT_MAT_ORIGINAL) return PRODUCT_MAT_ORIGINAL
+  return clampTone(value)
+}
+
+/** Saved backdrop tone for one design. Missing means inherit all-products, then original. */
 export function readProductMats(): ProductMatMap {
   if (typeof window === 'undefined') return {}
   try {
@@ -82,8 +93,10 @@ export function readProductMats(): ProductMatMap {
     if (!parsed || typeof parsed !== 'object') return {}
     const map: ProductMatMap = {}
     for (const [key, value] of Object.entries(parsed)) {
-      if (!key || typeof value !== 'number' || !Number.isFinite(value)) continue
-      map[key] = clampTone(value)
+      if (!key) continue
+      const tone = parseMatTone(value)
+      if (tone == null) continue
+      map[key] = tone
     }
     return map
   } catch {
@@ -94,15 +107,49 @@ export function readProductMats(): ProductMatMap {
 export function writeProductMat(id: string, tone: number | null) {
   if (typeof window === 'undefined' || !id) return
   const map = readProductMats()
-  if (tone == null) delete map[id]
-  else map[id] = clampTone(tone)
+  if (tone == null) {
+    const all = map[ALL_PRODUCTS_MAT_KEY]
+    if (all != null && all !== PRODUCT_MAT_ORIGINAL) map[id] = PRODUCT_MAT_ORIGINAL
+    else delete map[id]
+  } else {
+    map[id] = clampTone(tone)
+  }
   window.localStorage.setItem(PRODUCT_MATS_KEY, JSON.stringify(map))
+}
+
+/** Replace every product backdrop with one tone. Null restores original on all. */
+export function writeAllProductMats(tone: number | null) {
+  if (typeof window === 'undefined') return
+  if (tone == null) {
+    window.localStorage.removeItem(PRODUCT_MATS_KEY)
+    return
+  }
+  window.localStorage.setItem(
+    PRODUCT_MATS_KEY,
+    JSON.stringify({ [ALL_PRODUCTS_MAT_KEY]: clampTone(tone) }),
+  )
 }
 
 export function productMatKey(designId: string | null, catalogProductId: number | null): string | null {
   if (designId) return designId
   if (catalogProductId != null) return `catalog:${catalogProductId}`
   return null
+}
+
+/** Per-product override, else the all-products tone. Null keeps the original color. */
+export function resolveProductMat(map: ProductMatMap, key: string | null): number | null {
+  if (key && Object.prototype.hasOwnProperty.call(map, key)) {
+    const value = map[key]
+    return value === PRODUCT_MAT_ORIGINAL ? null : value
+  }
+  const all = map[ALL_PRODUCTS_MAT_KEY]
+  if (all == null || all === PRODUCT_MAT_ORIGINAL) return null
+  return all
+}
+
+export function productMatCss(map: ProductMatMap | undefined, key: string | null): string | undefined {
+  const tone = resolveProductMat(map || {}, key)
+  return tone == null ? undefined : productMatColor(tone)
 }
 
 /** Flat color behind a cut-out product. The garment image stays on top. */

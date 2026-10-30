@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import MerchDesignPreviewThumb from '@/components/admin/MerchDesignPreviewThumb'
 import StudioContextMenu, { type StudioContextMenuEntry } from '@/components/studio/StudioContextMenu'
-import { mockupPhotosForColor, shopFrontPhotoIndex } from '@/lib/merch/catalog-studio'
 import { sortMerchDesigns, type DesignStatus, type MerchDesign } from '@/lib/merch/design'
 import { groupMerchDesignsByItem } from '@/lib/merch/item-groups'
-import { productMatColor } from '@/lib/merch/studio-session'
+import { ALL_PRODUCTS_MAT_KEY, productMatCss } from '@/lib/merch/studio-session'
 import type { PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import type { CatalogNavItem, PrintfulCategoryNode } from '@/lib/merch/printful-categories'
 
@@ -130,34 +129,24 @@ function productPhotoUrls(design: MerchDesign): string[] {
   return urls
 }
 
-function designCoverUrl(design: MerchDesign): string | null {
-  const photos = mockupPhotosForColor(
-    design.mockupUrls,
-    design.mockupUrlsByColor,
-    design.previewColorName,
-    design.previewColorName,
-  )
-  const urls = photos.length > 0 ? photos : productPhotoUrls(design)
-  if (urls.length === 0) return null
-  const index = photos.length > 0 ? shopFrontPhotoIndex(design) : 0
-  return urls[Math.min(Math.max(index, 0), urls.length - 1)] || urls[0]
-}
-
 function ItemGroupFolderTile({
   label,
   count,
-  covers,
+  designs,
+  productMats,
   onOpen,
 }: {
   label: string
   count: number
-  covers: string[]
+  designs: MerchDesign[]
+  productMats?: Record<string, number>
   onOpen: () => void
 }) {
-  const cells = covers.slice(0, 4)
+  const cells = designs.slice(0, 4)
   const mosaic = cells.length <= 1 ? 'grid-cols-1' : cells.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'
-  const shown = cells.length >= 3 ? [...cells, '', '', '', ''].slice(0, 4) : cells.length > 0 ? cells : ['']
+  const shown = cells.length >= 3 ? [...cells, null, null, null, null].slice(0, 4) : cells.length > 0 ? cells : [null]
   const countLabel = count === 1 ? '1 product' : `${count} products`
+  const folderMat = productMatCss(productMats, cells[0]?.id ?? ALL_PRODUCTS_MAT_KEY)
   return (
     <button
       type="button"
@@ -165,17 +154,31 @@ function ItemGroupFolderTile({
       aria-label={`${label}, ${countLabel}`}
       className="group overflow-hidden rounded-xl border border-white/10 bg-black/25 text-left transition hover:border-white/30"
     >
-      <span className="relative block px-2 pt-2">
+      <span className="relative block px-2 pt-2" style={folderMat ? { backgroundColor: folderMat } : undefined}>
         <span
           className="absolute left-4 top-2 h-2.5 w-10 rounded-t-md border border-b-0 border-white/15 bg-white/15 group-hover:bg-white/25"
           aria-hidden
         />
-        <span className={`relative mt-2 grid aspect-square gap-px overflow-hidden rounded-lg rounded-tl-md bg-black ${mosaic}`}>
-          {shown.map((src, index) => (
-            <span key={`${src || 'empty'}-${index}`} className="relative min-h-0 overflow-hidden bg-white/[0.04]">
-              {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : null}
-            </span>
-          ))}
+        <span
+          className={`relative mt-2 grid aspect-square gap-px overflow-hidden rounded-lg rounded-tl-md ${mosaic} ${
+            folderMat ? '' : 'bg-black'
+          }`}
+          style={folderMat ? { backgroundColor: folderMat } : undefined}
+        >
+          {shown.map((design, index) => {
+            const cellMat = design ? productMatCss(productMats, design.id) : folderMat
+            return (
+              <span
+                key={`${design?.id || 'empty'}-${index}`}
+                className={`relative min-h-0 overflow-hidden ${cellMat ? '' : 'bg-white/[0.04]'}`}
+                style={cellMat ? { backgroundColor: cellMat } : undefined}
+              >
+                {design ? (
+                  <MerchDesignPreviewThumb design={design} matColor={cellMat} />
+                ) : null}
+              </span>
+            )
+          })}
         </span>
       </span>
       <span className="block px-2 pb-2 pt-1.5">
@@ -1013,15 +1016,13 @@ export default function MerchPrintfulCatalog({
               >
                 {(openGroup ? itemGroups.filter((group) => group.key === openGroup.key) : itemGroups).map((group) => {
                   if (!openGroup) {
-                    const covers = group.designs
-                      .map((design) => designCoverUrl(design))
-                      .filter((url): url is string => Boolean(url))
                     return (
                       <ItemGroupFolderTile
                         key={group.key}
                         label={group.label}
                         count={group.designs.length}
-                        covers={covers}
+                        designs={group.designs}
+                        productMats={productMats}
                         onOpen={() => {
                           setOpenItemGroup(group.key)
                           productListRef.current?.scrollTo({ top: 0 })
@@ -1092,11 +1093,7 @@ export default function MerchPrintfulCatalog({
                         <span className={`relative block overflow-hidden ${photosOpen ? 'h-16 w-16 shrink-0 rounded-lg' : 'aspect-square'}`}>
                           <MerchDesignPreviewThumb
                             design={design}
-                            matColor={
-                              productMats && productMats[design.id] != null
-                                ? productMatColor(productMats[design.id])
-                                : undefined
-                            }
+                            matColor={productMatCss(productMats, design.id)}
                           />
                         </span>
                         <span className="block p-2">
