@@ -69,10 +69,12 @@ export function paintGarmentBackdrop(
   height: number,
   mat: Rgb,
   garment: Rgb,
+  matAlpha = 255,
 ): Uint8ClampedArray {
   const kind = backdropKind(data, width, height)
   if (kind === 'cutout') return data
   const backdrop = backdropColor(data, width, height)
+  const alpha = Math.max(0, Math.min(255, Math.round(matAlpha)))
   const out = new Uint8ClampedArray(data.length)
   for (let index = 0; index < data.length; index += 4) {
     const sourceR = data[index]
@@ -83,13 +85,52 @@ export function paintGarmentBackdrop(
       out[index] = mat.r
       out[index + 1] = mat.g
       out[index + 2] = mat.b
-      out[index + 3] = 255
+      out[index + 3] = alpha
       continue
     }
     const cover = sourceA / 255
     out[index] = Math.round(sourceR * cover + garment.r * (1 - cover))
     out[index + 1] = Math.round(sourceG * cover + garment.g * (1 - cover))
     out[index + 2] = Math.round(sourceB * cover + garment.b * (1 - cover))
+    out[index + 3] = 255
+  }
+  return out
+}
+
+/**
+ * Same as `paintGarmentBackdrop`, but heather and patterned colors sample a
+ * fabric photo instead of a flat swatch. The photo must already match the
+ * template's pixel size.
+ */
+export function paintGarmentTexture(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  mat: Rgb,
+  texture: Uint8ClampedArray,
+  matAlpha = 255,
+): Uint8ClampedArray {
+  if (texture.length !== data.length) return paintGarmentBackdrop(data, width, height, mat, { r: 255, g: 255, b: 255 }, matAlpha)
+  if (backdropKind(data, width, height) === 'cutout') return fillSilhouetteWithPattern(data, texture, mat, matAlpha)
+  const backdrop = backdropColor(data, width, height)
+  const alpha = Math.max(0, Math.min(255, Math.round(matAlpha)))
+  const out = new Uint8ClampedArray(data.length)
+  for (let index = 0; index < data.length; index += 4) {
+    const sourceR = data[index]
+    const sourceG = data[index + 1]
+    const sourceB = data[index + 2]
+    const sourceA = data[index + 3]
+    if (sourceA >= OPAQUE && nearBackdrop(sourceR, sourceG, sourceB, backdrop)) {
+      out[index] = mat.r
+      out[index + 1] = mat.g
+      out[index + 2] = mat.b
+      out[index + 3] = alpha
+      continue
+    }
+    const cover = sourceA / 255
+    out[index] = Math.round(sourceR * cover + texture[index] * (1 - cover))
+    out[index + 1] = Math.round(sourceG * cover + texture[index + 1] * (1 - cover))
+    out[index + 2] = Math.round(sourceB * cover + texture[index + 2] * (1 - cover))
     out[index + 3] = 255
   }
   return out
@@ -173,8 +214,10 @@ export function fillSilhouetteWithPattern(
   silhouette: Uint8ClampedArray,
   pattern: Uint8ClampedArray,
   mat: Rgb | null,
+  matAlpha = 255,
 ): Uint8ClampedArray {
   if (silhouette.length !== pattern.length || silhouette.length % 4 !== 0) return silhouette
+  const alpha = Math.max(0, Math.min(255, Math.round(matAlpha)))
   const out = new Uint8ClampedArray(silhouette.length)
   for (let index = 0; index < silhouette.length; index += 4) {
     const hole = 1 - silhouette[index + 3] / 255
@@ -184,7 +227,7 @@ export function fillSilhouetteWithPattern(
     out[index] = Math.round(pattern[index] * hole + backdropR * (1 - hole))
     out[index + 1] = Math.round(pattern[index + 1] * hole + backdropG * (1 - hole))
     out[index + 2] = Math.round(pattern[index + 2] * hole + backdropB * (1 - hole))
-    out[index + 3] = 255
+    out[index + 3] = Math.round(255 * hole + alpha * (1 - hole))
   }
   return out
 }

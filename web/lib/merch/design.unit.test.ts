@@ -266,6 +266,9 @@ describe('merch design math', () => {
     expect(live?.fulfillmentReady).toBe(true)
     expect(live?.variants[0].printful_variant_id).toBe(88)
     expect(live?.category).toBe('tees')
+    expect(designToShopProduct({ ...base, status: 'live', shopCategory: 'accessories' })?.category).toBe(
+      'accessories',
+    )
     const hats = designToShopProduct({
       ...base,
       status: 'live',

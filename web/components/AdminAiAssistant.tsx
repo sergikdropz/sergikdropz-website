@@ -12,7 +12,8 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { LuBrainCircuit, LuSettings2 } from 'react-icons/lu'
+import { LuSettings2 } from 'react-icons/lu'
+import { loadMerchFont, merchFontById } from '@/lib/merch/text-fonts'
 import { ADMIN_AI_FAB_ANCHOR_ID } from '@/components/shell/AppShell'
 import { useAdminAiPageContextOptional } from '@/contexts/AdminAiPageContext'
 import { collectSignedInFormFields, type AdminAiPageContext } from '@/lib/ai/admin-ai-page-context'
@@ -2278,6 +2279,10 @@ export default function AdminAiAssistant({
 
   useEffect(() => {
     setPortalReady(true)
+  }, [])
+
+  useEffect(() => {
+    void loadMerchFont(merchFontById('orbitron'))
   }, [])
 
   useEffect(() => {
@@ -5966,12 +5971,12 @@ export default function AdminAiAssistant({
         <button
           type="button"
           onClick={handleAdminAiFabClick}
-          className={`inline-flex h-11 w-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-400 ${
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-status-info ${
             !enabled
               ? 'border-gray-700 bg-gray-900/95 text-gray-500 hover:border-gray-600 hover:text-gray-300'
               : open
-                ? 'border-purple-300/80 bg-purple-600 text-white shadow-purple-500/35 ring-2 ring-purple-400/45'
-                : 'border-purple-500/55 bg-purple-600 text-white hover:bg-purple-500 hover:shadow-purple-900/50'
+                ? 'border-status-info/60 bg-status-info/25 text-status-info ring-2 ring-status-info/40'
+                : 'border-status-info/40 bg-status-info/15 text-status-info hover:bg-status-info/25'
           }`}
           aria-label={
             !enabled
@@ -5988,7 +5993,13 @@ export default function AdminAiAssistant({
                 : 'Open Admin AI. Shift+click to turn AI off.'
           }
         >
-          <LuBrainCircuit className="h-5 w-5" aria-hidden />
+          <span
+            aria-hidden
+            className="text-[15px] leading-none tracking-wide"
+            style={{ fontFamily: 'Orbitron, sans-serif', fontWeight: 700 }}
+          >
+            AI
+          </span>
         </button>
   )
 

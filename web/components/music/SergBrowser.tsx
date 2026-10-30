@@ -3563,7 +3563,7 @@ export default function SergBrowser({
                   onClick={() => switchView(item.id)}
                   className={`w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-md text-sm transition ${
                     view === item.id && !activeSmartPlaylist
-                      ? 'bg-purple-600/20 text-purple-300'
+                      ? 'bg-white font-medium text-black'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
                 >
@@ -3692,7 +3692,7 @@ export default function SergBrowser({
                         sidebarPlaylistDragOverId === pl.id
                           ? 'bg-purple-600/30 text-purple-100 ring-1 ring-inset ring-purple-400/70'
                           : activeCuratedPlaylist === pl.id
-                          ? 'bg-purple-600/20 text-purple-300'
+                          ? 'bg-white font-medium text-black'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                       }`}
                     >
@@ -12870,7 +12870,7 @@ function SidebarAlbumItem({
         dropActive
           ? 'bg-teal-600/30 text-teal-100 ring-1 ring-inset ring-teal-400/70'
           : active
-          ? 'bg-purple-600/20 text-purple-300'
+          ? 'bg-white font-medium text-black'
           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
       }`}
     >

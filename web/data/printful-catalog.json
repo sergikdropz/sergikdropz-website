@@ -1,5 +1,5 @@
 {
-  "syncedAt": "2026-10-30T08:03:10.912Z",
+  "syncedAt": "2026-10-30T15:57:56.547Z",
   "productCount": 572,
   "products": [
     {
@@ -3608,7 +3608,7 @@
       "typeName": "All-Over Print Youth Recycled Basketball Jersey",
       "brand": null,
       "model": "All-Over Print Youth Recycled Basketball Jersey",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/5d/5dc12edbcc19d964b8387ea2124dfe57_l",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/7f/7f3ec4e92b3032559b93f76969ed58fd_l",
       "variantCount": 7,
       "fileTypes": [
         "front",
@@ -4945,29 +4945,6 @@
       "studioBlankId": "hat-dad",
       "category": "hats",
       "mainCategoryId": 45,
-      "avgFulfillmentDays": null
-    },
-    {
-      "id": 1767,
-      "title": "Custom Shape Metal Pin",
-      "type": "SUBLIMATION",
-      "typeName": "Custom Shape Metal Pin",
-      "brand": "Generic brand",
-      "model": "Custom Shape Metal Pin",
-      "image": "https://static.cdn.printful.com/s/static/v880/images/products/product_temporary_image.jpg",
-      "variantCount": 2,
-      "fileTypes": [
-        "front",
-        "mockup"
-      ],
-      "isDiscontinued": false,
-      "techniques": [
-        "SUBLIMATION"
-      ],
-      "studioFamily": "tee",
-      "studioBlankId": "tee-staple",
-      "category": "accessories",
-      "mainCategoryId": 268,
       "avgFulfillmentDays": null
     },
     {
@@ -7456,6 +7433,30 @@
       "studioBlankId": "tee-staple",
       "category": "accessories",
       "mainCategoryId": 220,
+      "avgFulfillmentDays": null
+    },
+    {
+      "id": 1722,
+      "title": "Men's Staple Ringer Tee | AS Colour 5053",
+      "type": "T-SHIRT",
+      "typeName": "AS Colour 5053 | Men's Staple Ringer Tee",
+      "brand": "AS Colour",
+      "model": "5053",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/dd/dd1e7360eb5a6eb82ee16fa3a0b107be_l",
+      "variantCount": 18,
+      "fileTypes": [
+        "front",
+        "back",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "DTG"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "tees",
+      "mainCategoryId": 6,
       "avgFulfillmentDays": null
     },
     {

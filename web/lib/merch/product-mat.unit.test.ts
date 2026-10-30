@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { backdropKind, coverFrontNeck, fillSilhouetteWithPattern, paintGarmentBackdrop } from '@/lib/merch/product-mat'
+import {
+  backdropKind,
+  coverFrontNeck,
+  fillSilhouetteWithPattern,
+  paintGarmentBackdrop,
+  paintGarmentTexture,
+} from '@/lib/merch/product-mat'
 
 function pixel(data: Uint8ClampedArray, index: number) {
   const offset = index * 4
@@ -34,6 +40,47 @@ describe('paintGarmentBackdrop', () => {
     const fabric = Math.round(8 * cover + 255 * (1 - cover))
     expect(pixel(painted, 4)).toEqual([fabric, fabric, fabric, 255])
     expect(fabric).toBeGreaterThan(160)
+  })
+
+  it('lets the backdrop fade without fading the garment', () => {
+    const white = [255, 255, 255, 255]
+    const hat = [8, 8, 8, 76]
+    const data = new Uint8ClampedArray([
+      ...white, ...white, ...white,
+      ...white, ...hat, ...white,
+      ...white, ...white, ...white,
+    ])
+    const painted = paintGarmentBackdrop(data, 3, 3, { r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, 128)
+    expect(pixel(painted, 0)).toEqual([0, 0, 0, 128])
+    const cover = 76 / 255
+    const fabric = Math.round(8 * cover + 255 * (1 - cover))
+    expect(pixel(painted, 4)).toEqual([fabric, fabric, fabric, 255])
+  })
+
+  it('paints a heather photo through the ghost instead of a flat swatch', () => {
+    const white = [255, 255, 255, 255]
+    const hat = [8, 8, 8, 76]
+    const data = new Uint8ClampedArray([
+      ...white, ...white, ...white,
+      ...white, ...hat, ...white,
+      ...white, ...white, ...white,
+    ])
+    const texture = new Uint8ClampedArray(data.length)
+    for (let index = 0; index < texture.length; index += 4) {
+      texture[index] = 40
+      texture[index + 1] = 80
+      texture[index + 2] = 20
+      texture[index + 3] = 255
+    }
+    const painted = paintGarmentTexture(data, 3, 3, { r: 0, g: 0, b: 0 }, texture)
+    expect(pixel(painted, 0)).toEqual([0, 0, 0, 255])
+    const cover = 76 / 255
+    expect(pixel(painted, 4)).toEqual([
+      Math.round(8 * cover + 40 * (1 - cover)),
+      Math.round(8 * cover + 80 * (1 - cover)),
+      Math.round(8 * cover + 20 * (1 - cover)),
+      255,
+    ])
   })
 
   it('fills a transparent positioning hole with the color photo and keeps the backdrop', () => {

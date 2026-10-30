@@ -237,8 +237,14 @@ export async function POST(request: Request) {
 
       // --- Merch purchase ---
       else if (productType === 'merch') {
-        const items = session.metadata?.items ? JSON.parse(session.metadata.items) : []
-        const shippingAddress = session.shipping_details?.address || null
+        const { parseMerchCheckoutMetadata } = await import('@/lib/merch/checkout-items')
+        const items = parseMerchCheckoutMetadata(session.metadata?.items)
+        const shippingAddress = session.shipping_details
+          ? {
+              name: session.shipping_details.name,
+              ...(session.shipping_details.address || {}),
+            }
+          : null
 
         // Create merch order
         const { data: merchOrder, error: merchError } = await supabase

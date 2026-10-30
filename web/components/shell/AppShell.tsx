@@ -29,6 +29,22 @@ export const ADMIN_AI_FAB_ANCHOR_ID = 'admin-ai-fab-anchor'
 /** Center of the shell header. Pages portal a title here. */
 export const APP_SHELL_TITLE_SLOT_ID = 'app-shell-title-slot'
 
+export const SHELL_TITLE_TYPE = 'truncate font-six-caps text-5xl font-bold tracking-[0.12em] sm:text-6xl'
+
+function ShellHeaderTitle({
+  children,
+  className = 'text-white',
+}: {
+  children: string
+  className?: string
+}) {
+  return (
+    <h1 className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-16 text-center sm:px-24">
+      <span className={`${SHELL_TITLE_TYPE} ${className}`}>{children}</span>
+    </h1>
+  )
+}
+
 export function AppShell({
   surface,
   title,
@@ -61,25 +77,23 @@ export function AppShell({
           id={APP_SHELL_TITLE_SLOT_ID}
           className="pointer-events-none absolute inset-x-0 bottom-0 top-[var(--shell-header-safe-top)] z-10 flex items-center justify-center px-16 text-center sm:px-24"
         />
-        <div className="relative flex items-center">
+        <div className="relative flex min-h-[4.75rem] items-center sm:min-h-[5.5rem]">
+          {surface === 'studio' ? (
+            <ShellHeaderTitle className="text-violet-400/90">Release Studio</ShellHeaderTitle>
+          ) : showAdminDashboardTitle ? (
+            <ShellHeaderTitle>Admin Dashboard</ShellHeaderTitle>
+          ) : showMusicVaultTitle ? (
+            <ShellHeaderTitle className="rounded border border-yellow-400 px-2 text-yellow-400 sm:px-3">
+              SERGIK Music Vault
+            </ShellHeaderTitle>
+          ) : showMerchDesignerTitle ? (
+            <ShellHeaderTitle>MERCH DESIGNER STUDIO</ShellHeaderTitle>
+          ) : null}
           <div
             id={ADMIN_AI_FAB_ANCHOR_ID}
             className="ml-3 inline-flex h-11 w-11 shrink-0 items-center justify-center sm:ml-4"
           />
           <div className="relative flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-6 sm:py-3 lg:px-8">
-            {surface === 'studio' ? (
-              <p className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[calc(100%-8rem)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-xl font-bold uppercase tracking-tight text-violet-400/90 sm:max-w-[calc(100%-14rem)] sm:text-3xl md:text-4xl">
-                Release Studio
-              </p>
-            ) : showAdminDashboardTitle ? (
-              <h1 className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[calc(100%-8rem)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-2xl font-bold text-ink sm:max-w-[calc(100%-14rem)] sm:text-4xl">
-                Admin Dashboard
-              </h1>
-            ) : showMusicVaultTitle ? (
-              <h1 className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[calc(100%-8rem)] -translate-x-1/2 -translate-y-1/2 truncate rounded border border-yellow-400 px-2 py-0.5 text-center font-six-caps text-2xl font-semibold text-yellow-400 sm:max-w-[calc(100%-14rem)] sm:px-3 sm:py-1 sm:text-4xl">
-                SERGIK Music Vault
-              </h1>
-            ) : null}
             {surface !== 'admin' ? (
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -112,10 +126,6 @@ export function AppShell({
                 {title ? <h1 className="text-xl font-bold tracking-tight text-ink">{title}</h1> : null}
                 {subtitle ? <p className="text-sm text-ink-subtle">{subtitle}</p> : null}
               </div>
-            ) : showMerchDesignerTitle ? (
-              <h1 className="min-w-0 flex-1 truncate text-center text-sm font-bold uppercase tracking-wide text-white xs:text-base sm:text-xl lg:text-2xl">
-                MERCH DESIGNER STUDIO
-              </h1>
             ) : (
               <div className="min-w-0 flex-1" aria-hidden />
             )}

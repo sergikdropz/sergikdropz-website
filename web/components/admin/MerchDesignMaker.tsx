@@ -15,6 +15,7 @@ import {
 import type { BlankColor, BlankPlacement, GarmentFamily } from '@/lib/merch/blanks'
 import { sameMerchArt } from '@/lib/merch/art-url'
 import type { CatalogAddOnRow } from '@/lib/merch/catalog-add-ons'
+import { conflictingPlacementProblems } from '@/lib/merch/catalog-design-intel'
 import type { CatalogPrintFile, CatalogProductDetail, CatalogTechnique } from '@/lib/merch/printful-catalog-types'
 import {
   mitigationGuidelines,
@@ -201,7 +202,7 @@ export function PlacementViewTabs({
   if (tabs.length === 0) return null
   const saving = Boolean(toolbar?.busy)
   return (
-    <nav aria-label="Placements" className="relative z-20 shrink-0 px-4 pb-3 pt-4">
+    <nav aria-label="Placements" className="relative z-20 shrink-0 px-4 pb-4 pt-2">
       <div className="flex items-center gap-2">
         {toolbar ? (
           <StageIconButton
@@ -226,7 +227,7 @@ export function PlacementViewTabs({
                   onClick={() => onTab(tab.id)}
                   className={`relative shrink-0 px-4 py-2 text-sm ${
                     active
-                      ? 'bg-white/10 text-white after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-x-[7px] after:border-t-[7px] after:border-x-transparent after:border-t-white/10'
+                      ? 'bg-white/10 text-white after:absolute after:bottom-full after:left-1/2 after:-translate-x-1/2 after:border-x-[7px] after:border-b-[7px] after:border-x-transparent after:border-b-white/10'
                       : 'text-white/55 hover:text-white'
                   }`}
                 >
@@ -680,6 +681,7 @@ export function MerchDesignCanvas({
   garmentUrl,
   garmentBackground = null,
   patternUrl = null,
+  garmentTexture = null,
   useTemplateMockup = false,
   garmentAspect = null,
   family,
@@ -728,6 +730,8 @@ export function MerchDesignCanvas({
   garmentBackground?: string | null
   /** Color photo drawn through a positioning silhouette. */
   patternUrl?: string | null
+  /** Heather or patterned fabric behind a ghost template. */
+  garmentTexture?: string | null
   /** Printful positioning template — skip 3D back flip; placement is per template. */
   useTemplateMockup?: boolean
   /** Width / height of the garment image, known before it loads (template_width / template_height). */
@@ -775,6 +779,7 @@ export function MerchDesignCanvas({
   /** Match preview stand-in: back uses rotateY(180) on the card plus scaleX(-1) on the photo — not flip alone. */
   const showBackGarment = !useTemplateMockup && placementId === 'back'
   const viewportRef = useRef<HTMLDivElement>(null)
+  const tabsWrapRef = useRef<HTMLDivElement>(null)
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null)
   const [frame, setFrame] = useState<{ width: number; height: number } | null>(null)
   const metaAspect = useTemplateMockup && garmentAspect && garmentAspect > 0 ? garmentAspect : null
@@ -791,23 +796,18 @@ export function MerchDesignCanvas({
       const style = getComputedStyle(node)
       const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
       const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
-      setFrame(fittedFrame(node.clientWidth - padX, node.clientHeight - padY, frameAspect))
+      const tabH = tabsWrapRef.current?.offsetHeight ?? 0
+      setFrame(fittedFrame(node.clientWidth - padX, node.clientHeight - padY - tabH, frameAspect))
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(node)
+    if (tabsWrapRef.current) observer.observe(tabsWrapRef.current)
     return () => observer.disconnect()
   }, [frameAspect])
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <PlacementViewTabs
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onTab={onTab}
-        toolbar={stageToolbar}
-        underTabs={underTabs}
-      />
       {onProductName ? (
         <label className="mx-auto block w-full max-w-sm shrink-0 px-6 pt-3 text-center text-xs text-white/55">
           Product name
@@ -820,7 +820,7 @@ export function MerchDesignCanvas({
       ) : null}
       <div
         ref={viewportRef}
-        className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-4"
+        className="relative z-0 flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-6 py-4"
         onContextMenu={(event) => {
           const target = event.target
           if (!(target instanceof Element) || target.closest('button, [data-art-layer]')) return
@@ -836,7 +836,7 @@ export function MerchDesignCanvas({
       >
         <div
           data-stage-garment=""
-          className="relative max-h-full max-w-full"
+          className="relative max-w-full shrink-0"
           style={{
             width: frame?.width,
             height: frame?.height,
@@ -860,6 +860,7 @@ export function MerchDesignCanvas({
                 matColor={matColor}
                 garmentColor={patternUrl ? null : garmentBackground}
                 patternUrl={patternUrl}
+                garmentTexture={garmentTexture}
                 className="pointer-events-none absolute inset-0"
                 imgClassName={`absolute inset-0 h-full w-full ${
                   useTemplateMockup ? 'object-fill' : 'object-contain'
@@ -997,6 +998,15 @@ export function MerchDesignCanvas({
               Optimize for print
             </button>
           ) : null}
+        </div>
+        <div ref={tabsWrapRef} className="w-full shrink-0">
+          <PlacementViewTabs
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onTab={onTab}
+            toolbar={stageToolbar}
+            underTabs={underTabs}
+          />
         </div>
       </div>
     </div>
@@ -1342,6 +1352,14 @@ export function MerchDesignSidebar({
   onPlacementRotateEnd?: () => void
 }) {
   const { product } = detail
+  const angles = detail.designIntel?.angles || []
+  const placementConflicts = detail.designIntel
+    ? conflictingPlacementProblems(
+        placed.map((item) => item.id),
+        detail.designIntel.conflicts,
+      )
+    : []
+  const auditProblems = detail.designIntel?.audit.problems || []
   const techniqueLabel = techniques.find((item) => item.key === technique)?.label || technique
   const activeFile = printFiles.find((file) => file.type === activePrintFileType) || printFiles[0]
   const activeIsEmbroidery =
@@ -1404,6 +1422,17 @@ export function MerchDesignSidebar({
         {nav === 'product' && (
           <>
             <p className="text-sm font-semibold leading-snug">{product.title}</p>
+            {angles.length > 0 ? (
+              <p className="text-[11px] leading-snug text-white/45">
+                Angles {angles.map((angle) => angle.view).join(', ')}
+              </p>
+            ) : null}
+            {auditProblems.length > 0 ? (
+              <p className="text-[11px] leading-snug text-amber-200/90">{auditProblems[0]}</p>
+            ) : null}
+            {placementConflicts.length > 0 ? (
+              <p className="text-[11px] leading-snug text-amber-200/90">{placementConflicts[0]}</p>
+            ) : null}
             <PlacementTools
               file={activeFile}
               hasArt={Boolean(activeLayerUrl)}

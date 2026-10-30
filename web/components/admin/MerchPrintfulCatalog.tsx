@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import MerchDesignPreviewThumb from '@/components/admin/MerchDesignPreviewThumb'
 import StudioContextMenu, { type StudioContextMenuEntry } from '@/components/studio/StudioContextMenu'
+import { mockupPhotosForColor, shopFrontPhotoIndex } from '@/lib/merch/catalog-studio'
 import { sortMerchDesigns, type DesignStatus, type MerchDesign } from '@/lib/merch/design'
+import { groupMerchDesignsByItem } from '@/lib/merch/item-groups'
 import { productMatColor } from '@/lib/merch/studio-session'
 import type { PrintfulCatalogProduct } from '@/lib/merch/printful-catalog-types'
 import type { CatalogNavItem, PrintfulCategoryNode } from '@/lib/merch/printful-categories'
@@ -128,6 +130,62 @@ function productPhotoUrls(design: MerchDesign): string[] {
   return urls
 }
 
+function designCoverUrl(design: MerchDesign): string | null {
+  const photos = mockupPhotosForColor(
+    design.mockupUrls,
+    design.mockupUrlsByColor,
+    design.previewColorName,
+    design.previewColorName,
+  )
+  const urls = photos.length > 0 ? photos : productPhotoUrls(design)
+  if (urls.length === 0) return null
+  const index = photos.length > 0 ? shopFrontPhotoIndex(design) : 0
+  return urls[Math.min(Math.max(index, 0), urls.length - 1)] || urls[0]
+}
+
+function ItemGroupFolderTile({
+  label,
+  count,
+  covers,
+  onOpen,
+}: {
+  label: string
+  count: number
+  covers: string[]
+  onOpen: () => void
+}) {
+  const cells = covers.slice(0, 4)
+  const mosaic = cells.length <= 1 ? 'grid-cols-1' : cells.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'
+  const shown = cells.length >= 3 ? [...cells, '', '', '', ''].slice(0, 4) : cells.length > 0 ? cells : ['']
+  const countLabel = count === 1 ? '1 product' : `${count} products`
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${label}, ${countLabel}`}
+      className="group overflow-hidden rounded-xl border border-white/10 bg-black/25 text-left transition hover:border-white/30"
+    >
+      <span className="relative block px-2 pt-2">
+        <span
+          className="absolute left-4 top-2 h-2.5 w-10 rounded-t-md border border-b-0 border-white/15 bg-white/15 group-hover:bg-white/25"
+          aria-hidden
+        />
+        <span className={`relative mt-2 grid aspect-square gap-px overflow-hidden rounded-lg rounded-tl-md bg-black ${mosaic}`}>
+          {shown.map((src, index) => (
+            <span key={`${src || 'empty'}-${index}`} className="relative min-h-0 overflow-hidden bg-white/[0.04]">
+              {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : null}
+            </span>
+          ))}
+        </span>
+      </span>
+      <span className="block px-2 pb-2 pt-1.5">
+        <span className="line-clamp-2 text-[11px] font-medium leading-snug text-white">{label}</span>
+        <span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-white/45">{countLabel}</span>
+      </span>
+    </button>
+  )
+}
+
 function designWriteBody(design: MerchDesign, overrides?: Record<string, unknown>) {
   return {
     id: design.id,
@@ -242,6 +300,8 @@ export default function MerchPrintfulCatalog({
   const [catalogPanelCollapsed, setCatalogPanelCollapsed] = useState(false)
   const [designMenu, setDesignMenu] = useState<{ design: MerchDesign; x: number; y: number } | null>(null)
   const [openPhotoIds, setOpenPhotoIds] = useState<Set<string>>(() => new Set())
+  const [openItemGroup, setOpenItemGroup] = useState<string | null>(null)
+  const productListRef = useRef<HTMLDivElement>(null)
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const previewOrderRef = useRef<string[] | null>(null)
@@ -599,13 +659,26 @@ export default function MerchPrintfulCatalog({
 
   const visibleDesigns = useMemo(() => {
     if (!productFolder) return []
+    const inFolder = orderedDesigns.filter((design) => matchesProductFolder(design))
     const query = q.trim().toLowerCase()
-    return orderedDesigns.filter((design) => {
-      if (!matchesProductFolder(design)) return false
-      if (!query) return true
-      return design.name.toLowerCase().includes(query)
+    if (!query) return inFolder
+    const labelById = new Map<string, string>()
+    for (const group of groupMerchDesignsByItem(inFolder)) {
+      const label = group.label.toLowerCase()
+      for (const design of group.designs) labelById.set(design.id, label)
+    }
+    return inFolder.filter((design) => {
+      if (design.name.toLowerCase().includes(query)) return true
+      return (labelById.get(design.id) || '').includes(query)
     })
   }, [orderedDesigns, productFolder, statusTab, q])
+
+  const itemGroups = useMemo(() => groupMerchDesignsByItem(visibleDesigns), [visibleDesigns])
+  const openGroup = openItemGroup ? itemGroups.find((group) => group.key === openItemGroup) ?? null : null
+
+  useEffect(() => {
+    setOpenItemGroup(null)
+  }, [productFolder, statusTab])
 
   const folderIds = useMemo(() => {
     if (!productFolder) return []
@@ -888,7 +961,7 @@ export default function MerchPrintfulCatalog({
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
+        <div ref={productListRef} className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
           {productFolder && (
             <>
               {designNote && (
@@ -915,6 +988,22 @@ export default function MerchPrintfulCatalog({
                         : 'Nothing hidden yet.'}
                 </p>
               )}
+              {openGroup ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenItemGroup(null)
+                    productListRef.current?.scrollTo({ top: 0 })
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  <span aria-hidden>←</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-white">{openGroup.label}</span>
+                  <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-white/40">
+                    {openGroup.designs.length === 1 ? '1 product' : `${openGroup.designs.length} products`}
+                  </span>
+                </button>
+              ) : null}
               <div
                 className="grid grid-cols-2 gap-2 xl:grid-cols-3"
                 onDragOver={(event) => {
@@ -922,7 +1011,25 @@ export default function MerchPrintfulCatalog({
                   event.preventDefault()
                 }}
               >
-                {visibleDesigns.map((design) => {
+                {(openGroup ? itemGroups.filter((group) => group.key === openGroup.key) : itemGroups).map((group) => {
+                  if (!openGroup) {
+                    const covers = group.designs
+                      .map((design) => designCoverUrl(design))
+                      .filter((url): url is string => Boolean(url))
+                    return (
+                      <ItemGroupFolderTile
+                        key={group.key}
+                        label={group.label}
+                        count={group.designs.length}
+                        covers={covers}
+                        onOpen={() => {
+                          setOpenItemGroup(group.key)
+                          productListRef.current?.scrollTo({ top: 0 })
+                        }}
+                      />
+                    )
+                  }
+                  return group.designs.map((design) => {
                   const statusLabel = FOLDER_LABEL[design.status]
                   const photos = productPhotoUrls(design)
                   const photosOpen = openPhotoIds.has(design.id)
@@ -1037,6 +1144,7 @@ export default function MerchPrintfulCatalog({
                     ) : null}
                     </div>
                   )
+                  })
                 })}
               </div>
             </>

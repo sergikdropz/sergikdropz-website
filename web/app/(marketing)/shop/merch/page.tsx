@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import MerchGrid from '@/components/shop/MerchGrid'
-import ShopSubshopNav from '@/components/shop/ShopSubshopNav'
+import { DEFAULT_SHOP_BACKDROP, parseShopBackdrop, type ShopBackdrop } from '@/lib/merch/shop-backdrop'
 
 export default function MerchPage() {
   const [products, setProducts] = useState<any[]>([])
+  const [backdrop, setBackdrop] = useState<ShopBackdrop>(DEFAULT_SHOP_BACKDROP)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -16,6 +17,7 @@ export default function MerchPage() {
         if (res.ok) {
           const data = await res.json()
           setProducts(data.products || [])
+          setBackdrop(parseShopBackdrop(data.backdrop))
         }
       } catch (err) {
         console.error('Error loading merch:', err)
@@ -29,17 +31,19 @@ export default function MerchPage() {
   return (
     <div className="min-h-screen pt-20 pb-16 px-4">
       <div className="max-w-7xl mx-auto">
-        <ShopSubshopNav active="merch" />
-
         <div className="text-center mb-8">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/90">Merch Shop</p>
-          <h1 className="font-six-caps text-5xl font-bold tracking-[0.12em] text-white sm:text-6xl">Merch</h1>
+          <h1 className="font-six-caps text-5xl font-bold tracking-[0.12em] text-white sm:text-6xl">Merch Shop</h1>
           <p className="mx-auto mt-3 max-w-xl text-gray-400">
             Rep the sound. Print-on-demand, shipped worldwide.
           </p>
-          <Link href="/shop" className="mt-4 inline-block text-sm text-gray-500 transition hover:text-gray-300">
-            ← All shops
-          </Link>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-sm">
+            <Link href="/shop" className="text-gray-500 transition hover:text-gray-300">
+              ← All shops
+            </Link>
+            <Link href="/shop/cart" className="text-gray-500 transition hover:text-gray-300">
+              Cart
+            </Link>
+          </div>
         </div>
 
         {loading ? (
@@ -49,7 +53,7 @@ export default function MerchPage() {
             ))}
           </div>
         ) : (
-          <MerchGrid products={products} />
+          <MerchGrid products={products} backdrop={backdrop} />
         )}
       </div>
     </div>

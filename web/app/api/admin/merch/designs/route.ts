@@ -4,6 +4,7 @@ import { requireAdminApi } from '@/lib/auth/route-policy'
 import { getBlank } from '@/lib/merch/blanks'
 import { merchArtIdFromUrl } from '@/lib/merch/art-url'
 import { normalizePlacements, suggestRetail, type MerchDesign } from '@/lib/merch/design'
+import { isShopCategory } from '@/lib/merch/shop-categories'
 import { normalizeEmbroideryThreads } from '@/lib/merch/embroidery-threads'
 import { listDesigns, saveDesign, uniqueSlug } from '@/lib/merch/design-store'
 
@@ -83,6 +84,12 @@ export async function POST(request: NextRequest) {
     variants: existing?.variants || [],
     publishNote: existing?.publishNote || null,
     sortIndex: existing?.sortIndex ?? null,
+    shopCategory:
+      body && Object.prototype.hasOwnProperty.call(body, 'shopCategory')
+        ? isShopCategory(body.shopCategory)
+          ? body.shopCategory
+          : null
+        : existing?.shopCategory ?? null,
     embroideryUnlimitedColor:
       typeof body?.embroideryUnlimitedColor === 'boolean'
         ? body.embroideryUnlimitedColor

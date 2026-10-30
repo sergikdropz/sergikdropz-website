@@ -42,6 +42,10 @@ import {
   threadOptionIdForFile,
   toggleEmbroideryThread,
 } from '@/lib/merch/embroidery-threads'
+import {
+  conflictingPlacementProblems,
+  openingPrintFile,
+} from '@/lib/merch/catalog-design-intel'
 import { buildDesignTabs, placementFileToOpen } from '@/lib/merch/design-tabs'
 import {
   productMatColor,
@@ -437,7 +441,8 @@ export default function MerchFittingRoom({
     const needsVariantTemplates = catalogStudio?.printFiles.some(
       (file) => file.templateUrl && !file.variantTemplates
     )
-    if (hasCalibratedStage && !needsVariantTemplates) return
+    const needsDesignIntel = Boolean(catalogStudio && !catalogStudio.designIntel)
+    if (hasCalibratedStage && !needsVariantTemplates && !needsDesignIntel) return
     if (templateRefetchDone.current.has(catalogProductId)) return
     templateRefetchDone.current.add(catalogProductId)
     let cancelled = false
@@ -1131,7 +1136,7 @@ export default function MerchFittingRoom({
         detail.techniques?.find((row) => row.isDefault)?.key || detail.techniques?.[0]?.key || 'DTG'
       setCatalogTechnique(nextTechnique)
       const firstFiles = filterPrintFilesForTechnique(detail.printFiles, nextTechnique)
-      const firstFile = firstFiles[0]
+      const firstFile = openingPrintFile(firstFiles, detail.designIntel?.angles) || firstFiles[0]
       if (firstFile) {
         setActivePrintFileType(firstFile.type)
         setPlacementId(placementForPrintFile(firstFile, template).id)
@@ -1458,10 +1463,12 @@ export default function MerchFittingRoom({
       printUrl: string | null
       art: ArtPlacement | null
     }> = []
-    const guideTitles =
+    const savedTitles =
       Object.entries(mockupAngleTitlesByColor).find(([name]) => sameColorKey(name, previewColorName))?.[1] ||
       Object.values(mockupAngleTitlesByColor).find((list) => list.length > 0) ||
       []
+    const guideTitles =
+      savedTitles.length > 0 ? savedTitles : catalogStudio.designIntel?.angles.map((angle) => angle.view) || []
     for (const file of orderPrintFilesByAngles(
       techniquePrintFiles.filter((row) => hasTemplateStage(row)),
       guideTitles,
@@ -1695,8 +1702,17 @@ export default function MerchFittingRoom({
   }, [blank, catalogFileLayers, catalogStudio, garmentPlacements, layers, techniquePrintFiles])
 
   const designIssues = useMemo(() => designPlacementIssues(placedDesignChecks), [placedDesignChecks])
+  const placementConflicts = useMemo(
+    () =>
+      conflictingPlacementProblems(
+        activePlacements.map((item) => item.fileType).filter((type): type is string => Boolean(type)),
+        catalogStudio?.designIntel?.conflicts || [],
+      ),
+    [activePlacements, catalogStudio?.designIntel?.conflicts],
+  )
   const activeDpiGrade = layer ? dpiGrade(effectiveDpi(layer, area)) : null
-  const canPutOutDesign = activePlacements.length > 0 && designIssues.outside.length === 0
+  const canPutOutDesign =
+    activePlacements.length > 0 && designIssues.outside.length === 0 && placementConflicts.length === 0
 
   const otherFace = garmentPlacements.find((item) => item.id !== area.id)
   const artMenuOpen = Boolean(artMenu && (artMenu.target === 'upload' || layer))
@@ -2538,6 +2554,10 @@ export default function MerchFittingRoom({
       setNote(`Art is outside the print area on: ${designIssues.outside.join(', ')}.`)
       return
     }
+    if (placementConflicts.length > 0) {
+      setNote(placementConflicts[0])
+      return
+    }
     if (designIssues.lowDpi.length > 0) {
       const proceed = window.confirm(
         `Low resolution (under 100 DPI) on: ${designIssues.lowDpi.join(', ')}.\n\nPut it out anyway?`
@@ -2868,6 +2888,7 @@ export default function MerchFittingRoom({
             garmentUrl={designGarmentUrl}
             garmentBackground={designPatternUrl ? null : designGarment?.backgroundColor || previewColor}
             patternUrl={designPatternUrl}
+            garmentTexture={designPatternUrl ? null : designGarment?.backgroundUrl || null}
             useTemplateMockup={designUsesTemplateMockup}
             garmentAspect={designUsesTemplateMockup ? activePrintFile?.templateAspect ?? null : null}
             family={blank.family}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { APP_SHELL_TITLE_SLOT_ID } from '@/components/shell/AppShell'
+import { APP_SHELL_TITLE_SLOT_ID, SHELL_TITLE_TYPE } from '@/components/shell/AppShell'
 import {
   departmentMailCounts,
   dueScheduledMail,
@@ -1451,7 +1451,7 @@ export default function DepartmentMailDesk() {
         ? createPortal(
             <div className="text-center">
               <p className="text-[11px] uppercase tracking-[0.16em] text-violet-300">{domain}</p>
-              <h1 className="text-lg font-semibold leading-tight text-ink">Department mail</h1>
+              <h1 className={`${SHELL_TITLE_TYPE} text-white`}>Department mail</h1>
             </div>,
             titleSlot,
           )

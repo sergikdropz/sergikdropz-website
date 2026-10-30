@@ -132,6 +132,8 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/admin/licensing/inquiries/[id]', method: 'POST', access: 'admin_write', reason: 'Verify, quote, or activate a licensing inquiry' },
   { path: '/api/admin/licensing/operator', method: 'POST', access: 'admin_write', reason: 'Record copyright owner or Stripe account name for licensing' },
 
+  { path: '/api/merch/backdrop', method: 'GET', access: 'public', reason: 'Public merch shop backdrop color and opacity' },
+  { path: '/api/admin/merch/backdrop', method: 'POST', access: 'admin_write', reason: 'Save the public merch shop backdrop' },
   { path: '/api/admin/merch/designs', method: 'GET', access: 'admin_read', reason: 'List fitting-room merch designs' },
   { path: '/api/admin/merch/designs', method: 'POST', access: 'admin_write', reason: 'Save a fitting-room merch design' },
   { path: '/api/admin/merch/designs/order', method: 'POST', access: 'admin_write', reason: 'Reorder fitting-room merch designs' },
@@ -139,6 +141,7 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/admin/merch/designs/[id]/publish', method: 'POST', access: 'admin_write', reason: 'Send a merch design to Printful and keep it hidden' },
   { path: '/api/admin/merch/designs/[id]/previews', method: 'POST', access: 'admin_write', reason: 'Ask Printful for new preview photos of a saved design' },
   { path: '/api/admin/merch/designs/[id]/visibility', method: 'POST', access: 'admin_write', reason: 'Show or hide a designed merch product' },
+  { path: '/api/admin/merch/designs/[id]/shop', method: 'POST', access: 'admin_write', reason: 'Set the public shop category for a designed merch product' },
   { path: '/api/admin/merch/designs/[id]/mockups', method: 'GET', access: 'admin_read', reason: 'Poll Printful mockup photos for a design' },
   {
     path: '/api/admin/merch/art',

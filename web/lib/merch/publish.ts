@@ -8,7 +8,9 @@ import {
   type MerchDesign,
 } from '@/lib/merch/design'
 import { printfulCatalogFetch, printfulFetch } from '@/lib/printful'
+import { photographStyleOptions } from '@/lib/merch/catalog-design-intel'
 import {
+  fetchCatalogProductDetail,
   fetchPlacementPrintAreas,
   resolvePlacementPrintArea,
   type PlacementPrintArea,
@@ -178,6 +180,67 @@ export function buildPrintFiles(
       }
     })
     .filter((file): file is PrintFile => Boolean(file))
+}
+
+type CreatedSyncVariant = {
+  id: number
+  variant_id: number
+  size?: string
+  color?: string
+}
+
+/** Printful POST /store/products returns `{ result: { id } }`, not `result.sync_product`. */
+export function createdSyncProductId(created: unknown): string | null {
+  const result = (created as { result?: Record<string, unknown> } | null)?.result
+  if (!result || typeof result !== 'object') return null
+  const nested = result.sync_product as { id?: unknown } | undefined
+  const id = nested?.id ?? result.id
+  return id != null && String(id).trim() ? String(id) : null
+}
+
+function createdSyncVariants(created: unknown): CreatedSyncVariant[] {
+  const result = (created as { result?: Record<string, unknown> } | null)?.result
+  const rows = result?.sync_variants
+  return Array.isArray(rows) ? (rows as CreatedSyncVariant[]) : []
+}
+
+function mapSyncVariants(rows: CreatedSyncVariant[], retailPrice: number): DesignVariant[] {
+  return rows
+    .filter((variant) => Number(variant.id) > 0)
+    .map((variant) => ({
+      catalogVariantId: Number(variant.variant_id) || 0,
+      syncVariantId: Number(variant.id),
+      size: variant.size || '',
+      color: variant.color || '',
+      retailPrice,
+    }))
+}
+
+async function hydrateCreatedSyncProduct(
+  created: unknown,
+  retailPrice: number,
+): Promise<{ id: string | null; variants: DesignVariant[] }> {
+  let id = createdSyncProductId(created)
+  let rows = createdSyncVariants(created)
+  if (id && rows.length === 0) {
+    const details = await printfulFetch(`/store/products/${encodeURIComponent(id)}`).catch(() => null)
+    const info = (details?.result || {}) as {
+      sync_product?: { id?: unknown }
+      sync_variants?: CreatedSyncVariant[]
+    }
+    if (!id && info.sync_product?.id != null) id = String(info.sync_product.id)
+    if (Array.isArray(info.sync_variants)) rows = info.sync_variants
+  }
+  return { id, variants: mapSyncVariants(rows, retailPrice) }
+}
+
+async function findStoreProductIdByName(name: string): Promise<string | null> {
+  const wanted = name.trim().toLowerCase()
+  if (!wanted) return null
+  const list = await printfulFetch('/store/products').catch(() => null)
+  const rows = (list?.result || []) as Array<{ id?: number; name?: string }>
+  const match = rows.find((row) => (row.name || '').trim().toLowerCase() === wanted)
+  return match?.id != null ? String(match.id) : null
 }
 
 function pickVariants(blank: MerchBlank, design: MerchDesign, variants: CatalogVariant[]): CatalogVariant[] {
@@ -386,6 +449,7 @@ async function createMockupTask(
   variantIds: number[],
   files: SyncPrintFile[],
   threadOptions: ReturnType<typeof embroideryVariantOptions>,
+  angles: { optionGroups: string[]; options: string[] } | null,
 ): Promise<string | null> {
   const ids = [...new Set(variantIds.filter((id) => Number.isFinite(id) && id > 0))]
   if (ids.length === 0) return null
@@ -397,6 +461,8 @@ async function createMockupTask(
       variant_ids: ids,
       format: 'jpg',
       ...(Object.keys(productOptions).length > 0 ? { product_options: productOptions } : {}),
+      ...(angles && angles.optionGroups.length > 0 ? { option_groups: angles.optionGroups } : {}),
+      ...(angles && angles.options.length > 0 ? { options: angles.options } : {}),
       files: files.map(({ type, url, position, options }) => ({
         placement: type,
         image_url: url,
@@ -416,13 +482,16 @@ async function startMockupTask(
 ): Promise<string | null> {
   const ids = [...new Set(variantIds.filter((id) => Number.isFinite(id) && id > 0))]
   if (ids.length === 0) return null
+  const detail = await fetchCatalogProductDetail(catalogProductId).catch(() => null)
+  const shot = detail?.designIntel ? photographStyleOptions(detail.designIntel) : null
+  const angles = shot && (shot.optionGroups.length > 0 || shot.options.length > 0) ? shot : null
   try {
-    return await createMockupTask(catalogProductId, ids, files, threadOptions)
+    return await createMockupTask(catalogProductId, ids, files, threadOptions, angles)
   } catch (error) {
     console.error('Printful mockup task:', error)
-    if (ids.length < 2) return null
+    if (!angles && ids.length < 2) return null
     try {
-      return await createMockupTask(catalogProductId, [ids[0]], files, threadOptions)
+      return await createMockupTask(catalogProductId, ids.length > 1 ? [ids[0]] : ids, files, threadOptions, null)
     } catch (again) {
       console.error('Printful mockup task:', again)
       return null
@@ -640,6 +709,20 @@ export async function publishDesignToPrintful(
           : 'Design saved. Printful could not start the photos.',
     }
   }
+  const existingId = design.printfulSyncProductId || (await findStoreProductIdByName(design.name))
+  if (existingId) {
+    return refreshPrintedDesign(
+      { ...design, printfulSyncProductId: existingId },
+      blank,
+      resolved.product.id,
+      syncFiles,
+      threadOptions,
+      startPhotos,
+      reusePhotos,
+      photoKey,
+    )
+  }
+
   const created = await printfulFetch('/store/products', {
     method: 'POST',
     body: JSON.stringify({
@@ -653,20 +736,8 @@ export async function publishDesignToPrintful(
     }),
   })
 
-  const syncVariants = (created.result?.sync_variants || []) as Array<{
-    id: number
-    variant_id: number
-    size?: string
-    color?: string
-    retail_price?: string
-  }>
-  const variants: DesignVariant[] = syncVariants.map((variant) => ({
-    catalogVariantId: variant.variant_id,
-    syncVariantId: variant.id,
-    size: variant.size || '',
-    color: variant.color || '',
-    retailPrice: design.retailPrice,
-  }))
+  const createdProduct = await hydrateCreatedSyncProduct(created, design.retailPrice)
+  const variants = createdProduct.variants
   const prices = chosen
     .map((variant) => Number(variant.price))
     .filter((price) => Number.isFinite(price) && price > 0)
@@ -676,9 +747,7 @@ export async function publishDesignToPrintful(
 
   return {
     variants,
-    printfulSyncProductId: created.result?.sync_product?.id
-      ? String(created.result.sync_product.id)
-      : null,
+    printfulSyncProductId: createdProduct.id,
     mockupTaskKey,
     requestedMockups: !reusePhotos,
     reusePhotos,

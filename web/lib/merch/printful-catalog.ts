@@ -24,9 +24,13 @@ export type {
   PrintfulCatalogProduct,
 } from '@/lib/merch/printful-catalog-types'
 export { categorizeCatalogProduct, inferStudioFamily, reconcileCatalogProductStudio } from '@/lib/merch/catalog-product-meta'
+import { buildCatalogDesignIntel, flatAnglesFromMockupStyles } from '@/lib/merch/catalog-design-intel'
+import type { CatalogGarmentAngle } from '@/lib/merch/printful-catalog-types'
 import { colorNameToHex } from '@/lib/merch/color-names'
 import {
   buildProductSpecs,
+  parseConflictingPlacements,
+  parseMockupGeneratorOptions,
   parsePrintfilesPayload,
   parseTemplateVariantLinks,
   parseTemplatesPayload,
@@ -185,6 +189,9 @@ export type PlacementGeometry = {
   variantPrintfiles: VariantPlacementMap[]
   templates: TemplateRecord[]
   templateLinks: TemplateVariantLink[]
+  styleGroups?: string[]
+  styleViews?: string[]
+  conflicts?: Array<{ placement: string; conflicts: string[] }>
 }
 
 /**
@@ -208,10 +215,14 @@ export async function fetchPlacementGeometry(
         readPrintfulOptional(`/mockup-generator/printfiles/${productId}${suffix}`, true),
         readPrintfulOptional(`/mockup-generator/templates/${productId}${suffix}`, true),
       ])
+      const styles = parseMockupGeneratorOptions(printfilePayload)
       return {
         parsed: parsePrintfilesPayload(printfilePayload),
         templates: parseTemplatesPayload(templatePayload),
         links: parseTemplateVariantLinks(templatePayload),
+        styleGroups: styles.groups,
+        styleViews: styles.views,
+        conflicts: parseConflictingPlacements(templatePayload),
       }
     })
   )
@@ -221,6 +232,9 @@ export async function fetchPlacementGeometry(
       variantPrintfiles: row.parsed.variantPrintfiles,
       templates: row.templates,
       templateLinks: row.links,
+      styleGroups: row.styleGroups,
+      styleViews: row.styleViews,
+      conflicts: row.conflicts,
     }))
   )
 }
@@ -232,6 +246,11 @@ export function mergePlacementGeometry(parts: PlacementGeometry[]): PlacementGeo
   const variantPlacements = new Map<number, Record<string, number>>()
   const links: TemplateVariantLink[] = []
   const seenLinks = new Set<string>()
+  const styleGroups: string[] = []
+  const styleViews: string[] = []
+  const conflicts = new Map<string, Set<string>>()
+  const seenGroups = new Set<string>()
+  const seenViews = new Set<string>()
   for (const part of parts) {
     for (const file of part.printfiles) {
       if (!printfiles.has(file.printfileId)) printfiles.set(file.printfileId, file)
@@ -251,16 +270,39 @@ export function mergePlacementGeometry(parts: PlacementGeometry[]): PlacementGeo
       seenLinks.add(key)
       links.push(link)
     }
+    for (const group of part.styleGroups || []) {
+      const key = group.toLowerCase()
+      if (seenGroups.has(key)) continue
+      seenGroups.add(key)
+      styleGroups.push(group)
+    }
+    for (const view of part.styleViews || []) {
+      const key = view.toLowerCase()
+      if (seenViews.has(key)) continue
+      seenViews.add(key)
+      styleViews.push(view)
+    }
+    for (const row of part.conflicts || []) {
+      const bucket = conflicts.get(row.placement) || new Set<string>()
+      for (const other of row.conflicts) bucket.add(other)
+      conflicts.set(row.placement, bucket)
+    }
   }
   return {
     printfiles: [...printfiles.values()],
     templates: [...templates.values()],
     variantPrintfiles: [...variantPlacements.entries()].map(([variantId, placements]) => ({ variantId, placements })),
     templateLinks: links,
+    styleGroups,
+    styleViews,
+    conflicts: [...conflicts.entries()].map(([placement, names]) => ({
+      placement,
+      conflicts: [...names],
+    })),
   }
 }
 
-const CATALOG_CACHE_VERSION = 3
+const CATALOG_CACHE_VERSION = 4
 const CATALOG_CACHE_TTL_MS = 12 * 60 * 60 * 1000
 const catalogMemory = new Map<number, { savedAt: number; detail: CatalogProductDetail }>()
 
@@ -270,11 +312,13 @@ function catalogCachePath(productId: number) {
 
 async function readCatalogCache(productId: number): Promise<CatalogProductDetail | null> {
   const memory = catalogMemory.get(productId)
-  if (memory && Date.now() - memory.savedAt < CATALOG_CACHE_TTL_MS) return memory.detail
+  if (memory && Date.now() - memory.savedAt < CATALOG_CACHE_TTL_MS && memory.detail.designIntel) {
+    return memory.detail
+  }
   try {
     const raw = await readFile(catalogCachePath(productId), 'utf8')
     const parsed = JSON.parse(raw) as { version?: number; savedAt?: number; detail?: CatalogProductDetail }
-    if (parsed.version !== CATALOG_CACHE_VERSION || !parsed.detail || !parsed.savedAt) return null
+    if (parsed.version !== CATALOG_CACHE_VERSION || !parsed.detail?.designIntel || !parsed.savedAt) return null
     if (Date.now() - parsed.savedAt > CATALOG_CACHE_TTL_MS) return null
     const templated = parsed.detail.printFiles.filter((file) => file.templateUrl)
     if (templated.some((file) => !file.variantTemplates)) return null
@@ -366,10 +410,13 @@ async function loadCatalogProductDetail(productId: number): Promise<CatalogProdu
     .map((option) => option.id || '')
     .filter((id) => id.startsWith('thread_colors') || id.startsWith('addon_thread_colors'))
 
-  const geometry = await fetchPlacementGeometry(
-    productId,
-    techniques.map((row) => row.key)
-  )
+  const [geometry, catalogAngles] = await Promise.all([
+    fetchPlacementGeometry(
+      productId,
+      techniques.map((row) => row.key)
+    ),
+    fetchFlatMockupAngles(productId),
+  ])
   const specs = buildProductSpecs({
     description: rawProduct.description || null,
     originCountry: rawProduct.origin_country || null,
@@ -395,7 +442,15 @@ async function loadCatalogProductDetail(productId: number): Promise<CatalogProdu
       mockupStage: guide?.templateStage ?? null,
       templateAspect: guide?.templateAspect ?? null,
       mockupSupported: Boolean(guide?.printWidth || guide?.templateUrl),
+      fillMode: guide?.fillMode ?? null,
     }
+  })
+  const designIntel = buildCatalogDesignIntel({
+    printFiles: printFilesWithArea,
+    catalogAngles,
+    styleGroups: geometry.styleGroups || [],
+    styleViews: geometry.styleViews || [],
+    conflicts: geometry.conflicts || [],
   })
 
   return {
@@ -412,10 +467,39 @@ async function loadCatalogProductDetail(productId: number): Promise<CatalogProdu
     threadOptionIds,
     description: specs.lead || null,
     specs,
+    designIntel,
   }
 }
 
-/** Catalog JSON only. Template photos stay on Printful's CDN. */
+/** Flat camera angles from the catalog. One page covers a normal blank; a few more cover the rest. */
+async function fetchFlatMockupAngles(productId: number): Promise<CatalogGarmentAngle[]> {
+  const collected: CatalogGarmentAngle[] = []
+  const seen = new Set<string>()
+  let offset = 0
+  for (let page = 0; page < 3; page += 1) {
+    const payload = await readPrintfulOptional(
+      `/v2/catalog-products/${productId}/mockup-styles?limit=100&offset=${offset}`,
+      true,
+    )
+    const parsed = flatAnglesFromMockupStyles(payload)
+    for (const angle of parsed.angles) {
+      const key = angle.view.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      collected.push(angle)
+    }
+    if (parsed.rowCount === 0) break
+    const next = parsed.offset + parsed.rowCount
+    if (next <= offset || next >= parsed.total) break
+    offset = next
+  }
+  return collected
+}
+
+/**
+ * Product, templates, flat angles, swatches, and the placement audit.
+ * Template image bytes stay on Printful's CDN; the stage loads the URLs.
+ */
 export async function fetchCatalogProductDetail(productId: number): Promise<CatalogProductDetail | null> {
   const cached = await readCatalogCache(productId)
   if (cached) return cached

@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { useRouter } from 'next/navigation'
 import MerchFittingRoom from '@/components/admin/MerchFittingRoom'
+import MerchAdminShop from '@/components/admin/MerchAdminShop'
 import type { StageView } from '@/components/admin/MerchDesignMaker'
-import { readStageView, writeStageView } from '@/lib/merch/studio-session'
+import { readStageView, writeStageView, writeStudioDesignId } from '@/lib/merch/studio-session'
 
 interface MerchOrder {
   id: string
@@ -33,7 +34,7 @@ export default function AdminMerchPage() {
   const [updatingOrder, setUpdatingOrder] = useState(false)
   const [orderStatusEdit, setOrderStatusEdit] = useState('')
   const [trackingEdit, setTrackingEdit] = useState('')
-  const [desk, setDesk] = useState<'design' | 'store'>('design')
+  const [desk, setDesk] = useState<'design' | 'shop' | 'store'>('design')
   const [stageView, setStageView] = useState<StageView>('design')
   const [stageReady, setStageReady] = useState(false)
 
@@ -175,6 +176,14 @@ useEffect(() => {
             Design
           </button>
           <button
+            onClick={() => setDesk('shop')}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+              desk === 'shop' ? 'bg-white text-black' : 'bg-gray-800 text-gray-300'
+            }`}
+          >
+            Shop
+          </button>
+          <button
             onClick={() => setDesk('store')}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
               desk === 'store' ? 'bg-white text-black' : 'bg-gray-800 text-gray-300'
@@ -196,6 +205,13 @@ useEffect(() => {
 
       {desk === 'design' ? (
         <MerchFittingRoom stageView={stageView} onStageViewChange={setStageView} />
+      ) : desk === 'shop' ? (
+        <MerchAdminShop
+          onOpenDesign={(designId) => {
+            writeStudioDesignId(designId)
+            setDesk('design')
+          }}
+        />
       ) : (
       <>
 

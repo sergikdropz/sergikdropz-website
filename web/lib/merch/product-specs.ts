@@ -17,6 +17,9 @@ export type PrintfileRecord = {
   width: number
   height: number
   dpi: number
+  /** How Printful fills the print area when a position is omitted. */
+  fillMode?: 'fit' | 'cover' | null
+  canRotate?: boolean
 }
 
 export type VariantPlacementMap = {
@@ -38,6 +41,8 @@ export type TemplateRecord = {
   imageUrl: string | null
   /** Printful garment color drawn behind a transparent ghost template. */
   backgroundColor?: string | null
+  /** Fabric photo for heather and patterned colors. Solids omit it. */
+  backgroundUrl?: string | null
   printAreaWidth: number | null
   printAreaHeight: number | null
   printAreaTop: number | null
@@ -87,6 +92,7 @@ export type FileGuidelineRow = {
   /** Width / height of the Printful template image (1 for square tee templates). */
   templateAspect: number | null
   additionalPrice: number | null
+  fillMode?: 'fit' | 'cover' | null
 }
 
 export type ProductSpecs = {
@@ -219,6 +225,7 @@ export function variantTemplateAssets(
     const next: VariantTemplateAsset = {
       imageUrl: template.imageUrl,
       backgroundColor: template.backgroundColor || null,
+      ...(template.backgroundUrl ? { backgroundUrl: template.backgroundUrl } : {}),
     }
     const current = assets[key]
     if (!current || (!current.backgroundColor && next.backgroundColor)) assets[key] = next
@@ -315,6 +322,7 @@ export function buildFileGuidelines(input: {
       templateStage,
       templateAspect,
       additionalPrice: file.additionalPrice,
+      fillMode: printfile?.fillMode ?? null,
     }
   })
 
@@ -403,19 +411,32 @@ export function parsePrintfilesPayload(payload: unknown): {
 } {
   const result = (payload as { result?: unknown } | null)?.result as
     | {
-        printfiles?: Array<{ printfile_id?: number; width?: number; height?: number; dpi?: number }>
+        printfiles?: Array<{
+          printfile_id?: number
+          width?: number
+          height?: number
+          dpi?: number
+          fill_mode?: string
+          can_rotate?: boolean
+        }>
         variant_printfiles?: Array<{ variant_id?: number; placements?: Record<string, number> }>
       }
     | undefined
   if (!result || !Array.isArray(result.printfiles)) return { printfiles: [], variantPrintfiles: [] }
   return {
     printfiles: result.printfiles
-      .map((file) => ({
-        printfileId: Number(file.printfile_id),
-        width: Number(file.width),
-        height: Number(file.height),
-        dpi: Number(file.dpi) || 150,
-      }))
+      .map((file) => {
+        const fillMode: 'fit' | 'cover' | null =
+          file.fill_mode === 'cover' ? 'cover' : file.fill_mode === 'fit' ? 'fit' : null
+        return {
+          printfileId: Number(file.printfile_id),
+          width: Number(file.width),
+          height: Number(file.height),
+          dpi: Number(file.dpi) || 150,
+          fillMode,
+          canRotate: file.can_rotate === true,
+        }
+      })
       .filter((file) => file.printfileId > 0 && file.width > 0 && file.height > 0),
     variantPrintfiles: (result.variant_printfiles || [])
       .map((row) => ({
@@ -424,6 +445,35 @@ export function parsePrintfilesPayload(payload: unknown): {
       }))
       .filter((row) => row.variantId > 0),
   }
+}
+
+/** Mockup style families and camera names from `/mockup-generator/printfiles`. */
+export function parseMockupGeneratorOptions(payload: unknown): { groups: string[]; views: string[] } {
+  const result = (payload as { result?: { option_groups?: unknown; options?: unknown } } | null)?.result
+  const groups = Array.isArray(result?.option_groups)
+    ? result.option_groups.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    : []
+  const views = Array.isArray(result?.options)
+    ? result.options.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    : []
+  return { groups, views }
+}
+
+export type PlacementConflict = { placement: string; conflicts: string[] }
+
+/** Placements Printful refuses to print on the same variant. */
+export function parseConflictingPlacements(payload: unknown): PlacementConflict[] {
+  const result = (payload as { result?: { conflicting_placements?: unknown[] } } | null)?.result
+  const rows = Array.isArray(result?.conflicting_placements) ? result.conflicting_placements : []
+  return rows
+    .map((item) => {
+      const row = item as { placement?: string; conflicts?: unknown }
+      const conflicts = Array.isArray(row.conflicts)
+        ? row.conflicts.filter((value): value is string => typeof value === 'string' && value.length > 0)
+        : []
+      return { placement: row.placement || '', conflicts }
+    })
+    .filter((row) => row.placement && row.conflicts.length > 0)
 }
 
 export function parseTemplatesPayload(payload: unknown): TemplateRecord[] {
@@ -442,6 +492,7 @@ export function parseTemplatesPayload(payload: unknown): TemplateRecord[] {
         image_url?: string
         template_url?: string
         background_color?: string | null
+        background_url?: string | null
         print_area_width?: number
         print_area_height?: number
         print_area_top?: number
@@ -461,6 +512,9 @@ export function parseTemplatesPayload(payload: unknown): TemplateRecord[] {
           typeof row.background_color === 'string' && /^#[0-9a-f]{3,8}$/i.test(row.background_color)
             ? row.background_color
             : null,
+        backgroundUrl: typeof row.background_url === 'string' && row.background_url.startsWith('http')
+          ? row.background_url
+          : null,
         printAreaWidth: numberOrNull(row.print_area_width),
         printAreaHeight: numberOrNull(row.print_area_height),
         printAreaTop: coordinateOrNull(row.print_area_top),

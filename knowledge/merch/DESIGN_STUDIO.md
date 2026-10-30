@@ -1,6 +1,6 @@
 # Merch design studio
 
-Admin route: `/admin/merch`. Public shop: `/shop/merch`. Fulfillment: Printful. Payments: Stripe.
+Admin route: `/admin/merch`. Public shop: `/shop/merch`. Cart: `/shop/cart`. Fulfillment: Printful. Payments: Stripe.
 
 The fitting room is for art that already exists (upload PNG or JPEG). It is not a clipart editor. Live preview is local. Printful is called when a design is put out, and again when a fan pays.
 

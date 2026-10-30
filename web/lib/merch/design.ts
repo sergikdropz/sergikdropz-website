@@ -1,5 +1,6 @@
 import { getBlank, type BlankPlacement, type GarmentFamily, type PlacementId } from '@/lib/merch/blanks'
 import { frontPhotoIndex, mockupPhotosForColor, mockupTitlesForColor } from '@/lib/merch/catalog-studio'
+import { isShopCategory, type ShopCategoryId } from '@/lib/merch/shop-categories'
 
 export type DpiGrade = 'good' | 'fair' | 'low'
 export type DesignStatus = 'draft' | 'hidden' | 'live'
@@ -67,8 +68,10 @@ export type MerchDesign = {
   printFileUrls?: Record<string, string>
   variants: DesignVariant[]
   publishNote: string | null
-  /** Manual order in My Products. Lower numbers come first. */
+  /** Manual order in My Products and on the public shop. Lower numbers come first. */
   sortIndex?: number | null
+  /** Shop chip this product sits under. Falls back to the garment's category. */
+  shopCategory?: ShopCategoryId | null
   /** Unlimited-color embroidery instead of a stock thread. */
   embroideryUnlimitedColor?: boolean
   /** Stock thread hexes keyed by Printful option id (`thread_colors_front_large`). */
@@ -86,6 +89,13 @@ export function compareMerchDesignOrder(a: MerchDesign, b: MerchDesign): number 
 
 export function sortMerchDesigns(designs: MerchDesign[]): MerchDesign[] {
   return [...designs].sort(compareMerchDesignOrder)
+}
+
+export function shopCategoryOf(design: Pick<MerchDesign, 'shopCategory' | 'blankId'>): ShopCategoryId {
+  if (isShopCategory(design.shopCategory)) return design.shopCategory
+  const blank = getBlank(design.blankId)
+  if (blank && isShopCategory(blank.category)) return blank.category
+  return 'tees'
 }
 
 const PRINT_DPI = 150
@@ -589,7 +599,6 @@ export type ShopMerchProduct = {
 
 export function designToShopProduct(design: MerchDesign): ShopMerchProduct | null {
   if (design.status !== 'live') return null
-  const blank = getBlank(design.blankId)
   const variants =
     design.variants.length > 0
       ? design.variants.map((variant, index) => ({
@@ -653,7 +662,7 @@ export function designToShopProduct(design: MerchDesign): ShopMerchProduct | nul
       embroideryUnlimitedColor: design.embroideryUnlimitedColor,
       embroideryThreads: design.embroideryThreads,
     },
-    category: blank?.category || 'tees',
+    category: shopCategoryOf(design),
     previewHex: design.previewColor || null,
     fulfillmentReady: ready,
     variants,

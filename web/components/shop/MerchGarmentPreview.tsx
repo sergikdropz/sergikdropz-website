@@ -127,6 +127,7 @@ export function StitchedColorPreview({
   garmentColor,
   patternUrl,
   matColor,
+  matOpacity = null,
   stage,
   printUrl,
   threadColors,
@@ -139,6 +140,7 @@ export function StitchedColorPreview({
   /** Color photo for a transparent positioning back. */
   patternUrl?: string | null
   matColor?: string | null
+  matOpacity?: number | null
   stage: { x: number; y: number; w: number; h: number }
   /** Baked print file. It already contains the stitch, so it fills the print box. */
   printUrl?: string | null
@@ -154,6 +156,7 @@ export function StitchedColorPreview({
       <GarmentMatImage
         src={garmentUrl}
         matColor={matColor}
+        matOpacity={matOpacity}
         garmentColor={patternUrl ? null : garmentColor}
         patternUrl={patternUrl}
         className="absolute inset-0"
@@ -230,6 +233,8 @@ type Props = {
   className?: string
   /** Studio mat behind a cut-out product. Leaves the garment image unchanged. */
   matColor?: string
+  /** Backdrop strength from 0 to 1. Omit it for a solid mat. */
+  matOpacity?: number | null
   /** Shopper's color. When it differs from the put-out photo, draw that garment. */
   colorName?: string | null
   /** Angle of the put-out photo, used only while that photo's color is selected. */
@@ -244,6 +249,7 @@ export default function MerchGarmentPreview({
   design,
   className = '',
   matColor,
+  matOpacity = null,
   colorName: requestedColorName = null,
   photoIndex = 0,
   viewFileType = null,
@@ -349,8 +355,10 @@ export default function MerchGarmentPreview({
           <GarmentMatImage
             src={garmentUrl}
             matColor={matColor}
+            matOpacity={matOpacity}
             garmentColor={patternUrl ? null : templateView?.backgroundColor || swatchHex || design.previewColor}
             patternUrl={patternUrl}
+            garmentTexture={patternUrl ? null : templateView?.backgroundUrl || null}
             className="absolute inset-0"
             imgClassName="absolute inset-0 h-full w-full object-fill"
             onLoad={(event) => {

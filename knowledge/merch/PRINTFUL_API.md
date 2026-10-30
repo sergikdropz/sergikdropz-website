@@ -379,12 +379,13 @@ Done (shipped):
   `package_returned`, `order_updated`, `order_refunded`, and the hold events.
 - ✅ **Live shipping endpoint** — `POST /api/merch/shipping-estimate` (additive) returns
   `/shipping/rates` for a basket; validates `state_code` for US/CA/AU.
+- ✅ **Storefront cart** — `/shop/cart` + header badge; Stripe Checkout prices from the
+  live catalog and attaches Printful rates as `shipping_options` when a destination is set.
 - ✅ **Mockup style controls** — create-task route accepts `width` (50–2000),
   `lifelike`, and `option_groups`/`options` to bound the 20k/24h budget.
 
 Remaining:
 
-4. **Wire shipping estimate into the storefront cart/checkout UI** (endpoint exists).
 5. **Size & fit** on PDPs via `/products/{id}/sizes`.
 6. **Upload validation** — reject `.ai/.psd/.tiff`; cache-bust file URLs on art change.
 7. **Account-level token** only if we want the Product Templates API.

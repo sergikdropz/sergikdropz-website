@@ -12,6 +12,8 @@ import {
   mockupTitlesForColor,
   shopFrontPhotoIndex,
   catalogAngleViews,
+  catalogShopAngleViews,
+  shopAngleShowsGarmentPhoto,
   orderPrintFilesByAngles,
   previewUsesMockupPhoto,
   designGarmentImage,
@@ -249,8 +251,41 @@ describe('catalog-studio', () => {
         face('embroidery_back', 'Back', true),
         face('embroidery_right', 'Right side', true),
         face('addon_embroidery_front', 'Front', true),
-      ]).map((view) => view.label),
+      ]    ).map((view) => view.label),
     ).toEqual(['Front', 'Back', 'Right side'])
+  })
+
+  it('drops shop angles that only show bare placement templates', () => {
+    const stage = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }
+    const front: CatalogPrintFile = {
+      fileId: 'front',
+      type: 'front',
+      title: 'Front print',
+      additionalPrice: null,
+      options: [],
+      templateUrl: 'https://files.cdn.printful.com/m/tee/medium/Flat/Front/ghost.png',
+      mockupStage: stage,
+    }
+    const sleeve: CatalogPrintFile = {
+      fileId: 'sleeve_left',
+      type: 'sleeve_left',
+      title: 'Left sleeve top',
+      additionalPrice: null,
+      options: [],
+      templateUrl: 'https://files.cdn.printful.com/m/tee/medium/template/square_sleeve_template.png',
+      mockupStage: stage,
+    }
+    const detail = mockDetail({
+      product: { ...mockDetail({}).product, title: 'Tee' },
+      sizes: ['M'],
+      variants: [{ id: 10, color: 'Black', size: 'M', image: null }],
+      printFiles: [front, sleeve],
+    })
+    expect(shopAngleShowsGarmentPhoto(detail, front, 'Black', 'M')).toBe(true)
+    expect(shopAngleShowsGarmentPhoto(detail, sleeve, 'Black', 'M')).toBe(false)
+    expect(catalogShopAngleViews([front, sleeve], detail, 'Black', 'M').map((view) => view.id)).toEqual([
+      'front',
+    ])
   })
 
   it('uses the angle photos Printful stored for the selected color', () => {

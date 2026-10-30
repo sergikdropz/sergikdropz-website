@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
+import { activeShopBackdrop, type ShopBackdrop } from '@/lib/merch/shop-backdrop'
 
 interface MerchCardProps {
   product: {
@@ -22,7 +23,7 @@ interface MerchCardProps {
   }
 }
 
-export default function MerchCard({ product }: MerchCardProps) {
+export default function MerchCard({ product, backdrop }: MerchCardProps & { backdrop?: ShopBackdrop | null }) {
   const minPrice = Math.min(...product.variants.map((v) => v.retail_price))
   const thumbnail = product.thumbnail ? resolveImageUrl(product.thumbnail) : ''
 
@@ -30,15 +31,21 @@ export default function MerchCard({ product }: MerchCardProps) {
     style: 'currency',
     currency: 'USD',
   }).format(minPrice)
+  const mat = activeShopBackdrop(backdrop)
 
   return (
     <Link href={`/shop/merch/${product.slug}`} className="group block">
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden transition-all duration-300 hover:border-gray-600">
-        <div className="relative aspect-square overflow-hidden bg-white">
+        <div
+          className={`relative aspect-square overflow-hidden ${mat ? '' : 'bg-white'}`}
+          style={mat ? { backgroundColor: mat.opacity < 1 ? 'transparent' : mat.color } : undefined}
+        >
           {product.designPreview ? (
             <MerchGarmentPreview
               design={product.designPreview}
               preferLayout
+              matColor={mat?.color}
+              matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
               className="transition-transform duration-300 group-hover:scale-[1.02]"
             />
           ) : thumbnail.startsWith('/api/') ? (

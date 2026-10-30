@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { CatalogPrintFile, CatalogProductDetail } from '@/lib/merch/printful-catalog-types'
 import { guidelinesForTypes, type FileGuidelineRow } from '@/lib/merch/product-specs'
+import { readStudioDockOpen, writeStudioDockOpen } from '@/lib/merch/studio-session'
 
 type Tab = 'description' | 'shipping' | 'guidelines' | 'availability' | 'source'
 
@@ -24,6 +25,15 @@ type Props = {
 export default function MerchProductSpecs({ detail, printFiles, technique, layout }: Props) {
   const specs = detail.specs
   const [tab, setTab] = useState<Tab>(layout === 'rail' ? 'guidelines' : 'description')
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    setOpen(readStudioDockOpen('product-specs', false))
+  }, [])
+  const toggleOpen = () => {
+    const next = !open
+    setOpen(next)
+    writeStudioDockOpen('product-specs', next)
+  }
   if (!specs) return null
 
   const guidelines = guidelinesForTypes(
@@ -50,11 +60,26 @@ export default function MerchProductSpecs({ detail, printFiles, technique, layou
     <div className="divide-y divide-white/10">
       {/* Header: what this is + section tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-white/40">Product specs</p>
-          <p className="mt-0.5 truncate text-sm text-white">{product.title}</p>
-          {subtitle && <p className="truncate text-[11px] text-white/45">{subtitle}</p>}
-        </div>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="product-specs-body"
+          onClick={toggleOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-white/40">Product specs</p>
+            <p className="mt-0.5 truncate text-sm text-white">{product.title}</p>
+            {subtitle && <p className="truncate text-[11px] text-white/45">{subtitle}</p>}
+          </div>
+          <span
+            aria-hidden
+            className={`ml-auto shrink-0 text-white/45 transition ${open ? 'rotate-180' : ''}`}
+          >
+            ▾
+          </span>
+        </button>
+        {open ? (
         <div role="tablist" aria-label="Product spec sections" className="flex gap-1 overflow-x-auto">
           {TABS.map((item) => (
             <button
@@ -71,8 +96,11 @@ export default function MerchProductSpecs({ detail, printFiles, technique, layou
             </button>
           ))}
         </div>
+        ) : null}
       </div>
 
+      {open ? (
+      <div id="product-specs-body">
       {/* At-a-glance facts in even columns */}
       <div className="grid grid-cols-1 gap-x-8 gap-y-4 px-6 py-4 md:grid-cols-3">
         <SummaryColumn label="Customization">
@@ -144,6 +172,8 @@ export default function MerchProductSpecs({ detail, printFiles, technique, layou
           />
         )}
       </div>
+      </div>
+      ) : null}
     </div>
   )
 }

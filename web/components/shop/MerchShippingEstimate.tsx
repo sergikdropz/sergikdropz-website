@@ -15,12 +15,25 @@ type Rate = {
 interface Props {
   /** Printful variant id (sync variant). 0/undefined disables the estimate. */
   variantId?: number
-  quantity: number
+  quantity?: number
+  items?: Array<{ variantId: number; quantity: number }>
+  onDestinationChange?: (destination: { country_code: string; state_code: string }) => void
 }
 
-export default function MerchShippingEstimate({ variantId, quantity }: Props) {
+export default function MerchShippingEstimate({
+  variantId,
+  quantity = 1,
+  items,
+  onDestinationChange,
+}: Props) {
   const [country, setCountry] = useState('US')
   const [state, setState] = useState('CA')
+  const estimateItems = useMemo(() => {
+    if (items && items.length > 0) {
+      return items.filter((item) => item.variantId > 0 && item.quantity > 0)
+    }
+    return variantId && variantId > 0 ? [{ variantId, quantity }] : []
+  }, [items, variantId, quantity])
   const [rates, setRates] = useState<Rate[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +51,11 @@ export default function MerchShippingEstimate({ variantId, quantity }: Props) {
   }, [country, needsState, states, state])
 
   useEffect(() => {
-    if (!variantId || variantId <= 0) return
+    onDestinationChange?.({ country_code: country, state_code: needsState ? state : '' })
+  }, [country, state, needsState, onDestinationChange])
+
+  useEffect(() => {
+    if (estimateItems.length === 0) return
     if (needsState && !state) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const controller = new AbortController()
@@ -52,7 +69,10 @@ export default function MerchShippingEstimate({ variantId, quantity }: Props) {
           signal: controller.signal,
           body: JSON.stringify({
             recipient: { country_code: country, state_code: needsState ? state : '' },
-            items: [{ variant_id: variantId, quantity }],
+            items: estimateItems.map((item) => ({
+              variant_id: item.variantId,
+              quantity: item.quantity,
+            })),
           }),
         })
         if (res.status === 503) {
@@ -75,9 +95,9 @@ export default function MerchShippingEstimate({ variantId, quantity }: Props) {
       controller.abort()
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [variantId, quantity, country, state, needsState])
+  }, [estimateItems, country, state, needsState])
 
-  if (!variantId || variantId <= 0) return null
+  if (estimateItems.length === 0) return null
 
   const cheapest = rates && rates.length > 0
     ? [...rates].sort((a, b) => Number(a.rate) - Number(b.rate))[0]

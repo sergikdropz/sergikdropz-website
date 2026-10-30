@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import MerchProductDetail from '@/components/shop/MerchProductDetail'
+import { DEFAULT_SHOP_BACKDROP, parseShopBackdrop, type ShopBackdrop } from '@/lib/merch/shop-backdrop'
 
 export default function MerchProductPage() {
   const params = useParams()
   const slug = params.slug as string
   const [product, setProduct] = useState<any>(null)
+  const [backdrop, setBackdrop] = useState<ShopBackdrop>(DEFAULT_SHOP_BACKDROP)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -19,6 +21,7 @@ export default function MerchProductPage() {
           const data = await res.json()
           const found = data.products.find((p: any) => p.slug === slug || p.id === slug)
           setProduct(found || null)
+          setBackdrop(parseShopBackdrop(data.backdrop))
         }
       } catch (err) {
         console.error('Error loading product:', err)
@@ -32,7 +35,7 @@ export default function MerchProductPage() {
   if (loading) {
     return (
       <div className="min-h-screen pt-24 pb-16 px-4">
-        <div className="max-w-4xl mx-auto animate-pulse">
+        <div className="mx-auto max-w-6xl animate-pulse">
           <div className="h-8 w-32 bg-gray-800 rounded mb-8" />
           <div className="grid md:grid-cols-2 gap-8">
             <div className="aspect-square bg-gray-800 rounded-lg" />
@@ -59,14 +62,14 @@ export default function MerchProductPage() {
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto max-w-6xl">
         <nav className="mb-8">
           <Link href="/shop/merch" className="text-gray-400 hover:text-white text-sm transition-colors">
             ← Back to Merch
           </Link>
         </nav>
 
-        <MerchProductDetail product={product} />
+        <MerchProductDetail product={product} backdrop={backdrop} />
       </div>
     </div>
   )

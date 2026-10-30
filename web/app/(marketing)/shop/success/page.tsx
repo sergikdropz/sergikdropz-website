@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { safeInternalPath } from '@/lib/safe-internal-path'
+import { clearMerchCart } from '@/lib/merch/shop-cart'
 
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
@@ -20,7 +21,8 @@ export default function PurchaseSuccessPage() {
         body: JSON.stringify({ sessionId }),
       }).catch(() => {})
     }
-  }, [sessionId, method])
+    if (type === 'merch') clearMerchCart()
+  }, [sessionId, method, type])
 
   const isGumroad = method === 'gumroad'
   const isLicense = type === 'license'
@@ -113,6 +115,9 @@ export default function PurchaseSuccessPage() {
             <p className="text-gray-400 text-sm">
               Your merch order is being processed. You&#39;ll receive a confirmation email with tracking info once it ships.
             </p>
+            <Link href="/shop/merch" className="inline-block text-sm text-gray-300 underline underline-offset-2 hover:text-white">
+              Back to merch
+            </Link>
           </div>
         )}
 

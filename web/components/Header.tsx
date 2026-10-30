@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { fetchBrowserAuthSession } from '@/lib/auth/browser-session'
+import MerchCartButton from '@/components/shop/MerchCartButton'
 
 const TOP_REVEAL_PX = 24
 const SCROLL_DELTA_PX = 8
@@ -26,9 +27,9 @@ export default function Header() {
     { href: '/', label: 'Home' },
     { href: '/music', label: 'Music' },
     { href: '/shop', label: 'Shop' },
-    { href: '/licensing', label: 'Licensing' },
     { href: '/videos', label: 'Videos' },
     { href: '/gallery', label: 'Gallery' },
+    { href: '/licensing', label: 'Licensing' },
     { href: '/epk', label: 'EPK' },
     { href: '/contact', label: 'Contact' },
   ]
@@ -293,24 +294,28 @@ export default function Header() {
                 </Link>
               </>
             )}
+            <MerchCartButton />
           </div>
 
-          <button
-            type="button"
-            className="md:hidden p-2 -mr-2 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center relative z-50"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setIsOpen((prev) => !prev)
-            }}
-            onTouchStart={(e) => e.stopPropagation()}
-            aria-label="Toggle menu"
-            aria-expanded={isOpen}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1 md:hidden">
+            <MerchCartButton />
+            <button
+              type="button"
+              className="relative z-50 -mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center p-2 touch-manipulation"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setIsOpen((prev) => !prev)
+              }}
+              onTouchStart={(e) => e.stopPropagation()}
+              aria-label="Toggle menu"
+              aria-expanded={isOpen}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -385,6 +390,13 @@ export default function Header() {
                     </Link>
                   </>
                 )}
+                <Link
+                  href="/shop/cart"
+                  className="block px-4 py-3 text-base font-medium text-white hover:bg-gray-800/40 rounded-md touch-manipulation min-h-[44px] flex items-center"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Cart
+                </Link>
               </nav>
             </div>
           </>,

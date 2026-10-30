@@ -43,6 +43,17 @@ export async function GET(_request: NextRequest, context: { params: { id: string
           mockupSupported: file.mockupSupported,
         })),
         fileTypes: detail.fileTypes,
+        description: detail.description,
+        techniques: detail.techniques,
+        specs: detail.specs
+          ? {
+              lead: detail.specs.lead,
+              bullets: detail.specs.bullets,
+              styleLines: detail.specs.styleLines,
+              originCountry: detail.specs.originCountry,
+              materials: detail.specs.materials,
+            }
+          : null,
       },
     })
   } catch (error: unknown) {

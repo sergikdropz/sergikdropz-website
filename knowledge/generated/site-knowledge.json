@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-30T07:54:51.263Z",
+    "generatedAt": "2026-10-30T14:03:29.230Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,10 +15,10 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 101,
-      "appRouterRouteHandlers": 355,
-      "componentsTsx": 234,
-      "libTs": 976
+      "appRouterPages": 102,
+      "appRouterRouteHandlers": 358,
+      "componentsTsx": 238,
+      "libTs": 991
     },
     "pagesByCategory": {
       "fan": 5,
@@ -26,11 +26,11 @@
       "public": 27,
       "debug": 1,
       "tooling": 1,
-      "shop": 10,
+      "shop": 11,
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "0b308f208a1e84b8"
+    "contentHash": "9a0a24c88da48330"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -200,6 +200,11 @@
       {
         "urlPath": "/shop/[slug]",
         "file": "web/app/(marketing)/shop/[slug]/page.tsx",
+        "category": "shop"
+      },
+      {
+        "urlPath": "/shop/cart",
+        "file": "web/app/(marketing)/shop/cart/page.tsx",
         "category": "shop"
       },
       {
@@ -835,6 +840,11 @@
         "category": "api"
       },
       {
+        "urlPath": "/api/admin/merch/backdrop",
+        "file": "web/app/api/admin/merch/backdrop/route.ts",
+        "category": "api"
+      },
+      {
         "urlPath": "/api/admin/merch/catalog/[id]/mockup",
         "file": "web/app/api/admin/merch/catalog/[id]/mockup/route.ts",
         "category": "api"
@@ -872,6 +882,11 @@
       {
         "urlPath": "/api/admin/merch/designs/[id]",
         "file": "web/app/api/admin/merch/designs/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/designs/[id]/shop",
+        "file": "web/app/api/admin/merch/designs/[id]/shop/route.ts",
         "category": "api"
       },
       {
@@ -1517,6 +1532,11 @@
       {
         "urlPath": "/api/merch/art/[id]",
         "file": "web/app/api/merch/art/[id]/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/merch/backdrop",
+        "file": "web/app/api/merch/backdrop/route.ts",
         "category": "api"
       },
       {

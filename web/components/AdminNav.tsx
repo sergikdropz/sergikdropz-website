@@ -9,6 +9,7 @@ import GlobalSearch from './GlobalSearch'
 import { adminNavItems, type AdminNavItem } from './admin-nav-items'
 import { prefetchAdminRoute } from '@/lib/admin-nav-prefetch'
 import { Badge } from '@/components/ui/Badge'
+import { loadMerchFont, merchFontById } from '@/lib/merch/text-fonts'
 
 const ReactQueryDevtools =
   process.env.NODE_ENV === 'development'
@@ -98,6 +99,10 @@ export default function AdminNav() {
   }, [pathname])
 
   useEffect(() => {
+    void loadMerchFont(merchFontById('orbitron'))
+  }, [])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
     try {
       setCollapsed(localStorage.getItem(ADMIN_NAV_COLLAPSED_KEY) === '1')
@@ -173,7 +178,7 @@ export default function AdminNav() {
                   onFocus={() => prefetchAdminRoute(router, child.href)}
                   className={`block px-3 py-1.5 rounded-md text-sm transition ${
                     isActive(child.href, siblingHrefs)
-                      ? 'text-white bg-purple-600/20 font-medium'
+                      ? 'bg-white font-medium text-black'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
                   }`}
                 >
@@ -208,7 +213,7 @@ export default function AdminNav() {
         onFocus={() => prefetchAdminRoute(router, item.href)}
         className={`block px-3 py-2 rounded-md text-sm font-medium transition ${
           isActive(item.href)
-            ? 'text-white bg-purple-600/20'
+            ? 'bg-white font-medium text-black'
             : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
         }`}
       >
@@ -252,7 +257,8 @@ export default function AdminNav() {
           <div className="min-w-0 flex-1">
             <Link
               href="/admin"
-              className="block truncate text-lg font-bold text-white transition hover:text-purple-400"
+              className="block truncate text-lg text-white transition hover:text-purple-400"
+              style={{ fontFamily: 'Orbitron, sans-serif', fontWeight: 700 }}
             >
               Admin Panel
             </Link>
@@ -346,7 +352,11 @@ export default function AdminNav() {
       {/* Mobile top bar */}
       <div className="fixed inset-x-0 top-0 z-50 border-b border-line bg-surface-overlay/95 pl-[var(--shell-safe-left)] pr-[var(--shell-safe-right)] pt-[var(--shell-safe-top)] backdrop-blur-sm md:hidden">
         <div className="flex h-shell-top items-center justify-between px-4">
-          <Link href="/admin" className="text-lg font-bold text-ink">
+          <Link
+            href="/admin"
+            className="text-lg text-ink"
+            style={{ fontFamily: 'Orbitron, sans-serif', fontWeight: 700 }}
+          >
             Admin Panel
           </Link>
           <button

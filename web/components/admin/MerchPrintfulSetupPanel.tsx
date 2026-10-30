@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { readStudioDockOpen, writeStudioDockOpen } from '@/lib/merch/studio-session'
 
 export type PrintfulReadyStatus = {
   canPublish: boolean
@@ -51,6 +52,17 @@ function StepRow({
 
 export default function MerchPrintfulSetupPanel({ status, onRefresh }: Props) {
   const [checking, setChecking] = useState(false)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    setOpen(
+      window.location.hash === '#printful-api' ? true : readStudioDockOpen('printful-api', false),
+    )
+  }, [])
+  const toggleOpen = () => {
+    const next = !open
+    setOpen(next)
+    writeStudioDockOpen('printful-api', next)
+  }
 
   const recheck = useCallback(async () => {
     setChecking(true)
@@ -78,10 +90,29 @@ export default function MerchPrintfulSetupPanel({ status, onRefresh }: Props) {
     )
   }
 
+  const readyCount = [
+    status.catalogSynced,
+    status.apiKeyValid,
+    Boolean(status.storeMatch),
+    status.publicArtOrigin,
+  ].filter(Boolean).length
+
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100/90">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-medium text-amber-50">Finish Printful API setup</h3>
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+      <div className={`${open ? 'mb-3' : ''} flex flex-wrap items-center justify-between gap-2`}>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="printful-api-body"
+          onClick={toggleOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <h3 className="text-base font-medium text-amber-50">Finish Printful API setup</h3>
+          <span className="text-xs text-amber-100/65">{readyCount}/4 ready</span>
+          <span aria-hidden className={`text-amber-100/55 transition ${open ? 'rotate-180' : ''}`}>
+            ▾
+          </span>
+        </button>
         <button
           type="button"
           onClick={() => void recheck()}
@@ -92,6 +123,8 @@ export default function MerchPrintfulSetupPanel({ status, onRefresh }: Props) {
         </button>
       </div>
 
+      {open ? (
+      <div id="printful-api-body">
       <ol className="space-y-3">
         <StepRow done={status.catalogSynced} label="Printful catalog loaded in admin">
           {!status.catalogSynced ? (
@@ -188,6 +221,8 @@ export default function MerchPrintfulSetupPanel({ status, onRefresh }: Props) {
         <code className="text-amber-50">web/docs/admin/PRINTFUL_API_SETUP.md</code> — after editing env, restart the dev
         server and click Re-check connection.
       </p>
+      </div>
+      ) : null}
     </div>
   )
 }

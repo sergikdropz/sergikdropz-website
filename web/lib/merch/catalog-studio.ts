@@ -102,6 +102,49 @@ export function catalogAngleViews(files: CatalogPrintFile[]): CatalogAngleView[]
   return views
 }
 
+function anglePreviewImageUrl(
+  detail: CatalogProductDetail,
+  file: CatalogPrintFile,
+  colorName: string | null,
+  size: string,
+): string | null {
+  const fromTemplate = coloredTemplate(detail, file, colorName, size)?.imageUrl
+  if (!fromTemplate) return null
+  const pattern = positioningPatternUrl(detail, fromTemplate, colorName, size)
+  return pattern || fromTemplate
+}
+
+/** True when the shop preview for this face is a garment mockup, not a blank placement sheet. */
+export function shopAngleShowsGarmentPhoto(
+  detail: CatalogProductDetail | null,
+  file: CatalogPrintFile,
+  colorName: string | null,
+  size: string | null,
+): boolean {
+  if (!detail) return false
+  const url = anglePreviewImageUrl(detail, file, colorName, size || 'M')
+  if (!url) return false
+  if (/square_sleeve_template/i.test(url)) return false
+  if (isPositioningTemplate(url)) return false
+  if (/\/template\//i.test(url) && !/\/Flat\//i.test(url)) return false
+  return true
+}
+
+/** Public shop: same as `catalogAngleViews`, minus faces that only show Printful placement templates. */
+export function catalogShopAngleViews(
+  files: CatalogPrintFile[],
+  detail: CatalogProductDetail | null,
+  colorName: string | null,
+  size: string | null,
+): CatalogAngleView[] {
+  const previewSize = size || 'M'
+  return catalogAngleViews(files).filter((view) => {
+    const file = files.find((row) => row.type === view.id)
+    if (!file) return false
+    return shopAngleShowsGarmentPhoto(detail, file, colorName, previewSize)
+  })
+}
+
 /** Angle photos for one color. A single saved set stays on the color it was made in. */
 export function mockupPhotosForColor(
   mockupUrls: string[] | null | undefined,
@@ -229,6 +272,8 @@ export type GarmentTemplate = {
   imageUrl: string
   /** Drawn behind a transparent Printful ghost template. Opaque photos hide it. */
   backgroundColor: string | null
+  /** Heather or patterned fabric photo. Solids leave this empty. */
+  backgroundUrl?: string | null
 }
 
 /**
@@ -244,7 +289,13 @@ export function coloredTemplate(
   if (!file?.templateUrl) return null
   const variant = detail ? pickPreviewVariant(detail.variants, colorName, size) : null
   const specific = variant ? file.variantTemplates?.[String(variant.id)] : undefined
-  if (specific?.imageUrl) return specific
+  if (specific?.imageUrl) {
+    return {
+      imageUrl: specific.imageUrl,
+      backgroundColor: specific.backgroundColor,
+      ...(specific.backgroundUrl ? { backgroundUrl: specific.backgroundUrl } : {}),
+    }
+  }
   return { imageUrl: file.templateUrl, backgroundColor: null }
 }
 

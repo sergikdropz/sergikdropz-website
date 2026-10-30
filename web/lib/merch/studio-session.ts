@@ -1,3 +1,10 @@
+import {
+  DEFAULT_SHOP_BACKDROP,
+  parseShopBackdrop,
+  shopBackdropIsOriginal,
+  type ShopBackdrop,
+} from '@/lib/merch/shop-backdrop'
+
 const CATALOG_NAV_KEY = 'sergwear-catalog-nav'
 const STUDIO_DESIGN_KEY = 'sergwear-studio-design'
 const STAGE_VIEW_KEY = 'sergwear-stage-view'
@@ -104,6 +111,38 @@ export function productMatColor(tone: number): string {
   return `rgb(${value}, ${value}, ${value})`
 }
 
+const SHOP_BACKDROP_KEY = 'sergwear-shop-backdrop'
+
+export type { ShopBackdrop } from '@/lib/merch/shop-backdrop'
+export {
+  DEFAULT_SHOP_BACKDROP,
+  activeShopBackdrop,
+  parseShopBackdrop,
+  shopBackdropCss,
+  shopBackdropIsOriginal,
+} from '@/lib/merch/shop-backdrop'
+
+export function readShopBackdrop(): ShopBackdrop {
+  if (typeof window === 'undefined') return DEFAULT_SHOP_BACKDROP
+  try {
+    const raw = window.localStorage.getItem(SHOP_BACKDROP_KEY)
+    if (!raw) return DEFAULT_SHOP_BACKDROP
+    return parseShopBackdrop(JSON.parse(raw))
+  } catch {
+    return DEFAULT_SHOP_BACKDROP
+  }
+}
+
+export function writeShopBackdrop(backdrop: ShopBackdrop) {
+  if (typeof window === 'undefined') return
+  const saved = parseShopBackdrop(backdrop)
+  if (shopBackdropIsOriginal(saved)) {
+    window.localStorage.removeItem(SHOP_BACKDROP_KEY)
+    return
+  }
+  window.localStorage.setItem(SHOP_BACKDROP_KEY, JSON.stringify(saved))
+}
+
 export function readOpenTab(designId: string): string | null {
   if (typeof window === 'undefined' || !designId) return null
   try {
@@ -115,6 +154,38 @@ export function readOpenTab(designId: string): string | null {
   } catch {
     return null
   }
+}
+
+const STUDIO_DOCK_KEY = 'sergwear-studio-docks'
+
+export function readStudioDockOpen(id: string, fallback = false): boolean {
+  if (typeof window === 'undefined' || !id) return fallback
+  try {
+    const raw = window.localStorage.getItem(STUDIO_DOCK_KEY)
+    if (!raw) return fallback
+    const map = JSON.parse(raw) as Record<string, unknown>
+    return typeof map[id] === 'boolean' ? map[id] : fallback
+  } catch {
+    return fallback
+  }
+}
+
+export function writeStudioDockOpen(id: string, open: boolean) {
+  if (typeof window === 'undefined' || !id) return
+  let map: Record<string, boolean> = {}
+  try {
+    const raw = window.localStorage.getItem(STUDIO_DOCK_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === 'boolean') map[key] = value
+      }
+    }
+  } catch {
+    map = {}
+  }
+  map[id] = open
+  window.localStorage.setItem(STUDIO_DOCK_KEY, JSON.stringify(map))
 }
 
 export function writeOpenTab(designId: string, fileType: string) {

@@ -44,7 +44,12 @@ export type CatalogPrintFile = {
   templateId?: number | null
   templateUrl?: string | null
   /** Printful template photo and garment color for each variant, keyed by variant id. */
-  variantTemplates?: Record<string, { imageUrl: string; backgroundColor: string | null }>
+  variantTemplates?: Record<
+    string,
+    { imageUrl: string; backgroundColor: string | null; backgroundUrl?: string | null }
+  >
+  /** Printful printfile fill mode (`fit` or `cover`). */
+  fillMode?: 'fit' | 'cover' | null
   /** Normalized print drop zone from Printful positioning template (0–1). */
   mockupStage?: { x: number; y: number; w: number; h: number } | null
   /** Width / height of the template image so the stage can keep its true shape. */
@@ -55,6 +60,27 @@ export type CatalogPrintFile = {
    * Such files are hidden from the designer when a calibrated sibling exists.
    */
   mockupSupported?: boolean
+}
+
+/** One camera angle Printful can photograph for this blank. */
+export type CatalogGarmentAngle = {
+  styleId: number | null
+  view: string
+  group: string
+  placement: string | null
+  technique: string | null
+}
+
+/** What the design desk needs after a catalog product is opened. */
+export type CatalogDesignIntel = {
+  angles: CatalogGarmentAngle[]
+  styleGroups: string[]
+  styleViews: string[]
+  conflicts: Array<{ placement: string; conflicts: string[] }>
+  audit: {
+    problems: string[]
+    warnings: string[]
+  }
 }
 
 export type CatalogProductDetail = {
@@ -72,6 +98,8 @@ export type CatalogProductDetail = {
   threadOptionIds?: string[]
   description: string | null
   specs: ProductSpecs | null
+  /** Templates, flat angles, swatch fabric, conflicts, and the placement audit. */
+  designIntel?: CatalogDesignIntel | null
 }
 
 export type PrintfulCatalogSnapshot = {

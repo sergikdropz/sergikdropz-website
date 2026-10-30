@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectMockupsByVariant,
+  createdSyncProductId,
   freshPrintfulUrl,
   mockupAnglesByColorFromTask,
   mockupPhotoKey,
@@ -9,6 +10,18 @@ import {
   previewVariantId,
   variantIdsForColors,
 } from '@/lib/merch/publish'
+
+describe('createdSyncProductId', () => {
+  it('reads Printful create-product result.id', () => {
+    expect(createdSyncProductId({ code: 200, result: { id: 79348732, name: 'Valle Del Sol - Backprint Tee', variants: 2 } })).toBe(
+      '79348732',
+    )
+  })
+
+  it('still reads the older result.sync_product.id shape', () => {
+    expect(createdSyncProductId({ result: { sync_product: { id: 13 } } })).toBe('13')
+  })
+})
 
 describe('freshPrintfulUrl', () => {
   it('adds a cache buster so Printful fetches the replaced file', () => {

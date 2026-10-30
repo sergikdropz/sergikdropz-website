@@ -13,7 +13,6 @@ import NavigationButtons from '@/components/NavigationButtons'
 import ShopMemberBenefitsBar from '@/components/shop/ShopMemberBenefitsBar'
 import ShopMemberVaultSection from '@/components/shop/ShopMemberVaultSection'
 import ShopExclusiveSection from '@/components/shop/ShopExclusiveSection'
-import ShopSubshopNav from '@/components/shop/ShopSubshopNav'
 import { type ShopCatalogPayload } from '@/lib/marketing/shop-catalog'
 import type { MemberCatalogItem } from '@/lib/shop/member-catalog'
 
@@ -56,8 +55,6 @@ export default function MusicShopPageClient({
   return (
     <div className="relative min-h-screen pt-20">
       <div className="container relative z-10 mx-auto px-4 py-12 sm:py-16">
-        <ShopSubshopNav active="music" />
-
         <div className="mx-auto mb-6 max-w-4xl text-center">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-purple-400/90">Music Shop</p>
           <h1 className="font-six-caps mb-4 text-5xl font-bold tracking-[0.12em] text-white sm:text-6xl md:text-7xl">
@@ -82,6 +79,9 @@ export default function MusicShopPageClient({
               Create free fan account
             </Link>
           </div>
+          <Link href="/shop" className="mt-4 inline-block text-sm text-gray-500 transition hover:text-gray-300">
+            ← All shops
+          </Link>
         </div>
 
         <ShopSectionNav sections={sections} />
