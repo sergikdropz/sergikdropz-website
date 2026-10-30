@@ -292,4 +292,10 @@ describe('previewArtPlacement', () => {
     expect(previewArtPlacement([chest, front], null)?.fileType).toBe('front_dtf')
     expect(previewArtPlacement([chest, front], 'missing')?.fileType).toBe('front_dtf')
   })
+
+  it('opens a full back print instead of a small front mark left as the active file', () => {
+    const front = placement({ fileType: 'front', placement: 'front', scale: 0.21 })
+    const back = placement({ fileType: 'back', placement: 'back', scale: 1 })
+    expect(previewArtPlacement([front, back], 'front')?.fileType).toBe('back')
+  })
 })

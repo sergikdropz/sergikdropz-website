@@ -11,7 +11,6 @@ import {
 } from '@/lib/merch/blanks'
 import { merchArtIdFromUrl, sameMerchArt, withArtVersion } from '@/lib/merch/art-url'
 import { createSupabaseClient } from '@/lib/supabase'
-import MerchMannequin from '@/components/admin/MerchMannequin'
 import type { StudioDockTool } from '@/components/admin/MerchStudioDock'
 import MerchPrintfulCatalog, {
   CATALOG_PANEL_COLLAPSED_WIDTH,
@@ -26,9 +25,6 @@ import {
   DesignSaveRow,
   MerchDesignCanvas,
   MerchDesignSidebar,
-  DpiQualityHint,
-  PrintAreaSnapGuides,
-  PlacementViewTabs,
   type DesignStageToolbarProps,
   StageModeSwitch,
   placementTabLabel,
@@ -58,8 +54,6 @@ import {
   type ProductMatMap,
 } from '@/lib/merch/studio-session'
 import { channelLuma, hexToRgb } from '@/lib/merch/product-mat'
-import GarmentMatImage from '@/components/shop/GarmentMatImage'
-import { StitchedColorPreview } from '@/components/shop/MerchGarmentPreview'
 import MerchLeaveDesignDialog from '@/components/admin/MerchLeaveDesignDialog'
 import MerchArtEditor from '@/components/admin/MerchArtEditor'
 import StudioContextMenu, {
@@ -2865,7 +2859,6 @@ export default function MerchFittingRoom({
         className="relative flex min-h-[680px] flex-col overflow-hidden rounded-2xl border border-white/10 text-white xl:h-full xl:min-h-0"
         style={studioPanelBg}
       >
-        {stageView === 'design' ? (
           <MerchDesignCanvas
             tabs={designTabs}
             activeTabId={activeDesignTabId}
@@ -2907,364 +2900,21 @@ export default function MerchFittingRoom({
             showRotationGuides={showRotationGuides}
             onRotationGuide={setShowRotationGuides}
             stageToolbar={stageToolbar}
-            underTabs={<StageModeSwitch view={stageView} onChange={onStageViewChange} />}
-            matColor={stageMat}
-            onStageBackdropContextMenu={onStageBackgroundContextMenu}
-          />
-        ) : (
-        <>
-        {catalogStudio && designTabs.length > 0 ? (
-          <PlacementViewTabs
-            tabs={designTabs}
-            activeTabId={activeDesignTabId}
-            onTab={selectDesignTab}
-            toolbar={stageToolbar}
             underTabs={
               <StageModeSwitch
                 view={stageView}
                 onChange={onStageViewChange}
-                zoom={stageZoom}
-                onZoom={setStageZoom}
+                zoom={stageView === 'preview' ? stageZoom : undefined}
+                onZoom={stageView === 'preview' ? setStageZoom : undefined}
               />
             }
+            matColor={stageMat}
+            onStageBackdropContextMenu={onStageBackgroundContextMenu}
+            productName={name}
+            onProductName={setName}
+            readOnly={stageView !== 'design'}
+            zoom={stageView === 'preview' ? stageZoom : 1}
           />
-        ) : (
-          <div className="shrink-0 px-4 pb-3 pt-4">
-            <StageModeSwitch
-              view={stageView}
-              onChange={onStageViewChange}
-              zoom={stageZoom}
-              onZoom={setStageZoom}
-            />
-          </div>
-        )}
-        <div
-          className="relative min-h-[280px] flex-1 overflow-hidden"
-          onContextMenu={onStageBackgroundContextMenu}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault()
-            const file = event.dataTransfer.files?.[0]
-            if (file) uploadFile(file).catch((error) => setNote(error.message))
-          }}
-        >
-          {anglePhotos.length === 0 && colorShot ? (
-            <>
-              <div className="absolute inset-0 flex items-center justify-center px-8 pb-6">
-                <div
-                  data-stage-garment=""
-                  className="relative h-[84%] max-h-full"
-                  style={{ aspectRatio: String(colorShot.aspect), transform: `scale(${stageZoom})` }}
-                >
-                  <StitchedColorPreview
-                    garmentUrl={colorShot.garmentUrl}
-                    garmentColor={colorShot.garmentColor}
-                    patternUrl={colorShot.patternUrl}
-                    matColor={stageMat}
-                    stage={colorShot.stage}
-                    printUrl={colorShot.printUrl}
-                    threadColors={embroideryOn && !embroideryUnlimitedColor ? selectedEmbroideryThreads : null}
-                    art={colorShot.art}
-                    area={colorShot.area}
-                  />
-                </div>
-              </div>
-              {colorShots.length > 1 && (
-                <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
-                  {colorShots.map((shot, index) => (
-                    <button
-                      key={shot.id}
-                      type="button"
-                      onClick={() => setPhotoPick(index)}
-                      aria-label={shot.label}
-                      className={`relative h-12 w-12 overflow-hidden rounded border ${index === colorAt ? 'border-white' : 'border-white/20'}`}
-                    >
-                      <StitchedColorPreview
-                        garmentUrl={shot.garmentUrl}
-                        garmentColor={shot.garmentColor}
-                        patternUrl={shot.patternUrl}
-                        matColor={stageMat}
-                        stage={shot.stage}
-                        printUrl={shot.printUrl}
-                        threadColors={embroideryOn && !embroideryUnlimitedColor ? selectedEmbroideryThreads : null}
-                        art={shot.art}
-                        area={shot.area}
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : anglePhotos.length === 0 ? (
-            <>
-              <div
-                className="absolute inset-0 flex items-center justify-center pb-14"
-                style={{ perspective: '1280px' }}
-              >
-                <div
-                  className="relative h-[84%] max-h-full"
-                  style={{
-                    aspectRatio: String(previewCardAspect),
-                    transform: `scale(${stageZoom})`,
-                  }}
-                >
-                <div
-                  data-stage-garment=""
-                  className="relative h-full w-full"
-                  style={{
-                    transformStyle: 'preserve-3d',
-                    transform: `rotateY(${(placementId === 'back' ? 180 : 0) + cardRotate}deg)`,
-                    transition: spinTransition
-                      ? 'transform 0.55s cubic-bezier(0.4, 0, 0.2, 1)'
-                      : 'none',
-                  }}
-                  onTransitionEnd={onGarmentSpinEnd}
-                >
-                  {garmentPlacements.map((faceArea) => {
-                    const filesOnFace = catalogStudio
-                      ? techniquePrintFiles.filter(
-                          (file) => placementForPrintFile(file, blank).id === faceArea.id
-                        )
-                      : []
-                    const isActive = faceArea.id === placementId
-                    // The file drawn on this face: the active one, else the first with art, else the first.
-                    const faceFile =
-                      isActive && activePrintFile
-                        ? activePrintFile
-                        : filesOnFace.find((file) => catalogFileLayers[file.type]?.assetUrl) || filesOnFace[0]
-                    const faceLayer = (() => {
-                      if (!catalogStudio) return layers[faceArea.id]
-                      if (isActive && activePrintFile) return catalogFileLayers[activePrintFile.type]
-                      return faceFile ? catalogFileLayers[faceFile.type] : undefined
-                    })()
-                    // Template-calibrated faces draw the Printful template so the drop zone lines up;
-                    // otherwise the variant photo with the studio blank's zone.
-                    const faceTemplate =
-                      catalogStudio && faceFile && hasTemplateStage(faceFile)
-                        ? coloredTemplate(catalogStudio, faceFile, previewColorName, previewSize)
-                        : null
-                    const faceTemplateUrl = faceTemplate?.imageUrl ?? null
-                    const faceGuideArea =
-                      catalogStudio && faceFile
-                        ? placementForPrintFile(faceFile, blank, {
-                            surface: faceTemplateUrl ? 'template' : 'photo',
-                          })
-                        : faceArea
-                    const faceImageUrl = faceTemplateUrl || catalogGarmentUrl
-                    const facePatternUrl = positioningPatternUrl(
-                      catalogStudio,
-                      faceTemplateUrl,
-                      previewColorName,
-                      previewSize,
-                    )
-                    const faceHeight = layerHeightFraction(faceLayer, faceGuideArea)
-                    const faceRotateY = faceArea.id === 'back' ? 180 : 0
-                    return (
-                      <div
-                        key={faceArea.id}
-                        className="absolute inset-0"
-                        style={{
-                          transform: `rotateY(${faceRotateY}deg)`,
-                          backfaceVisibility: 'hidden',
-                          WebkitBackfaceVisibility: 'hidden',
-                          pointerEvents: isActive ? 'auto' : 'none',
-                          backgroundColor: faceImageUrl ? undefined : stageMat || undefined,
-                        }}
-                      >
-                        {faceImageUrl ? (
-                          <GarmentMatImage
-                            src={faceImageUrl}
-                            matColor={stageMat}
-                            garmentColor={facePatternUrl ? null : faceTemplate?.backgroundColor || previewColor}
-                            patternUrl={facePatternUrl}
-                            className="pointer-events-none absolute inset-0"
-                            imgClassName={`absolute inset-0 h-full w-full drop-shadow-lg ${
-                              faceTemplateUrl ? 'object-fill' : 'object-contain'
-                            }`}
-                            imgStyle={
-                              !faceTemplateUrl && faceArea.id === 'back' ? { transform: 'scaleX(-1)' } : undefined
-                            }
-                          />
-                        ) : (
-                          <MerchMannequin
-                            family={blank.family}
-                            color={previewColor}
-                            placement={faceArea.id}
-                            idPrefix={`stage-${faceArea.id}`}
-                          />
-                        )}
-                        <div
-                          ref={isActive ? areaRef : undefined}
-                          className="absolute"
-                          style={{
-                            left: `${faceGuideArea.stage.x * 100}%`,
-                            top: `${faceGuideArea.stage.y * 100}%`,
-                            width: `${faceGuideArea.stage.w * 100}%`,
-                            height: `${faceGuideArea.stage.h * 100}%`,
-                          }}
-                        >
-                          {faceLayer ? (
-                            <img
-                              src={faceLayer.assetUrl}
-                              alt=""
-                              draggable={false}
-                              className="pointer-events-none absolute touch-none select-none"
-                              style={{
-                                left: `${faceLayer.x * 100}%`,
-                                top: `${faceLayer.y * 100}%`,
-                                width: `${faceLayer.scale * 100}%`,
-                                height: `${faceHeight * 100}%`,
-                                transform: `rotate(${faceLayer.rotation}deg)`,
-                                transformOrigin: 'center',
-                              }}
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                </div>
-              </div>
-              {!layer && (
-                <p
-                  className={`pointer-events-none absolute inset-x-8 bottom-8 text-center text-sm ${
-                    lightBackdrop ? 'text-black/50' : 'text-white/45'
-                  }`}
-                >
-                  Upload art on the right, drop a PNG here, or tap Add below.
-                </p>
-              )}
-
-              {dockTool === 'edit' && layer && (
-                <div className="pointer-events-auto absolute inset-x-6 bottom-8 z-10 mx-auto max-w-sm rounded-2xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
-                  <div className="mb-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={fit}
-                      className="flex-1 rounded-lg bg-white/10 py-1.5 text-[10px] tracking-[0.14em] uppercase hover:bg-white/20"
-                    >
-                      Fit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={center}
-                      className="flex-1 rounded-lg bg-white/10 py-1.5 text-[10px] tracking-[0.14em] uppercase hover:bg-white/20"
-                    >
-                      Center
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={optimizeForPrint}
-                    title="Size this art inside the stitch or print area without stretching it"
-                    className="mb-3 w-full rounded-lg bg-white/10 py-1.5 text-[10px] tracking-[0.14em] uppercase hover:bg-white/20"
-                  >
-                    Optimize for print
-                  </button>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label
-                      className="text-[10px] tracking-[0.12em] uppercase text-white/45"
-                      title="Double-click to reset scale"
-                      onDoubleClick={(event) => {
-                        event.preventDefault()
-                        resetScale()
-                      }}
-                    >
-                      Scale
-                      <input
-                        type="range"
-                        min={0.15}
-                        max={maxScaleInMitigation(layer, area)}
-                        step={0.01}
-                        value={Math.min(layer.scale, maxScaleInMitigation(layer, area))}
-                        onPointerDown={() => {
-                          sliderSnapshotRef.current = studioSnapshotFrom(
-                            layersRef.current,
-                            catalogFileLayersRef.current
-                          )
-                        }}
-                        onPointerUp={finishSliderEdit}
-                        onChange={(event) => {
-                          updateLayer({ scale: Number(event.target.value) })
-                          flashGuide()
-                        }}
-                        className="mt-1 w-full accent-white"
-                      />
-                    </label>
-                    <label
-                      className="text-[10px] tracking-[0.12em] uppercase text-white/45"
-                      title="Double-click to reset rotation"
-                      onDoubleClick={(event) => {
-                        event.preventDefault()
-                        straightenActive()
-                      }}
-                    >
-                      Rotate
-                      <input
-                        type="range"
-                        min={-180}
-                        max={180}
-                        step={1}
-                        value={layer.rotation}
-                        onPointerDown={() => {
-                          sliderSnapshotRef.current = studioSnapshotFrom(
-                            layersRef.current,
-                            catalogFileLayersRef.current
-                          )
-                          beginRotationGuide()
-                        }}
-                        onPointerUp={() => {
-                          endRotationGuide()
-                          finishSliderEdit()
-                        }}
-                        onChange={(event) => {
-                          applyRotation(Number(event.target.value))
-                        }}
-                        className="mt-1 w-full accent-white"
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-
-            </>
-          ) : (
-            <>
-              <div className="absolute inset-0 flex items-center justify-center px-8 pb-6">
-                <img
-                  src={activePhoto}
-                  alt=""
-                  data-stage-garment=""
-                  className="max-h-full max-w-full object-contain"
-                  style={{ transform: `scale(${stageZoom})` }}
-                />
-              </div>
-              {anglePhotos.length > 1 && (
-                <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
-                  {anglePhotos.map((url, index) => (
-                    <button
-                      key={url}
-                      type="button"
-                      aria-label={
-                        Object.entries(mockupAngleTitlesByColor).find(([name]) =>
-                          sameColorKey(name, previewColorName),
-                        )?.[1][index] || `Angle ${index + 1}`
-                      }
-                      onClick={() => setPhotoPick(index)}
-                      className={`h-12 w-12 overflow-hidden rounded border ${index === photoAt ? 'border-white' : 'border-white/20'}`}
-                    >
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        </>
-        )}
         <div className="shrink-0 px-4 pb-3 pt-1">
           <DesignSaveRow toolbar={stageToolbar} />
         </div>

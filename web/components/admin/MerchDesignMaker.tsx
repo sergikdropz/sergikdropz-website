@@ -711,6 +711,10 @@ export function MerchDesignCanvas({
   underTabs,
   matColor,
   onStageBackdropContextMenu,
+  productName,
+  onProductName,
+  readOnly = false,
+  zoom = 1,
 }: {
   tabs: DesignTab[]
   activeTabId: string
@@ -759,6 +763,13 @@ export function MerchDesignCanvas({
   /** Flat color behind the cut-out product. Does not recolor the garment image. */
   matColor?: string | null
   onStageBackdropContextMenu?: (event: MouseEvent) => void
+  /** Centered above the garment. Shared by Preview and Design so the name stays on the stage. */
+  productName?: string
+  onProductName?: (value: string) => void
+  /** Preview: same garment and art as Design, without move handles or print guides. */
+  readOnly?: boolean
+  /** Preview zoom. 1 leaves the frame at the same size as Design. */
+  zoom?: number
 }) {
   const height = artHeightFraction(layer, area)
   /** Match preview stand-in: back uses rotateY(180) on the card plus scaleX(-1) on the photo — not flip alone. */
@@ -797,6 +808,16 @@ export function MerchDesignCanvas({
         toolbar={stageToolbar}
         underTabs={underTabs}
       />
+      {onProductName ? (
+        <label className="mx-auto block w-full max-w-sm shrink-0 px-6 pt-3 text-center text-xs text-white/55">
+          Product name
+          <input
+            value={productName ?? ''}
+            onChange={(event) => onProductName(event.target.value)}
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-center text-sm text-white placeholder:text-white/35"
+          />
+        </label>
+      ) : null}
       <div
         ref={viewportRef}
         className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-4"
@@ -820,6 +841,7 @@ export function MerchDesignCanvas({
             width: frame?.width,
             height: frame?.height,
             aspectRatio: String(frameAspect),
+            transform: zoom !== 1 ? `scale(${zoom})` : undefined,
             ...(showBackGarment ? { perspective: '1280px' } : {}),
           }}
         >
@@ -868,6 +890,29 @@ export function MerchDesignCanvas({
                 height: `${area.stage.h * 100}%`,
               }}
             >
+              {readOnly ? (
+                layer?.assetUrl ? (
+                  <div
+                    className="pointer-events-none absolute"
+                    style={{
+                      left: `${layer.x * 100}%`,
+                      top: `${layer.y * 100}%`,
+                      width: `${layer.scale * 100}%`,
+                      height: `${height * 100}%`,
+                      transform: `rotate(${layer.rotation}deg)`,
+                      transformOrigin: 'center',
+                    }}
+                  >
+                    <img
+                      src={layer.assetUrl}
+                      alt=""
+                      draggable={false}
+                      className="absolute inset-0 h-full w-full"
+                    />
+                  </div>
+                ) : null
+              ) : (
+                <>
               {boundToInset && (printInsetX > 0 || printInsetY > 0) ? (
                 <div className="pointer-events-none absolute inset-0">
                   <div className="absolute inset-0 border border-dashed border-white/20" />
@@ -938,9 +983,11 @@ export function MerchDesignCanvas({
                   Upload or drop your design here
                 </button>
               )}
+                </>
+              )}
             </div>
           </div>
-          {layer?.assetUrl && onOptimizeForPrint ? (
+          {!readOnly && layer?.assetUrl && onOptimizeForPrint ? (
             <button
               type="button"
               onClick={onOptimizeForPrint}
@@ -1156,8 +1203,6 @@ export function MerchDesignSidebar({
   onEmbroideryThreadColor,
   onPullStitchFile,
   onPhotographColor,
-  productName,
-  onProductName,
   previewColorName,
   swatchColors,
   onPreviewColor,
@@ -1358,18 +1403,7 @@ export function MerchDesignSidebar({
         {dropHint ? <p className="text-[11px] text-amber-300/90">{dropHint}</p> : null}
         {nav === 'product' && (
           <>
-            <div>
-              <p className="text-sm font-semibold leading-snug">{product.title}</p>
-              <label className="mt-3 block text-xs text-white/55">
-                Product name
-                <input
-                  value={productName}
-                  onChange={(event) => onProductName(event.target.value)}
-                  placeholder={product.title}
-                  className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/35"
-                />
-              </label>
-            </div>
+            <p className="text-sm font-semibold leading-snug">{product.title}</p>
             <PlacementTools
               file={activeFile}
               hasArt={Boolean(activeLayerUrl)}

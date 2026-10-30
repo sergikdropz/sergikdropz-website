@@ -131,8 +131,18 @@ export function placementKey(placement: Pick<ArtPlacement, 'placement' | 'fileTy
 }
 
 /**
- * Art the product card should show. The file open on the stage wins, so a
- * small chest or sleeve mark does not hide the front layout that was saved.
+ * A chest, sleeve, label, or small mark. It should not become the product
+ * preview when another side carries the actual print.
+ */
+function isAccentPlacement(row: ArtPlacement): boolean {
+  const type = (row.fileType || '').toLowerCase()
+  if (/sleeve|chest|label|pocket/.test(type)) return true
+  return row.scale < 0.45
+}
+
+/**
+ * Art the product card and the stage should open on. The file last open on
+ * the stage wins, unless it is only a small mark and another side has the print.
  */
 function previewPlacementRank(row: ArtPlacement): number {
   const type = (row.fileType || '').toLowerCase()
@@ -150,11 +160,17 @@ export function previewArtPlacement(
   activeFileType?: string | null,
 ): ArtPlacement | undefined {
   const withArt = placements.filter((row) => row.assetUrl)
+  const ranked = [...withArt].sort(
+    (a, b) => previewPlacementRank(a) - previewPlacementRank(b) || b.scale - a.scale,
+  )
   if (activeFileType) {
     const active = withArt.find((row) => row.fileType === activeFileType)
+    if (active && !isAccentPlacement(active)) return active
+    const full = ranked.find((row) => !isAccentPlacement(row))
+    if (full) return full
     if (active) return active
   }
-  return [...withArt].sort((a, b) => previewPlacementRank(a) - previewPlacementRank(b))[0]
+  return ranked[0]
 }
 
 /** Validate placements posted from the fitting room. Keeps the Printful file type so sleeves and labels survive save + publish. */
