@@ -17,7 +17,7 @@
       "variants": [],
       "createdAt": "2026-10-29T09:14:33.830Z",
       "sortIndex": 0,
-      "updatedAt": "2026-10-30T00:51:35.493Z",
+      "updatedAt": "2026-10-31T01:18:07.253Z",
       "mockupUrls": [
         "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
         "/api/merch/art/fe3a26db-6f51-46a8-84ed-d1773902b05a.jpg",
@@ -28,20 +28,21 @@
       ],
       "placements": [
         {
-          "x": 0.2540144501727738,
-          "y": 0.11764705882352941,
-          "scale": 0.49197109965445235,
-          "assetUrl": "/api/merch/art/b998d67b-e49c-4aac-b17c-fdd145ba1245.png?v=2026-10-29T10%3A16%3A50.872Z",
+          "x": 0.3669047619047619,
+          "y": 0.17117647058823524,
+          "scale": 0.2661904761904762,
+          "assetUrl": "/api/merch/art/887ede4c-017f-46e3-b10f-3e1b4a2a8492.png?v=1793409469761",
           "fileType": "embroidery_front_large",
           "rotation": 0,
           "placement": "front",
-          "assetWidth": 4096,
-          "assetHeight": 2577
+          "assetWidth": 3464,
+          "assetHeight": 3464
         }
       ],
       "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 35,
       "previewColor": "#2a2a2a",
+      "shopCategory": null,
       "mockupTaskKey": null,
       "printFileUrls": {
         "embroidery_front_large": "/api/merch/art/635e029d-1f33-4449-84a7-53ace764d2e3.png?v=1793321302554"
@@ -53,7 +54,6 @@
       "previewColorName": "Black",
       "embroideryThreads": {
         "thread_colors_front_large": [
-          "#FFFFFF",
           "#000000"
         ]
       },
@@ -1061,7 +1061,7 @@
       "variants": [],
       "createdAt": "2026-10-29T21:29:55.063Z",
       "sortIndex": 13,
-      "updatedAt": "2026-10-30T01:56:42.179Z",
+      "updatedAt": "2026-10-31T01:39:52.719Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -1123,6 +1123,7 @@
       "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
       "retailPrice": 45,
       "previewColor": "#ef8fbf",
+      "shopCategory": null,
       "mockupTaskKey": null,
       "printFileUrls": {
         "back_dtf": "/api/merch/art/fdb332d2-80ab-4230-8032-cbf83c524162.png?v=1793323609475",
@@ -2037,8 +2038,11 @@
       "variants": [],
       "createdAt": "2026-10-30T07:02:17.829Z",
       "sortIndex": 25,
-      "updatedAt": "2026-10-30T07:09:24.319Z",
-      "mockupUrls": [],
+      "updatedAt": "2026-10-30T14:43:05.072Z",
+      "mockupUrls": [
+        "/api/merch/art/d47f18ec-154d-47aa-aca0-2d8cab6c3905.jpg",
+        "/api/merch/art/c887a762-b1da-4202-a12b-6c6293ace7c2.jpg"
+      ],
       "placements": [
         {
           "x": -2.47198095326695e-17,
@@ -2067,20 +2071,35 @@
       "retailPrice": 40,
       "previewColor": "#d8aa7c",
       "mockupTaskKey": null,
-      "printFileUrls": {},
-      "wholesaleCost": 13,
+      "printFileUrls": {
+        "back": "/api/merch/art/ddfa6a7d-2e98-4778-84b5-be597cdc8ef4.png?v=1793371157892",
+        "front": "/api/merch/art/db1e6b73-a2e3-4648-85cf-f21a3e31eeba.png"
+      },
+      "wholesaleCost": 16.39,
       "activeFileType": "back",
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Khaki",
       "embroideryThreads": {},
-      "mockupUrlsByColor": {},
+      "mockupUrlsByColor": {
+        "Khaki": [
+          "/api/merch/art/d47f18ec-154d-47aa-aca0-2d8cab6c3905.jpg",
+          "/api/merch/art/c887a762-b1da-4202-a12b-6c6293ace7c2.jpg"
+        ]
+      },
       "mockupRetiredArtIds": [],
       "mockupPendingByColor": {},
       "printfulSyncProductId": null,
-      "mockupPhotoKeysByColor": {},
+      "mockupPhotoKeysByColor": {
+        "Khaki": "1637~khaki~back:https://sergikdropz.com/api/merch/art/ddfa6a7d-2e98-4778-84b5-be597cdc8ef4.png|front:https://sergikdropz.com/api/merch/art/db1e6b73-a2e3-4648-85cf-f21a3e31eeba.png~back:/api/merch/art/5bde075d-2d1b-4825-9ada-57dcb43c5e0b.png:0:0:1:0|front:/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png:0.385:0:0.231:0~"
+      },
       "embroideryUnlimitedColor": false,
-      "mockupAngleTitlesByColor": {},
+      "mockupAngleTitlesByColor": {
+        "Khaki": [
+          "Back",
+          "Front"
+        ]
+      },
       "mockupPendingTitlesByColor": {}
     },
     {
@@ -2136,6 +2155,146 @@
       "catalogProductId": 1637,
       "mockupPendingKey": null,
       "previewColorName": "Blonde",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "eb6532b5-3ca6-4539-8323-082fb84ec7b1",
+      "name": "Soul Candy Backprint",
+      "slug": "soul-candy-backprint",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Coral",
+        "Hot Pink",
+        "Cardinal",
+        "Red",
+        "Sky Blue",
+        "Pink"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-31T01:33:03.579Z",
+      "sortIndex": null,
+      "updatedAt": "2026-10-31T01:37:15.475Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.06902610441767071,
+          "y": 0,
+          "scale": 0.8619477911646586,
+          "assetUrl": "/api/merch/art/9cfc569b-8337-480e-b545-a654d660a3e2.png?v=2026-10-31T01%3A19%3A45.760Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 2525,
+          "assetHeight": 3320
+        },
+        {
+          "x": 0.649380690864055,
+          "y": 1.3444106938820255e-17,
+          "scale": 0.25410616088552646,
+          "assetUrl": "/api/merch/art/f62513c7-bbd3-43cf-a6c1-c3cb9c7303c2.png?v=1793410074386",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 1835,
+          "assetHeight": 2356
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 40,
+      "previewColor": "#fdaea8",
+      "shopCategory": null,
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "back",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Coral",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {},
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {},
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "8c62c3db-2803-455f-8907-ae0c17d0521a",
+      "name": "Soul Candy Tee",
+      "slug": "soul-candy-tee",
+      "sizes": [
+        "3XL",
+        "4XL",
+        "5XL",
+        "L",
+        "M",
+        "XL",
+        "2XL"
+      ],
+      "colors": [
+        "Black",
+        "Blonde",
+        "Cream Blue",
+        "Turquoise",
+        "Sky Blue",
+        "Coral",
+        "Tiffany Blue"
+      ],
+      "family": "tee",
+      "status": "live",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-10-31T01:23:59.928Z",
+      "sortIndex": null,
+      "updatedAt": "2026-10-31T01:26:08.609Z",
+      "mockupUrls": [],
+      "placements": [
+        {
+          "x": 0.13458295076265325,
+          "y": 2.0816681711721685e-17,
+          "scale": 0.7308340984746935,
+          "assetUrl": "/api/merch/art/9cfc569b-8337-480e-b545-a654d660a3e2.png?v=1793409587050",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 2525,
+          "assetHeight": 3320
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 40,
+      "previewColor": "#8fc2e5",
+      "shopCategory": null,
+      "mockupTaskKey": null,
+      "printFileUrls": {},
+      "wholesaleCost": 13,
+      "activeFileType": "front",
+      "catalogProductId": 1637,
+      "mockupPendingKey": null,
+      "previewColorName": "Sky Blue",
       "embroideryThreads": {},
       "mockupUrlsByColor": {},
       "mockupRetiredArtIds": [],
