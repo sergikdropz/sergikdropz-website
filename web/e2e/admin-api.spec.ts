@@ -5,6 +5,7 @@ const protectedAdminPaths = [
   '/api/admin/users',
   '/api/admin/purchases',
   '/api/admin/logs',
+  '/api/admin/merch/printful-status',
 ] as const
 
 /** Privileged audio handlers must deny anonymous callers (defense beyond middleware). */

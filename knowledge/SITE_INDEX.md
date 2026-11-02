@@ -69,8 +69,8 @@ Exact matcher list: see `middleware.config.matcher` in `web/middleware.ts` and t
 
 | Suite | Spec files | Credentials |
 | --- | --- | --- |
-| Guest / public | `admin-guest`, `admin-api`, `admin-audit`, `admin-a11y`, `fan-public` | None |
-| Authenticated admin | `admin-authenticated`, `admin-ui-crawl` | `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` (storage state in `e2e/.auth/admin.json`) |
+| Guest / public | `admin-guest`, `admin-api`, `admin-audit`, `admin-a11y`, `fan-public`, `merch-shop` | None |
+| Authenticated admin | `admin-authenticated`, `admin-ui-crawl`, `merch-studio` | `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` (storage state in `e2e/.auth/admin.json`) |
 
 Static admin paths crawled in UI tests: `web/e2e/admin-ui-paths.ts` (`ADMIN_UI_CRAWL_PATHS`). The knowledge build compares this list to real `web/app/admin/**/page.tsx` routes and reports drift in `generated/site-knowledge.json` → `e2e.drift`.
 

@@ -596,6 +596,7 @@ function FolderCoverCell({ cover }: { cover: FolderCover | null }) {
           preferLayout
           matColor={mat?.color}
           matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
+          className="absolute inset-0"
         />
       ) : (
         <span className="absolute inset-0" style={{ background: cover.design.previewColor || '#111' }} />
@@ -702,6 +703,7 @@ function DesignShopCard({
             preferLayout
             matColor={mat?.color}
             matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
+            className="absolute inset-0"
           />
         ) : (
           <div className="absolute inset-0" style={{ background: design.previewColor || '#111' }} />

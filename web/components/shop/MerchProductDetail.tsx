@@ -16,12 +16,13 @@ import MerchGarmentPreview, {
 import type { BlankColor } from '@/lib/merch/blanks'
 import { activeShopBackdrop, type ShopBackdrop } from '@/lib/merch/shop-backdrop'
 import {
-  catalogShopAngleViews,
   designPreviewColorName,
   mockupPhotosForColor,
   mockupTitlesForColor,
   sameColorKey,
+  shopDesignAngleViews,
   shopFrontPhotoIndex,
+  shopViewFileTypeToOpen,
 } from '@/lib/merch/catalog-studio'
 
 interface Variant {
@@ -117,18 +118,24 @@ export default function MerchProductDetail({
     }
   }, [product])
 
-  const savedColorName = product.designPreview?.previewColorName || null
+  const designPreview = product.designPreview
+  const savedColorName = designPreview?.previewColorName || null
   const requestedColor = colorReady ? selectedVariant?.color : savedColorName
   const activeColorName = pickedColor || requestedColor || null
   const angleViews = useMemo(
     () =>
-      catalogShopAngleViews(
+      shopDesignAngleViews(
         catalogDetail?.printFiles || [],
         catalogDetail,
         activeColorName,
         selectedVariant?.size,
+        designPreview?.placements || [],
       ),
-    [catalogDetail, activeColorName, selectedVariant?.size],
+    [catalogDetail, activeColorName, selectedVariant?.size, designPreview?.placements],
+  )
+  const designedAngleId = useMemo(
+    () => shopViewFileTypeToOpen(angleViews, designPreview?.placements || [], designPreview?.activeFileType),
+    [angleViews, designPreview?.placements, designPreview?.activeFileType],
   )
 
   useEffect(() => {
@@ -151,10 +158,12 @@ export default function MerchProductDetail({
         savedColorName,
       )
     : []
-  const usingPhotos = Boolean(product.designPreview) && allImages.length > 0
+  const usingPhotos = Boolean(designPreview) && allImages.length > 0
   const mat = activeShopBackdrop(backdrop)
-  const designPreview = product.designPreview
-  const activeAngleId = viewFileType || angleViews[0]?.id || null
+  const activeAngleId = viewFileType || designedAngleId
+  const stageFile = catalogDetail?.printFiles.find((file) => file.type === activeAngleId)
+  const heroAspect =
+    stageFile?.templateAspect && stageFile.templateAspect > 0 ? stageFile.templateAspect : 3 / 4
   const colorListed = product.variants.some(
     (variant) => !activeColorName || sameColorKey(variant.color, activeColorName),
   )
@@ -275,17 +284,22 @@ export default function MerchProductDetail({
         {/* Gallery */}
         <div className="mx-auto flex w-full max-w-lg flex-col items-center space-y-3 md:mx-0 md:max-w-none">
           <div
-            className={`relative aspect-square w-full overflow-hidden rounded-lg ${
+            className={`relative w-full overflow-hidden rounded-lg ${
               mat ? '' : usingPhotos || !product.designPreview ? 'bg-gray-900' : 'bg-white'
             }`}
-            style={mat ? { backgroundColor: mat.opacity < 1 ? 'transparent' : mat.color } : undefined}
+            style={{
+              aspectRatio: product.designPreview ? String(heroAspect) : '1 / 1',
+              ...(mat ? { backgroundColor: mat.opacity < 1 ? 'transparent' : mat.color } : {}),
+            }}
           >
             {product.designPreview ? (
               <MerchGarmentPreview
                 design={product.designPreview}
                 colorName={colorReady ? activeColorName : null}
                 photoIndex={activeImage}
-                viewFileType={viewFileType || (usingPhotos ? null : activeAngleId)}
+                viewFileType={activeAngleId}
+                preferLayout
+                fillStage
                 matColor={mat?.color}
                 matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
               />
@@ -310,7 +324,7 @@ export default function MerchProductDetail({
           {designPreview && angleViews.length > 1 && (
             <div className="flex w-full justify-center gap-2 overflow-x-auto pb-1">
               {angleViews.map((view) => {
-                const selected = (viewFileType || (usingPhotos ? null : activeAngleId)) === view.id
+                const selected = activeAngleId === view.id
                 return (
                   <button
                     key={view.id}
@@ -330,6 +344,7 @@ export default function MerchProductDetail({
                         design={designPreview}
                         colorName={colorReady ? activeColorName : null}
                         viewFileType={view.id}
+                        preferLayout
                         matColor={mat?.color}
                         matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
                         className="absolute inset-0"

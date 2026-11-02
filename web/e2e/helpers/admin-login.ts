@@ -6,20 +6,21 @@ import type { Page } from '@playwright/test'
 export async function loginAsAdmin(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/admin/login?autologin=1', { waitUntil: 'domcontentloaded' })
 
-  try {
-    await page.waitForURL(/\/admin\/?$/, { timeout: 25_000 })
+  const emailField = page.getByLabel('Email')
+  const adminHome = page.getByRole('link', { name: 'Admin Panel' })
+  await emailField.or(adminHome).waitFor({ state: 'visible', timeout: 60_000 })
+
+  if (!/\/admin\/login/.test(page.url()) && (await adminHome.count())) {
     return
-  } catch {
-    // fall through to manual submit
   }
 
-  const stillOnLogin = /\/admin\/login/.test(page.url())
-  if (!stillOnLogin) {
-    throw new Error(`Unexpected URL after autologin: ${page.url()}`)
+  if (!(await emailField.isVisible())) {
+    await page.waitForURL(/\/admin\/?$/, { timeout: 15_000 })
+    return
   }
 
-  await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
+  await emailField.fill(email)
+  await page.getByRole('textbox', { name: 'Password' }).fill(password)
   await page.getByRole('button', { name: /Sign In/i }).click()
   await page.waitForURL(/\/admin\/?$/, { timeout: 60_000 })
 }

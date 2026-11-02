@@ -61,8 +61,8 @@
       "adminPagesNotInCrawlList": []
     },
     "suites": {
-      "guest": "admin-guest, admin-api, admin-audit, admin-a11y, fan-public",
-      "authenticated": "admin-authenticated, admin-ui-crawl (requires E2E_ADMIN_EMAIL/PASSWORD)"
+      "guest": "admin-guest, admin-api, admin-audit, admin-a11y, fan-public, merch-shop",
+      "authenticated": "admin-authenticated, admin-ui-crawl, merch-studio (requires E2E_ADMIN_EMAIL/PASSWORD)"
     }
   },
   "tables": {

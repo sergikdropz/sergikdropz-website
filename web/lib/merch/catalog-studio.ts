@@ -145,6 +145,60 @@ export function catalogShopAngleViews(
   })
 }
 
+function designedPrintFileTypes(
+  placements: Array<{ fileType?: string | null; assetUrl?: string | null }>,
+): string[] {
+  const types: string[] = []
+  const seen = new Set<string>()
+  for (const row of placements) {
+    const type = row.fileType?.trim()
+    if (!type || !row.assetUrl || seen.has(type)) continue
+    seen.add(type)
+    types.push(type)
+  }
+  return types
+}
+
+/**
+ * Shop placement strip: only the print files that have art on this design.
+ * Catalog tees list every chest/sleeve/front add-on; merch studio does not.
+ */
+export function shopDesignAngleViews(
+  files: CatalogPrintFile[],
+  detail: CatalogProductDetail | null,
+  colorName: string | null,
+  size: string | null,
+  placements: Array<{ fileType?: string | null; assetUrl?: string | null }>,
+): CatalogAngleView[] {
+  const designed = designedPrintFileTypes(placements)
+  const views = catalogShopAngleViews(files, detail, colorName, size)
+  if (designed.length === 0) return views.slice(0, 1)
+  const byType = new Map(files.map((file) => [file.type, file]))
+  const fromCatalog = views.filter((view) => designed.includes(view.id))
+  if (fromCatalog.length > 0) return designed
+    .map((type) => fromCatalog.find((view) => view.id === type))
+    .filter((view): view is CatalogAngleView => Boolean(view))
+  return designed.map((type) => ({
+    id: type,
+    label: (byType.get(type)?.title || type).trim(),
+  }))
+}
+
+/** Open the same print file merch studio would: the designed face, not the first catalog add-on. */
+export function shopViewFileTypeToOpen(
+  views: CatalogAngleView[],
+  placements: Array<{ fileType?: string | null; assetUrl?: string | null }>,
+  activeFileType?: string | null,
+): string | null {
+  if (views.length === 0) return null
+  const hasArt = (type: string) =>
+    placements.some((row) => row.fileType === type && Boolean(row.assetUrl))
+  if (activeFileType && views.some((view) => view.id === activeFileType) && hasArt(activeFileType)) {
+    return activeFileType
+  }
+  return views.find((view) => hasArt(view.id))?.id || views[0]?.id || null
+}
+
 /** Angle photos for one color. A single saved set stays on the color it was made in. */
 export function mockupPhotosForColor(
   mockupUrls: string[] | null | undefined,

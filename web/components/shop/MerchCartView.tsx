@@ -1,21 +1,22 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import MerchShippingEstimate from '@/components/shop/MerchShippingEstimate'
 import { formatMerchMoney, merchCartCheckoutItems } from '@/lib/merch/shop-cart'
 import { startMerchCheckout } from '@/lib/merch/start-merch-checkout'
 import { useMerchCart } from '@/lib/merch/use-merch-cart'
 
 export default function MerchCartView() {
-  const searchParams = useSearchParams()
   const { lines, ready, subtotal, setQuantity, removeLine } = useMerchCart()
   const [checkingOut, setCheckingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [destination, setDestination] = useState({ country_code: 'US', state_code: 'CA' })
-  const cancelled = searchParams.get('purchase') === 'cancelled'
+  const [cancelled, setCancelled] = useState(false)
+  useEffect(() => {
+    setCancelled(new URLSearchParams(window.location.search).get('purchase') === 'cancelled')
+  }, [])
   const shippingItems = useMemo(
     () => lines.map((line) => ({ variantId: line.printful_variant_id, quantity: line.quantity })),
     [lines],
@@ -59,7 +60,8 @@ export default function MerchCartView() {
         ) : null}
 
         {!ready ? (
-          <div className="space-y-3">
+          <div className="space-y-3" role="status">
+            <p className="sr-only">Loading cart</p>
             {[0, 1].map((i) => (
               <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-800" />
             ))}

@@ -46,7 +46,7 @@ export default function MerchCard({ product, backdrop }: MerchCardProps & { back
               preferLayout
               matColor={mat?.color}
               matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
-              className="transition-transform duration-300 group-hover:scale-[1.02]"
+              className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.02]"
             />
           ) : thumbnail.startsWith('/api/') ? (
             <img src={thumbnail} alt={product.name} className="absolute inset-0 h-full w-full object-cover" />

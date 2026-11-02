@@ -13,6 +13,8 @@ import {
   shopFrontPhotoIndex,
   catalogAngleViews,
   catalogShopAngleViews,
+  shopDesignAngleViews,
+  shopViewFileTypeToOpen,
   shopAngleShowsGarmentPhoto,
   orderPrintFilesByAngles,
   previewUsesMockupPhoto,
@@ -286,6 +288,40 @@ describe('catalog-studio', () => {
     expect(catalogShopAngleViews([front, sleeve], detail, 'Black', 'M').map((view) => view.id)).toEqual([
       'front',
     ])
+  })
+
+  it('keeps shop angles on the print files that have art', () => {
+    const stage = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }
+    const face = (type: string, title: string): CatalogPrintFile => ({
+      fileId: type,
+      type,
+      title,
+      additionalPrice: null,
+      options: [],
+      templateUrl: `https://files.cdn.printful.com/m/tee/medium/Flat/${type}/ghost.png`,
+      mockupStage: stage,
+    })
+    const files = [
+      face('embroidery_chest_left', 'Left chest'),
+      face('embroidery_chest_center', 'Center chest'),
+      face('front', 'Front print'),
+      face('front_large', 'Large front print'),
+      face('back', 'Back print'),
+    ]
+    const detail = mockDetail({
+      sizes: ['M'],
+      variants: [{ id: 10, color: 'Black', size: 'M', image: null }],
+      printFiles: files,
+    })
+    const views = shopDesignAngleViews(files, detail, 'Black', 'M', [
+      { fileType: 'front', assetUrl: '/art/front.png' },
+      { fileType: 'back', assetUrl: '/art/back.png' },
+      { fileType: 'embroidery_chest_left', assetUrl: '' },
+    ])
+    expect(views.map((view) => view.id)).toEqual(['front', 'back'])
+    expect(shopViewFileTypeToOpen(views, [{ fileType: 'front', assetUrl: '/art/front.png' }, { fileType: 'back', assetUrl: '/art/back.png' }], 'front')).toBe(
+      'front',
+    )
   })
 
   it('uses the angle photos Printful stored for the selected color', () => {

@@ -1,4 +1,8 @@
+import { resolve } from 'path'
+import { config as loadEnv } from 'dotenv'
 import { defineConfig, devices } from '@playwright/test'
+
+loadEnv({ path: resolve(__dirname, '.env.local') })
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3001'
 const usePerf = process.env.PLAYWRIGHT_PERF === '1'
@@ -33,7 +37,7 @@ export default defineConfig({
     : [
         {
           name: 'chromium-guest',
-          testMatch: /(admin-guest|admin-api|admin-audit|admin-a11y|fan-public|auto-dj-player|idj-player|playback-edge-url|playback-health|youtube-subscribe-gate-fan|youtube-subscribe-gate)\.spec\.ts/,
+          testMatch: /(admin-guest|admin-api|admin-audit|admin-a11y|fan-public|merch-shop|auto-dj-player|idj-player|playback-edge-url|playback-health|youtube-subscribe-gate-fan|youtube-subscribe-gate)\.spec\.ts/,
           use: { ...chrome },
         },
         ...(e2eAuth
@@ -44,7 +48,7 @@ export default defineConfig({
               },
               {
                 name: 'chromium-admin',
-                testMatch: /admin-(authenticated|ui-crawl)\.spec\.ts|studio-(social-promo|dsp-connect|dsp-package|distrokid-import|ugc-pack|soundexchange|revelator-distribute)\.spec\.ts/,
+                testMatch: /admin-(authenticated|ui-crawl)\.spec\.ts|studio-(social-promo|dsp-connect|dsp-package|distrokid-import|ugc-pack|soundexchange|revelator-distribute)\.spec\.ts|merch-studio\.spec\.ts/,
                 dependencies: ['setup'],
                 use: {
                   ...chrome,

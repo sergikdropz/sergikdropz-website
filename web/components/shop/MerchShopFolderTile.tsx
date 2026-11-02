@@ -43,6 +43,7 @@ function FolderCoverCell({
           preferLayout
           matColor={mat?.color}
           matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
+          className="absolute inset-0"
         />
       ) : thumbnail.startsWith('/api/') ? (
         <img src={thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />

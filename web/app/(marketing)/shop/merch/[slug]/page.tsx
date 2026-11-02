@@ -36,6 +36,7 @@ export default function MerchProductPage() {
     return (
       <div className="min-h-screen pt-24 pb-16 px-4">
         <div className="mx-auto max-w-6xl animate-pulse">
+          <p className="sr-only">Loading product</p>
           <div className="h-8 w-32 bg-gray-800 rounded mb-8" />
           <div className="grid md:grid-cols-2 gap-8">
             <div className="aspect-square bg-gray-800 rounded-lg" />
