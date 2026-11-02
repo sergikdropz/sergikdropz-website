@@ -277,6 +277,25 @@ export function shopFrontPhotoIndex(
 }
 
 /**
+ * Shop PDP hero: photographed angles are the source of truth.
+ * Template faces are only used when this color has no stored photos.
+ */
+export function shopHeroView(photoCount: number, selectedPhotoIndex: number, selectedFileType: string | null): {
+  photoIndex: number
+  viewFileType: string | null
+  preferLayout: boolean
+} {
+  if (photoCount > 0) {
+    return {
+      photoIndex: Math.min(Math.max(selectedPhotoIndex, 0), photoCount - 1),
+      viewFileType: null,
+      preferLayout: false,
+    }
+  }
+  return { photoIndex: 0, viewFileType: selectedFileType, preferLayout: true }
+}
+
+/**
  * A put-out photo is one garment color. Keep it until the catalog can name that
  * color, then switch to the live color preview when the shopper picks another.
  */

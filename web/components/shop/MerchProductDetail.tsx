@@ -22,6 +22,7 @@ import {
   sameColorKey,
   shopDesignAngleViews,
   shopFrontPhotoIndex,
+  shopHeroView,
   shopViewFileTypeToOpen,
 } from '@/lib/merch/catalog-studio'
 
@@ -161,9 +162,12 @@ export default function MerchProductDetail({
   const usingPhotos = Boolean(designPreview) && allImages.length > 0
   const mat = activeShopBackdrop(backdrop)
   const activeAngleId = viewFileType || designedAngleId
+  const heroView = shopHeroView(usingPhotos ? allImages.length : 0, activeImage, activeAngleId)
   const stageFile = catalogDetail?.printFiles.find((file) => file.type === activeAngleId)
   const heroAspect =
-    stageFile?.templateAspect && stageFile.templateAspect > 0 ? stageFile.templateAspect : 3 / 4
+    usingPhotos || !stageFile?.templateAspect || stageFile.templateAspect <= 0
+      ? 3 / 4
+      : stageFile.templateAspect
   const colorListed = product.variants.some(
     (variant) => !activeColorName || sameColorKey(variant.color, activeColorName),
   )
@@ -296,10 +300,10 @@ export default function MerchProductDetail({
               <MerchGarmentPreview
                 design={product.designPreview}
                 colorName={colorReady ? activeColorName : null}
-                photoIndex={activeImage}
-                viewFileType={activeAngleId}
-                preferLayout
-                fillStage
+                photoIndex={heroView.photoIndex}
+                viewFileType={heroView.viewFileType}
+                preferLayout={heroView.preferLayout}
+                fillStage={heroView.preferLayout}
                 matColor={mat?.color}
                 matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
               />
@@ -321,7 +325,7 @@ export default function MerchProductDetail({
                 />
               ))}
           </div>
-          {designPreview && angleViews.length > 1 && (
+          {designPreview && !usingPhotos && angleViews.length > 1 && (
             <div className="flex w-full justify-center gap-2 overflow-x-auto pb-1">
               {angleViews.map((view) => {
                 const selected = activeAngleId === view.id

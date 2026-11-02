@@ -11,6 +11,7 @@ import {
   mockupPhotosForColor,
   mockupTitlesForColor,
   shopFrontPhotoIndex,
+  shopHeroView,
   catalogAngleViews,
   catalogShopAngleViews,
   shopDesignAngleViews,
@@ -232,6 +233,16 @@ describe('catalog-studio', () => {
     ).toBe(5)
     expect(mockupTitlesForColor({ Black: titles }, 'Black', 'Black')).toEqual(titles)
     expect(mockupTitlesForColor({ Black: titles }, 'White', 'Black')).toEqual([])
+    expect(shopHeroView(6, 5, 'embroidery_front_large')).toEqual({
+      photoIndex: 5,
+      viewFileType: null,
+      preferLayout: false,
+    })
+    expect(shopHeroView(0, 5, 'embroidery_front_large')).toEqual({
+      photoIndex: 0,
+      viewFileType: 'embroidery_front_large',
+      preferLayout: true,
+    })
   })
 
   it('offers each Printful template face once, skipping add-ons and unmeasured files', () => {
