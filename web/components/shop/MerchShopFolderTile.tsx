@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
+import { shopPreviewFileType } from '@/lib/merch/catalog-studio'
 import { activeShopBackdrop, type ShopBackdrop } from '@/lib/merch/shop-backdrop'
 
 export type MerchFolderProduct = {
@@ -41,6 +42,7 @@ function FolderCoverCell({
         <MerchGarmentPreview
           design={product.designPreview}
           preferLayout
+          viewFileType={shopPreviewFileType(product.designPreview.placements, product.designPreview.activeFileType)}
           matColor={mat?.color}
           matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
           className="absolute inset-0"

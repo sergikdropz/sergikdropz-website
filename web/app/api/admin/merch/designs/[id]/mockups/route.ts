@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth/route-policy'
 import { getDesign, listDesigns, saveDesign } from '@/lib/merch/design-store'
-import { mockupAnglesByColorFromTask } from '@/lib/merch/publish'
+import { mergeMockupAnglesByColor, mockupAnglesByColorFromTask } from '@/lib/merch/publish'
+import { splitMockupTaskKeys } from '@/lib/merch/technique-mix'
 import { fetchCatalogProductDetail } from '@/lib/merch/printful-catalog'
 import { sameColorKey } from '@/lib/merch/catalog-studio'
 import { printfulFetch } from '@/lib/printful'
@@ -53,12 +54,28 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ status: 'idle', design })
   }
 
-  const task = await printfulFetch(
-    `/mockup-generator/task?task_key=${encodeURIComponent(design.mockupTaskKey)}`
+  const taskKeys = splitMockupTaskKeys(design.mockupTaskKey)
+  const tasks = await Promise.all(
+    taskKeys.map((key) =>
+      printfulFetch(`/mockup-generator/task?task_key=${encodeURIComponent(key)}`),
+    ),
   )
-  const state = String(task.result?.status || 'pending')
-  if (state !== 'completed') {
-    return NextResponse.json({ status: state, design })
+  const states = tasks.map((task) => String(task.result?.status || 'pending'))
+  const waiting = states.find((state) => state !== 'completed' && state !== 'failed')
+  if (waiting) {
+    return NextResponse.json({ status: waiting, design })
+  }
+  const completed = tasks.filter((task) => String(task.result?.status || '') === 'completed')
+  if (completed.length === 0) {
+    const saved = await saveDesign({
+      ...design,
+      mockupTaskKey: null,
+      mockupPendingByColor: {},
+      mockupPendingTitlesByColor: {},
+      publishNote: 'Printful finished without photos. Put it out again.',
+      updatedAt: new Date().toISOString(),
+    })
+    return NextResponse.json({ status: 'failed', design: saved.design })
   }
 
   const displayed = { ...(design.mockupUrlsByColor || {}) }
@@ -78,7 +95,11 @@ export async function GET(_request: Request, { params }: Params) {
     for (const variant of design.variants) {
       if (variant.catalogVariantId && variant.color) colorByVariant.set(variant.catalogVariantId, variant.color)
     }
-    const fresh = mockupAnglesByColorFromTask(task.result, colorByVariant, design.previewColorName || null)
+    const fresh = mergeMockupAnglesByColor(
+      completed.map((task) =>
+        mockupAnglesByColorFromTask(task.result, colorByVariant, design.previewColorName || null),
+      ),
+    )
     if (Object.keys(fresh).length === 0) {
       const saved = await saveDesign({
         ...design,
@@ -156,9 +177,11 @@ export async function GET(_request: Request, { params }: Params) {
     mockupTaskKey: stillRemote ? design.mockupTaskKey : null,
     publishNote: stillRemote
       ? 'Saving this color’s photos. The other colors stay on the garment template.'
-      : design.status === 'live'
-        ? design.publishNote
-        : 'Photos are ready. It is still hidden until you make it public.',
+      : completed.length < tasks.length
+        ? 'One technique did not photograph. Put it out again to retry that side.'
+        : design.status === 'live'
+          ? design.publishNote
+          : 'Photos are ready. It is still hidden until you make it public.',
     updatedAt: new Date().toISOString(),
   })
 

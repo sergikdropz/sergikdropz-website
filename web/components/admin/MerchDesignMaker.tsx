@@ -1204,6 +1204,9 @@ export function MerchDesignSidebar({
   technique,
   techniques,
   onTechnique,
+  selectedTechniques,
+  onToggleTechnique,
+  placementBlockNote,
   printFiles,
   activePrintFileType,
   embroideryUnlimitedColor,
@@ -1275,6 +1278,10 @@ export function MerchDesignSidebar({
   technique: string
   techniques: CatalogTechnique[]
   onTechnique: (key: string) => void
+  /** Techniques turned on for this product. Each placement still uses only one. */
+  selectedTechniques?: string[]
+  onToggleTechnique?: (key: string) => void
+  placementBlockNote?: string | null
   printFiles: CatalogProductDetail['printFiles']
   activePrintFileType?: string
   embroideryUnlimitedColor: boolean
@@ -1360,7 +1367,11 @@ export function MerchDesignSidebar({
       )
     : []
   const auditProblems = detail.designIntel?.audit.problems || []
-  const techniqueLabel = techniques.find((item) => item.key === technique)?.label || technique
+  const activeTechniques = selectedTechniques && selectedTechniques.length > 0 ? selectedTechniques : [technique]
+  const techniqueLabel =
+    activeTechniques
+      .map((key) => techniques.find((item) => item.key === key)?.label || key)
+      .join(' · ') || technique
   const activeFile = printFiles.find((file) => file.type === activePrintFileType) || printFiles[0]
   const activeIsEmbroidery =
     technique.trim().toUpperCase() === 'EMBROIDERY' || Boolean(activeFile && /embroidery/i.test(activeFile.type))
@@ -1453,24 +1464,34 @@ export function MerchDesignSidebar({
             />
             <MitigationGuidelines file={activeFile} />
             <div>
-              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Technique</p>
+              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">Techniques</p>
               <p className="text-sm">{techniqueLabel}</p>
               {techniques.length > 1 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {techniques.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => onTechnique(item.key)}
-                      className={`rounded-full px-2.5 py-1 text-[10px] ${
-                        technique === item.key ? 'bg-white text-black' : 'bg-white/10 text-white/70 hover:bg-white/15'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+                  {techniques.map((item) => {
+                    const on = activeTechniques.includes(item.key)
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => (onToggleTechnique ? onToggleTechnique(item.key) : onTechnique(item.key))}
+                        className={`rounded-full px-2.5 py-1 text-[10px] ${
+                          on ? 'bg-white text-black' : 'bg-white/10 text-white/70 hover:bg-white/15'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
+              <p className="mt-2 text-[11px] leading-snug text-white/45">
+                Turn on more than one technique. Each placement keeps a single technique.
+              </p>
+              {placementBlockNote ? (
+                <p className="mt-1 text-[11px] leading-snug text-amber-200/90">{placementBlockNote}</p>
+              ) : null}
             </div>
             {activeIsEmbroidery ? (
               <div className="rounded-xl border border-white/10 bg-black/25 p-3 space-y-2">

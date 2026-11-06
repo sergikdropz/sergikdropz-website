@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { printFilesForSelectedTechniques } from '@/lib/merch/technique-mix'
 import { buildDesignTabs, placementFileToOpen } from '@/lib/merch/design-tabs'
 
 describe('buildDesignTabs', () => {
@@ -75,6 +76,71 @@ describe('buildDesignTabs', () => {
     const tabs = buildDesignTabs(snapback, [], { preferTypes: ['embroidery_front_large'] })
     expect(tabs.find((tab) => tab.label === 'Front')?.id).toBe('embroidery_front')
     expect(tabs.find((tab) => tab.label === 'Front Wide')?.id).toBe('embroidery_front_large')
+  })
+
+  it('keeps left-chest embroidery and front DTG as separate tabs until one is chosen', () => {
+    const tabs = buildDesignTabs(
+      [
+        { type: 'front', title: 'Front print', additionalPrice: null },
+        { type: 'back', title: 'Back print', additionalPrice: null },
+        { type: 'embroidery_chest_left', title: 'Left chest', additionalPrice: null },
+      ],
+      [],
+      { separateTechniques: true },
+    )
+    expect(tabs.map((tab) => tab.id)).toEqual(['front', 'embroidery_chest_left', 'back'])
+    expect(tabs.map((tab) => tab.label)).toEqual(['Front', 'Left chest', 'Back'])
+  })
+
+  it('names both front techniques when print and embroidery share that side', () => {
+    const tabs = buildDesignTabs(
+      [
+        { type: 'front', title: 'Front print', additionalPrice: null },
+        { type: 'embroidery_front', title: 'Front', additionalPrice: null },
+        { type: 'back', title: 'Back print', additionalPrice: null },
+      ],
+      [],
+      { separateTechniques: true },
+    )
+    expect(tabs.map((tab) => tab.label)).toEqual(['Front · DTG', 'Front · embroidery', 'Back'])
+  })
+
+  it('bella 3001 shows left chest beside the front print, and keeps the wide front', () => {
+    const rows = [
+      ['embroidery_chest_left', 'Left chest'],
+      ['embroidery_chest_center', 'Center chest'],
+      ['embroidery_sleeve_left_top', 'Left sleeve top'],
+      ['embroidery_sleeve_right_top', 'Right sleeve top'],
+      ['front', 'Front print'],
+      ['front_dtf', 'Front print'],
+      ['front_large', 'Large front print'],
+      ['back', 'Back print'],
+      ['back_dtf', 'Back print'],
+      ['sleeve_left', 'Left sleeve'],
+      ['sleeve_right', 'Right sleeve'],
+      ['label_inside', 'Inside label'],
+      ['label_outside', 'Outside label'],
+    ].map(([type, title]) => ({
+      fileId: type,
+      type,
+      title,
+      additionalPrice: null,
+      options: [],
+    }))
+    const shown = printFilesForSelectedTechniques(rows, ['DTG', 'EMBROIDERY'])
+    const tabs = buildDesignTabs(shown, [], { separateTechniques: true })
+    expect(tabs.map((tab) => `${tab.id}:${tab.label}`)).toEqual([
+      'front:Front',
+      'front_large:Front Wide',
+      'embroidery_chest_left:Left chest',
+      'back:Back',
+      'sleeve_right:Right sleeve',
+      'embroidery_sleeve_right_top:Right sleeve top',
+      'sleeve_left:Left sleeve',
+      'embroidery_sleeve_left_top:Left sleeve top',
+      'label_inside:Inside label',
+      'label_outside:Outside label',
+    ])
   })
 
   it('reopens the remembered tab, otherwise the first tab that has art', () => {

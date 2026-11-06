@@ -9,6 +9,9 @@ import {
   serializeMerchCheckoutMetadata,
   stripeShippingFromPrintfulRates,
 } from '@/lib/merch/checkout-items'
+import { quoteMerchDiscount } from '@/lib/merch/discount'
+import { findActiveMerchDiscount } from '@/lib/merch/discount-store'
+import { ensureMerchStripeCoupon } from '@/lib/merch/discount-stripe'
 import { STATE_REQUIRED } from '@/lib/merch/regions'
 
 function getBaseUrl(request: NextRequest) {
@@ -33,6 +36,28 @@ export async function POST(request: NextRequest) {
     const resolved = resolveMerchCheckoutLines(products, Array.isArray(body?.items) ? body.items : [])
     if ('error' in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: 400 })
+    }
+
+    const requestedCode = typeof body?.discountCode === 'string' ? body.discountCode.trim() : ''
+    let stripeCoupon: string | null = null
+    let appliedCode: string | null = null
+    if (requestedCode) {
+      const found = await findActiveMerchDiscount(requestedCode)
+      if (!found) {
+        return NextResponse.json({ error: "That code doesn't apply." }, { status: 400 })
+      }
+      const quote = quoteMerchDiscount(
+        resolved.lines.map((line) => line.price * line.quantity),
+        found,
+      )
+      if ('error' in quote) {
+        return NextResponse.json({ error: quote.error }, { status: 400 })
+      }
+      if (quote.total <= 0) {
+        return NextResponse.json({ error: 'This code covers the whole order.' }, { status: 400 })
+      }
+      stripeCoupon = await ensureMerchStripeCoupon(found)
+      appliedCode = found.code
     }
 
     const baseUrl = getBaseUrl(request)
@@ -86,11 +111,13 @@ export async function POST(request: NextRequest) {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'ES', 'IT', 'NL', 'SE', 'NO', 'DK', 'JP'],
       },
       ...(shippingOptions.length > 0 ? { shipping_options: shippingOptions } : {}),
+      ...(stripeCoupon ? { discounts: [{ coupon: stripeCoupon }] } : {}),
       success_url: `${baseUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}&type=merch`,
       cancel_url: `${baseUrl}${cancelPath}${cancelPath.includes('?') ? '&' : '?'}purchase=cancelled`,
       metadata: {
         productType: 'merch',
         items: serializeMerchCheckoutMetadata(resolved.lines),
+        ...(appliedCode ? { discountCode: appliedCode } : {}),
         ...(metaUserId ? { supabaseUserId: metaUserId } : {}),
       },
     })

@@ -1,4 +1,5 @@
 import { ensureShopCheckoutAuth } from '@/lib/checkoutActor'
+import { readStoredMerchDiscount } from '@/lib/merch/discount-session'
 
 export async function startMerchCheckout(options: {
   items: Array<{ printful_variant_id: number; quantity: number }>
@@ -22,6 +23,7 @@ export async function startMerchCheckout(options: {
       supabaseUserId: gate.userId,
       cancelPath: options.cancelPath,
       recipient: options.recipient,
+      discountCode: readStoredMerchDiscount()?.code || undefined,
     }),
   })
   const data = await res.json().catch(() => ({}))

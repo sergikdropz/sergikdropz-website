@@ -6,7 +6,10 @@ import SizeGuide from './SizeGuide'
 import MerchShippingEstimate from '@/components/shop/MerchShippingEstimate'
 import MerchShopGarmentInfo from '@/components/shop/MerchShopGarmentInfo'
 import Link from 'next/link'
+import MerchDiscountCode from '@/components/shop/MerchDiscountCode'
+import { quoteMerchDiscount } from '@/lib/merch/discount'
 import { addMerchCartLine } from '@/lib/merch/shop-cart'
+import { useMerchDiscount } from '@/lib/merch/use-merch-discount'
 import { startMerchCheckout } from '@/lib/merch/start-merch-checkout'
 import type { CatalogProductDetail } from '@/lib/merch/printful-catalog-types'
 import MerchGarmentPreview, {
@@ -23,6 +26,7 @@ import {
   shopDesignAngleViews,
   shopFrontPhotoIndex,
   shopHeroView,
+  shopPreviewFileType,
   shopViewFileTypeToOpen,
 } from '@/lib/merch/catalog-studio'
 
@@ -79,6 +83,7 @@ export default function MerchProductDetail({
   const [pickedColor, setPickedColor] = useState<string | null>(null)
   const [viewFileType, setViewFileType] = useState<string | null>(null)
   const colorTouched = useRef(false)
+  const { discount } = useMerchDiscount()
 
   useEffect(() => {
     colorTouched.current = false
@@ -134,10 +139,11 @@ export default function MerchProductDetail({
       ),
     [catalogDetail, activeColorName, selectedVariant?.size, designPreview?.placements],
   )
-  const designedAngleId = useMemo(
-    () => shopViewFileTypeToOpen(angleViews, designPreview?.placements || [], designPreview?.activeFileType),
-    [angleViews, designPreview?.placements, designPreview?.activeFileType],
-  )
+  const designedAngleId = useMemo(() => {
+    const hero = shopPreviewFileType(designPreview?.placements || [], designPreview?.activeFileType)
+    if (hero && angleViews.some((view) => view.id === hero)) return hero
+    return shopViewFileTypeToOpen(angleViews, designPreview?.placements || [], designPreview?.activeFileType)
+  }, [angleViews, designPreview?.placements, designPreview?.activeFileType])
 
   useEffect(() => {
     if (!viewFileType) return
@@ -165,9 +171,9 @@ export default function MerchProductDetail({
   const heroView = shopHeroView(usingPhotos ? allImages.length : 0, activeImage, activeAngleId)
   const stageFile = catalogDetail?.printFiles.find((file) => file.type === activeAngleId)
   const heroAspect =
-    usingPhotos || !stageFile?.templateAspect || stageFile.templateAspect <= 0
-      ? 3 / 4
-      : stageFile.templateAspect
+    heroView.preferLayout && stageFile?.templateAspect && stageFile.templateAspect > 0
+      ? stageFile.templateAspect
+      : 3 / 4
   const colorListed = product.variants.some(
     (variant) => !activeColorName || sameColorKey(variant.color, activeColorName),
   )
@@ -279,6 +285,11 @@ export default function MerchProductDetail({
     if (product.designPreview) setActiveImage(shopFrontPhotoIndex(product.designPreview, name))
   }
 
+  const lineTotal = (selectedVariant?.retail_price || 0) * quantity
+  const discountQuote = discount ? quoteMerchDiscount([lineTotal], discount) : null
+  const priced = discountQuote && !('error' in discountQuote) ? discountQuote : null
+  const payable = priced ? priced.total : lineTotal
+
   return (
     <>
       <h1 className="mb-6 text-center text-2xl font-bold leading-tight text-white sm:mb-8 sm:text-3xl">
@@ -325,7 +336,7 @@ export default function MerchProductDetail({
                 />
               ))}
           </div>
-          {designPreview && !usingPhotos && angleViews.length > 1 && (
+          {designPreview && angleViews.length > 1 && (
             <div className="flex w-full justify-center gap-2 overflow-x-auto pb-1">
               {angleViews.map((view) => {
                 const selected = activeAngleId === view.id
@@ -361,7 +372,7 @@ export default function MerchProductDetail({
             </div>
           )}
 
-          {allImages.length > 1 && (
+          {!heroView.preferLayout && allImages.length > 1 && (
             <div className="flex w-full justify-center gap-2 overflow-x-auto">
               {allImages.map((img, i) => (
                 <button
@@ -517,13 +528,18 @@ export default function MerchProductDetail({
               </button>
             </div>
             <p className="text-center text-2xl font-bold tabular-nums text-white">
-              {formatPrice(selectedVariant.retail_price * quantity)}
+              {priced ? (
+                <span className="mr-2 text-base font-medium text-gray-500 line-through">{formatPrice(lineTotal)}</span>
+              ) : null}
+              {formatPrice(payable)}
             </p>
             {quantity > 1 ? (
               <p className="text-center text-xs text-gray-500">
-                {quantity} × {formatPrice(selectedVariant.retail_price)} each
+                {quantity} × {formatPrice(selectedVariant.retail_price)}
+                {priced ? ` · ${priced.label}` : ' each'}
               </p>
             ) : null}
+            <MerchDiscountCode />
           </div>
 
           {shippable && (
@@ -562,7 +578,7 @@ export default function MerchProductDetail({
             >
               {checkoutAction === 'buy'
                 ? 'Processing…'
-                : `Buy now · ${formatPrice(selectedVariant.retail_price * quantity)}`}
+                : `Buy now · ${formatPrice(payable)}`}
             </button>
           </div>
 

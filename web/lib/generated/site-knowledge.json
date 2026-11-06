@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-30T14:03:29.230Z",
+    "generatedAt": "2026-11-05T02:01:03.090Z",
     "siteLabel": "sergikdropz.com",
     "repoPaths": {
       "webRoot": "web/",
@@ -15,22 +15,22 @@
       "devDependencyCount": 18
     },
     "counts": {
-      "appRouterPages": 102,
-      "appRouterRouteHandlers": 358,
-      "componentsTsx": 238,
-      "libTs": 992
+      "appRouterPages": 103,
+      "appRouterRouteHandlers": 360,
+      "componentsTsx": 241,
+      "libTs": 1007
     },
     "pagesByCategory": {
       "fan": 5,
       "music_library": 2,
-      "public": 27,
+      "public": 28,
       "debug": 1,
       "tooling": 1,
       "shop": 11,
       "admin": 41,
       "studio": 14
     },
-    "contentHash": "9a0a24c88da48330"
+    "contentHash": "331a3316dc7aad6d"
   },
   "middleware": {
     "adminProtectedPrefixes": [
@@ -573,6 +573,11 @@
         "category": "studio"
       },
       {
+        "urlPath": "/tv",
+        "file": "web/app/tv/page.tsx",
+        "category": "public"
+      },
+      {
         "urlPath": "/youtube-subscribe",
         "file": "web/app/youtube-subscribe/page.tsx",
         "category": "public"
@@ -902,6 +907,11 @@
       {
         "urlPath": "/api/admin/merch/designs",
         "file": "web/app/api/admin/merch/designs/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/admin/merch/discounts",
+        "file": "web/app/api/admin/merch/discounts/route.ts",
         "category": "api"
       },
       {
@@ -1547,6 +1557,11 @@
       {
         "urlPath": "/api/merch/catalog/[id]/sizes",
         "file": "web/app/api/merch/catalog/[id]/sizes/route.ts",
+        "category": "api"
+      },
+      {
+        "urlPath": "/api/merch/discount",
+        "file": "web/app/api/merch/discount/route.ts",
         "category": "api"
       },
       {

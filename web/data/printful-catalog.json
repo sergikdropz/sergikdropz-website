@@ -1,6 +1,6 @@
 {
-  "syncedAt": "2026-11-02T07:41:15.431Z",
-  "productCount": 572,
+  "syncedAt": "2026-11-06T19:31:33.957Z",
+  "productCount": 580,
   "products": [
     {
       "id": 1677,
@@ -6237,6 +6237,32 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 1704,
+      "title": "Kids Knitted Classic Fit Crewneck Sweater",
+      "type": "KNITWEAR",
+      "typeName": "Kids Knitted Classic Fit Crewneck Sweater",
+      "brand": null,
+      "model": "Kids Knitted Classic Fit Crewneck Sweater",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/ff/ff33a87ddcb35cd2b026c2a6a35d691c_l",
+      "variantCount": 6,
+      "fileTypes": [
+        "front",
+        "back",
+        "sleeve_right",
+        "sleeve_left",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "KNITWEAR"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "accessories",
+      "mainCategoryId": 105,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 1702,
       "title": "Kids Knitted Relaxed Fit Crewneck Sweater",
       "type": "KNITWEAR",
@@ -8684,6 +8710,31 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 1707,
+      "title": "Sherpa Vest | Stanley/Stella STJU249",
+      "type": "DTFILM",
+      "typeName": "Stanley/Stella STJU249 | Sherpa Vest",
+      "brand": "Stanley/Stella",
+      "model": "STJU249",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/53/5382eb8f088442ea24e6caa9ab55d025_l",
+      "variantCount": 40,
+      "fileTypes": [
+        "embroidery_chest_right",
+        "label_outside_dtf",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "EMBROIDERY",
+        "DTFILM"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "accessories",
+      "mainCategoryId": 95,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 1641,
       "title": "Shopping bag 2.0 | Stanley/Stella STAU117",
       "type": "T-SHIRT",
@@ -9663,6 +9714,31 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 612,
+      "title": "Unisex 3/4 Raglan T-Shirt | Gildan 5700",
+      "type": "T-SHIRT",
+      "typeName": "Gildan 5700 | Adult Heavy Cotton 3/4 Sleeve RaglanT-Shirt",
+      "brand": "Gildan",
+      "model": "5700",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/b0/b0430f36daa0d8f0348e4f9dd36e4c97_l",
+      "variantCount": 5,
+      "fileTypes": [
+        "front",
+        "label_outside",
+        "label_inside",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "DTG"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "tees",
+      "mainCategoryId": 25,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 233,
       "title": "Unisex 3/4 Sleeve Raglan Shirt | Tultex 245",
       "type": "T-SHIRT",
@@ -10178,7 +10254,7 @@
       "id": 1638,
       "title": "Unisex Deluxe T-Shirt | Lane Seven LS15000",
       "type": "T-SHIRT",
-      "typeName": "Unisex Deluxe T-Shirt | Lane Seven LS15000",
+      "typeName": "Lane Seven LS15000 | Deluxe Tee",
       "brand": "Lane Seven",
       "model": "LS15000",
       "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/e8/e855e583d2c731b420fbbeed29855ad5_l",
@@ -11667,13 +11743,39 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 1721,
+      "title": "Unisex Knitted Extended Sizes Crewneck Sweater",
+      "type": "KNITWEAR",
+      "typeName": "Unisex Knitted Extended Sizes Crewneck Sweater",
+      "brand": null,
+      "model": "Unisex Knitted Extended Sizes Crewneck Sweater",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/ea/eaebfc1f6ec6848ac4876b4fb6947b9f_l",
+      "variantCount": 6,
+      "fileTypes": [
+        "front",
+        "back",
+        "sleeve_left",
+        "sleeve_right",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "KNITWEAR"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "accessories",
+      "mainCategoryId": 7,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 1699,
       "title": "Unisex Knitted Hoodie",
       "type": "KNITWEAR",
       "typeName": "Unisex Knitted Hoodie",
       "brand": null,
       "model": "Unisex Knitted Hoodie",
-      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/62/62375a043f732af947189f9f3c0f03fd_l",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/25/2506ece0c25f19021dc6fe41c20dc1bb_l",
       "variantCount": 8,
       "fileTypes": [
         "front",
@@ -11743,6 +11845,32 @@
       "studioBlankId": "tee-staple",
       "category": "tees",
       "mainCategoryId": 24,
+      "avgFulfillmentDays": null
+    },
+    {
+      "id": 1698,
+      "title": "Unisex Knitted Turtle Neck Sweater",
+      "type": "KNITWEAR",
+      "typeName": "Unisex Knitted Turtle Neck Sweater",
+      "brand": null,
+      "model": "Unisex Knitted Turtle Neck Sweater",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/e4/e43b9b76826c7e00fb6aa974946ab7bb_l",
+      "variantCount": 8,
+      "fileTypes": [
+        "front",
+        "back",
+        "sleeve_right",
+        "sleeve_left",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "KNITWEAR"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "accessories",
+      "mainCategoryId": 7,
       "avgFulfillmentDays": null
     },
     {
@@ -13374,6 +13502,33 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 1711,
+      "title": "Unisex Relaxed Fit Brooker Sherpa Jacket | Stanley/Stella STJU248",
+      "type": "DTFILM",
+      "typeName": "Stanley/Stella STJU248 | Unisex Relaxed Fit Brooker Sherpa Jacket",
+      "brand": "Stanley/Stella",
+      "model": "STJU248",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/89/895918e6e2719dd2dd05b3778ccbbdc7_l",
+      "variantCount": 40,
+      "fileTypes": [
+        "embroidery_chest_right",
+        "embroidery_wrist_left",
+        "embroidery_wrist_right",
+        "label_outside_dtf",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "EMBROIDERY",
+        "DTFILM"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "accessories",
+      "mainCategoryId": 95,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 860,
       "title": "Unisex Relaxed Fit Knitted Crew Neck Sweater",
       "type": "KNITWEAR",
@@ -14436,6 +14591,30 @@
       "avgFulfillmentDays": null
     },
     {
+      "id": 1715,
+      "title": "Women's 6-Ounce Heavyweight Tee | Bella + Canvas 6110",
+      "type": "T-SHIRT",
+      "typeName": "Bella + Canvas 6110 | Women's 6-Ounce Heavyweight Tee",
+      "brand": "Bella + Canvas",
+      "model": "BC6110",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/4b/4b2d3e56e41013b0108e540dfc85b38d_l",
+      "variantCount": 112,
+      "fileTypes": [
+        "front",
+        "back",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "DTG"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "tees",
+      "mainCategoryId": 32,
+      "avgFulfillmentDays": null
+    },
+    {
       "id": 658,
       "title": "Women's Athletic Shoes",
       "type": "SHOES",
@@ -14563,6 +14742,31 @@
       "studioBlankId": "hoodie-fleece",
       "category": "hoodies",
       "mainCategoryId": 9,
+      "avgFulfillmentDays": null
+    },
+    {
+      "id": 1464,
+      "title": "Women's Cropped Racerback Tank | Bella + Canvas 6682",
+      "type": "T-SHIRT",
+      "typeName": "Women's Cropped Racerback Tank | Bella + Canvas 6682",
+      "brand": "Bella + Canvas",
+      "model": "6682",
+      "image": "https://files.cdn.printful.com/o/upload/product-catalog-img/fb/fb689c828a21f2f79fe37d823501db0d_l",
+      "variantCount": 35,
+      "fileTypes": [
+        "front",
+        "label_inside",
+        "label_outside",
+        "mockup"
+      ],
+      "isDiscontinued": false,
+      "techniques": [
+        "DTG"
+      ],
+      "studioFamily": "tee",
+      "studioBlankId": "tee-staple",
+      "category": "tees",
+      "mainCategoryId": 30,
       "avgFulfillmentDays": null
     },
     {

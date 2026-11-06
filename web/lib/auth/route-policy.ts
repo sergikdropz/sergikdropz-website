@@ -133,6 +133,9 @@ export const ROUTE_POLICIES: readonly RoutePolicyEntry[] = [
   { path: '/api/admin/licensing/operator', method: 'POST', access: 'admin_write', reason: 'Record copyright owner or Stripe account name for licensing' },
 
   { path: '/api/merch/backdrop', method: 'GET', access: 'public', reason: 'Public merch shop backdrop color and opacity' },
+  { path: '/api/merch/discount', method: 'POST', access: 'public', reason: 'Check a merch discount code before checkout' },
+  { path: '/api/admin/merch/discounts', method: 'GET', access: 'admin_read', reason: 'List merch discount codes' },
+  { path: '/api/admin/merch/discounts', method: 'POST', access: 'admin_write', reason: 'Save merch discount codes' },
   { path: '/api/admin/merch/backdrop', method: 'POST', access: 'admin_write', reason: 'Save the public merch shop backdrop' },
   { path: '/api/admin/merch/designs', method: 'GET', access: 'admin_read', reason: 'List fitting-room merch designs' },
   { path: '/api/admin/merch/designs', method: 'POST', access: 'admin_write', reason: 'Save a fitting-room merch design' },

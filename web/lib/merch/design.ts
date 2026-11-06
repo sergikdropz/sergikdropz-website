@@ -105,9 +105,47 @@ export function suggestRetail(cost: number): number {
   return Math.ceil(Math.max(cost * 2.2, cost + 12))
 }
 
+/** Stripe's standard online rate. Discount headroom uses the same fee as `youKeep`. */
+const CARD_FEE_RATE = 0.029
+const CARD_FEE_FIXED = 0.3
+
+/** Percent the shop price sits above Printful's price. $35 on a $17.50 blank is 100. */
+export function upchargePercent(retail: number, cost: number): number | null {
+  if (!(retail > 0) || !(cost > 0)) return null
+  return Math.round(((retail - cost) / cost) * 100)
+}
+
+/**
+ * Largest whole percent off the shop price that still pays Printful in full.
+ * Floored so the stated percent never drops the sale below Printful's price.
+ * $35 on a $17.23 blank is 50, because 51% would leave $17.15.
+ */
+export function maxDiscountPercent(retail: number, cost: number): number | null {
+  if (!(retail > 0) || !(cost > 0)) return null
+  if (cost >= retail) return 0
+  return Math.floor(((retail - cost) / retail) * 100)
+}
+
+/** Dollars between the shop price and Printful. This is the cash a discount can give away. */
+export function discountRoom(retail: number, cost: number): number | null {
+  if (!(retail > 0) || !(cost > 0)) return null
+  return Math.round((retail - cost) * 100) / 100
+}
+
+/**
+ * Largest whole percent off that still covers Printful and the 2.9% + $0.30 card fee.
+ * A code at this percent leaves about $0. One point higher comes out of pocket.
+ */
+export function safeDiscountPercent(retail: number, cost: number): number | null {
+  if (!(retail > 0) || !(cost > 0)) return null
+  const floorPrice = (cost + CARD_FEE_FIXED) / (1 - CARD_FEE_RATE)
+  if (floorPrice >= retail) return 0
+  return Math.floor(((retail - floorPrice) / retail) * 100)
+}
+
 /** Retail minus wholesale minus a 2.9% + $0.30 card fee. */
 export function youKeep(retail: number, cost: number): number {
-  const fee = retail * 0.029 + 0.3
+  const fee = retail * CARD_FEE_RATE + CARD_FEE_FIXED
   return Math.round((retail - cost - fee) * 100) / 100
 }
 

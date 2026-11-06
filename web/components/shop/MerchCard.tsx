@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { resolveImageUrl } from '@/utils/resolveImageUrl'
 import { isSafeNextImageSrc, shouldUnoptimizeImage } from '@/utils/imageOptimization'
 import MerchGarmentPreview, { type MerchGarmentPreviewDesign } from '@/components/shop/MerchGarmentPreview'
+import { shopPreviewFileType } from '@/lib/merch/catalog-studio'
 import { activeShopBackdrop, type ShopBackdrop } from '@/lib/merch/shop-backdrop'
 
 interface MerchCardProps {
@@ -44,6 +45,7 @@ export default function MerchCard({ product, backdrop }: MerchCardProps & { back
             <MerchGarmentPreview
               design={product.designPreview}
               preferLayout
+              viewFileType={shopPreviewFileType(product.designPreview.placements, product.designPreview.activeFileType)}
               matColor={mat?.color}
               matOpacity={mat && mat.opacity < 1 ? mat.opacity : undefined}
               className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.02]"

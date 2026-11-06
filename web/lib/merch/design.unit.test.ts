@@ -18,6 +18,10 @@ import {
   isPublicFulfillmentUrl,
   slugify,
   suggestRetail,
+  discountRoom,
+  maxDiscountPercent,
+  safeDiscountPercent,
+  upchargePercent,
   youKeep,
   type MerchDesign,
 } from '@/lib/merch/design'
@@ -54,6 +58,24 @@ describe('merch design math', () => {
 
   it('subtracts wholesale and the card fee from retail', () => {
     expect(youKeep(36, 13)).toBeCloseTo(21.66, 2)
+  })
+
+  it('states the shop price as a percent above Printful', () => {
+    expect(upchargePercent(35, 17.5)).toBe(100)
+    expect(upchargePercent(35, 17.23)).toBe(103)
+    expect(upchargePercent(35, 0)).toBeNull()
+  })
+
+  it('floors the discount that still pays Printful, and the one that also covers the card fee', () => {
+    expect(maxDiscountPercent(35, 17.23)).toBe(50)
+    expect(discountRoom(35, 17.23)).toBeCloseTo(17.77, 2)
+    expect(safeDiscountPercent(35, 17.23)).toBe(48)
+    expect(maxDiscountPercent(35, 15)).toBe(57)
+    expect(safeDiscountPercent(35, 15)).toBe(54)
+    expect(maxDiscountPercent(35, 40)).toBe(0)
+    expect(safeDiscountPercent(10, 9.9)).toBe(0)
+    expect(maxDiscountPercent(35, 0)).toBeNull()
+    expect(discountRoom(35, 0)).toBeNull()
   })
 
   it('grades print DPI from how large the file is drawn', () => {

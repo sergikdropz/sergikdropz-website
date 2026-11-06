@@ -4,6 +4,7 @@ import {
   placementViewName,
   type PlacementView,
 } from '@/components/admin/MerchDesignMaker'
+import { techniqueKeyForPrintFile } from '@/lib/merch/catalog-studio'
 
 export type DesignTab = { id: string; label: string }
 
@@ -65,10 +66,35 @@ function placementFileWins(
   return placementFileScore(file) < placementFileScore(current)
 }
 
+function techniqueHint(type: string): string {
+  const family = techniqueKeyForPrintFile(type)
+  if (family === 'EMBROIDERY') return 'embroidery'
+  if (family === 'DTFILM') return 'DTF'
+  if (family === 'DTG') return 'DTG'
+  return ''
+}
+
+/** Two techniques on one view must not share a tab name like "Front". */
+function disambiguateTechniqueLabels(tabs: DesignTab[], files: DesignTabPrintFile[]) {
+  const counts = new Map<string, number>()
+  for (const tab of tabs) counts.set(tab.label, (counts.get(tab.label) || 0) + 1)
+  for (const tab of tabs) {
+    if ((counts.get(tab.label) || 0) < 2) continue
+    const hint = techniqueHint(files.find((file) => file.type === tab.id)?.type || tab.id)
+    if (!hint || tab.label.toLowerCase().includes(hint.toLowerCase())) continue
+    tab.label = `${tab.label} · ${hint}`
+  }
+}
+
+function techniqueSlot(view: PlacementView, file: DesignTabPrintFile, separateTechniques: boolean): string {
+  if (!separateTechniques) return view
+  return `${view}:${techniqueKeyForPrintFile(file.type) || 'other'}`
+}
+
 export function buildDesignTabs(
   techniquePrintFiles: DesignTabPrintFile[],
   garmentPlacements: Array<{ id: string; label: string }>,
-  options?: { preferTypes?: readonly string[] },
+  options?: { preferTypes?: readonly string[]; separateTechniques?: boolean },
 ): DesignTab[] {
   if (techniquePrintFiles.length === 0) {
     return garmentPlacements.map((item) => ({
@@ -77,46 +103,58 @@ export function buildDesignTabs(
     }))
   }
 
+  const separateTechniques = Boolean(options?.separateTechniques)
   const prefer = new Set(options?.preferTypes || [])
-  const chosen = new Map<PlacementView, DesignTabPrintFile>()
+  const chosen = new Map<string, DesignTabPrintFile>()
   for (const file of techniquePrintFiles) {
     const view = placementViewName(file.type, file.title || file.type)
     if (!view) continue
-    const current = chosen.get(view)
-    if (!current || placementFileWins(file, current, prefer)) chosen.set(view, file)
+    const slot = techniqueSlot(view, file, separateTechniques)
+    const current = chosen.get(slot)
+    if (!current || placementFileWins(file, current, prefer)) chosen.set(slot, file)
   }
 
-  const tabs: DesignTab[] = PLACEMENT_VIEWS.flatMap((view) => {
-    const file = chosen.get(view)
-    if (!file) return []
-    return [{ id: file.type, label: primaryTabLabel(file, view) }]
-  })
+  const slotsForView = (view: PlacementView) =>
+    [...chosen.keys()]
+      .filter((slot) => slot === view || slot.startsWith(`${view}:`))
+      .sort((a, b) => a.localeCompare(b))
+
+  const tabs: DesignTab[] = PLACEMENT_VIEWS.flatMap((view) =>
+    slotsForView(view).flatMap((slot) => {
+      const file = chosen.get(slot)
+      if (!file) return []
+      return [{ id: file.type, label: primaryTabLabel(file, view) }]
+    }),
+  )
 
   const coveredTypes = new Set(tabs.map((tab) => tab.id))
-  const coveredViews = new Set<PlacementView>()
+  const coveredSlots = new Set<string>()
   for (const tab of tabs) {
     const file = techniquePrintFiles.find((row) => row.type === tab.id)
     if (!file) continue
     const view = placementViewName(file.type, file.title || file.type)
-    if (view) coveredViews.add(view)
+    if (view) coveredSlots.add(techniqueSlot(view, file, separateTechniques))
   }
 
   const wideFronts: DesignTab[] = []
   for (const file of techniquePrintFiles) {
     if (coveredTypes.has(file.type)) continue
     const view = placementViewName(file.type, file.title || file.type)
-    if (view && coveredViews.has(view) && !isAlternatePlacementFile(file)) continue
+    const slot = view ? techniqueSlot(view, file, separateTechniques) : ''
+    if (view && coveredSlots.has(slot) && !isAlternatePlacementFile(file)) continue
     coveredTypes.add(file.type)
-    if (view) coveredViews.add(view)
+    if (view) coveredSlots.add(techniqueSlot(view, file, separateTechniques))
     const wide = view === 'Front' && isWideFront(file)
     const tab = { id: file.type, label: wide ? 'Front Wide' : placementTabLabel(file.title || file.type) }
     if (wide) wideFronts.push(tab)
     else tabs.push(tab)
   }
   if (wideFronts.length > 0) {
-    const frontAt = tabs.findIndex((tab) => tab.label === 'Front')
+    const frontAt = tabs.findIndex((tab) => tab.label === 'Front' || tab.label.startsWith('Front ·'))
     tabs.splice(frontAt >= 0 ? frontAt + 1 : tabs.length, 0, ...wideFronts)
   }
+
+  if (separateTechniques) disambiguateTechniqueLabels(tabs, techniquePrintFiles)
 
   if (tabs.length > 0) return tabs
 

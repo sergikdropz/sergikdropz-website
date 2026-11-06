@@ -79,6 +79,7 @@ Static admin paths crawled in UI tests: `web/e2e/admin-ui-paths.ts` (`ADMIN_UI_C
 | Area | Typical paths | Code roots |
 | --- | --- | --- |
 | Public marketing / music | `/`, `/music`, `/epk`, `/book`, `/shop`, … | `web/app/` (non-admin) |
+| Smart TV | `/tv` — remote shelves for videos, SoundCloud sets, and release audio. Playback starts on Enter. No shop, admin, or Studio. | `web/app/tv/`, `web/components/tv/`, `web/lib/tv/` |
 | Fan portal | `/fan/*` | `web/app/fan/` |
 | Admin CMS | `/admin/*` | `web/app/admin/`, `web/components/admin-nav-items.ts` |
 | Release Studio | `/studio/*` | `web/app/studio/`, `web/app/api/studio/` |

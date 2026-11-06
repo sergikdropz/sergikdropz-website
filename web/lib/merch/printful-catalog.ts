@@ -516,17 +516,8 @@ export type PlacementPrintArea = { width: number; height: number; dpi: number }
  * correct area for EVERY product (tee, hoodie, hat, mug, poster, sleeves…),
  * not a hardcoded tee size. Returns an empty object if the API is unavailable.
  */
-export async function fetchPlacementPrintAreas(
-  productId: number,
-  techniqueKeys?: string[]
-): Promise<Record<string, PlacementPrintArea>> {
-  let keys = techniqueKeys
-  if (!keys) {
-    const data = await printfulCatalogFetch(`/products/${productId}`).catch(() => null)
-    const raw = (data?.result?.product?.techniques || []) as Array<{ key?: string }>
-    keys = raw.map((row) => row.key || '').filter(Boolean)
-  }
-  const { printfiles, variantPrintfiles } = await fetchPlacementGeometry(productId, keys)
+function areasFromGeometry(geometry: PlacementGeometry): Record<string, PlacementPrintArea> {
+  const { printfiles, variantPrintfiles } = geometry
   const byId = new Map(printfiles.map((file) => [file.printfileId, file]))
   const counts = new Map<string, Map<number, number>>()
   for (const row of variantPrintfiles) {
@@ -552,6 +543,29 @@ export async function fetchPlacementPrintAreas(
       dpi: printfiles[0].dpi,
     }
   }
+  return areas
+}
+
+/** Print areas plus the placement pairs Printful refuses to combine. */
+export async function fetchPlacementFulfillment(
+  productId: number,
+  techniqueKeys?: string[],
+): Promise<{ areas: Record<string, PlacementPrintArea>; conflicts: Array<{ placement: string; conflicts: string[] }> }> {
+  let keys = techniqueKeys
+  if (!keys) {
+    const data = await printfulCatalogFetch(`/products/${productId}`).catch(() => null)
+    const raw = (data?.result?.product?.techniques || []) as Array<{ key?: string }>
+    keys = raw.map((row) => row.key || '').filter(Boolean)
+  }
+  const geometry = await fetchPlacementGeometry(productId, keys)
+  return { areas: areasFromGeometry(geometry), conflicts: geometry.conflicts || [] }
+}
+
+export async function fetchPlacementPrintAreas(
+  productId: number,
+  techniqueKeys?: string[],
+): Promise<Record<string, PlacementPrintArea>> {
+  const { areas } = await fetchPlacementFulfillment(productId, techniqueKeys)
   return areas
 }
 

@@ -81,6 +81,7 @@ export default function AnalyticsConsentBanner() {
   const isShareEmbedRoute = pathname?.startsWith('/embed/') ?? false
   const isShareListenRoute = pathname?.startsWith('/s/') ?? false
   const isYoutubeSubscribeRoute = pathname?.startsWith('/youtube-subscribe') ?? false
+  const isTvRoute = pathname === '/tv' || (pathname?.startsWith('/tv/') ?? false)
   const [consent, setConsent] = useState<AnalyticsConsentStatus>('unknown')
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -148,6 +149,7 @@ export default function AnalyticsConsentBanner() {
     isShareEmbedRoute ||
     isShareListenRoute ||
     isYoutubeSubscribeRoute ||
+    isTvRoute ||
     consent !== 'unknown'
   ) {
     return null

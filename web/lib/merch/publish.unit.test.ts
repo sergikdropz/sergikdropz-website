@@ -3,6 +3,7 @@ import {
   collectMockupsByVariant,
   createdSyncProductId,
   freshPrintfulUrl,
+  mergeMockupAnglesByColor,
   mockupAnglesByColorFromTask,
   mockupPhotoKey,
   mockupsByColorFromTask,
@@ -124,6 +125,19 @@ describe('mockupsByColorFromTask', () => {
     expect(mockupAnglesByColorFromTask(result, new Map([[1, 'Black']]), null).Black?.map((angle) => angle.url)).toEqual([
       'https://files.example/black-front.jpg',
       'https://files.example/black-side.jpg',
+    ])
+  })
+})
+
+describe('mergeMockupAnglesByColor', () => {
+  it('keeps the embroidered front and the printed back from separate tasks', () => {
+    const merged = mergeMockupAnglesByColor([
+      { Black: [{ url: 'https://files.example/front.jpg', title: 'Front' }] },
+      { Black: [{ url: 'https://files.example/back.jpg', title: 'Back' }] },
+    ])
+    expect(merged.Black).toEqual([
+      { url: 'https://files.example/front.jpg', title: 'Front' },
+      { url: 'https://files.example/back.jpg', title: 'Back' },
     ])
   })
 })

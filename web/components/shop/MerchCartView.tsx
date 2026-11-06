@@ -4,12 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import MerchShippingEstimate from '@/components/shop/MerchShippingEstimate'
+import MerchDiscountCode from '@/components/shop/MerchDiscountCode'
+import { quoteMerchDiscount } from '@/lib/merch/discount'
 import { formatMerchMoney, merchCartCheckoutItems } from '@/lib/merch/shop-cart'
+import { useMerchDiscount } from '@/lib/merch/use-merch-discount'
 import { startMerchCheckout } from '@/lib/merch/start-merch-checkout'
 import { useMerchCart } from '@/lib/merch/use-merch-cart'
 
 export default function MerchCartView() {
   const { lines, ready, subtotal, setQuantity, removeLine } = useMerchCart()
+  const { discount } = useMerchDiscount()
   const [checkingOut, setCheckingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [destination, setDestination] = useState({ country_code: 'US', state_code: 'CA' })
@@ -24,6 +28,9 @@ export default function MerchCartView() {
   const onDestinationChange = useCallback((next: { country_code: string; state_code: string }) => {
     setDestination(next)
   }, [])
+  const discountQuote = discount ? quoteMerchDiscount(lines.map((line) => line.price * line.quantity), discount) : null
+  const priced = discountQuote && !('error' in discountQuote) ? discountQuote : null
+  const payable = priced ? priced.total : subtotal
 
   const handleCheckout = async () => {
     setCheckingOut(true)
@@ -145,9 +152,22 @@ export default function MerchCartView() {
             <MerchShippingEstimate items={shippingItems} onDestinationChange={onDestinationChange} />
 
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
-              <div className="flex items-center justify-between text-white">
+              <MerchDiscountCode />
+              <div className="mt-4 flex items-center justify-between text-sm text-gray-400">
                 <span>Subtotal</span>
-                <span className="text-xl font-bold tabular-nums">{formatMerchMoney(subtotal)}</span>
+                <span className="tabular-nums">{formatMerchMoney(subtotal)}</span>
+              </div>
+              {priced ? (
+                <div className="mt-2 flex items-center justify-between text-sm text-white">
+                  <span>
+                    {priced.code} · {priced.label}
+                  </span>
+                  <span className="tabular-nums">−{formatMerchMoney(priced.amountOff)}</span>
+                </div>
+              ) : null}
+              <div className="mt-3 flex items-center justify-between text-white">
+                <span>Total</span>
+                <span className="text-xl font-bold tabular-nums">{formatMerchMoney(payable)}</span>
               </div>
               <p className="mt-2 text-xs text-gray-500">
                 Shipping is calculated from your destination and collected at Stripe checkout. Printful fulfills the
@@ -160,7 +180,7 @@ export default function MerchCartView() {
                 disabled={checkingOut}
                 className="mt-4 w-full rounded-lg bg-white py-3.5 text-sm font-bold text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
               >
-                {checkingOut ? 'Processing…' : `Checkout · ${formatMerchMoney(subtotal)}`}
+                {checkingOut ? 'Processing…' : `Checkout · ${formatMerchMoney(payable)}`}
               </button>
             </div>
           </div>

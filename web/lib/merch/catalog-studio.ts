@@ -175,28 +175,58 @@ export function shopDesignAngleViews(
   if (designed.length === 0) return views.slice(0, 1)
   const byType = new Map(files.map((file) => [file.type, file]))
   const fromCatalog = views.filter((view) => designed.includes(view.id))
-  if (fromCatalog.length > 0) return designed
+  const ordered = (fromCatalog.length > 0 ? designed
     .map((type) => fromCatalog.find((view) => view.id === type))
-    .filter((view): view is CatalogAngleView => Boolean(view))
-  return designed.map((type) => ({
+    .filter((view): view is CatalogAngleView => Boolean(view)) : designed.map((type) => ({
     id: type,
     label: (byType.get(type)?.title || type).trim(),
-  }))
+  }))).filter((view) => view.label)
+  const full = ordered.filter((view) => !isShopAccentPlacement({ fileType: view.id }))
+  return full.length > 0 ? [...full, ...ordered.filter((view) => !full.includes(view))] : ordered
+}
+
+function isShopAccentPlacement(row: { fileType?: string | null; scale?: number | null }): boolean {
+  const type = (row.fileType || '').toLowerCase()
+  if (/sleeve|chest|label|pocket/.test(type)) return true
+  return typeof row.scale === 'number' && row.scale < 0.45
+}
+
+/**
+ * The print the public shop should open on: the stage file when it is a real
+ * print, otherwise the largest full placement. Chest and sleeve marks stay out.
+ */
+export function shopPreviewFileType(
+  placements: Array<{ fileType?: string | null; assetUrl?: string | null; scale?: number | null }>,
+  activeFileType?: string | null,
+): string | null {
+  const withArt = placements.filter((row) => row.fileType?.trim() && row.assetUrl)
+  const full = withArt.filter((row) => !isShopAccentPlacement(row))
+  const pool = full.length > 0 ? full : withArt
+  if (activeFileType) {
+    const active = pool.find((row) => row.fileType === activeFileType)
+    if (active?.fileType) return active.fileType
+  }
+  return [...pool].sort((a, b) => (b.scale || 0) - (a.scale || 0))[0]?.fileType || null
 }
 
 /** Open the same print file merch studio would: the designed face, not the first catalog add-on. */
 export function shopViewFileTypeToOpen(
   views: CatalogAngleView[],
-  placements: Array<{ fileType?: string | null; assetUrl?: string | null }>,
+  placements: Array<{ fileType?: string | null; assetUrl?: string | null; scale?: number | null }>,
   activeFileType?: string | null,
 ): string | null {
   if (views.length === 0) return null
   const hasArt = (type: string) =>
     placements.some((row) => row.fileType === type && Boolean(row.assetUrl))
+  const hero = shopPreviewFileType(placements, activeFileType)
+  if (hero && views.some((view) => view.id === hero) && hasArt(hero)) return hero
   if (activeFileType && views.some((view) => view.id === activeFileType) && hasArt(activeFileType)) {
     return activeFileType
   }
-  return views.find((view) => hasArt(view.id))?.id || views[0]?.id || null
+  return views.find((view) => hasArt(view.id) && !isShopAccentPlacement({ fileType: view.id }))?.id
+    || views.find((view) => hasArt(view.id))?.id
+    || views[0]?.id
+    || null
 }
 
 /** Angle photos for one color. A single saved set stays on the color it was made in. */
@@ -277,14 +307,17 @@ export function shopFrontPhotoIndex(
 }
 
 /**
- * Shop PDP hero: photographed angles are the source of truth.
- * Template faces are only used when this color has no stored photos.
+ * Shop PDP hero: the studio Design layout is the source of truth.
+ * Photos are only used when this product has no designed print file.
  */
 export function shopHeroView(photoCount: number, selectedPhotoIndex: number, selectedFileType: string | null): {
   photoIndex: number
   viewFileType: string | null
   preferLayout: boolean
 } {
+  if (selectedFileType) {
+    return { photoIndex: selectedPhotoIndex, viewFileType: selectedFileType, preferLayout: true }
+  }
   if (photoCount > 0) {
     return {
       photoIndex: Math.min(Math.max(selectedPhotoIndex, 0), photoCount - 1),
@@ -292,7 +325,7 @@ export function shopHeroView(photoCount: number, selectedPhotoIndex: number, sel
       preferLayout: false,
     }
   }
-  return { photoIndex: 0, viewFileType: selectedFileType, preferLayout: true }
+  return { photoIndex: 0, viewFileType: null, preferLayout: true }
 }
 
 /**
@@ -546,8 +579,9 @@ export function techniqueKeyForPrintFile(fileType: string | null | undefined): '
   if (type.includes('dtf')) return 'DTFILM'
   if (
     type.includes('dtg') ||
-    type === 'front' ||
-    type === 'back' ||
+    type.includes('front') ||
+    type.includes('back') ||
+    type.includes('chest') ||
     type.includes('default') ||
     type.includes('sleeve') ||
     type.includes('label')
@@ -623,6 +657,68 @@ export function filterPrintFilesForTechnique(
     return files
   })()
   return placeablePrintFiles(matched)
+}
+
+function techniqueFamily(key: string | null | undefined): 'EMBROIDERY' | 'DTFILM' | 'DTG' | null {
+  const upper = (key || '').trim().toUpperCase()
+  if (!upper) return null
+  if (upper.includes('EMBROID')) return 'EMBROIDERY'
+  if (upper.includes('DTF')) return 'DTFILM'
+  if (upper.includes('DTG') || upper.includes('DIRECT')) return 'DTG'
+  return null
+}
+
+/**
+ * Printful locks a sync variant to one technique. An embroidery file plus a
+ * print file (`front`, `front_dtf`, …) is rejected: placements are not allowed
+ * for technique EMBROIDERY. Keep the technique the designer is on.
+ */
+export function selectFilesForOneTechnique<T extends { type: string }>(
+  files: T[],
+  techniques: Array<{ key: string; isDefault?: boolean }>,
+  activeFileType?: string | null,
+): T[] {
+  if (files.length <= 1) return files
+  const kinds = new Set(files.map((file) => techniqueKeyForPrintFile(file.type)).filter(Boolean))
+  if (kinds.size <= 1) return files
+
+  const listed = techniques.filter((row) => row.key.trim())
+  const preferred =
+    techniqueForSavedFile(listed, activeFileType) ||
+    listed.find((row) => row.isDefault)?.key ||
+    listed[0]?.key ||
+    techniqueKeyForPrintFile(activeFileType) ||
+    null
+  if (!preferred) return files
+
+  const allowed = new Set(
+    filterPrintFilesForTechnique(
+      files.map((file) => ({
+        fileId: file.type,
+        type: file.type,
+        title: file.type,
+        additionalPrice: null,
+        options: [],
+      })),
+      preferred,
+    ).map((file) => file.type),
+  )
+  const matched = files.filter((file) => allowed.has(file.type))
+  if (matched.length > 0) return matched
+  const family = techniqueFamily(preferred)
+  return files.filter((file) => techniqueKeyForPrintFile(file.type) === family)
+}
+
+/** Catalog technique key that owns these print files, when the product lists it. */
+export function techniqueForPrintFiles(
+  files: Array<{ type: string }>,
+  techniques: Array<{ key: string; isDefault?: boolean }>,
+): string | null {
+  const family = techniqueKeyForPrintFile(files[0]?.type)
+  const listed = techniques.filter((row) => row.key.trim())
+  if (!family) return listed.find((row) => row.isDefault)?.key || listed[0]?.key || null
+  const match = listed.find((row) => techniqueFamily(row.key) === family)
+  return match?.key || family
 }
 
 function printDimensionsForFile(type: string, template: MerchBlank): { printWidth: number; printHeight: number } {

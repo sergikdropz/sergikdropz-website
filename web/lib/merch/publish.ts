@@ -11,10 +11,16 @@ import { printfulCatalogFetch, printfulFetch } from '@/lib/printful'
 import { photographStyleOptions } from '@/lib/merch/catalog-design-intel'
 import {
   fetchCatalogProductDetail,
-  fetchPlacementPrintAreas,
+  fetchPlacementFulfillment,
   resolvePlacementPrintArea,
   type PlacementPrintArea,
 } from '@/lib/merch/printful-catalog'
+import {
+  filesRespectingPlacementTechnique,
+  joinMockupTaskKeys,
+  mockupFileGroups,
+  mockupStyleOptionsForFiles,
+} from '@/lib/merch/technique-mix'
 import { embroideryVariantOptions } from '@/lib/merch/embroidery-threads'
 
 type CatalogListItem = {
@@ -35,7 +41,7 @@ type CatalogProduct = {
   id: number
   title?: string
   files?: Array<{ type?: string; title?: string; options?: Array<{ id?: string }> }>
-  techniques?: Array<{ key?: string }>
+  techniques?: Array<{ key?: string; is_default?: boolean; isDefault?: boolean }>
   options?: Array<{ id?: string }>
 }
 
@@ -431,6 +437,26 @@ export function mockupAnglesByColorFromTask(
   return byColor
 }
 
+/** Combine one completed mockup task per technique. The same view is kept once. */
+export function mergeMockupAnglesByColor(
+  groups: Array<Record<string, MockupAngle[]>>,
+): Record<string, MockupAngle[]> {
+  const merged: Record<string, MockupAngle[]> = {}
+  for (const group of groups) {
+    for (const [color, angles] of Object.entries(group)) {
+      const existing = merged[color] || []
+      for (const angle of angles) {
+        const title = angle.title.trim().toLowerCase()
+        if (existing.some((item) => item.url === angle.url || item.title.trim().toLowerCase() === title)) continue
+        if (existing.length >= MOCKUP_ANGLES) continue
+        existing.push(angle)
+      }
+      merged[color] = existing
+    }
+  }
+  return merged
+}
+
 export function mockupsByColorFromTask(
   result: unknown,
   colorByVariantId: Map<number, string>,
@@ -450,6 +476,7 @@ async function createMockupTask(
   files: SyncPrintFile[],
   threadOptions: ReturnType<typeof embroideryVariantOptions>,
   angles: { optionGroups: string[]; options: string[] } | null,
+  technique: string | null,
 ): Promise<string | null> {
   const ids = [...new Set(variantIds.filter((id) => Number.isFinite(id) && id > 0))]
   if (ids.length === 0) return null
@@ -460,6 +487,7 @@ async function createMockupTask(
     body: JSON.stringify({
       variant_ids: ids,
       format: 'jpg',
+      ...(technique ? { technique } : {}),
       ...(Object.keys(productOptions).length > 0 ? { product_options: productOptions } : {}),
       ...(angles && angles.optionGroups.length > 0 ? { option_groups: angles.optionGroups } : {}),
       ...(angles && angles.options.length > 0 ? { options: angles.options } : {}),
@@ -479,24 +507,39 @@ async function startMockupTask(
   variantIds: number[],
   files: SyncPrintFile[],
   threadOptions: ReturnType<typeof embroideryVariantOptions>,
+  techniques: Array<{ key: string; isDefault?: boolean }>,
 ): Promise<string | null> {
   const ids = [...new Set(variantIds.filter((id) => Number.isFinite(id) && id > 0))]
-  if (ids.length === 0) return null
+  if (ids.length === 0 || files.length === 0) return null
   const detail = await fetchCatalogProductDetail(catalogProductId).catch(() => null)
   const shot = detail?.designIntel ? photographStyleOptions(detail.designIntel) : null
-  const angles = shot && (shot.optionGroups.length > 0 || shot.options.length > 0) ? shot : null
-  try {
-    return await createMockupTask(catalogProductId, ids, files, threadOptions, angles)
-  } catch (error) {
-    console.error('Printful mockup task:', error)
-    if (!angles && ids.length < 2) return null
+  const available = shot && (shot.optionGroups.length > 0 || shot.options.length > 0) ? shot : null
+  const keys: string[] = []
+  for (const group of mockupFileGroups(files, techniques)) {
+    const angles = mockupStyleOptionsForFiles(group.files, available)
+    const threads = group.files.some((file) => /embroidery/i.test(file.type)) ? threadOptions : []
     try {
-      return await createMockupTask(catalogProductId, ids.length > 1 ? [ids[0]] : ids, files, threadOptions, null)
-    } catch (again) {
-      console.error('Printful mockup task:', again)
-      return null
+      const key = await createMockupTask(catalogProductId, ids, group.files, threads, angles, group.technique)
+      if (key) keys.push(key)
+    } catch (error) {
+      console.error('Printful mockup task:', error)
+      if (!angles && ids.length < 2) continue
+      try {
+        const key = await createMockupTask(
+          catalogProductId,
+          ids.length > 1 ? [ids[0]] : ids,
+          group.files,
+          threads,
+          null,
+          group.technique,
+        )
+        if (key) keys.push(key)
+      } catch (again) {
+        console.error('Printful mockup task:', again)
+      }
     }
   }
+  return joinMockupTaskKeys(keys)
 }
 
 async function refreshPrintedDesign(
@@ -633,10 +676,11 @@ export async function publishDesignToPrintful(
     }
   }
 
-  const printAreas = await fetchPlacementPrintAreas(
+  const fulfillment = await fetchPlacementFulfillment(
     resolved.product.id,
     (resolved.product.techniques || []).map((row) => row.key || '').filter(Boolean)
-  ).catch(() => ({}))
+  ).catch(() => ({ areas: {}, conflicts: [] }))
+  const printAreas = fulfillment.areas
   const readyFiles = buildPrintFiles(
     design,
     blank,
@@ -645,19 +689,41 @@ export async function publishDesignToPrintful(
     printFilesByPlacement,
     printAreas
   )
+  const techniqueRows = (resolved.product.techniques || [])
+    .map((row) => ({
+      key: row.key || '',
+      isDefault: Boolean(row.is_default ?? row.isDefault),
+    }))
+    .filter((row) => row.key)
+  const techniqueFiles = filesRespectingPlacementTechnique(readyFiles, design.activeFileType, fulfillment.conflicts)
+  const omitted = readyFiles.filter((file) => !techniqueFiles.some((kept) => kept.type === file.type))
+  const omitNote =
+    omitted.length > 0
+      ? ` Left off ${omitted.map((file) => file.type.replaceAll('_', ' ')).join(', ')} because Printful will not combine it with the other art.`
+      : ''
+  if (techniqueFiles.length === 0) {
+    return {
+      variants: design.variants,
+      printfulSyncProductId: design.printfulSyncProductId,
+      mockupTaskKey: null,
+      requestedMockups: false,
+      wholesaleCost: blank.estimatedCost,
+      note: 'Each placement can use only one technique. Clear the extra art on that spot and try again.',
+    }
+  }
   const optionIds = (resolved.product.options || []).map((option) => option.id || '').filter(Boolean)
   const fullColorFileTypes = (resolved.product.files || [])
     .filter((file) => (file.options || []).some((option) => option.id === 'full_color'))
     .map((file) => file.type || '')
     .filter(Boolean)
   const threadOptions = embroideryVariantOptions(
-    readyFiles.map((file) => file.type),
+    techniqueFiles.map((file) => file.type),
     design,
     optionIds,
     fullColorFileTypes,
   )
   const fullColorTypes = new Set(fullColorFileTypes)
-  const syncFiles = readyFiles.map((file) => {
+  const syncFiles = techniqueFiles.map((file) => {
     const unlimited = Boolean(design.embroideryUnlimitedColor) && fullColorTypes.has(file.type)
     return {
       ...file,
@@ -676,18 +742,24 @@ export async function publishDesignToPrintful(
     threads: design.embroideryThreads,
   })
   const reusePhotos = photosMatchKey(design, photoKey)
+  const withOmit = <T extends { note: string }>(result: T): T =>
+    omitNote ? { ...result, note: `${result.note}${omitNote}` } : result
   const startPhotos = () =>
-    reusePhotos ? Promise.resolve(null) : startMockupTask(resolved.product.id, [variantId], syncFiles, threadOptions)
+    reusePhotos
+      ? Promise.resolve(null)
+      : startMockupTask(resolved.product.id, [variantId], syncFiles, threadOptions, techniqueRows)
   if (design.printfulSyncProductId) {
-    return refreshPrintedDesign(
-      design,
-      blank,
-      resolved.product.id,
-      syncFiles,
-      threadOptions,
-      startPhotos,
-      reusePhotos,
-      photoKey,
+    return withOmit(
+      await refreshPrintedDesign(
+        design,
+        blank,
+        resolved.product.id,
+        syncFiles,
+        threadOptions,
+        startPhotos,
+        reusePhotos,
+        photoKey,
+      ),
     )
   }
   if (options?.previewOnly) {
@@ -702,24 +774,27 @@ export async function publishDesignToPrintful(
       wholesaleCost:
         chosen.map((variant) => Number(variant.price)).filter((price) => Number.isFinite(price) && price > 0).sort((a, b) => a - b)[0] ??
         blank.estimatedCost,
-      note: mockupTaskKey
-        ? 'Printful is making a photo of this color.'
-        : reusePhotos
-          ? 'Photos for this color are already current.'
-          : 'Design saved. Printful could not start the photos.',
+      note:
+        (mockupTaskKey
+          ? 'Printful is making a photo of this color.'
+          : reusePhotos
+            ? 'Photos for this color are already current.'
+            : 'Design saved. Printful could not start the photos.') + omitNote,
     }
   }
   const existingId = design.printfulSyncProductId || (await findStoreProductIdByName(design.name))
   if (existingId) {
-    return refreshPrintedDesign(
-      { ...design, printfulSyncProductId: existingId },
-      blank,
-      resolved.product.id,
-      syncFiles,
-      threadOptions,
-      startPhotos,
-      reusePhotos,
-      photoKey,
+    return withOmit(
+      await refreshPrintedDesign(
+        { ...design, printfulSyncProductId: existingId },
+        blank,
+        resolved.product.id,
+        syncFiles,
+        threadOptions,
+        startPhotos,
+        reusePhotos,
+        photoKey,
+      ),
     )
   }
 
@@ -753,11 +828,12 @@ export async function publishDesignToPrintful(
     reusePhotos,
     mockupPhotoKey: photoKey,
     wholesaleCost,
-    note: mockupTaskKey
-      ? 'Hidden in the shop. Printful is making a photo of this color.'
-      : reusePhotos
-        ? 'Hidden in the shop. Photos for this color are already current.'
-        : 'Hidden in the shop. The printer has the product. Photos can be generated again from this design.',
+    note:
+      (mockupTaskKey
+        ? 'Hidden in the shop. Printful is making a photo of this color.'
+        : reusePhotos
+          ? 'Hidden in the shop. Photos for this color are already current.'
+          : 'Hidden in the shop. The printer has the product. Photos can be generated again from this design.') + omitNote,
   }
 }
 

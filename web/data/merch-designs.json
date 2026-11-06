@@ -17,7 +17,7 @@
       "variants": [],
       "createdAt": "2026-10-29T09:14:33.830Z",
       "sortIndex": 0,
-      "updatedAt": "2026-10-31T01:18:07.253Z",
+      "updatedAt": "2026-11-02T08:09:41.724Z",
       "mockupUrls": [
         "/api/merch/art/bbd9a7b7-834d-44a4-a90e-ca0651c35cbf.jpg",
         "/api/merch/art/fe3a26db-6f51-46a8-84ed-d1773902b05a.jpg",
@@ -28,15 +28,15 @@
       ],
       "placements": [
         {
-          "x": 0.3669047619047619,
+          "x": 0.28845242714858543,
           "y": 0.17117647058823524,
-          "scale": 0.2661904761904762,
-          "assetUrl": "/api/merch/art/887ede4c-017f-46e3-b10f-3e1b4a2a8492.png?v=1793409469761",
+          "scale": 0.4230951457028291,
+          "assetUrl": "/api/merch/art/b998d67b-e49c-4aac-b17c-fdd145ba1245.png?v=2026-10-29T10%3A16%3A50.872Z",
           "fileType": "embroidery_front_large",
           "rotation": 0,
           "placement": "front",
-          "assetWidth": 3464,
-          "assetHeight": 3464
+          "assetWidth": 4096,
+          "assetHeight": 2577
         }
       ],
       "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
@@ -54,6 +54,7 @@
       "previewColorName": "Black",
       "embroideryThreads": {
         "thread_colors_front_large": [
+          "#FFFFFF",
           "#000000"
         ]
       },
@@ -1056,12 +1057,12 @@
         "Sherbet rainbow"
       ],
       "family": "tee",
-      "status": "live",
+      "status": "hidden",
       "blankId": "tee-staple",
       "variants": [],
       "createdAt": "2026-10-29T21:29:55.063Z",
       "sortIndex": 13,
-      "updatedAt": "2026-10-31T01:39:52.719Z",
+      "updatedAt": "2026-11-02T22:09:30.878Z",
       "mockupUrls": [],
       "placements": [
         {
@@ -1120,21 +1121,21 @@
           "assetHeight": 6558
         }
       ],
-      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "publishNote": "Printful API error 400: {\"code\":400,\"result\":\"One or more provided placements are not allowed for product technique \\\"EMBROIDERY\\\"\",\"error\":{\"reason\":\"BadRequest\",\"message\":\"One or more provided placements are not allowed for product technique \\\"EMBROIDERY\\\"\"}}",
       "retailPrice": 45,
       "previewColor": "#ef8fbf",
       "shopCategory": null,
       "mockupTaskKey": null,
       "printFileUrls": {
-        "back_dtf": "/api/merch/art/fdb332d2-80ab-4230-8032-cbf83c524162.png?v=1793323609475",
-        "front_dtf": "/api/merch/art/1a1cf5f2-1b45-4939-aa47-01df68da3217.png?v=1793323612415",
-        "embroidery_chest_left": "/api/merch/art/3a03f13c-a6aa-4846-a69a-e40f39e3ea32.png?v=1793323587743",
+        "back_dtf": "/api/merch/art/3f08aaa1-b2ae-4ddc-b8af-10d85aced277.png?v=1793657351671",
+        "front_dtf": "/api/merch/art/1a1cf5f2-1b45-4939-aa47-01df68da3217.png?v=1793657355033",
+        "embroidery_chest_left": "/api/merch/art/3a03f13c-a6aa-4846-a69a-e40f39e3ea32.png?v=1793657330949",
         "embroidery_chest_center": "/api/merch/art/e8352599-76bf-4087-a4db-d1eae1c12eb9.png",
-        "embroidery_sleeve_left_top": "/api/merch/art/037fb73e-8cc7-4334-91d5-7d6c5129fd69.png?v=1793323590157",
-        "embroidery_sleeve_right_top": "/api/merch/art/d0cb3a5f-0c17-4f7d-9d94-3c8fe283ca28.png?v=1793323592508"
+        "embroidery_sleeve_left_top": "/api/merch/art/037fb73e-8cc7-4334-91d5-7d6c5129fd69.png?v=1793657334614",
+        "embroidery_sleeve_right_top": "/api/merch/art/d0cb3a5f-0c17-4f7d-9d94-3c8fe283ca28.png?v=1793657337794"
       },
       "wholesaleCost": 13,
-      "activeFileType": "front_dtf",
+      "activeFileType": "short_sleeve_right_dtf",
       "catalogProductId": 515,
       "mockupPendingKey": null,
       "previewColorName": "Sherbet rainbow",
@@ -2163,6 +2164,772 @@
       "mockupPhotoKeysByColor": {},
       "embroideryUnlimitedColor": false,
       "mockupAngleTitlesByColor": {},
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "0d3bdea1-bcfe-46d5-8e18-983bd618872d",
+      "name": "OlliN Stone Hoodie",
+      "slug": "ollin-stone-hoodie",
+      "blankId": "hoodie-fleece",
+      "catalogProductId": 1661,
+      "family": "hoodie",
+      "placements": [
+        {
+          "placement": "back",
+          "assetUrl": "/api/merch/art/0a694237-3749-45f8-af4d-93eb16617aed.png?v=2026-10-29T08%3A25%3A50.038Z",
+          "assetWidth": 3464,
+          "assetHeight": 3464,
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "rotation": 0,
+          "fileType": "back"
+        },
+        {
+          "placement": "front",
+          "assetUrl": "/api/merch/art/90489eda-98ce-4ae5-800e-6c9d54958995.png?v=2026-10-29T19%3A46%3A57.866Z",
+          "assetWidth": 4096,
+          "assetHeight": 2577,
+          "x": 0.6261551751966289,
+          "y": 0.14877244816201676,
+          "scale": 0.3217912707243922,
+          "rotation": 0,
+          "fileType": "front"
+        }
+      ],
+      "activeFileType": "back",
+      "colors": [
+        "Black",
+        "French Navy"
+      ],
+      "sizes": [
+        "2XL",
+        "L",
+        "M",
+        "S",
+        "XL"
+      ],
+      "previewColor": "#242628",
+      "previewColorName": "Black",
+      "retailPrice": 88.88,
+      "wholesaleCost": 48.1,
+      "status": "draft",
+      "printfulSyncProductId": "489539069",
+      "mockupTaskKey": null,
+      "mockupUrls": [
+        "/api/merch/art/8781fbe4-0d99-4cf0-9586-9c618a705ec3.jpg",
+        "/api/merch/art/54f5dfe9-5770-4f87-826d-02fc78a3ad37.jpg"
+      ],
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/8781fbe4-0d99-4cf0-9586-9c618a705ec3.jpg",
+          "/api/merch/art/54f5dfe9-5770-4f87-826d-02fc78a3ad37.jpg"
+        ]
+      },
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Front",
+          "Front"
+        ]
+      },
+      "mockupPendingByColor": {},
+      "mockupPendingTitlesByColor": {},
+      "mockupPendingKey": null,
+      "mockupPhotoKeysByColor": {
+        "Black": "1661~black~back:https://sergikdropz.com/api/merch/art/0a410ff6-d64e-4e22-ba41-3443e68052b0.png|front:https://sergikdropz.com/api/merch/art/55030476-6873-4d7e-afcf-b0272642ea8e.png~back:/api/merch/art/0a694237-3749-45f8-af4d-93eb16617aed.png:0:0:1:0|front:/api/merch/art/90489eda-98ce-4ae5-800e-6c9d54958995.png:0.626:0.149:0.322:0~thread_colors_chest_left:#000000,#FFFFFF"
+      },
+      "mockupRetiredArtIds": [],
+      "printFileUrls": {
+        "back": "/api/merch/art/0a410ff6-d64e-4e22-ba41-3443e68052b0.png?v=1793891821896",
+        "front": "/api/merch/art/55030476-6873-4d7e-afcf-b0272642ea8e.png?v=1793891825590",
+        "embroidery_chest_left": "/api/merch/art/296e1ea6-e0de-4d6c-9974-1c95f0f10914.png?v=1793889208611"
+      },
+      "variants": [
+        {
+          "size": "2XL",
+          "color": "Black",
+          "retailPrice": 90,
+          "syncVariantId": 5620528728,
+          "catalogVariantId": 52547
+        },
+        {
+          "size": "L",
+          "color": "Black",
+          "retailPrice": 90,
+          "syncVariantId": 5620528729,
+          "catalogVariantId": 52535
+        },
+        {
+          "size": "M",
+          "color": "Black",
+          "retailPrice": 90,
+          "syncVariantId": 5620528730,
+          "catalogVariantId": 52529
+        },
+        {
+          "size": "S",
+          "color": "Black",
+          "retailPrice": 90,
+          "syncVariantId": 5620528732,
+          "catalogVariantId": 52523
+        },
+        {
+          "size": "XL",
+          "color": "Black",
+          "retailPrice": 90,
+          "syncVariantId": 5620528733,
+          "catalogVariantId": 52541
+        },
+        {
+          "size": "2XL",
+          "color": "French Navy",
+          "retailPrice": 90,
+          "syncVariantId": 5620528739,
+          "catalogVariantId": 52548
+        },
+        {
+          "size": "L",
+          "color": "French Navy",
+          "retailPrice": 90,
+          "syncVariantId": 5620528740,
+          "catalogVariantId": 52536
+        },
+        {
+          "size": "M",
+          "color": "French Navy",
+          "retailPrice": 90,
+          "syncVariantId": 5620528741,
+          "catalogVariantId": 52530
+        },
+        {
+          "size": "S",
+          "color": "French Navy",
+          "retailPrice": 90,
+          "syncVariantId": 5620528742,
+          "catalogVariantId": 52524
+        },
+        {
+          "size": "XL",
+          "color": "French Navy",
+          "retailPrice": 90,
+          "syncVariantId": 5620528743,
+          "catalogVariantId": 52542
+        }
+      ],
+      "publishNote": "Public on the merch shop.",
+      "sortIndex": null,
+      "shopCategory": null,
+      "embroideryUnlimitedColor": false,
+      "embroideryThreads": {
+        "thread_colors_chest_left": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "createdAt": "2026-11-05T12:39:04.637Z",
+      "updatedAt": "2026-11-06T19:26:37.406Z"
+    },
+    {
+      "id": "556b444a-d0b8-4650-a9c5-2c8879e3ea44",
+      "name": "Soul Candy Hoodie",
+      "slug": "soul-candy-hoodie",
+      "sizes": [
+        "2XL",
+        "L",
+        "M",
+        "S",
+        "XL"
+      ],
+      "colors": [
+        "Black",
+        "French Navy"
+      ],
+      "family": "hoodie",
+      "status": "live",
+      "blankId": "hoodie-fleece",
+      "variants": [],
+      "createdAt": "2026-11-05T13:43:54.072Z",
+      "sortIndex": null,
+      "updatedAt": "2026-11-05T14:45:52.663Z",
+      "mockupUrls": [
+        "/api/merch/art/972e6ef1-a15f-4fab-9d87-ad9a0ae3d007.jpg",
+        "/api/merch/art/c8b0ee19-525a-43a2-88ca-f831d3c213a4.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.6002856471810385,
+          "y": 2.688821387764051e-17,
+          "scale": 0.3997143528189616,
+          "assetUrl": "/api/merch/art/f62513c7-bbd3-43cf-a6c1-c3cb9c7303c2.png?v=2026-10-31T01%3A27%3A52.515Z",
+          "fileType": "front",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 1835,
+          "assetHeight": 2356
+        },
+        {
+          "x": 0,
+          "y": 0.0068673290473407755,
+          "scale": 1,
+          "assetUrl": "/api/merch/art/cea6c007-ff4f-47e9-a407-6502d9e1d764.png?v=2026-10-31T01%3A35%3A52.550Z",
+          "fileType": "back",
+          "rotation": 0,
+          "placement": "back",
+          "assetWidth": 3422,
+          "assetHeight": 4500
+        }
+      ],
+      "publishNote": "Public as a preview. Buying stays off until Printful has the product.",
+      "retailPrice": 88.88,
+      "previewColor": "#242628",
+      "shopCategory": null,
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "back": "/api/merch/art/25b6ed6c-57c6-40ff-b232-f91c2289c10b.png?v=1793889921101",
+        "front": "/api/merch/art/d5819ebf-0f12-4cfa-90ed-9719a63e6d51.png?v=1793889909181"
+      },
+      "wholesaleCost": 27,
+      "activeFileType": "front",
+      "catalogProductId": 1661,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/972e6ef1-a15f-4fab-9d87-ad9a0ae3d007.jpg",
+          "/api/merch/art/c8b0ee19-525a-43a2-88ca-f831d3c213a4.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": "489491444",
+      "mockupPhotoKeysByColor": {
+        "Black": "1661~black~back:https://sergikdropz.com/api/merch/art/25b6ed6c-57c6-40ff-b232-f91c2289c10b.png|front:https://sergikdropz.com/api/merch/art/d5819ebf-0f12-4cfa-90ed-9719a63e6d51.png~back:/api/merch/art/cea6c007-ff4f-47e9-a407-6502d9e1d764.png:0:0.007:1:0|front:/api/merch/art/f62513c7-bbd3-43cf-a6c1-c3cb9c7303c2.png:0.6:0:0.4:0~"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Front",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "55ee1fbe-f4cf-4190-9398-70d07298976a",
+      "name": "All-Over Print Neck Gaiter",
+      "slug": "all-over-print-neck-gaiter",
+      "sizes": [
+        "One size"
+      ],
+      "colors": [
+        "White"
+      ],
+      "family": "tee",
+      "status": "draft",
+      "blankId": "tee-staple",
+      "variants": [],
+      "createdAt": "2026-11-05T06:26:43.891Z",
+      "sortIndex": null,
+      "updatedAt": "2026-11-05T06:27:09.073Z",
+      "mockupUrls": [
+        "/api/merch/art/60fe920d-783c-4b14-a8ee-29320aa6c126.jpg",
+        "/api/merch/art/391f2eb0-1e30-4b70-8b7c-04e849eb23ef.jpg",
+        "/api/merch/art/b1b18f1d-c535-4e48-8535-cb2f208da969.jpg",
+        "/api/merch/art/fbc10a48-9371-490b-bac5-bdb7db32d1ea.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.10709462935079767,
+          "y": 0.10264535250546697,
+          "scale": 0.7858107412984047,
+          "assetUrl": "/api/merch/art/7ff66bac-9f24-4b39-ac79-b4462a687944.png?v=2026-10-29T09%3A59%3A21.330Z",
+          "fileType": "default",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 3444,
+          "assetHeight": 3483
+        }
+      ],
+      "publishNote": "Photos are ready. It is still hidden until you make it public.",
+      "retailPrice": 23,
+      "previewColor": "#ffffff",
+      "shopCategory": null,
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "default": "/api/merch/art/2b2b9fb5-f1c7-4b2a-b82d-fef9b7fb54a4.png"
+      },
+      "wholesaleCost": 10.35,
+      "activeFileType": "default",
+      "catalogProductId": 420,
+      "mockupPendingKey": null,
+      "previewColorName": "White",
+      "embroideryThreads": {},
+      "mockupUrlsByColor": {
+        "White": [
+          "/api/merch/art/60fe920d-783c-4b14-a8ee-29320aa6c126.jpg",
+          "/api/merch/art/391f2eb0-1e30-4b70-8b7c-04e849eb23ef.jpg",
+          "/api/merch/art/b1b18f1d-c535-4e48-8535-cb2f208da969.jpg",
+          "/api/merch/art/fbc10a48-9371-490b-bac5-bdb7db32d1ea.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": null,
+      "mockupPhotoKeysByColor": {
+        "White": "420~white~default:https://sergikdropz.com/api/merch/art/2b2b9fb5-f1c7-4b2a-b82d-fef9b7fb54a4.png~default:/api/merch/art/7ff66bac-9f24-4b39-ac79-b4462a687944.png:0.107:0.103:0.786:0~"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "White": [
+          "Back",
+          "Folded",
+          "On Tube",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "59b883a8-6259-44d2-bdc7-b36cc8f3e704",
+      "name": "Ollin White Flexfit",
+      "slug": "ollin-white-flexfit",
+      "sizes": [
+        "L/XL",
+        "S/M"
+      ],
+      "colors": [
+        "Black",
+        "Dark Grey",
+        "Red",
+        "Royal Blue",
+        "White",
+        "Olive",
+        "Multicam Green",
+        "Multicam Black"
+      ],
+      "family": "hat",
+      "status": "live",
+      "blankId": "hat-dad",
+      "variants": [
+        {
+          "size": "L/XL",
+          "color": "Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618927732,
+          "catalogVariantId": 5277
+        },
+        {
+          "size": "S/M",
+          "color": "Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618927733,
+          "catalogVariantId": 5276
+        },
+        {
+          "size": "L/XL",
+          "color": "Dark Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618927734,
+          "catalogVariantId": 5281
+        },
+        {
+          "size": "S/M",
+          "color": "Dark Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618927736,
+          "catalogVariantId": 5280
+        },
+        {
+          "size": "L/XL",
+          "color": "Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618927737,
+          "catalogVariantId": 5283
+        },
+        {
+          "size": "S/M",
+          "color": "Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618927738,
+          "catalogVariantId": 5282
+        },
+        {
+          "size": "L/XL",
+          "color": "Multicam Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618927739,
+          "catalogVariantId": 15898
+        },
+        {
+          "size": "S/M",
+          "color": "Multicam Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618927740,
+          "catalogVariantId": 15897
+        },
+        {
+          "size": "L/XL",
+          "color": "Multicam Green",
+          "retailPrice": 37,
+          "syncVariantId": 5618927741,
+          "catalogVariantId": 15900
+        },
+        {
+          "size": "S/M",
+          "color": "Multicam Green",
+          "retailPrice": 37,
+          "syncVariantId": 5618927743,
+          "catalogVariantId": 15899
+        },
+        {
+          "size": "L/XL",
+          "color": "Olive",
+          "retailPrice": 37,
+          "syncVariantId": 5618927744,
+          "catalogVariantId": 15902
+        },
+        {
+          "size": "S/M",
+          "color": "Olive",
+          "retailPrice": 37,
+          "syncVariantId": 5618927745,
+          "catalogVariantId": 15901
+        },
+        {
+          "size": "L/XL",
+          "color": "Red",
+          "retailPrice": 37,
+          "syncVariantId": 5618927746,
+          "catalogVariantId": 5289
+        },
+        {
+          "size": "S/M",
+          "color": "Red",
+          "retailPrice": 37,
+          "syncVariantId": 5618927747,
+          "catalogVariantId": 5288
+        },
+        {
+          "size": "L/XL",
+          "color": "Royal Blue",
+          "retailPrice": 37,
+          "syncVariantId": 5618927748,
+          "catalogVariantId": 5287
+        },
+        {
+          "size": "S/M",
+          "color": "Royal Blue",
+          "retailPrice": 37,
+          "syncVariantId": 5618927754,
+          "catalogVariantId": 5286
+        },
+        {
+          "size": "L/XL",
+          "color": "White",
+          "retailPrice": 37,
+          "syncVariantId": 5618927755,
+          "catalogVariantId": 5275
+        },
+        {
+          "size": "S/M",
+          "color": "White",
+          "retailPrice": 37,
+          "syncVariantId": 5618927756,
+          "catalogVariantId": 5274
+        }
+      ],
+      "createdAt": "2026-11-04T21:18:04.393Z",
+      "sortIndex": null,
+      "updatedAt": "2026-11-04T21:20:16.993Z",
+      "mockupUrls": [
+        "/api/merch/art/dd5ee6af-3588-496f-92c9-f3a6ee169e5e.jpg",
+        "/api/merch/art/927a78fc-ca30-4305-9e12-16400a6e8317.jpg",
+        "/api/merch/art/1715c1c6-13e7-4985-be90-1590f8a417a9.jpg",
+        "/api/merch/art/bddec6cb-cc46-40f1-8f53-313f2a2faab2.jpg",
+        "/api/merch/art/0314d365-b2f3-49af-9a05-3e9092ac7313.jpg",
+        "/api/merch/art/8588f3c3-04c6-47d9-bf80-d9cd290c038b.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.37733961883790534,
+          "y": 0.15,
+          "scale": 0.24532076232418937,
+          "assetUrl": "/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png?v=2026-10-29T10%3A10%3A27.254Z",
+          "fileType": "embroidery_front_large",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 6780,
+          "assetHeight": 6558
+        }
+      ],
+      "publishNote": "Public on the merch shop.",
+      "retailPrice": 37,
+      "previewColor": "#1b1b1b",
+      "shopCategory": null,
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front_large": "/api/merch/art/c5edac3a-3ac8-41cf-a117-696eac17cffa.png?v=1793827212809"
+      },
+      "wholesaleCost": 16.51,
+      "activeFileType": "embroidery_front_large",
+      "catalogProductId": 140,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {
+        "thread_colors_front_large": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/dd5ee6af-3588-496f-92c9-f3a6ee169e5e.jpg",
+          "/api/merch/art/927a78fc-ca30-4305-9e12-16400a6e8317.jpg",
+          "/api/merch/art/1715c1c6-13e7-4985-be90-1590f8a417a9.jpg",
+          "/api/merch/art/bddec6cb-cc46-40f1-8f53-313f2a2faab2.jpg",
+          "/api/merch/art/0314d365-b2f3-49af-9a05-3e9092ac7313.jpg",
+          "/api/merch/art/8588f3c3-04c6-47d9-bf80-d9cd290c038b.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": "489297796",
+      "mockupPhotoKeysByColor": {
+        "Black": "140~black~embroidery_front_large:https://sergikdropz.com/api/merch/art/c5edac3a-3ac8-41cf-a117-696eac17cffa.png~embroidery_front_large:/api/merch/art/d54d78d3-6cbc-4d79-af58-9eb8cce15e82.png:0.377:0.15:0.245:0~thread_colors_front_large:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Left",
+          "Left Front",
+          "Right",
+          "Right Front",
+          "Front"
+        ]
+      },
+      "mockupPendingTitlesByColor": {}
+    },
+    {
+      "id": "a6d890ec-e220-4c32-8e02-3703a935450b",
+      "name": "Ollin Black Flexfit",
+      "slug": "ollin-black-flexfit",
+      "sizes": [
+        "L/XL",
+        "S/M"
+      ],
+      "colors": [
+        "Black",
+        "Dark Grey",
+        "Red",
+        "Royal Blue",
+        "White",
+        "Olive",
+        "Multicam Green",
+        "Multicam Black"
+      ],
+      "family": "hat",
+      "status": "live",
+      "blankId": "hat-dad",
+      "variants": [
+        {
+          "size": "L/XL",
+          "color": "Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618923666,
+          "catalogVariantId": 5277
+        },
+        {
+          "size": "S/M",
+          "color": "Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618923667,
+          "catalogVariantId": 5276
+        },
+        {
+          "size": "L/XL",
+          "color": "Dark Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618923668,
+          "catalogVariantId": 5281
+        },
+        {
+          "size": "S/M",
+          "color": "Dark Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618923669,
+          "catalogVariantId": 5280
+        },
+        {
+          "size": "L/XL",
+          "color": "Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618923670,
+          "catalogVariantId": 5283
+        },
+        {
+          "size": "S/M",
+          "color": "Grey",
+          "retailPrice": 37,
+          "syncVariantId": 5618923671,
+          "catalogVariantId": 5282
+        },
+        {
+          "size": "L/XL",
+          "color": "Multicam Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618923672,
+          "catalogVariantId": 15898
+        },
+        {
+          "size": "S/M",
+          "color": "Multicam Black",
+          "retailPrice": 37,
+          "syncVariantId": 5618923673,
+          "catalogVariantId": 15897
+        },
+        {
+          "size": "L/XL",
+          "color": "Multicam Green",
+          "retailPrice": 37,
+          "syncVariantId": 5618923674,
+          "catalogVariantId": 15900
+        },
+        {
+          "size": "S/M",
+          "color": "Multicam Green",
+          "retailPrice": 37,
+          "syncVariantId": 5618923675,
+          "catalogVariantId": 15899
+        },
+        {
+          "size": "L/XL",
+          "color": "Olive",
+          "retailPrice": 37,
+          "syncVariantId": 5618923676,
+          "catalogVariantId": 15902
+        },
+        {
+          "size": "S/M",
+          "color": "Olive",
+          "retailPrice": 37,
+          "syncVariantId": 5618923677,
+          "catalogVariantId": 15901
+        },
+        {
+          "size": "L/XL",
+          "color": "Red",
+          "retailPrice": 37,
+          "syncVariantId": 5618923678,
+          "catalogVariantId": 5289
+        },
+        {
+          "size": "S/M",
+          "color": "Red",
+          "retailPrice": 37,
+          "syncVariantId": 5618923679,
+          "catalogVariantId": 5288
+        },
+        {
+          "size": "L/XL",
+          "color": "Royal Blue",
+          "retailPrice": 37,
+          "syncVariantId": 5618923680,
+          "catalogVariantId": 5287
+        },
+        {
+          "size": "S/M",
+          "color": "Royal Blue",
+          "retailPrice": 37,
+          "syncVariantId": 5618923681,
+          "catalogVariantId": 5286
+        },
+        {
+          "size": "L/XL",
+          "color": "White",
+          "retailPrice": 37,
+          "syncVariantId": 5618923682,
+          "catalogVariantId": 5275
+        },
+        {
+          "size": "S/M",
+          "color": "White",
+          "retailPrice": 37,
+          "syncVariantId": 5618923683,
+          "catalogVariantId": 5274
+        }
+      ],
+      "createdAt": "2026-11-04T21:16:37.982Z",
+      "sortIndex": null,
+      "updatedAt": "2026-11-04T21:17:42.213Z",
+      "mockupUrls": [
+        "/api/merch/art/dd5ee6af-3588-496f-92c9-f3a6ee169e5e.jpg",
+        "/api/merch/art/0743f2b6-5acd-436c-a9f4-ec8ab6471839.jpg",
+        "/api/merch/art/d8ba8272-6c66-4b03-af92-2f630d2fb644.jpg",
+        "/api/merch/art/e1d7cd1d-3c77-47a1-85e8-083337c2c090.jpg",
+        "/api/merch/art/36c85779-1282-427f-908b-06f2cc47a08b.jpg",
+        "/api/merch/art/c631bce8-4b94-496f-9c1f-f53eee22a4ff.jpg"
+      ],
+      "placements": [
+        {
+          "x": 0.3813559322033898,
+          "y": 0.15,
+          "scale": 0.23728813559322035,
+          "assetUrl": "/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png?v=2026-10-29T11%3A29%3A10.923Z",
+          "fileType": "embroidery_front_large",
+          "rotation": 0,
+          "placement": "front",
+          "assetWidth": 675,
+          "assetHeight": 675
+        }
+      ],
+      "publishNote": "Public on the merch shop.",
+      "retailPrice": 37,
+      "previewColor": "#1b1b1b",
+      "shopCategory": null,
+      "mockupTaskKey": null,
+      "printFileUrls": {
+        "embroidery_front_large": "/api/merch/art/50d5aba2-8d46-417c-b369-fe6b911b79be.png?v=1793827055434"
+      },
+      "wholesaleCost": 16.51,
+      "activeFileType": "embroidery_front_large",
+      "catalogProductId": 140,
+      "mockupPendingKey": null,
+      "previewColorName": "Black",
+      "embroideryThreads": {
+        "thread_colors_front_large": [
+          "#FFFFFF",
+          "#000000"
+        ]
+      },
+      "mockupUrlsByColor": {
+        "Black": [
+          "/api/merch/art/dd5ee6af-3588-496f-92c9-f3a6ee169e5e.jpg",
+          "/api/merch/art/0743f2b6-5acd-436c-a9f4-ec8ab6471839.jpg",
+          "/api/merch/art/d8ba8272-6c66-4b03-af92-2f630d2fb644.jpg",
+          "/api/merch/art/e1d7cd1d-3c77-47a1-85e8-083337c2c090.jpg",
+          "/api/merch/art/36c85779-1282-427f-908b-06f2cc47a08b.jpg",
+          "/api/merch/art/c631bce8-4b94-496f-9c1f-f53eee22a4ff.jpg"
+        ]
+      },
+      "mockupRetiredArtIds": [],
+      "mockupPendingByColor": {},
+      "printfulSyncProductId": "489297149",
+      "mockupPhotoKeysByColor": {
+        "Black": "140~black~embroidery_front_large:https://sergikdropz.com/api/merch/art/50d5aba2-8d46-417c-b369-fe6b911b79be.png~embroidery_front_large:/api/merch/art/1c7125b3-99e5-4200-9cf5-968b4a267ce5.png:0.381:0.15:0.237:0~thread_colors_front_large:#000000,#FFFFFF"
+      },
+      "embroideryUnlimitedColor": false,
+      "mockupAngleTitlesByColor": {
+        "Black": [
+          "Back",
+          "Left",
+          "Left Front",
+          "Right",
+          "Right Front",
+          "Front"
+        ]
+      },
       "mockupPendingTitlesByColor": {}
     },
     {

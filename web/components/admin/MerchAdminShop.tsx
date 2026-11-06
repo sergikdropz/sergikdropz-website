@@ -1,11 +1,18 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import MerchDiscountCodes from '@/components/admin/MerchDiscountCodes'
 import MerchGarmentPreview from '@/components/shop/MerchGarmentPreview'
+import { getBlank } from '@/lib/merch/blanks'
 import {
   designToShopProduct,
+  discountRoom,
+  maxDiscountPercent,
+  safeDiscountPercent,
   shopCategoryOf,
   sortMerchDesigns,
+  upchargePercent,
+  youKeep,
   type MerchDesign,
   type ShopMerchProduct,
 } from '@/lib/merch/design'
@@ -67,11 +74,26 @@ function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
 }
 
-function designPriceLabel(design: MerchDesign): string {
+function designRetailAmount(design: MerchDesign): number {
   const prices = design.variants.map((variant) => variant.retailPrice).filter((price) => price > 0)
   const amount = prices.length > 0 ? Math.min(...prices) : design.retailPrice
-  const formatted = money(Number.isFinite(amount) ? amount : 0)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+function designPriceLabel(design: MerchDesign): string {
+  const amount = designRetailAmount(design)
+  const formatted = money(amount)
+  const prices = design.variants.map((variant) => variant.retailPrice).filter((price) => price > 0)
   return prices.length > 1 ? `From ${formatted}` : formatted
+}
+
+function designPrintfulPrice(design: MerchDesign): { amount: number; estimated: boolean } | null {
+  if (design.wholesaleCost != null && design.wholesaleCost > 0) {
+    return { amount: design.wholesaleCost, estimated: false }
+  }
+  const estimate = getBlank(design.blankId)?.estimatedCost
+  if (estimate != null && estimate > 0) return { amount: estimate, estimated: true }
+  return null
 }
 
 function syncedPriceLabel(product: SyncedProduct): string {
@@ -377,6 +399,8 @@ export default function MerchAdminShop({ onOpenDesign }: { onOpenDesign: (design
         <p className={`mb-4 text-center text-sm ${noteError ? 'text-red-300' : 'text-emerald-300'}`}>{note}</p>
       )}
 
+      <MerchDiscountCodes />
+
       <div className="mb-6 flex flex-wrap justify-center gap-2">
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>
           All
@@ -661,6 +685,13 @@ function DesignShopCard({
   const preview = designToShopProduct({ ...design, status: 'live' }) as ShopMerchProduct | null
   const category = shopCategoryOf(design)
   const onShop = design.status === 'live'
+  const printful = designPrintfulPrice(design)
+  const retail = designRetailAmount(design)
+  const upcharge = printful ? upchargePercent(retail, printful.amount) : null
+  const maxDiscount = printful ? maxDiscountPercent(retail, printful.amount) : null
+  const room = printful ? discountRoom(retail, printful.amount) : null
+  const safeDiscount = printful ? safeDiscountPercent(retail, printful.amount) : null
+  const keep = printful ? youKeep(retail, printful.amount) : null
   const shopBackdrop = useShopBackdrop()
   const mat = previewMat(shopBackdrop?.backdrop)
 
@@ -715,6 +746,28 @@ function DesignShopCard({
           <span className="font-bold text-white">{designPriceLabel(design)}</span>
           <span className="text-xs uppercase tracking-wide text-gray-500">{category}</span>
         </div>
+        {printful ? (
+          <div className="mt-1 space-y-0.5 text-xs tabular-nums text-gray-400">
+            <p>
+              Printful {printful.estimated ? 'est. ' : ''}
+              {money(printful.amount)}
+              {upcharge != null ? ` · Upcharge ${upcharge}%` : ''}
+            </p>
+            {maxDiscount != null ? (
+              <p title="Largest percent off the shop price that still pays Printful in full. One point more comes out of the print cost.">
+                Max discount {maxDiscount}%
+                {room != null && room > 0 ? ` · ${money(room)} off` : ''}
+              </p>
+            ) : null}
+            {safeDiscount != null || keep != null ? (
+              <p title="Safe discount also covers the 2.9% + $0.30 card fee, so the code leaves about $0. You keep is what's left at the listed price after Printful and that fee.">
+                {safeDiscount != null ? `Safe discount ${safeDiscount}%` : ''}
+                {safeDiscount != null && keep != null ? ' · ' : ''}
+                {keep != null ? `You keep ${money(keep)}` : ''}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <label className="sr-only" htmlFor={`shop-category-${design.id}`}>
             Category for {design.name}

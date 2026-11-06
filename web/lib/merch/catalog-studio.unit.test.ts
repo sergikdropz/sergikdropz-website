@@ -12,6 +12,7 @@ import {
   mockupTitlesForColor,
   shopFrontPhotoIndex,
   shopHeroView,
+  shopPreviewFileType,
   catalogAngleViews,
   catalogShopAngleViews,
   shopDesignAngleViews,
@@ -21,6 +22,8 @@ import {
   previewUsesMockupPhoto,
   designGarmentImage,
   filterPrintFilesForTechnique,
+  selectFilesForOneTechnique,
+  techniqueForPrintFiles,
   techniqueForSavedFile,
   isAllOverCatalogProduct,
   studioPlacementsForProduct,
@@ -235,14 +238,41 @@ describe('catalog-studio', () => {
     expect(mockupTitlesForColor({ Black: titles }, 'White', 'Black')).toEqual([])
     expect(shopHeroView(6, 5, 'embroidery_front_large')).toEqual({
       photoIndex: 5,
+      viewFileType: 'embroidery_front_large',
+      preferLayout: true,
+    })
+    expect(shopHeroView(6, 5, null)).toEqual({
+      photoIndex: 5,
       viewFileType: null,
       preferLayout: false,
     })
     expect(shopHeroView(0, 5, 'embroidery_front_large')).toEqual({
-      photoIndex: 0,
+      photoIndex: 5,
       viewFileType: 'embroidery_front_large',
       preferLayout: true,
     })
+  })
+
+  it('opens the full back print on the shop, not a leftover sleeve tab', () => {
+    expect(
+      shopPreviewFileType(
+        [
+          { fileType: 'embroidery_chest_left', assetUrl: '/chest.png', scale: 0.2 },
+          { fileType: 'front_dtf', assetUrl: '/front.png', scale: 0.32 },
+          { fileType: 'back_dtf', assetUrl: '/back.png', scale: 1 },
+        ],
+        'short_sleeve_left_dtf',
+      ),
+    ).toBe('back_dtf')
+    expect(
+      shopPreviewFileType(
+        [
+          { fileType: 'back', assetUrl: '/back.png', scale: 1 },
+          { fileType: 'front', assetUrl: '/front.png', scale: 0.23 },
+        ],
+        'back',
+      ),
+    ).toBe('back')
   })
 
   it('offers each Printful template face once, skipping add-ons and unmeasured files', () => {
@@ -388,5 +418,24 @@ describe('catalog-studio', () => {
     ]
     expect(techniqueForSavedFile(techniques, 'front_dtf')).toBe('DTFILM')
     expect(techniqueForSavedFile(techniques, 'embroidery_chest_left')).toBe('EMBROIDERY')
+  })
+
+  it('sends only the active technique so embroidery is not mixed with a print placement', () => {
+    const files = [{ type: 'front' }, { type: 'embroidery_chest_left' }, { type: 'front_dtf' }]
+    const techniques = [
+      { key: 'DTG', isDefault: true },
+      { key: 'EMBROIDERY', isDefault: false },
+      { key: 'DTFILM', isDefault: false },
+    ]
+    expect(selectFilesForOneTechnique(files, techniques, 'embroidery_chest_left').map((file) => file.type)).toEqual([
+      'embroidery_chest_left',
+    ])
+    expect(selectFilesForOneTechnique(files, techniques, 'front').map((file) => file.type)).toEqual(['front'])
+    expect(selectFilesForOneTechnique(files, techniques, 'front_dtf').map((file) => file.type)).toEqual(['front_dtf'])
+    expect(techniqueForPrintFiles([{ type: 'embroidery_chest_left' }], techniques)).toBe('EMBROIDERY')
+    expect(selectFilesForOneTechnique([{ type: 'front' }, { type: 'back' }], techniques, 'front').map((file) => file.type)).toEqual([
+      'front',
+      'back',
+    ])
   })
 })

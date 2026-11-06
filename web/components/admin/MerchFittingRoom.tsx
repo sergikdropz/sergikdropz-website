@@ -82,6 +82,12 @@ import {
   restoreCatalogFileLayers,
   studioPlacementsForTechnique,
 } from '@/lib/merch/catalog-studio'
+import {
+  hideClaimedPlacementTechniques,
+  placementTechniqueBlockNote,
+  printFilesForSelectedTechniques,
+  techniqueKeysForFileTypes,
+} from '@/lib/merch/technique-mix'
 import { snapArtInPrintArea, snapRotation, type SnapGuides } from '@/lib/merch/placement-snap'
 import { removeSolidBackground } from '@/lib/merch/remove-background'
 import {
@@ -254,7 +260,8 @@ export default function MerchFittingRoom({
   const [catalogColors, setCatalogColors] = useState<BlankColor[] | null>(null)
   const [catalogSizes, setCatalogSizes] = useState<string[] | null>(null)
   const [catalogStudio, setCatalogStudio] = useState<CatalogProductDetail | null>(null)
-  const [catalogTechnique, setCatalogTechnique] = useState('DTG')
+  const [catalogTechniques, setCatalogTechniques] = useState<string[]>(['DTG'])
+  const [techniqueLockNote, setTechniqueLockNote] = useState<string | null>(null)
   const [activePrintFileType, setActivePrintFileType] = useState<string>('')
   const [catalogFileLayers, setCatalogFileLayers] = useState<Record<string, ArtPlacement>>({})
   const [embroideryUnlimitedColor, setEmbroideryUnlimitedColor] = useState(false)
@@ -285,26 +292,49 @@ export default function MerchFittingRoom({
   const manualThreadKey = useRef<string | null>(null)
   const threadDetectToken = useRef(0)
 
-  const techniquePrintFiles = useMemo(
+  const placedFileTypes = useMemo(
     () =>
-      catalogStudio ? filterPrintFilesForTechnique(catalogStudio.printFiles, catalogTechnique) : [],
-    [catalogStudio, catalogTechnique]
+      Object.entries(catalogFileLayers)
+        .filter(([, art]) => Boolean(art?.assetUrl))
+        .map(([type]) => type),
+    [catalogFileLayers],
   )
 
-  const garmentPlacements = useMemo(
-    () =>
-      catalogStudio
-        ? studioPlacementsForTechnique(catalogStudio, blank, catalogTechnique)
-        : blank.placements,
-    [catalogStudio, blank, catalogTechnique]
-  )
+  const techniquePrintFiles = useMemo(() => {
+    if (!catalogStudio) return []
+    const union = printFilesForSelectedTechniques(catalogStudio.printFiles, catalogTechniques)
+    return hideClaimedPlacementTechniques(union, placedFileTypes, catalogStudio.designIntel?.conflicts)
+  }, [catalogStudio, catalogTechniques, placedFileTypes])
+
+  const placementBlockNote = useMemo(() => {
+    if (!catalogStudio) return null
+    const union = printFilesForSelectedTechniques(catalogStudio.printFiles, catalogTechniques)
+    return placementTechniqueBlockNote(union, placedFileTypes, catalogStudio.designIntel?.conflicts)
+  }, [catalogStudio, catalogTechniques, placedFileTypes])
+
+  const garmentPlacements = useMemo(() => {
+    if (!catalogStudio) return blank.placements
+    const seen = new Set<string>()
+    const rows: Array<ReturnType<typeof studioPlacementsForTechnique>[number]> = []
+    for (const key of catalogTechniques) {
+      for (const placement of studioPlacementsForTechnique(catalogStudio, blank, key)) {
+        if (seen.has(placement.printfulType)) continue
+        seen.add(placement.printfulType)
+        rows.push(placement)
+      }
+    }
+    return rows.length > 0 ? rows : blank.placements
+  }, [catalogStudio, blank, catalogTechniques])
 
   const designTabs = useMemo(() => {
     const preferTypes = Object.entries(catalogFileLayers)
       .filter(([, art]) => Boolean(art?.assetUrl))
       .map(([type]) => type)
-    return buildDesignTabs(techniquePrintFiles, garmentPlacements, { preferTypes })
-  }, [techniquePrintFiles, garmentPlacements, catalogFileLayers])
+    return buildDesignTabs(techniquePrintFiles, garmentPlacements, {
+      preferTypes,
+      separateTechniques: catalogTechniques.length > 1,
+    })
+  }, [techniquePrintFiles, garmentPlacements, catalogFileLayers, catalogTechniques.length])
 
   const activePrintFile =
     techniquePrintFiles.find((file) => file.type === activePrintFileType) || techniquePrintFiles[0]
@@ -968,6 +998,17 @@ export default function MerchFittingRoom({
     [blank, designId, techniquePrintFiles]
   )
 
+  useEffect(() => {
+    if (!catalogStudio) return
+    if (techniquePrintFiles.some((file) => file.type === activePrintFileType)) return
+    const next = techniquePrintFiles[0]
+    if (!next) {
+      setActivePrintFileType('')
+      return
+    }
+    selectPlacementTab(next.type)
+  }, [activePrintFileType, catalogStudio, selectPlacementTab, techniquePrintFiles])
+
   const selectPlacementView = useCallback(
     (view: PlacementView) => {
       const tab = designTabs.find((item) => item.label === view)
@@ -994,16 +1035,22 @@ export default function MerchFittingRoom({
     return activePrintFile?.type || placementId
   }, [activePrintFile, designTabs, placementId])
 
-  const pickCatalogTechnique = (key: string) => {
-    setCatalogTechnique(key)
-    if (!catalogStudio) return
-    const files = filterPrintFilesForTechnique(catalogStudio.printFiles, key)
-    const first = files.find((file) => catalogFileLayers[file.type]?.assetUrl) || files[0]
-    if (first) {
-      selectPlacementTab(first.type)
-    } else {
-      setActivePrintFileType('')
+  const toggleCatalogTechnique = (key: string) => {
+    if (catalogTechniques.includes(key)) {
+      const stillUsed =
+        catalogStudio &&
+        placedFileTypes.some((type) => techniqueForSavedFile(catalogStudio.techniques, type) === key)
+      if (stillUsed) {
+        setTechniqueLockNote('Remove the art on that technique before turning it off.')
+        return
+      }
+      if (catalogTechniques.length === 1) return
+      setTechniqueLockNote(null)
+      setCatalogTechniques(catalogTechniques.filter((item) => item !== key))
+      return
     }
+    setTechniqueLockNote(null)
+    setCatalogTechniques([...catalogTechniques, key])
   }
 
   const openArt = (url: string) => {
@@ -1136,7 +1183,7 @@ export default function MerchFittingRoom({
       setCatalogStudio(detail)
       const nextTechnique =
         detail.techniques?.find((row) => row.isDefault)?.key || detail.techniques?.[0]?.key || 'DTG'
-      setCatalogTechnique(nextTechnique)
+      setCatalogTechniques([nextTechnique])
       const firstFiles = filterPrintFilesForTechnique(detail.printFiles, nextTechnique)
       const firstFile = openingPrintFile(firstFiles, detail.designIntel?.angles) || firstFiles[0]
       if (firstFile) {
@@ -1191,8 +1238,15 @@ export default function MerchFittingRoom({
             detail.techniques?.find((row) => row.isDefault)?.key ||
             detail.techniques?.[0]?.key ||
             'DTG'
-          setCatalogTechnique(technique)
-          const files = filterPrintFilesForTechnique(detail.printFiles, technique)
+          const placedTypes = design.placements.map((row) => row.fileType).filter((type): type is string => Boolean(type))
+          const selected = techniqueKeysForFileTypes(detail.techniques || [], placedTypes)
+          const nextSelected = selected.length > 0 ? selected : [technique]
+          setCatalogTechniques(nextSelected)
+          const files = hideClaimedPlacementTechniques(
+            printFilesForSelectedTechniques(detail.printFiles, nextSelected),
+            placedTypes,
+            detail.designIntel?.conflicts,
+          )
           const mapped = restoreCatalogFileLayers(design.placements, detail.printFiles, template)
           if (Object.keys(mapped).length > 0) setCatalogFileLayers(mapped)
           const preferTypes = Object.entries(mapped)
@@ -1200,6 +1254,7 @@ export default function MerchFittingRoom({
             .map(([type]) => type)
           const tabs = buildDesignTabs(files, studioPlacementsForTechnique(detail, template, technique), {
             preferTypes,
+            separateTechniques: nextSelected.length > 1,
           })
           const nextType = placementFileToOpen(tabs, mapped, hero?.fileType || design.activeFileType)
           const nextFile = nextType ? files.find((file) => file.type === nextType) : null
@@ -1538,7 +1593,7 @@ export default function MerchFittingRoom({
     previewColor,
     embroideryUnlimitedColor,
     embroideryThreads,
-    catalogTechnique,
+    catalogTechniques,
     activeFileType: activePrintFileType,
     placements: activePlacements.map((placement) => [
       placement.fileType || placement.placement,
@@ -1563,7 +1618,7 @@ export default function MerchFittingRoom({
   const embroideryUnlimitedRef = useRef(embroideryUnlimitedColor)
   embroideryUnlimitedRef.current = embroideryUnlimitedColor
   const embroideryOn =
-    catalogTechnique.trim().toUpperCase() === 'EMBROIDERY' ||
+    catalogTechniques.some((key) => key.trim().toUpperCase() === 'EMBROIDERY' && /embroidery/i.test(activePrintFile?.type || '')) ||
     Boolean(activePrintFile && /embroidery/i.test(activePrintFile.type))
 
   useEffect(() => {
@@ -2522,6 +2577,11 @@ export default function MerchFittingRoom({
     try {
       const design = await persist()
       if (!still()) return
+      if (placementConflicts.length > 0) {
+        setNote(placementConflicts[0])
+        setPublishProgress(null)
+        return
+      }
       if (activePlacements.length === 0 || !printfulReady?.canPublish || !printfulReady.publicArtOrigin) {
         setNote(design.publishNote || 'Save the design on the live site to photograph this color.')
         setPublishProgress(null)
@@ -3033,9 +3093,12 @@ export default function MerchFittingRoom({
             onPlacementRotateStart={beginRotationGuide}
             onPlacementRotateEnd={endRotationGuide}
             detail={catalogStudio}
-            technique={catalogTechnique}
+            technique={catalogTechniques[0] || 'DTG'}
             techniques={catalogStudio.techniques}
-            onTechnique={pickCatalogTechnique}
+            onTechnique={toggleCatalogTechnique}
+            selectedTechniques={catalogTechniques}
+            onToggleTechnique={toggleCatalogTechnique}
+            placementBlockNote={[placementBlockNote, techniqueLockNote].filter(Boolean).join(' ')}
             printFiles={techniquePrintFiles}
             activePrintFileType={activePrintFile?.type || activePrintFileType}
             embroideryUnlimitedColor={embroideryUnlimitedColor}
@@ -3125,7 +3188,9 @@ export default function MerchFittingRoom({
           <MerchProductSpecs
             detail={catalogStudio}
             printFiles={techniquePrintFiles}
-            technique={catalogTechnique}
+            technique={catalogTechniques
+              .map((key) => catalogStudio.techniques.find((item) => item.key === key)?.label || key)
+              .join(' · ')}
             layout="stage"
           />
         </div>
